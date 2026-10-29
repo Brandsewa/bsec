@@ -3,9 +3,10 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { evaluateStorefrontAccess, getOrderByActionToken, getOrderReturnsByToken } from "@bs/domain";
+import { evaluateStorefrontAccess, getOrderByActionToken, getOrderReturnsByToken, readTrackingConfig } from "@bs/domain";
 import { StatusBadge, Money } from "@bs/ui";
 import { ReturnRequestForm } from "@/components/orders/ReturnRequestForm.tsx";
+import { OrderTrackingView } from "@/components/orders/OrderTrackingView.tsx";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
 import { server } from "@/server/runtime.ts";
 
@@ -37,6 +38,7 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
   }
 
   const returnsView = await getOrderReturnsByToken(rt, access.tenantId, token);
+  const trackingConfig = await readTrackingConfig(rt._db.db, access.tenantId);
   const status = describeOrderStatus(order.status);
   const statusToneMap: Record<"good" | "bad" | "neutral", "success" | "destructive" | "neutral"> = {
     good: "success",
@@ -72,6 +74,10 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
             </span>
           </div>
         )}
+
+        <div className="mt-6">
+          <OrderTrackingView status={order.status} tracking={order.tracking} config={trackingConfig} />
+        </div>
 
         <div className="mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Items</h2>

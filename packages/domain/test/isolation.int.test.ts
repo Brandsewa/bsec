@@ -264,6 +264,7 @@ import {
   type TenantContext,
   confirmAdminOrder,
   advanceAdminOrder,
+  shipAdminOrderItems,
   listAdminReturns,
   requestReturn,
   actOnReturn,
@@ -900,6 +901,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("orders.createInvoice");
     expect(adminProcedures).toContain("orders.confirm");
     expect(adminProcedures).toContain("orders.advance");
+    expect(adminProcedures).toContain("orders.ship");
     expect(adminProcedures).toContain("returns.list");
     expect(adminProcedures).toContain("returns.act");
     expect(adminProcedures).toContain("customers.list");
@@ -1329,6 +1331,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
       }
       case "orders.confirm":
       case "orders.advance":
+      case "orders.ship":
       case "returns.list":
       case "returns.act": {
         const draft = await createAdminDraftOrder(rt, ctx, {
@@ -1339,6 +1342,10 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         });
         if (procPath === "orders.confirm") return await confirmAdminOrder(rt, ctx, { id: draft.orderId });
         if (procPath === "orders.advance") return await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "shipped" });
+        if (procPath === "orders.ship") {
+          const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);
+          return await shipAdminOrderItems(rt, ctx, { id: draft.orderId, items: [{ orderItemId: line!.id, quantity: 1 }] });
+        }
         if (procPath === "returns.list") return await listAdminReturns(rt, ctx);
         await advanceAdminOrder(rt, ctx, { id: draft.orderId, to: "delivered" });
         const [line] = await getAdminOrderDetail(rt, ctx, { id: draft.orderId }).then((d) => d.items);

@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowRight, Clock, Coins, Hash } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Coins, Hash, Plus, Trash2 } from "lucide-react";
 import { EmptyState, FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
+import { SimpleSelect, Switch } from "@bs/ui";
+import type { TrackingSettings } from "@bs/contracts";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
@@ -67,6 +69,7 @@ function OrderSettingsForm({
     currentNextValue: number;
     stockHoldMinutes?: number;
     minimumOrderPaise?: number;
+    tracking: TrackingSettings;
   };
 }) {
   const queryClient = useQueryClient();
@@ -81,7 +84,10 @@ function OrderSettingsForm({
     minimumOrderRupees: initialMinRupees,
   });
 
+  const [tracking, setTracking] = useState<TrackingSettings>(initial.tracking);
+  const trackingDirty = JSON.stringify(tracking) !== JSON.stringify(initial.tracking);
   const dirty =
+    trackingDirty ||
     form.prefix !== initial.prefix ||
     form.padding !== initial.padding ||
     form.nextValue !== initial.nextValue ||
@@ -115,6 +121,7 @@ function OrderSettingsForm({
       nextValue: form.nextValue,
       stockHoldMinutes: form.stockHoldMinutes,
       minimumOrderPaise: Math.round(form.minimumOrderRupees * 100),
+      tracking: { ...tracking, carriers: tracking.carriers.filter((c) => c.name.trim() !== "") },
     });
   }
 
@@ -261,6 +268,120 @@ function OrderSettingsForm({
         </SettingsCard>
 
         <SettingsCard
+          title="Order tracking"
+          description="What shoppers see on the Track your order page (/track), the order link in emails and their account"
+        >
+          <div className="space-y-4">
+            <ToggleRow
+              label="Public tracking page"
+              hint="Lets anyone with an order number and their email or phone look an order up at /track. Add the page to your menu yourself."
+              checked={tracking.enabled}
+              onChange={(v) => setTracking((t) => ({ ...t, enabled: v }))}
+            />
+            <Field id="trackingLookup" label="Look up an order with" hint="Shoppers must type this next to the order number.">
+              <SimpleSelect
+                id="trackingLookup"
+                value={tracking.lookup}
+                onChange={(v) => setTracking((t) => ({ ...t, lookup: v as TrackingSettings["lookup"] }))}
+                options={[
+                  { value: "either", label: "Email or phone number" },
+                  { value: "email", label: "Email only" },
+                  { value: "phone", label: "Phone number only" },
+                ]}
+              />
+            </Field>
+            <ToggleRow
+              label="Show the updates timeline"
+              hint="Order milestones and the courier's latest scan."
+              checked={tracking.showTimeline}
+              onChange={(v) => setTracking((t) => ({ ...t, showTimeline: v }))}
+            />
+            <ToggleRow
+              label="Show carrier and tracking number"
+              hint="Includes the Track with carrier button."
+              checked={tracking.showCarrierDetails}
+              onChange={(v) => setTracking((t) => ({ ...t, showCarrierDetails: v }))}
+            />
+            <Field id="trackingEta" label="Estimated delivery" hint="Days after a parcel ships. Leave empty to show no estimate.">
+              <div className="flex items-center gap-2">
+                <Input
+                  id="trackingEta"
+                  type="number"
+                  min={1}
+                  max={60}
+                  className="w-24"
+                  value={tracking.estimatedDeliveryDays ?? ""}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    setTracking((t) => ({ ...t, estimatedDeliveryDays: Number.isNaN(n) ? null : Math.min(60, Math.max(1, n)) }));
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">days</span>
+              </div>
+            </Field>
+            <Field id="trackingMessage" label="Message above the tracker" hint="Plain text, up to 300 characters.">
+              <Input
+                id="trackingMessage"
+                maxLength={300}
+                value={tracking.message}
+                onChange={(e) => setTracking((t) => ({ ...t, message: e.target.value }))}
+                placeholder="Orders ship Monday to Saturday."
+              />
+            </Field>
+            <ToggleRow
+              label="Notify the customer by default when fulfilling"
+              hint="Sets the Notify customer switch in the fulfil dialog. Staff can still change it per shipment."
+              checked={tracking.notifyByDefault}
+              onChange={(v) => setTracking((t) => ({ ...t, notifyByDefault: v }))}
+            />
+            <div>
+              <p className="text-sm font-medium text-foreground">Carriers</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Shown in the fulfil dialog. Add a tracking link pattern with {"{awb}"} so staff only type the number, for example https://example.com/track/{"{awb}"}. With no carriers listed, a standard list is used.
+              </p>
+              <div className="space-y-2">
+                {tracking.carriers.map((c, i) => (
+                  <div key={i} className="grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
+                    <Input
+                      aria-label={`Carrier ${i + 1} name`}
+                      placeholder="Carrier name"
+                      maxLength={40}
+                      value={c.name}
+                      onChange={(e) => setTracking((t) => ({ ...t, carriers: t.carriers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) }))}
+                    />
+                    <Input
+                      aria-label={`Carrier ${i + 1} tracking link`}
+                      placeholder="https://…/{awb}"
+                      maxLength={300}
+                      value={c.urlTemplate}
+                      onChange={(e) => setTracking((t) => ({ ...t, carriers: t.carriers.map((x, j) => (j === i ? { ...x, urlTemplate: e.target.value } : x)) }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove carrier ${i + 1}`}
+                      onClick={() => setTracking((t) => ({ ...t, carriers: t.carriers.filter((_, j) => j !== i) }))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={tracking.carriers.length >= 20}
+                  onClick={() => setTracking((t) => ({ ...t, carriers: [...t.carriers, { name: "", urlTemplate: "" }] }))}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" /> Add carrier
+                </Button>
+              </div>
+            </div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
           title="Related settings"
           description="Other store settings that affect order handling and fulfillment"
         >
@@ -312,5 +433,17 @@ function OrderSettingsForm({
         </SettingsCard>
       </form>
     </SettingsPageFrame>
+  );
+}
+
+function ToggleRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start justify-between gap-4">
+      <span>
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+    </label>
   );
 }

@@ -188,6 +188,7 @@ import {
   createAdminFulfillment,
   confirmAdminOrder,
   advanceAdminOrder,
+  shipAdminOrderItems,
   archiveOrders,
   unarchiveOrders,
   deleteOrders,
@@ -2182,6 +2183,17 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           try {
             return await advanceAdminOrder(context.rt, context.tenantCtx, input);
+          } catch (err) {
+            throw mapAuthError(err);
+          }
+        }),
+      ship: os.admin.orders.ship
+        .use(requireAdmin)
+        .use(requirePermission("orders.write"))
+        .handler(async ({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          try {
+            return await shipAdminOrderItems(context.rt, context.tenantCtx, input);
           } catch (err) {
             throw mapAuthError(err);
           }

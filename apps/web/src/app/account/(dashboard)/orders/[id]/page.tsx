@@ -1,10 +1,12 @@
 import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCustomerOrderDetail } from "@bs/domain";
+import { getCustomerOrderDetail, readTrackingConfig } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
 import { StatusBadge, Badge, Money, type StatusTone } from "@bs/ui";
 import { buttonVariants } from "@bs/ui/server";
+import { describeOrderStatus } from "@/components/orders/order-labels.ts";
+import { OrderTrackingView } from "@/components/orders/OrderTrackingView.tsx";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,6 +44,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
   if (!UUID.test(id)) notFound();
   const order = await getCustomerOrderDetail(ctx.store.rt._db.db, ctx.store.tenantId, ctx.customer.id, id);
   if (!order) notFound();
+  const trackingConfig = await readTrackingConfig(ctx.store.rt._db.db, ctx.store.tenantId);
 
   return (
     <div className="rounded-xl bg-[var(--muted)]/50 p-4 sm:p-5">
@@ -52,11 +55,15 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
           <p className="text-xs text-[var(--muted-foreground)]">Placed {order.placedAt.toISOString().slice(0, 10)}</p>
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge tone={mapStatusToTone(order.status)} label={order.status.replace(/_/g, " ")} />
+          <StatusBadge tone={mapStatusToTone(order.status)} label={describeOrderStatus(order.status).label} />
           <Badge variant="secondary">
             Payment: {order.paymentStatus.replace(/_/g, " ")}
           </Badge>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <OrderTrackingView status={order.status} tracking={order.tracking} config={trackingConfig} />
       </div>
 
       <div className="mt-6 divide-y divide-[var(--border-soft)]">
@@ -116,7 +123,7 @@ export default async function AccountOrderPage({ params }: { params: Promise<{ i
           prefetch={false}
           className={buttonVariants({ variant: "secondary", size: "sm" })}
         >
-          Track order or request a return
+          Request a return
         </Link>
       </div>
     </div>

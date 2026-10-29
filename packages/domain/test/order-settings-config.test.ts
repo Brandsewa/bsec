@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ORDER_PROCESSING_CONFIG,
   parseOrderProcessingConfig,
+  parseTrackingConfig,
+  carrierTrackingUrl,
+  DEFAULT_TRACKING_CONFIG,
 } from "../src/admin/order-settings-config.ts";
 
 describe("parseOrderProcessingConfig", () => {
@@ -37,5 +40,37 @@ describe("parseOrderProcessingConfig", () => {
 
     const tooHigh = parseOrderProcessingConfig({ minimumOrderPaise: 99_999_999 });
     expect(tooHigh.minimumOrderPaise).toBe(10_000_00);
+  });
+});
+
+describe("tracking config", () => {
+  it("defaults when absent or malformed", () => {
+    expect(parseTrackingConfig(null)).toEqual(DEFAULT_TRACKING_CONFIG);
+    expect(parseTrackingConfig({ tracking: "x" })).toEqual(DEFAULT_TRACKING_CONFIG);
+  });
+
+  it("clamps and cleans what it reads", () => {
+    const c = parseTrackingConfig({
+      tracking: {
+        enabled: false,
+        lookup: "sms",
+        estimatedDeliveryDays: 500,
+        message: "m".repeat(400),
+        carriers: [{ name: "  Bluedart ", urlTemplate: "javascript:alert(1)" }, { name: "", urlTemplate: "https://x.test/{awb}" }, { name: "DTDC", urlTemplate: "https://t.test/{awb}" }],
+      },
+    });
+    expect(c.enabled).toBe(false);
+    expect(c.lookup).toBe("either");
+    expect(c.estimatedDeliveryDays).toBe(60);
+    expect(c.message).toHaveLength(300);
+    expect(c.carriers).toEqual([{ name: "Bluedart", urlTemplate: "" }, { name: "DTDC", urlTemplate: "https://t.test/{awb}" }]);
+  });
+
+  it("builds a carrier link only from an http(s) template and a number", () => {
+    const carriers = [{ name: "DTDC", urlTemplate: "https://t.test/?n={awb}" }, { name: "None", urlTemplate: "" }];
+    expect(carrierTrackingUrl(carriers, "dtdc", " A B1 ")).toBe("https://t.test/?n=A%20B1");
+    expect(carrierTrackingUrl(carriers, "None", "123")).toBeNull();
+    expect(carrierTrackingUrl(carriers, "DTDC", "")).toBeNull();
+    expect(carrierTrackingUrl(carriers, "Other", "123")).toBeNull();
   });
 });

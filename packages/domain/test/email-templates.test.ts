@@ -80,6 +80,35 @@ describe("other emails", () => {
     expect(r.html).toContain("Track your order");
   });
 
+  it("shipped: parcel contents, carrier link and estimate; a split order says which parcel", () => {
+    const r = renderEmail(
+      "order_shipped",
+      brand,
+      {
+        order,
+        carrier: "Bluedart",
+        awb: "BD1",
+        trackingUrl: "https://track.example/bd?n=BD1",
+        parcelItems: [{ title: "Dupatta", variant: "Free size", quantity: 1 }],
+        parcelNumber: 1,
+        parcelCount: 2,
+        estimatedDelivery: "3 Nov 2026",
+      },
+      "Shipped",
+    );
+    expect(r.text).toContain("In this parcel (1 of 2):");
+    expect(r.text).toContain("- Dupatta (Free size) x 1");
+    expect(r.text).toContain("Track with Bluedart: https://track.example/bd?n=BD1");
+    expect(r.text).toContain("Estimated delivery: 3 Nov 2026.");
+    expect(r.html).toContain('href="https://track.example/bd?n=BD1"');
+  });
+
+  it("shipped: a non-http carrier link is never put in the mail", () => {
+    const r = renderEmail("order_shipped", brand, { order, carrier: "X", trackingUrl: "javascript:alert(1)" }, "Shipped");
+    expect(r.html).not.toContain("javascript:");
+    expect(r.text).not.toContain("javascript:");
+  });
+
   it("refund: says how much", () => {
     expect(renderEmail("refund_processed", brand, { order, refundAmount: 15000 }, "Refund").text).toContain("refund of ₹150 for order ORD-00007");
   });

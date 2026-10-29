@@ -5,6 +5,8 @@ describe("thank-you page wording", () => {
   it("a new order reads as received; a cancelled one as cancelled", () => {
     expect(describeOrderStatus("pending")).toEqual({ label: "Order received", tone: "good" });
     expect(describeOrderStatus("confirmed").label).toBe("Order received");
+    expect(describeOrderStatus("partially_fulfilled").label).toBe("Partly shipped");
+    expect(describeOrderStatus("processing").label).toBe("Being prepared");
     expect(describeOrderStatus("cancelled")).toEqual({ label: "Cancelled", tone: "bad" });
     expect(describeOrderStatus("delivered").label).toBe("Delivered");
   });
