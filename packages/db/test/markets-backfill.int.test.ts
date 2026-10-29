@@ -4,7 +4,7 @@
  * backfill (ADR-040, docs/MULTIMARKET-PLAN.md Phase 1: "all existing stores behave identically").
  */
 import { randomBytes } from "node:crypto";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,12 +64,12 @@ beforeAll(async () => {
   tmp = mkdtempSync(path.join(os.tmpdir(), "mm-mig-"));
   const src = path.resolve(here, "../migrations");
   cpSync(src, tmp, { recursive: true });
-  rmSync(path.join(tmp, "0087_markets_foundation.sql"));
-  rmSync(path.join(tmp, "0088_markets_config.sql"));
-  rmSync(path.join(tmp, "0089_market_scope_functions.sql"));
+  // Stop at 0086: drop every migration from 0087 on (drizzle applies by journal time, so a later one left in would run first).
+  const isLater = (name: string) => Number(/^(\d{4})_/.exec(name)?.[1] ?? 0) >= 87;
+  for (const f of readdirSync(tmp)) if (f.endsWith(".sql") && isLater(f)) rmSync(path.join(tmp, f));
   const journalPath = path.join(tmp, "meta", "_journal.json");
   const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
-  journal.entries = journal.entries.filter((e) => !e.tag.startsWith("0087_") && !e.tag.startsWith("0088_") && !e.tag.startsWith("0089_"));
+  journal.entries = journal.entries.filter((e) => !isLater(e.tag));
   writeFileSync(journalPath, JSON.stringify(journal));
   await runMigrations(as("app_owner"), tmp);
 
