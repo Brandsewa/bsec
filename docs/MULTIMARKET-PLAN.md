@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Proposed, not started.** Owner decisions recorded in section 12 (2026-10-28); questions A-D answered; no open questions remain |
+| Status | **Built locally (2026-10-29), not pushed; browser pass and sandbox runs pending, see `docs/MULTIMARKET-PUSH-CHECKLIST.md`.** Original status: proposed, not started. Owner decisions recorded in section 12 (2026-10-28); questions A-D answered; no open questions remain |
 | Author | Claude Code (planner/verifier), 2026-10-28 |
 | Builders | assigned per phase by the owner (section 11) |
 | Related | ADR-002 (RLS), ADR-004 (cache), ADR-008 (payment adapter), ADR-013/015 (quotas), ADR-017 (custom domains), `docs/CUSTOM-DOMAIN-ROUTING-PLAN.md`, `docs/ORDERS-RETURNS-PLAN.md`, `docs/FINANCE-PLAN.md`, `docs/PLATFORM-BILLING-PLAN.md`. **New ADR-040 (markets) is written in Phase 0.** |

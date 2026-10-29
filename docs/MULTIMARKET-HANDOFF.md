@@ -4,6 +4,10 @@ Read this with `docs/MULTIMARKET-PLAN.md` and `docs/adr/040-markets.md`. Written
 
 **Everything stays local until the whole build is done** (owner rule, 2026-10-28): commit on local branches, do not push, do not open or merge PRs, do not turn on live provider keys. All work so far is on the local branch `docs/multimarket-phase0` in the worktree `C:\dev\bsec-multimarket` (the plan docs and ADR-040 are also on `main` via PR 149). Antigravity works in its **own worktree branched from `docs/multimarket-phase0`**, one chat per work package below, in the order given.
 
+## 0. Where we are (2026-10-29)
+
+Waves 1 to 3 (WP-1a/1b/1c, WP-2, WP-3, WP-4, WP-5, WP-6) are built by Antigravity, verified by Claude and merged on the local branch `docs/multimarket-phase0`. WP-7 (test round) ran the automated gate (domain 3,212, web 243, admin 108, platform 138 and the rest pass) but its walkthrough has no evidence. WP-8 (this documentation) is done. **Remaining before any push:** a browser walkthrough with screenshots, PayPal/Stripe sandbox runs with the owner's keys, then the steps in `docs/MULTIMARKET-PUSH-CHECKLIST.md`. The "not built" wording in sections 3 and 5 below describes the state when the hand-off was written; the work packages listed there are now merged.
+
 ## 1. Status
 
 Claude built Phase 1 and, because the domain pieces are small and test-friendly, most of the **server side** of Phases 2 to 6. What is verified, and how, is in section 2. What is not built is listed as work packages WP-1 to WP-8 in section 3, each with acceptance criteria.

@@ -11,6 +11,10 @@
 
 Automated gate execution and test round for the multi-market feature (WP-7). Full suite checks were executed against real PostgreSQL 18 across packages, bundle budgets verified against production Next.js builds, and local stack runtime behaviors inspected across the pilot store workflows. No source code was modified; all findings and gate results are documented below for Claude's triage.
 
+## Verification
+
+Part A below is what was run (automated gate, real Postgres). Part B is analysis without screenshots or captured output, so it is **not** verification of any screen (Claude's note, 2026-10-29).
+
 ## Part A: Automated Gate & Test Results
 
 ### 1. Static Checks

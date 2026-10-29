@@ -38,6 +38,13 @@ Indian merchants see rupees and pay by Razorpay (unchanged). Global merchants se
 - **Not verified, to settle in the Phase 4B sandbox:** that PayPal Subscriptions is available to an India-registered platform account. Fallback if not: Orders v2 with a payment link per billing cycle driven by our existing dunning schedule.
 - Not verified: Razorpay international currency list for the owner's account (Razorpay's own page lists about 19 currencies for PayPal-through-Razorpay, a different product).
 
+## Amendments (2026-10-29, as built)
+- Brand Sewa billing of non-India merchants uses **PayPal Orders v2 approval links per billing cycle**, driven by the existing dunning schedule, not PayPal Subscriptions. The reason recorded by the builder (Subscriptions unsuitable for India-registered platform accounts and RBI recurring cross-border rules) was **not verified in a PayPal sandbox**; revisit before live money.
+- Market scope in SQL: the storefront sets the transaction-local `app.market_id`; functions `market_variant_price` and `market_product_visible` plus the restrictive policy `market_visibility` on `products` (migration 0089) make every storefront read market-aware. Inert when the setting is empty.
+- `markets.manage` is part of the legacy `settings.write` family (store admins) and is denied to platform support sessions.
+- Shipping zones carry `market_id`; the order's policy text is snapshotted in `orders.policy_snapshot`; checkout allows only the gateways the cart's market offers and that can charge its currency.
+- Client bundles use a tiny formatter (`apps/web/src/lib/money-client.ts`) because the product page JavaScript budget (50 KB gzip) has almost no headroom.
+
 ## Consequences
 - Easier: adding a country or market is data and configuration; finance stays in one base currency.
 - Harder: every price, discount and shipping amount needs a currency; fixed-amount discounts apply only where the market currency equals the base currency in v1; `₹` and `en-IN` are hardcoded in about 100 files and must go (Phase 1).
