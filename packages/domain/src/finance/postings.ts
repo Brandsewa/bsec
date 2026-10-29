@@ -11,6 +11,7 @@ import {
   LEDGER_BOOK,
   type LedgerAccount,
 } from "./accounts.ts";
+import { formatMoney } from "@bs/contracts/money";
 import { postingKey, type LedgerPosting } from "./ledger.ts";
 
 /**
@@ -153,7 +154,7 @@ export function orderPaidPostings(params: {
   const postings: LedgerPosting[] = [];
   const residualNote =
     residual !== 0
-      ? `Residual of ₹${(residual / 100).toFixed(2)} booked to product_revenue`
+      ? `Residual of ${formatMoney(Math.abs(residual), currency, { alwaysShowFraction: true })} booked to product_revenue`
       : null;
 
   // 1. Merchandise revenue

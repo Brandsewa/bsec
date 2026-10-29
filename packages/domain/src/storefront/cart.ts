@@ -230,7 +230,7 @@ async function loadCartWithItems(
   let discountNotice: string | null = null;
   const appliedCode = cartRecord.discountCodes?.[0];
   if (appliedCode) {
-    const res = await evaluateDiscount(tx as unknown as Db, cartRecord.tenantId as string, { code: appliedCode, cartSubtotal: subtotal, cartTotalQty: itemCount });
+    const res = await evaluateDiscount(tx as unknown as Db, cartRecord.tenantId as string, { code: appliedCode, cartSubtotal: subtotal, cartTotalQty: itemCount, currency: cartRecord.currency ?? "INR" });
     if (res.valid && res.discountId) {
       discount = {
         discountId: res.discountId,
@@ -714,7 +714,7 @@ export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: 
     // evaluate against the cart as it is (without the old code)
     const current = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [] });
     if (current.items.length === 0) throw new Error("Bad Request: add something to your cart first");
-    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount });
+    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount, currency: current.currency ?? "INR" });
     if (!res.valid) throw new Error(`Bad Request: ${res.reason ?? "this code can't be used"}`);
 
     const [updated] = await tx

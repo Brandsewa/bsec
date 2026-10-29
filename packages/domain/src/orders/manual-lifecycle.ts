@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant, type Db, QUEUE_NAMES } from "@bs/db";
 import { formatMoney } from "@bs/contracts/money";
 import type { Runtime } from "../runtime.ts";
@@ -541,7 +542,8 @@ export async function actOnReturn(
         const totalAlreadyRefunded = existingRefunds.reduce((s, r) => s + Number(r.amount), 0);
         const maxRefundable = Math.max(0, order.grandTotal - totalAlreadyRefunded);
         if (amount > maxRefundable) {
-          throw new Error(`Conflict: Refund of ${formatMoney(amount, order.currency)} exceeds maximum refundable amount of ${formatMoney(maxRefundable, order.currency)}`);
+          const orderCurrency = order.currency ?? "INR";
+          throw new Error(`Conflict: Refund of ${formatMoney(amount, orderCurrency, { alwaysShowFraction: true })} exceeds maximum refundable amount of ${formatMoney(maxRefundable, orderCurrency, { alwaysShowFraction: true })}`);
         }
 
         const [intent] = await tx
@@ -560,6 +562,7 @@ export async function actOnReturn(
             refundMethod: input.refundMethod ?? "manual",
             refundReference: input.refundReference,
             adminNote: input.note,
+            currency: order.currency ?? "INR",
           },
           tx,
         );

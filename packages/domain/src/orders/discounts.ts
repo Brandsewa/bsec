@@ -1,4 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import {
   discounts,
   discountRedemptions,
@@ -13,6 +14,7 @@ export interface ValidateDiscountInput {
   cartSubtotal: number; // in paise
   cartTotalQty: number;
   customerId?: string | undefined;
+  currency?: string | undefined;
 }
 
 export interface AppliedDiscountResult {
@@ -75,10 +77,11 @@ export async function evaluateDiscount(db: Db, tenantId: string, input: Validate
   }
 
   if (discount.minSubtotal && input.cartSubtotal < discount.minSubtotal) {
+    const currency = input.currency ?? "INR";
     return {
       valid: false,
       discountAmount: 0,
-      reason: `Minimum order subtotal of ₹${(discount.minSubtotal / 100).toFixed(2)} required`,
+      reason: `Minimum order subtotal of ${formatMoney(discount.minSubtotal, currency, { alwaysShowFraction: true })} required`,
     };
   }
 

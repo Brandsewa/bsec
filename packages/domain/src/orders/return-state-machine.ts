@@ -1,7 +1,9 @@
 import { eq, and } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import {
   returns,
   orderEvents,
+  orders,
   withTenant,
   type Db,
   QUEUE_NAMES,
@@ -80,6 +82,7 @@ export type ReturnTransitionEvent =
       refundMethod?: string | undefined;
       refundReference?: string | undefined;
       adminNote?: string | undefined;
+      currency?: string | undefined;
       data?: Record<string, unknown> | undefined;
     }
   | {
@@ -149,12 +152,22 @@ export async function transitionReturn(
         targetStatus = "received";
         eventMessage = "Return package received and inspected at warehouse";
         break;
-      case "return.refund":
+      case "return.refund": {
         targetStatus = "refunded";
+        let refundCurrency = event.currency;
+        if (!refundCurrency && event.refundAmount) {
+          const [orderRow] = await db
+            .select({ currency: orders.currency })
+            .from(orders)
+            .where(and(eq(orders.tenantId, ctx.tenantId), eq(orders.id, ret.orderId)))
+            .limit(1);
+          refundCurrency = orderRow?.currency ?? "INR";
+        }
         eventMessage = event.refundAmount
-          ? `Return refunded (₹${(event.refundAmount / 100).toFixed(2)}) via ${event.refundMethod ?? "manual"}`
+          ? `Return refunded (${formatMoney(event.refundAmount, refundCurrency ?? "INR", { alwaysShowFraction: true })}) via ${event.refundMethod ?? "manual"}`
           : "Return refunded";
         break;
+      }
       case "return.replace":
         targetStatus = "replaced";
         eventMessage = event.exchangeOrderId
