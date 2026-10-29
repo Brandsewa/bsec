@@ -55,6 +55,13 @@ describe("useStoreCurrency hook", () => {
     expect(html).toContain("USD");
   });
 
+  it("prefers the store settings currency over the markets list", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(orpc.admin.settings.get.queryOptions().queryKey, { storeName: "S", currency: "CAD", timezone: "America/Toronto" });
+    qc.setQueryData(orpc.admin.markets.list.queryOptions({}).queryKey, { markets: [{ id: "11111111-1111-1111-1111-111111111111", name: "US", handle: "us", isBase: true, status: "active", currency: "USD", unitSystem: null, fxRate: 1, priceAdjustBps: 0, rounding: "none", taxDisplay: "exclusive", pathPrefix: null, catalogMode: "all", locale: null, taxCollect: false, taxShippingToo: false, complianceAckAt: null, countries: ["US"] }], extraMarketLimit: 1 });
+    expect(render(qc)).toContain("CAD");
+  });
+
   it("falls back to settings.get currency when markets has no base market", () => {
     const qc = new QueryClient();
     qc.setQueryData(orpc.admin.settings.get.queryOptions().queryKey, {
