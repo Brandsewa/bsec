@@ -57,7 +57,7 @@ function Parcel({ s, index, total, config }: { s: TrackingShipment; index: numbe
       ? new Date(new Date(s.shippedAt).getTime() + config.estimatedDeliveryDays * 86_400_000).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })
       : null;
   return (
-    <div className="rounded-lg border border-border p-4 text-sm">
+    <div className="border-t border-border pt-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold text-foreground">{total > 1 ? `Parcel ${index + 1} of ${total}` : "Shipment"}</p>
         <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">{SHIPMENT_LABEL[s.status] ?? s.status.replace(/_/g, " ")}</span>
@@ -126,11 +126,29 @@ function Parcel({ s, index, total, config }: { s: TrackingShipment; index: numbe
   );
 }
 
+/** The order's milestones, newest first. Empty when the store hides the timeline. */
+export function OrderUpdates({ tracking, config }: { tracking: OrderTracking; config: TrackingViewConfig }) {
+  if (!config.showTimeline) return null;
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Updates</h3>
+      <ol className="ml-1.5 space-y-3 border-l-2 border-border pl-4 text-sm">
+        {tracking.timeline.map((e, i) => (
+          <li key={`${e.label}-${i}`}>
+            <p className="font-medium text-foreground">{e.label}</p>
+            <p className="text-xs text-muted-foreground">{when(e.at)}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /**
  * The shopper's tracking view: progress, one card per parcel, what has not shipped yet, and a timeline.
  * One component for the emailed link, the account order page and (later) the public lookup, so they never drift apart.
  */
-export function OrderTrackingView({ status, tracking, config }: { status: string; tracking: OrderTracking; config: TrackingViewConfig }) {
+export function OrderTrackingView({ status, tracking, config, showUpdates = true }: { status: string; tracking: OrderTracking; config: TrackingViewConfig; /** Pass false when the page shows <OrderUpdates> in a card of its own. */ showUpdates?: boolean }) {
   if (status === "cancelled") {
     return (
       <section aria-label="Tracking" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
@@ -139,7 +157,7 @@ export function OrderTrackingView({ status, tracking, config }: { status: string
     );
   }
   const stage = stageOf(status, tracking);
-  const { shipments, unshipped, timeline } = tracking;
+  const { shipments, unshipped } = tracking;
   return (
     <section aria-label="Tracking" className="space-y-5">
       {config.message ? <p className="rounded-lg bg-muted p-3 text-sm text-foreground">{config.message}</p> : null}
@@ -152,7 +170,7 @@ export function OrderTrackingView({ status, tracking, config }: { status: string
         </div>
       ) : null}
       {shipments.length > 0 && unshipped.length > 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-4 text-sm">
+        <div className="border-t border-border pt-4 text-sm">
           <p className="font-semibold text-foreground">Not shipped yet</p>
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             {unshipped.map((i) => (
@@ -165,19 +183,7 @@ export function OrderTrackingView({ status, tracking, config }: { status: string
           <p className="mt-2 text-xs text-muted-foreground">These will get their own tracking number when they ship.</p>
         </div>
       ) : null}
-      {config.showTimeline ? (
-      <div>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Updates</h3>
-        <ol className="ml-1.5 space-y-3 border-l-2 border-border pl-4 text-sm">
-          {timeline.map((e, i) => (
-            <li key={`${e.label}-${i}`}>
-              <p className="font-medium text-foreground">{e.label}</p>
-              <p className="text-xs text-muted-foreground">{when(e.at)}</p>
-            </li>
-          ))}
-        </ol>
-      </div>
-      ) : null}
+      {showUpdates ? <OrderUpdates tracking={tracking} config={config} /> : null}
     </section>
   );
 }

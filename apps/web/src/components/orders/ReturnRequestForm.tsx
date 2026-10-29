@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, SimpleSelect } from "@bs/ui";
+import { Button, ConfirmDialog, SimpleSelect } from "@bs/ui";
+import { FloatingField, FloatingTextarea } from "@/components/account/FloatingField.tsx";
+
+const SECTION = "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
 
 
 interface Item {
@@ -44,6 +47,10 @@ interface ReturnRequestFormProps {
   policyText?: string;
   instructions?: string;
   existingReturns?: ExistingReturn[];
+  /** Show the form straight away (inside a pop-up) instead of behind a button. */
+  startOpen?: boolean;
+  /** Called after a request is sent, or when the form is closed in start-open mode. */
+  onDone?: () => void;
 }
 
 export function ReturnRequestForm({
@@ -54,10 +61,25 @@ export function ReturnRequestForm({
   policyText,
   instructions,
   existingReturns = [],
+  startOpen = false,
+  onDone,
 }: ReturnRequestFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
+  const close = () => {
+    setOpen(false);
+    if (startOpen) onDone?.();
+  };
+  // a "Request a return" link elsewhere on the page points at #return: open the form when it is followed
+  useEffect(() => {
+    const sync = () => {
+      if (window.location.hash === "#return") setOpen(true);
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [selectedReasonId, setSelectedReasonId] = useState(reasons[0]?.id ?? "damaged_or_defective");
   const [customReason, setCustomReason] = useState("");
@@ -214,6 +236,7 @@ export function ReturnRequestForm({
       setCustomerComment("");
       setPhotos([]);
       router.refresh();
+      onDone?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send your return request");
     } finally {
@@ -232,7 +255,7 @@ export function ReturnRequestForm({
       {existingReturns.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Return & Exchange Requests</h3>
-          <div className="divide-y divide-border rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border border-y border-border">
             {existingReturns.map((r) => (
               <div key={r.id} className="p-4 space-y-2 text-sm">
                 <div className="flex items-center justify-between">
@@ -292,102 +315,81 @@ export function ReturnRequestForm({
               Request a return or exchange
             </button>
           ) : (
-            <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-card p-5" data-testid="return-form">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Request a Return / Exchange</h3>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-full p-1 text-muted-foreground hover:bg-muted"
-                  aria-label="Close form"
-                >
-                  <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {policyText && (
-                <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">Return Policy:</span> {policyText}
+            <form onSubmit={submit} className="space-y-5" data-testid="return-form">
+              {startOpen ? null : (
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Request a return or exchange</h3>
+                  <button type="button" onClick={close} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label="Close form">
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               )}
 
-              {/* Items Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Choose Items</label>
-                <div className="space-y-2">
-                  {available.map((i) => (
-                    <label key={i.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
-                      <div>
-                        <span className="font-medium text-foreground">{i.title}</span>
-                        {i.variant ? <span className="text-xs text-muted-foreground"> ({i.variant})</span> : null}
-                      </div>
-                      <SimpleSelect
-                        ariaLabel={`Quantity of ${i.title} to return`}
-                        value={String(qty[i.id] ?? 0)}
-                        onChange={(v) => setQty({ ...qty, [i.id]: Number(v) })}
-                        options={Array.from({ length: i.returnable + 1 }, (_, n) => ({
-                          value: String(n),
-                          label: `${n} ${n === 1 ? "unit" : "units"}`,
-                        }))}
-                        className="w-28"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
+              {policyText && (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  <span className="font-semibold text-foreground">Return policy: </span>
+                  {policyText}
+                </p>
+              )}
 
-              {/* Resolution Type */}
+              {/* Items: a quantity stepper per line */}
+              <fieldset className="space-y-2">
+                <legend className={SECTION}>Items to return</legend>
+                {available.map((i) => {
+                  const n = qty[i.id] ?? 0;
+                  const set = (v: number) => setQty({ ...qty, [i.id]: Math.min(i.returnable, Math.max(0, v)) });
+                  return (
+                    <div key={i.id} className={`flex items-center justify-between gap-3 rounded-lg border px-3.5 py-3 text-sm transition-colors ${n > 0 ? "border-foreground bg-background" : "border-border"}`}>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{i.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[i.variant, `${i.returnable} ${i.returnable === 1 ? "unit" : "units"} returnable`].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center rounded-lg border border-border bg-background" role="group" aria-label={`Quantity of ${i.title} to return`}>
+                        <button type="button" onClick={() => set(n - 1)} disabled={n <= 0} aria-label="One fewer" className="size-8 text-base text-foreground hover:bg-muted disabled:opacity-40">
+                          −
+                        </button>
+                        <span className="w-7 text-center text-sm font-medium tabular-nums" aria-live="polite">{n}</span>
+                        <button type="button" onClick={() => set(n + 1)} disabled={n >= i.returnable} aria-label="One more" className="size-8 text-base text-foreground hover:bg-muted disabled:opacity-40">
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </fieldset>
+
               {allowExchanges && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What would you prefer?</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm font-medium ${resolution === "refund" ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground"}`}>
-                      <input
-                        type="radio"
-                        name="resolution"
-                        value="refund"
-                        checked={resolution === "refund"}
-                        onChange={() => setResolution("refund")}
-                        className="sr-only"
-                      />
-                      Refund
-                    </label>
-                    <label className={`flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm font-medium ${resolution === "replacement" ? "border-primary bg-primary/5 text-primary" : "border-border text-foreground"}`}>
-                      <input
-                        type="radio"
-                        name="resolution"
-                        value="replacement"
-                        checked={resolution === "replacement"}
-                        onChange={() => setResolution("replacement")}
-                        className="sr-only"
-                      />
-                      Exchange
-                    </label>
+                <div role="radiogroup" aria-label="What would you prefer?" className="space-y-2">
+                  <p className={SECTION}>What would you prefer?</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["refund", "replacement"] as const).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        role="radio"
+                        aria-checked={resolution === r}
+                        onClick={() => setResolution(r)}
+                        className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${resolution === r ? "border-foreground bg-background text-foreground" : "border-border text-muted-foreground hover:bg-background"}`}
+                      >
+                        {r === "refund" ? "Refund" : "Exchange"}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* Exchange Item Request */}
               {resolution === "replacement" && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Exchange request details *</label>
-                  <input
-                    required
-                    maxLength={200}
-                    placeholder="e.g. Please replace with Size L / Blue color"
-                    value={exchangeRequest}
-                    onChange={(e) => setExchangeRequest(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground"
-                  />
-                </div>
+                <FloatingField id="return-exchange" label="What should we send instead? (size, colour...)" required maxLength={200} value={exchangeRequest} onChange={setExchangeRequest} />
               )}
 
-              {/* Reason Selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reason for Return *</label>
-                {reasons.length > 0 ? (
+              {/* Reason */}
+              {reasons.length > 0 ? (
+                <div className="space-y-2">
+                  <p className={SECTION}>Reason for return *</p>
                   <SimpleSelect
                     ariaLabel="Reason for return"
                     value={selectedReasonId}
@@ -395,31 +397,12 @@ export function ReturnRequestForm({
                     options={reasons.map((r) => ({ value: r.id, label: r.label }))}
                     className="w-full"
                   />
-                ) : (
-                  <input
-                    required
-                    minLength={3}
-                    maxLength={100}
-                    placeholder="Reason (damaged, wrong item, etc.)"
-                    value={customReason}
-                    onChange={(e) => setCustomReason(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground"
-                  />
-                )}
-              </div>
+                </div>
+              ) : (
+                <FloatingField id="return-reason" label="Reason (damaged, wrong item, etc.)" required minLength={3} maxLength={100} value={customReason} onChange={setCustomReason} />
+              )}
 
-              {/* Additional Comments */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Additional details (optional)</label>
-                <textarea
-                  maxLength={500}
-                  value={customerComment}
-                  onChange={(e) => setCustomerComment(e.target.value)}
-                  placeholder="Tell us more about the issue..."
-                  className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground"
-                  rows={2}
-                />
-              </div>
+              <FloatingTextarea id="return-comment" label="Tell us more (optional)" maxLength={500} value={customerComment} onChange={setCustomerComment} />
 
               {/* Photo Upload */}
               {currentReasonObj?.photoRequirement !== "not_asked" && (
@@ -474,7 +457,7 @@ export function ReturnRequestForm({
               )}
 
               {error && (
-                <p role="alert" className="text-xs text-destructive flex items-center gap-1.5">
+                <p role="alert" className="flex items-center gap-1.5 text-xs text-destructive">
                   <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
@@ -482,21 +465,13 @@ export function ReturnRequestForm({
                 </p>
               )}
 
-              <div className="flex gap-2 pt-2 border-t border-border">
-                <button
-                  type="submit"
-                  disabled={busy || uploading}
-                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
-                >
-                  {busy ? "Submitting..." : "Submit request"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
-                >
+              <div className="flex items-center gap-2.5 border-t border-border pt-4">
+                <Button type="submit" size="md" disabled={busy || uploading} loading={busy}>
+                  {busy ? "Submitting…" : "Submit request"}
+                </Button>
+                <Button type="button" variant="ghost" size="md" onClick={close}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           )}

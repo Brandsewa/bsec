@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { checkRateLimit, RateLimitExceededError } from "../system/rate-limit.ts";
-import { type Db, orders, orderItems, orderEvents, fulfillments, fulfillmentItems, trackingEvents, actionTokens, customers, withTenant } from "@bs/db";
+import { type Db, orders, orderItems, orderEvents, fulfillments, fulfillmentItems, trackingEvents, returns, actionTokens, customers, withTenant } from "@bs/db";
 
 export interface OrderItemSummary {
   id: string;
@@ -155,7 +155,7 @@ export async function loadOrderTracking(
  * Orders that belong to a signed-in customer: those linked to them, plus guest orders placed with the phone number they
  * just proved they own with an OTP (checkout does not link a guest order to an account).
  */
-async function ownedBy(tx: Db, tenantId: string, customerId: string) {
+export async function ownedBy(tx: Db, tenantId: string, customerId: string) {
   const [c] = await tx
     .select({
       phone: customers.phone,
@@ -218,6 +218,48 @@ export async function getCustomerOrders(
       .orderBy(sql`${orders.placedAt} DESC`);
 
     return rows;
+  });
+}
+
+export interface CustomerDashboardStats {
+  /** Placed and not yet delivered, cancelled or returned. */
+  active: number;
+  /** Shipped (all or part) and on the way. */
+  inTransit: number;
+  /** Orders with a return request still being handled, or a parcel being sent back to the seller. */
+  inReturn: number;
+  delivered: number;
+}
+
+/** The four counts on the account dashboard, over the same orders the shopper sees in their order list. */
+export async function getCustomerDashboardStats(db: Db, tenantId: string, customerId: string): Promise<CustomerDashboardStats> {
+  return await withTenant(db, tenantId, async (tx) => {
+    const owned = await ownedBy(tx, tenantId, customerId);
+    const rows = await tx
+      .select({ id: orders.id, status: orders.status, fulfillmentStatus: orders.fulfillmentStatus })
+      .from(orders)
+      .where(and(eq(orders.tenantId, tenantId), owned));
+    const open = await tx
+      .select({ orderId: returns.orderId })
+      .from(returns)
+      .where(
+        and(
+          eq(returns.tenantId, tenantId),
+          inArray(returns.orderId, rows.length ? rows.map((r) => r.id) : ["00000000-0000-0000-0000-000000000000"]),
+          inArray(returns.status, ["requested", "approved", "picked_up", "received"]),
+        ),
+      );
+    const done = ["delivered", "cancelled", "returned"];
+    // a parcel the courier is sending back to the seller counts as "in return", not as active or in transit
+    const coming = rows.filter((r) => r.fulfillmentStatus !== "rto" && r.fulfillmentStatus !== "rto_delivered");
+    const returning = new Set(open.map((o) => o.orderId));
+    for (const r of rows) if (r.fulfillmentStatus === "rto") returning.add(r.id);
+    return {
+      active: coming.filter((r) => !done.includes(r.status)).length,
+      inTransit: coming.filter((r) => r.status === "fulfilled" || r.status === "partially_fulfilled").length,
+      inReturn: returning.size,
+      delivered: rows.filter((r) => r.status === "delivered").length,
+    };
   });
 }
 
@@ -370,6 +412,8 @@ export async function mintOrderViewTokenForCustomer(
   tenantId: string,
   customerId: string,
   orderId: string,
+  /** How long the link lives; a page that only needs it for one visit asks for a few hours. */
+  ttlMs: number = 30 * 86_400_000,
 ): Promise<string | null> {
   return await withTenant(db, tenantId, async (tx) => {
     const owned = await ownedBy(tx, tenantId, customerId);
@@ -384,7 +428,7 @@ export async function mintOrderViewTokenForCustomer(
       purpose: "order_view",
       targetId: orderId,
       tokenHash: createHash("sha256").update(raw).digest("hex"),
-      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      expiresAt: new Date(Date.now() + ttlMs),
     });
     return raw;
   });

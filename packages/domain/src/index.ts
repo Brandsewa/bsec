@@ -58,6 +58,7 @@ export * from "./customers/auth.ts";
 export * from "./customers/addresses.ts";
 export * from "./customers/wishlist.ts";
 export * from "./customers/orders.ts";
+export * from "./customers/returns.ts";
 export * from "./customers/session.ts";
 export * from "./customers/profile.ts";
 export * from "./customers/unsubscribe.ts";

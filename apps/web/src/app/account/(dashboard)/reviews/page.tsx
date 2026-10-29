@@ -10,7 +10,7 @@ export default async function AccountReviewsPage() {
   const reviews = await getCustomerReviews(ctx.store.rt._db.db, ctx.store.tenantId, ctx.customer.id);
   if (reviews.length === 0) {
     return (
-      <div className="rounded-xl bg-[var(--muted)]/50 p-8 text-center" data-testid="no-reviews">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-8 text-center" data-testid="no-reviews">
         <p className="text-sm text-[var(--muted-foreground)]">You have not reviewed any products yet. Reviews you write on a product page show up here.</p>
       </div>
     );
@@ -18,7 +18,7 @@ export default async function AccountReviewsPage() {
   return (
     <ul className="space-y-3" data-testid="reviews-list">
       {reviews.map((r) => (
-        <li key={r.id} className="rounded-xl bg-[var(--muted)]/50 p-4">
+        <li key={r.id} className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Link href={`/products/${r.productSlug}`} className="text-sm font-semibold hover:opacity-70 transition-opacity">
               {r.productTitle}
