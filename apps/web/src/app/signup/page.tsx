@@ -5,6 +5,8 @@ import { TurnstileWidget } from "@/components/marketing/TurnstileWidget";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SimpleSelect } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
+import { postalCodeProblem, regionsFor, POSTAL_LABEL } from "@bs/domain/addresses";
 import { INDIAN_STATES } from "@/lib/india";
 import { loadGoogleScript } from "@/lib/google-identity.ts";
 import { fontSerifDisplay } from "@/lib/fonts.ts";
@@ -16,15 +18,31 @@ interface PlanOption {
   code: string;
   name: string;
   priceMonthlyPaise: number;
+  priceMonthlyUsdCents?: number | null;
+  currency: string;
   limits: Record<string, number>;
   features: Record<string, boolean>;
 }
 
+interface CountryOption {
+  iso2: string;
+  name: string;
+  defaultCurrency: string;
+  defaultLocale: string;
+  defaultTimezone: string;
+  defaultUnitSystem: string;
+  addressSchema: string;
+  sort: number;
+}
+
 const DEFAULT_TRIAL_DAYS = 14;
 
-
-function rupees(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })} / mo`;
+function formatPlanPrice(plan: PlanOption, country: string): string {
+  if (country === "IN") {
+    return `${formatMoney(plan.priceMonthlyPaise, "INR")} / mo`;
+  }
+  const usdCents = plan.priceMonthlyUsdCents ?? Math.round(plan.priceMonthlyPaise / 80);
+  return `${formatMoney(usdCents, "USD")} / mo`;
 }
 
 /** Feature chips built from the plan's real limits and flags (no copy is hard-coded per plan). */
@@ -50,6 +68,12 @@ function SignupContent() {
   const [promoCode, setPromoCode] = useState(searchParams.get("promo") || "");
 
   // Form fields
+  const [country, setCountry] = useState<string>("IN");
+  const [countries, setCountries] = useState<CountryOption[]>([
+    { iso2: "IN", name: "India", defaultCurrency: "INR", defaultLocale: "en-IN", defaultTimezone: "Asia/Kolkata", defaultUnitSystem: "metric", addressSchema: "in", sort: 1 },
+    { iso2: "US", name: "United States", defaultCurrency: "USD", defaultLocale: "en-US", defaultTimezone: "America/New_York", defaultUnitSystem: "imperial", addressSchema: "us", sort: 2 },
+    { iso2: "CA", name: "Canada", defaultCurrency: "CAD", defaultLocale: "en-CA", defaultTimezone: "America/Toronto", defaultUnitSystem: "metric", addressSchema: "ca", sort: 3 },
+  ]);
   const [storeName, setStoreName] = useState(searchParams.get("storeName") || "");
   const [slug, setSlug] = useState(searchParams.get("slug") || "");
   const [slugStatus, setSlugStatus] = useState<{ available?: boolean; reason?: string } | null>(null);
@@ -267,8 +291,15 @@ function SignupContent() {
   const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessState) {
-      setErrorMessage("Please choose the state your business is in.");
+      setErrorMessage(country === "IN" ? "Please choose the state your business is in." : country === "US" ? "Please choose your state." : country === "CA" ? "Please choose your province." : "Please choose your state or region.");
       return;
+    }
+    if (pincode.trim()) {
+      const postalErr = postalCodeProblem(country, pincode);
+      if (postalErr) {
+        setErrorMessage(postalErr);
+        return;
+      }
     }
     setErrorMessage(null);
     await updateLead("basics_entered", { businessName: businessName.trim() || storeName || undefined });
@@ -286,6 +317,16 @@ function SignupContent() {
         setSelectedPlan((cur) => (cur && rows.some((p) => p.code === cur) ? cur : (rows[Math.min(1, rows.length - 1)]?.code ?? null)));
       })
       .catch(() => setPlansError(true));
+  }, []);
+
+  // Load supported platform countries
+  useEffect(() => {
+    fetch("/api/saas/countries")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("countries"))))
+      .then((rows: CountryOption[]) => {
+        if (rows && rows.length > 0) setCountries(rows);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -331,9 +372,11 @@ function SignupContent() {
     setErrorMessage(null);
     setProvisionProgress("Creating tenant database isolation...");
 
+    const selectedCountryCfg = countries.find((c) => c.iso2 === country);
+    const countryName = selectedCountryCfg?.name || country;
     const steps = [
-      "Configuring India shipping zones...",
-      "Setting up Cash on Delivery & payment configurations...",
+      `Configuring ${countryName} shipping zones & base market...`,
+      country === "IN" ? "Setting up Cash on Delivery & payment configurations..." : "Setting up payment configurations...",
       "Publishing starter theme template & home page blocks...",
       trialDays > 0 ? `Allocating size tier & starting ${trialDays}-day free trial...` : "Allocating size tier & setting up your plan...",
     ];
@@ -356,6 +399,7 @@ function SignupContent() {
           turnstileToken: turnstileToken ?? undefined,
           storeName: storeName.trim() || `${slug} Store`,
           slug: slug.trim(),
+          country,
           owner: {
             email: email.trim(),
             name: ownerName.trim(),
@@ -372,8 +416,6 @@ function SignupContent() {
             state: businessState || undefined,
             pincode: pincode.trim() || undefined,
           },
-          currency: "INR",
-          timezone: "Asia/Kolkata",
         }),
       });
 
@@ -505,7 +547,23 @@ function SignupContent() {
           <form onSubmit={handleStep1Submit} className="space-y-6">
             <div>
               <h2 className="mb-1 text-xl font-semibold">Step 1: Choose your store address</h2>
-              <p className="bm-dim text-sm">Pick your store name and claim your permanent subdomain.</p>
+              <p className="bm-dim text-sm">Pick your country, store name and claim your permanent subdomain.</p>
+            </div>
+
+            <div>
+              <label className="bm-label">
+                Country
+              </label>
+              <SimpleSelect
+                value={country}
+                onChange={(c) => {
+                  setCountry(c);
+                  setBusinessState("");
+                  setPincode("");
+                }}
+                options={countries.map((c) => ({ value: c.iso2, label: `${c.name} (${c.defaultCurrency})` }))}
+              />
+              <p className="bm-dim mt-1 text-xs">Sets your store currency, timezone and base shipping market.</p>
             </div>
 
             <div>
@@ -514,7 +572,7 @@ function SignupContent() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Kolkata Handlooms"
+                placeholder={country === "IN" ? "e.g. Kolkata Handlooms" : country === "US" ? "e.g. Brooklyn Roasters" : "e.g. Montreal Organics"}
                 value={storeName}
                 onChange={(e) => handleStoreNameChange(e.target.value)}
                 className="bm-input"
@@ -680,7 +738,11 @@ function SignupContent() {
           <form onSubmit={handleStep3Submit} className="space-y-6">
             <div>
               <h2 className="mb-1 text-xl font-semibold">Step 3: Tell us about your business</h2>
-              <p className="bm-dim text-sm">This pre-fills your store details, invoices and GST state. You can change it later in Settings.</p>
+              <p className="bm-dim text-sm">
+                {country === "IN"
+                  ? "This pre-fills your store details, invoices and GST state. You can change it later in Settings."
+                  : "This pre-fills your store details and business address. You can change it later in Settings."}
+              </p>
             </div>
 
             <div>
@@ -728,7 +790,7 @@ function SignupContent() {
                 <label className="bm-label">City</label>
                 <input
                   type="text"
-                  placeholder="e.g. Mumbai"
+                  placeholder={country === "IN" ? "e.g. Mumbai" : country === "US" ? "e.g. Austin" : "e.g. Toronto"}
                   value={businessCity}
                   onChange={(e) => setBusinessCity(e.target.value)}
                   className="bm-input"
@@ -736,24 +798,50 @@ function SignupContent() {
                 />
               </div>
               <div>
-                <label className="bm-label">State</label>
-                <SimpleSelect
-                  value={businessState}
-                  onChange={setBusinessState}
-                  placeholder="Select state"
-                  options={INDIAN_STATES.map((st) => ({ value: st, label: st }))}
-                />
+                <label className="bm-label">{country === "CA" ? "Province" : "State"}</label>
+                {country === "IN" ? (
+                  <SimpleSelect
+                    value={businessState}
+                    onChange={setBusinessState}
+                    placeholder="Select state"
+                    options={INDIAN_STATES.map((st) => ({ value: st, label: st }))}
+                  />
+                ) : regionsFor(country).length > 0 ? (
+                  <SimpleSelect
+                    value={businessState}
+                    onChange={setBusinessState}
+                    placeholder={country === "CA" ? "Select province" : "Select state"}
+                    options={regionsFor(country).map((r) => ({ value: r.code, label: `${r.name} (${r.code})` }))}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="State or Region"
+                    value={businessState}
+                    onChange={(e) => setBusinessState(e.target.value)}
+                    className="bm-input"
+                    required
+                  />
+                )}
               </div>
             </div>
 
             <div>
-              <label className="bm-label">PIN code (optional)</label>
+              <label className="bm-label">
+                {POSTAL_LABEL[country] ? `${POSTAL_LABEL[country].charAt(0).toUpperCase() + POSTAL_LABEL[country].slice(1)} (optional)` : "Postal code (optional)"}
+              </label>
               <input
                 type="text"
-                inputMode="numeric"
-                placeholder="400001"
+                placeholder={country === "IN" ? "400001" : country === "US" ? "90210" : "M5V 2T6"}
                 value={pincode}
-                onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (country === "IN") {
+                    setPincode(val.replace(/\D/g, "").slice(0, 6));
+                  } else {
+                    setPincode(val.slice(0, 10));
+                  }
+                }}
                 className="bm-input"
               />
             </div>
@@ -796,7 +884,7 @@ function SignupContent() {
                       <h4 className="font-semibold text-base">{plan.name}</h4>
                       {i === Math.min(1, (plans?.length ?? 1) - 1) && <span className="bm-badge">Recommended</span>}
                     </div>
-                    <span className="font-semibold text-base">{rupees(plan.priceMonthlyPaise)}</span>
+                    <span className="font-semibold text-base">{formatPlanPrice(plan, country)}</span>
                   </div>
                   <div className="bm-dim flex flex-wrap gap-2 text-[11px] font-medium">
                     {planChips(plan).map((f) => (

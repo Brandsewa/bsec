@@ -17,6 +17,7 @@ import {
   toast,
 } from "@bs/ui";
 import type { ProductDetail, ProductVariant } from "@bs/contracts";
+import { gramsToUnit, unitToGrams, type WeightUnit } from "@bs/contracts/units";
 import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -48,7 +49,7 @@ interface FormState {
   optionInputs: Record<string, string>;
 }
 
-function toForm(variant: ProductVariant | null, optionNames: string[]): FormState {
+function toForm(variant: ProductVariant | null, optionNames: string[], weightUnit: WeightUnit = "g"): FormState {
   const dims = variant?.dimensions as Dims;
   return {
     sku: variant?.sku ?? "",
@@ -57,7 +58,7 @@ function toForm(variant: ProductVariant | null, optionNames: string[]): FormStat
     price: toRupees(variant?.price),
     compare: toRupees(variant?.compareAtPrice),
     cost: toRupees(variant?.costPrice),
-    weight: variant?.weightGrams != null ? String(variant.weightGrams) : "",
+    weight: variant?.weightGrams != null ? String(gramsToUnit(variant.weightGrams, weightUnit)) : "",
     length: dimText(dims, "lengthCm"),
     width: dimText(dims, "widthCm"),
     height: dimText(dims, "heightCm"),
@@ -108,8 +109,11 @@ export function VariantDrawer(props: VariantDrawerProps) {
 
 function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnRequest, variant, variants, optionNames, canDelete, onChanged }: VariantDrawerProps) {
   const isNew = variant === null;
+  const settingsQuery = useQuery(orpc.admin.settings.get.queryOptions());
+  const activeWeightUnit: WeightUnit = settingsQuery.data?.weightUnit ?? "g";
+
   const [activeId, setActiveId] = useState<string>(variant?.id ?? "new");
-  const [forms, setForms] = useState<Record<string, FormState>>(() => ({ [variant?.id ?? "new"]: toForm(variant, optionNames) }));
+  const [forms, setForms] = useState<Record<string, FormState>>(() => ({ [variant?.id ?? "new"]: toForm(variant, optionNames, activeWeightUnit) }));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -117,8 +121,8 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
   const rail = useMemo(() => variants.filter((v) => !removed.has(v.id)), [variants, removed]);
   const active = isNew ? null : (rail.find((v) => v.id === activeId) ?? rail[0] ?? null);
   const activeKey = active?.id ?? "new";
-  const form = forms[activeKey] ?? toForm(active, optionNames);
-  const patch = (p: Partial<FormState>) => setForms((prev) => ({ ...prev, [activeKey]: { ...(prev[activeKey] ?? toForm(active, optionNames)), ...p } }));
+  const form = forms[activeKey] ?? toForm(active, optionNames, activeWeightUnit);
+  const patch = (p: Partial<FormState>) => setForms((prev) => ({ ...prev, [activeKey]: { ...(prev[activeKey] ?? toForm(active, optionNames, activeWeightUnit)), ...p } }));
 
   const updateMutation = useMutation(orpc.admin.variants.update.mutationOptions());
   const createMutation = useMutation(orpc.admin.variants.create.mutationOptions());
@@ -128,7 +132,7 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
 
   const isDirty = (v: ProductVariant) => {
     const f = forms[v.id];
-    return f ? JSON.stringify(f) !== JSON.stringify(toForm(v, optionNames)) : false;
+    return f ? JSON.stringify(f) !== JSON.stringify(toForm(v, optionNames, activeWeightUnit)) : false;
   };
   const dirtyVariants = rail.filter(isDirty);
 
@@ -149,7 +153,11 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
     if (!priceOnRequest && f.compare !== "" && (!Number.isFinite(Number(f.compare)) || Number(f.compare) < 0)) return "Enter a valid compare-at price";
     if (f.cost !== "" && (!Number.isFinite(Number(f.cost)) || Number(f.cost) < 0)) return "Enter a valid cost price";
     const w = numberOrNull(f.weight);
-    if (w !== null && (!Number.isInteger(w) || w < 0 || w > 1_000_000)) return "Weight must be a whole number of grams (0 to 1,000,000)";
+    if (w !== null) {
+      if (!Number.isFinite(w) || w < 0) return `Enter a valid weight in ${activeWeightUnit}`;
+      const grams = unitToGrams(w, activeWeightUnit);
+      if (grams > 1_000_000) return "Weight cannot exceed 1,000,000 grams";
+    }
     for (const [label, v] of [["Length", f.length], ["Width", f.width], ["Height", f.height]] as const) {
       const n = numberOrNull(v);
       if (n !== null && (!Number.isFinite(n) || n < 0 || n > 1000)) return `${label} must be between 0 and 1000 cm`;
@@ -165,8 +173,10 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
     const l = numberOrNull(f.length);
     const wd = numberOrNull(f.width);
     const h = numberOrNull(f.height);
+    const w = numberOrNull(f.weight);
+    const weightGrams = w !== null ? unitToGrams(w, activeWeightUnit) : null;
     return {
-      weightGrams: numberOrNull(f.weight),
+      weightGrams,
       dimensions: l === null && wd === null && h === null ? null : { ...(l !== null ? { lengthCm: l } : {}), ...(wd !== null ? { widthCm: wd } : {}), ...(h !== null ? { heightCm: h } : {}) },
     };
   }
@@ -366,8 +376,16 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
             <p className="text-muted-foreground">Used for weight-based delivery rates and courier packing.</p>
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="grid gap-1.5">
-                <FieldLabel htmlFor="vd-weight">Weight (g)</FieldLabel>
-                <Input id="vd-weight" type="number" step="1" min="0" value={form.weight} onChange={(e) => patch({ weight: e.target.value })} placeholder="e.g. 250" />
+                <FieldLabel htmlFor="vd-weight">Weight ({activeWeightUnit})</FieldLabel>
+                <Input
+                  id="vd-weight"
+                  type="number"
+                  step={activeWeightUnit === "g" ? "1" : activeWeightUnit === "oz" ? "0.01" : "0.001"}
+                  min="0"
+                  value={form.weight}
+                  onChange={(e) => patch({ weight: e.target.value })}
+                  placeholder={activeWeightUnit === "g" ? "e.g. 250" : activeWeightUnit === "kg" ? "e.g. 0.25" : activeWeightUnit === "lb" ? "e.g. 1" : "e.g. 8"}
+                />
               </div>
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="vd-length">Length (cm)</FieldLabel>

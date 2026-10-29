@@ -10,6 +10,7 @@ import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { INDIAN_STATES } from "../../../lib/india.ts";
 import { STORE_TIMEZONES } from "@bs/contracts";
+import { defaultWeightUnit, unitsForSystem, type UnitSystem, type WeightUnit } from "@bs/contracts/units";
 
 export const Route = createFileRoute("/_store/settings/store-details")({
   pendingComponent: () => <PageSkeleton />,
@@ -27,6 +28,8 @@ interface FormState {
   state: string;
   pincode: string;
   timezone: string;
+  unitSystem: UnitSystem;
+  weightUnit: WeightUnit;
   autoPublishReviews: boolean;
 }
 
@@ -49,9 +52,14 @@ interface SettingsData {
   autoPublishReviews?: boolean | undefined;
   currency: string;
   timezone: string;
+  country?: string | undefined;
+  unitSystem?: UnitSystem | undefined;
+  weightUnit?: WeightUnit | undefined;
   tax?: { gstin?: string | null | undefined } | undefined;
 }
 function toFormState(s: SettingsData): FormState {
+  const unitSystem = s.unitSystem ?? "metric";
+  const weightUnit = s.weightUnit ?? defaultWeightUnit(unitSystem);
   return {
     storeName: s.storeName,
     legalName: s.legalName ?? "",
@@ -63,6 +71,8 @@ function toFormState(s: SettingsData): FormState {
     state: s.address?.state ?? "",
     pincode: s.address?.pincode ?? "",
     timezone: s.timezone,
+    unitSystem,
+    weightUnit,
     autoPublishReviews: Boolean(s.autoPublishReviews),
   };
 }
@@ -112,7 +122,7 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const address = {
-      countryCode: "IN",
+      countryCode: data.address?.countryCode ?? data.country ?? "IN",
       ...(form.line1 ? { line1: form.line1 } : {}),
       ...(form.line2 ? { line2: form.line2 } : {}),
       ...(form.city ? { city: form.city } : {}),
@@ -127,6 +137,8 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
         supportPhone: form.supportPhone.trim() || null,
         address: Object.keys(address).length > 1 || data.address ? address : null,
         timezone: form.timezone,
+        unitSystem: form.unitSystem,
+        weightUnit: form.weightUnit,
         autoPublishReviews: form.autoPublishReviews,
       },
       {
@@ -209,8 +221,48 @@ function StoreDetailsForm({ data }: { data: SettingsData }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="country" className="text-xs font-medium text-foreground">Country</Label>
-              <Input id="country" disabled readOnly value="India" />
-              <span className="text-[11px] text-muted-foreground">More countries supported soon.</span>
+              <Input
+                id="country"
+                disabled
+                readOnly
+                value={data.country === "US" ? "United States (US)" : data.country === "CA" ? "Canada (CA)" : data.country === "IN" ? "India (IN)" : (data.country ?? "India")}
+              />
+              <span className="text-[11px] text-muted-foreground">Base market registration country.</span>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-border">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="unitSystem" className="text-xs font-medium text-foreground">Unit system</Label>
+              <SimpleSelect
+                id="unitSystem"
+                value={form.unitSystem}
+                onChange={(v) => {
+                  const sys = v as UnitSystem;
+                  setForm((f) => ({
+                    ...f,
+                    unitSystem: sys,
+                    weightUnit: defaultWeightUnit(sys),
+                  }));
+                }}
+                options={[
+                  { value: "metric", label: "Metric (g, kg)" },
+                  { value: "imperial", label: "Imperial (oz, lb)" },
+                ]}
+              />
+              <span className="text-[11px] text-muted-foreground">Default unit system for entering and displaying weight.</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="weightUnit" className="text-xs font-medium text-foreground">Default weight unit</Label>
+              <SimpleSelect
+                id="weightUnit"
+                value={form.weightUnit}
+                onChange={(v) => setForm((f) => ({ ...f, weightUnit: v as WeightUnit }))}
+                options={unitsForSystem(form.unitSystem).map((u) => ({
+                  value: u,
+                  label: u === "kg" ? "Kilograms (kg)" : u === "g" ? "Grams (g)" : u === "lb" ? "Pounds (lb)" : "Ounces (oz)",
+                }))}
+              />
+              <span className="text-[11px] text-muted-foreground">Preferred unit in product variant and shipping editors.</span>
             </div>
           </div>
         </SettingsCard>

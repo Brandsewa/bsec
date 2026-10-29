@@ -2,6 +2,7 @@ import { loadTrialPolicy } from "../platform/billing-settings.ts";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { QUEUE_NAMES, schema, type Db } from "@bs/db";
+import { defaultWeightUnit, type UnitSystem } from "@bs/contracts/units";
 import { hashPassword, STORE_PERMISSIONS, SYSTEM_STORE_ROLES } from "@bs/auth";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { tierForPlan } from "./plan-tiers.ts";
@@ -45,6 +46,8 @@ export interface ProvisionTenantInput {
   slug: string;
   owner: ProvisionOwnerInput;
   planCode?: "starter" | "growth" | "pro" | string | undefined;
+  /** Country code (ISO2). Sets tenants.country, currency, timezone, locale, unit system, base market and shipping zone. Defaults to 'IN'. */
+  country?: string | undefined;
   /** Theme template code. Omitted for self-service signups: the platform's default template is used (`resolveSignupTemplateCode`). */
   themeTemplate?: string | undefined;
   /** Business details collected at signup; they pre-fill Settings, Store details and the tax state. */
@@ -105,10 +108,24 @@ export async function provisionTenant(
   const storeName = input.storeName.trim() || `${slug.charAt(0).toUpperCase() + slug.slice(1)} Store`;
   const ownerEmail = input.owner.email.trim().toLowerCase();
   const ownerName = input.owner.name.trim() || ownerEmail.split("@")[0] || "Store Owner";
-  const currency = (input.currency || "INR").toUpperCase();
-  const timezone = input.timezone || "Asia/Kolkata";
   const planCode = (input.planCode || "starter").toLowerCase();
   const source = input.source || "self_service";
+
+  // Resolve platform country configuration (IN, US, CA from platform_countries)
+  const reqCountry = (input.country || "IN").trim().toUpperCase();
+  const countryRows = await db
+    .select()
+    .from(schema.platformCountries)
+    .where(eq(schema.platformCountries.iso2, reqCountry))
+    .limit(1);
+  const pc = countryRows[0];
+
+  const country = pc?.iso2 ?? reqCountry;
+  const currency = (input.currency || pc?.defaultCurrency || "INR").toUpperCase();
+  const timezone = input.timezone || pc?.defaultTimezone || "Asia/Kolkata";
+  const locale = pc?.defaultLocale || (country === "IN" ? "en-IN" : "en-US");
+  const unitSystem = (pc?.defaultUnitSystem as UnitSystem) || "metric";
+  const weightUnit = defaultWeightUnit(unitSystem);
 
   const platformDomain = process.env.PLATFORM_DOMAIN?.trim() || "bcom.si";
   const hostname = `${slug}.${platformDomain}`;
@@ -186,8 +203,10 @@ export async function provisionTenant(
         name: storeName,
         ownerUserId: ownerId,
         status: "active",
+        country,
         currency,
         timezone,
+        locale,
       })
       .returning({ id: schema.tenants.id });
     if (!tenant) throw new Error("Failed to create tenant record");
@@ -272,7 +291,7 @@ export async function provisionTenant(
     const businessAddress =
       biz && (biz.line1?.trim() || biz.city?.trim() || biz.state?.trim() || biz.pincode?.trim())
         ? {
-            countryCode: "IN",
+            countryCode: country,
             ...(biz.line1?.trim() ? { line1: biz.line1.trim() } : {}),
             ...(biz.city?.trim() ? { city: biz.city.trim() } : {}),
             ...(biz.state?.trim() ? { state: biz.state.trim() } : {}),
@@ -280,6 +299,7 @@ export async function provisionTenant(
           }
         : null;
     const orderPrefix = `#${slug.slice(0, 3).toUpperCase()}-`;
+    const isIndia = country === "IN";
     await tx.insert(schema.storeSettings).values({
       tenantId,
       storeName,
@@ -287,21 +307,40 @@ export async function provisionTenant(
       address: businessAddress,
       currency,
       timezone,
+      unitSystem,
+      weightUnit,
       supportEmail: ownerEmail,
       supportPhone: input.owner.phone ?? null,
       orderPrefix,
       checkout: {
-        cod: { enabled: true, feePaise: 0 },
-        tax: { gstin: null, sellerState: input.business?.state?.trim() || null, pricesIncludeTax: true },
+        cod: { enabled: isIndia, feePaise: 0 },
+        tax: {
+          gstin: null,
+          sellerState: isIndia ? (input.business?.state?.trim() || null) : null,
+          pricesIncludeTax: isIndia,
+        },
       },
     });
 
     // 9b. Base market (ADR-040): every store has exactly one, from its country and currency.
+    const baseMarketName = pc?.name ?? (country === "US" ? "United States" : country === "CA" ? "Canada" : country);
+    const baseMarketHandle = country.toLowerCase();
+    const baseTaxDisplay = isIndia ? "inclusive" : "exclusive";
     const [baseMarket] = await tx
       .insert(schema.markets)
-      .values({ tenantId, name: "India", handle: "in", isBase: true, status: "active", currency, taxDisplay: "inclusive" })
+      .values({
+        tenantId,
+        name: baseMarketName,
+        handle: baseMarketHandle,
+        isBase: true,
+        status: "active",
+        currency,
+        taxDisplay: baseTaxDisplay,
+      })
       .returning({ id: schema.markets.id });
-    if (baseMarket) await tx.insert(schema.marketCountries).values({ tenantId, marketId: baseMarket.id, country: "IN" });
+    if (baseMarket) {
+      await tx.insert(schema.marketCountries).values({ tenantId, marketId: baseMarket.id, country });
+    }
 
     // 10. Default Warehouse Location
     await tx
@@ -312,39 +351,60 @@ export async function provisionTenant(
         isDefault: true,
       });
 
-    // 11. Default India Flat Shipping Zone & Rates (PLAN §5.4 / M7)
+    // 11. Default Flat Shipping Zone & Rates (PLAN §5.4 / M7 / ADR-040)
+    const zoneName = isIndia ? "India (All States & UTs)" : `${baseMarketName} (National)`;
     const [shippingZone] = await tx
       .insert(schema.shippingZones)
       .values({
         tenantId,
-        name: "India (All States & UTs)",
-        countries: ["IN"],
+        name: zoneName,
+        countries: [country],
         isDefault: true,
+        marketId: baseMarket?.id ?? null,
       })
       .returning({ id: schema.shippingZones.id });
 
     if (shippingZone) {
-      // Standard Flat Rate (₹99.00)
+      // Sensible default shipping rates per country & currency (minor units: paise / cents)
+      let standardRatePrice = 9900;
+      let freeRateThreshold = 99900;
+      let freeRateLabel = "Free Shipping on orders above ₹999";
+
+      if (currency === "USD") {
+        standardRatePrice = 500; // $5.00
+        freeRateThreshold = 5000; // $50.00
+        freeRateLabel = "Free Shipping on orders above $50";
+      } else if (currency === "CAD") {
+        standardRatePrice = 700; // $7.00 CAD
+        freeRateThreshold = 7500; // $75.00 CAD
+        freeRateLabel = "Free Shipping on orders above $75";
+      } else if (!isIndia) {
+        standardRatePrice = 1000;
+        freeRateThreshold = 10000;
+        freeRateLabel = `Free Shipping on qualifying orders`;
+      }
+
+      // Standard Flat Rate
       await tx.insert(schema.shippingRates).values({
         tenantId,
         zoneId: shippingZone.id,
         name: "Standard Shipping",
         method: "standard",
         rateType: "flat",
-        pricePaise: 9900,
+        pricePaise: standardRatePrice,
         minDays: 3,
         maxDays: 7,
       });
 
-      // Free Shipping above ₹999 threshold
+      // Free Shipping above threshold
       await tx.insert(schema.shippingRates).values({
         tenantId,
         zoneId: shippingZone.id,
-        name: "Free Shipping on orders above ₹999",
+        name: freeRateLabel,
         method: "standard",
         rateType: "free_above_threshold",
         pricePaise: 0,
-        thresholdPaise: 99900,
+        thresholdPaise: freeRateThreshold,
         minDays: 3,
         maxDays: 7,
       });
