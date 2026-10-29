@@ -1481,6 +1481,10 @@ export const ReviewsMarqueeSchema = z.object({
   button1Href: hrefSchema.or(z.literal("")).default(""),
   button2Label: z.string().max(40).default("Learn more"),
   button2Href: hrefSchema.or(z.literal("")).default(""),
+  /** Optional picture under (or above) the heading block; it fills the height left in that column. */
+  imageMediaId: z.string().optional(),
+  imageAlt: z.string().max(120).default(""),
+  imagePlace: z.enum(["below", "above"]).default("below"),
   /** Where the heading block sits next to the reviews. "split" puts the heading on top and the description and buttons at the bottom. */
   textPosition: z.enum(["top", "middle", "bottom", "split"]).default("middle"),
   /** Which side the heading sits on; the moving reviews take the other side. */

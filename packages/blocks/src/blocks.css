@@ -223,6 +223,8 @@
 .bsb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .bsb-sticky { position: sticky; top: 0; z-index: 40; }
 .bsb-site-header { border-bottom: 1px solid var(--b); }
+/* The header and footer always paint their tone, even the default one, which is transparent for ordinary blocks. */
+.bsb-site-header.bsb-tone-default, .bs-block-site-footer.bsb-tone-default { background: var(--bg); }
 .bsb-site-header-row { display: flex; align-items: center; gap: 1.5rem; padding-block: 0.75rem; }
 .bsb-site-logo { font-family: var(--fh); font-weight: 700; font-size: 1.25rem; color: inherit; text-decoration: none; display: inline-flex; align-items: center; }
 .bsb-site-nav { display: none; gap: 1.5rem; font-size: 0.9rem; font-weight: 500; flex: 1; align-items: center; }
@@ -235,7 +237,8 @@
 .bsb-has-dropdown:focus-within > .bsb-nav-link .bsb-chevron { transform: rotate(180deg); }
 .bsb-dropdown-menu {
   position: absolute;
-  top: 100%;
+  /* Sits a little under the header's bottom line; the ::before strip keeps the hover alive across the gap. */
+  top: calc(100% + 1.1rem);
   left: 0;
   min-width: 12rem;
   background: var(--bs-bg, #fff);
@@ -246,10 +249,12 @@
   display: none;
   z-index: 50;
 }
+.bsb-dropdown-menu::before { content: ""; position: absolute; left: 0; right: 0; top: -1.2rem; height: 1.2rem; }
 .bsb-has-dropdown:hover > .bsb-dropdown-menu,
 .bsb-has-dropdown:focus-within > .bsb-dropdown-menu {
   display: block;
 }
+.bsb-has-dropdown.bsb-dd-closed > .bsb-dropdown-menu { display: none; }
 .bsb-dropdown-list { list-style: none; margin: 0; padding: 0; }
 .bsb-dropdown-item { position: relative; padding: 0; }
 .bsb-dropdown-link { display: block; padding: 0.5rem 1rem; color: inherit; text-decoration: none; font-size: 0.875rem; }
@@ -1547,6 +1552,11 @@
 .bsb-rm-titleblock { display: flex; flex-direction: column; gap: 0.5rem; }
 .bsb-rm-eyebrow { margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--p); }
 .bsb-tone-primary .bsb-rm-eyebrow { color: inherit; opacity: 0.85; }
+.bsb-rm-img { position: relative; flex: 1 1 auto; min-height: 12rem; border-radius: var(--r); overflow: hidden; background: var(--s); }
+.bsb-rm-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.bsb-rm-img-above .bsb-rm-img { order: -1; }
+/* Phones and tablets: the column has no fixed height, so the picture takes a wide shape instead. */
+@media (max-width: 899px) { .bsb-rm-img { flex: none; min-height: 0; aspect-ratio: 16 / 10; } }
 .bsb-rm-lower { display: flex; flex-direction: column; gap: 1.25rem; }
 .bsb-rm-desc { margin: 0; max-width: 32rem; }
 .bsb-rm-btns { display: flex; flex-wrap: nowrap; gap: 0.75rem; }
