@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant, type Db, QUEUE_NAMES } from "@bs/db";
-import { formatMoney } from "@bs/contracts/money";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
