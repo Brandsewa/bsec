@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-29
 - **Agent:** claude
-- **Branch:** `feat/storefront-batch-updates` (not merged yet)
+- **Branch:** `feat/storefront-batch-updates` (merged in #152, 0198aa0)
 - **Area:** blocks, web, admin, domain, contracts, block-editor, ui
 - **Type:** fix
 - **Supersedes:** none

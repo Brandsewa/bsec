@@ -21,7 +21,7 @@ import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
-import { MobileMenu } from "./views-mobile-menu-client.tsx";
+import { MobileMenu, NavDropdownCloser } from "./views-mobile-menu-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
 
@@ -1387,6 +1387,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
           {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <span>{name}</span>}
         </NavLink>
         <nav className="bsb-site-nav" aria-label="Main">
+          {hasResolvedMenu ? <NavDropdownCloser /> : null}
           {hasResolvedMenu ? (
             menuData.map((item) =>
               item.children && item.children.length > 0 ? (

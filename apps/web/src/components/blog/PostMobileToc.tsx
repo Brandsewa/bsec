@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Table of contents on phones: open at its normal place in the post. Once the reader has scrolled past it, a bar sticks to the bottom of the
+ * Table of contents on phones: closed at its normal place in the post. Once the reader has scrolled past it, a bar sticks to the bottom of the
  * screen, above the quick-navigation bar; tapping it opens the list so they can jump to a section (the list closes after a jump).
  */
 export function PostMobileToc({ items }: { items: Array<{ id: string; text: string }> }) {
@@ -36,7 +36,7 @@ export function PostMobileToc({ items }: { items: Array<{ id: string; text: stri
 
   return (
     <>
-      <details className="bsb-bp-toc-m" ref={inline} open>
+      <details className="bsb-bp-toc-m" ref={inline}>
         <summary>Table of contents</summary>
         <nav aria-label="Table of contents">{list}</nav>
       </details>
