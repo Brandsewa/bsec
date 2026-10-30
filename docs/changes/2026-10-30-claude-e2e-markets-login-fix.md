@@ -12,6 +12,7 @@ The multi-market squash (#150) failed `staging smoke test` on `main`: `e2e/marke
 
 ## What changed
 - `e2e/markets.spec.ts`: sign-in helper only (unused `ADMIN` const removed).
+- `scripts/test-affected.mjs`: leave the Playwright-only `@bs/e2e` package out of the vitest run (a change under `e2e/` made the pre-push gate run Playwright specs under vitest and fail).
 
 ## Verification
 Ran the spec against a local stack (web on 3001, admin on 5180, dev database with migrations 0087 to 0090): 1 passed. CI on `main` is the real check.

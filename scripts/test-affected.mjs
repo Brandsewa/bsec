@@ -56,5 +56,5 @@ const vitestArgs = isHeavy
   ? ["run", "int.test.ts", "--no-file-parallelism"]
   : ["run", "--exclude", "**/*.int.test.ts"];
 process.exit(
-  runCommand("pnpm", ["--filter", "...[origin/main]", "--filter", "!bsec", "exec", "vitest", ...vitestArgs, "--changed", "origin/main", "--passWithNoTests", ...extraVitestArgs]),
+  runCommand("pnpm", ["--filter", "...[origin/main]", "--filter", "!bsec", "--filter", "!@bs/e2e", "exec", "vitest", ...vitestArgs, "--changed", "origin/main", "--passWithNoTests", ...extraVitestArgs]),
 );
