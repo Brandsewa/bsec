@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-30
 - **Agent:** claude
-- **Branch:** `fix/dependency-security-overrides`
+- **Branch:** `fix/dependency-security-overrides` (merged in #158, 4d1f924)
 - **Area:** deps
 - **Type:** fix
 - **Supersedes:** none
@@ -25,4 +25,4 @@ Ran locally: `pnpm typecheck`, `pnpm lint`, `pnpm build` (all green), `pnpm test
 
 ## Definition of done
 - [x] Change record
-- [ ] After merge: confirm the open alert count drops on GitHub; delete this branch and the `bsec-deps` worktree
+- [x] After merge: branch and worktree deleted. GitHub did not start a `main` CI run for the merge commit (a 502 on the merge call, probably a lost push event), so this docs follow-up carries the first build and smoke test of the new lockfile; confirm the open alert count drops afterwards

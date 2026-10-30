@@ -6,8 +6,7 @@ onlyBuiltDependencies:
   - esbuild
 # Security fixes for transitive dependencies Dependabot cannot bump (GitHub alerts, 2026-10-30).
 # Each line forces the patched version only where an older one would be installed; remove a line once the
-# parent package ships it. Not overridden on purpose: esbuild 0.18 (drizzle-kit tooling, dev only) and
-# deepmerge (no patched release exists).
+# parent package ships it. Not overridden on purpose: deepmerge (no patched release exists).
 overrides:
   "fast-uri@<3.1.9": "3.1.9"
   "seroval@<1.6.11": "1.6.11"
@@ -16,4 +15,5 @@ overrides:
   "body-parser@<2.4.0": "2.4.0"
   "follow-redirects@<1.16.1": "1.16.1"
   "source-map-js@<1.2.2": "1.2.2"
-  "zod@>=4.0.0 <4.6.6": "4.6.7"
+  "zod@<4.6.6": "4.6.7"
+  "esbuild@<0.25.0": "0.25.12"
