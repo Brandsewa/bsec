@@ -33,7 +33,7 @@ export default async function AddressUpdatePage({ params }: { params: Promise<{ 
       title="Delivery address"
       description={view ? `Order ${view.orderNumber}` : ""}
       footer={
-        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:underline">
+        <Link href="/" className="text-xs text-[var(--brand-ink)] hover:opacity-70 transition-opacity">
           ← Back to the store
         </Link>
       }

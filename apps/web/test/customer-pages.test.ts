@@ -64,6 +64,7 @@ const domain = {
   updateCustomerAddress: vi.fn(async (_db: unknown, _t: string, _c: string, id: string) => (id === "01a0f000-0000-7000-8000-000000000001" ? { id } : null)),
   deleteCustomerAddress: vi.fn(async (_db: unknown, _t: string, _c: string, id: string) => id === "01a0f000-0000-7000-8000-000000000001"),
   mintOrderViewTokenForCustomer: vi.fn(async (_db: unknown, _t: string, _c: string, id: string) => (id === "01a0f000-0000-7000-8000-000000000001" ? "ord_minted" : null)),
+  getCustomerDashboardStats: vi.fn(async () => ({ active: 1, inTransit: 0, inReturn: 0, delivered: 0 })),
   getCustomerOrders: vi.fn(async () => [
     { id: "01a0f000-0000-7000-8000-000000000001", number: "#1001", status: "confirmed", paymentStatus: "cod_pending", fulfillmentStatus: "unfulfilled", subtotal: 10000, shippingTotal: 0, grandTotal: 10000, placedAt: new Date("2026-09-30T10:00:00Z") },
   ]),

@@ -49,7 +49,8 @@ function DomainSetupGuide() {
       </ol>
       <p className="mt-2 text-muted-foreground">
         <span className="font-medium text-foreground">Bare domain (advanced)?</span> For <span className="font-mono">mybrand.com</span> without{" "}
-        <span className="font-mono">www</span>, DNS does not allow a CNAME, so we show A records instead. Remove any old A, AAAA or CNAME record on the same
+        <span className="font-mono">www</span>, DNS does not allow a CNAME, so we use A records instead, and the order matters: add only the TXT records first, wait until we confirm ownership,
+        and only then add the A records. If the A records are already there, remove them until ownership is confirmed. Remove any old A, AAAA or CNAME record on the same
         name first (a parking page record will block it). Many providers can also forward the bare domain to <span className="font-mono">www</span>.
       </p>
     </div>
@@ -94,6 +95,7 @@ export function DomainsSettingsPage() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [hostname, setHostname] = useState("");
+  const typedApex = isApexDomain(hostname.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")) && hostname.trim().includes(".");
   const [prevalidateTxt, setPrevalidateTxt] = useState(false);
   const [domainToRemove, setDomainToRemove] = useState<CustomDomainItem | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export function DomainsSettingsPage() {
     }
 
     addDomain.mutate(
-      { hostname: clean, prevalidateTxt },
+      { hostname: clean, prevalidateTxt: prevalidateTxt || isApexDomain(clean) },
       {
         onSuccess: () => {
           setHostname("");
@@ -262,14 +264,17 @@ export function DomainsSettingsPage() {
 
             <label className="flex items-start gap-2.5 text-xs text-foreground cursor-pointer">
               <Checkbox
-                checked={prevalidateTxt}
+                checked={prevalidateTxt || typedApex}
+                disabled={typedApex}
                 onCheckedChange={(checked) => setPrevalidateTxt(Boolean(checked))}
                 className="mt-0.5"
               />
               <span>
                 <span className="font-medium block">Pre-validate ownership with a TXT record</span>
                 <span className="text-muted-foreground block">
-                  Verify domain ownership with your DNS provider before routing traffic (recommended for live stores switching hosts).
+                  {typedApex
+                    ? "Required for a bare domain: you prove ownership first, and only then point the domain to us."
+                    : "Verify domain ownership with your DNS provider before routing traffic (recommended for live stores switching hosts)."}
                 </span>
               </span>
             </label>
@@ -312,7 +317,18 @@ export function DomainsSettingsPage() {
           const apex = isApexDomain(d.hostname);
           const expected = d.routing?.expected;
           const cnameTarget = expected?.cname || d.verification?.cname || "stores.bcom.si";
-          const routingNote = describeRouting(d.hostname, d.routing);
+          // A bare domain's A records resolve to Cloudflare, which then refuses to verify ownership by TXT. So the
+          // records are only shown once ownership is verified; if they already exist, the merchant must remove them for now.
+          const ownershipPending = apex && !isActive && !isDegraded && d.verification?.ownershipVerified === false;
+          const seenIps = [...(d.routing?.seen.a ?? []), ...(d.routing?.seen.aaaa ?? [])];
+          const routingNote = ownershipPending
+            ? seenIps.length > 0
+              ? {
+                  tone: "problem" as const,
+                  text: `Remove the A and AAAA records for ${d.hostname} (${seenIps.join(", ")}) for now. They stop the ownership check from finishing; you add them back in step 2.`,
+                }
+              : { tone: "wait" as const, text: "Waiting for ownership to be verified. Press Check status a minute after adding the TXT records." }
+            : describeRouting(d.hostname, d.routing);
           const toneClass =
             routingNote.tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : routingNote.tone === "problem" ? "text-destructive" : "text-amber-700 dark:text-amber-300";
           const isFailed = d.status === "failed";
@@ -467,9 +483,13 @@ export function DomainsSettingsPage() {
 
                         <div className="space-y-2">
                           <p className="font-sans text-xs font-medium text-foreground">
-                            {d.prevalidateTxt ? "Step 2: point your domain to us (required)" : "Point your domain to us"}
+                            {d.prevalidateTxt ? `Step 2: point your domain to us (required)${ownershipPending ? " - not yet" : ""}` : "Point your domain to us"}
                           </p>
-                          {apex ? (
+                          {ownershipPending ? (
+                            <p className="font-sans text-muted-foreground">
+                              Step 2 unlocks when step 1 is verified. Keep only the TXT records above for now, then press Check status.
+                            </p>
+                          ) : apex ? (
                             (expected?.a ?? []).length > 0 ? (
                               <>
                                 {(expected?.a ?? []).map((ip) => (

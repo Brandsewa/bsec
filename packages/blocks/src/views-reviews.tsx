@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { BlockRenderArgs, BlockReview } from "./types.ts";
 import type * as R from "./registry.ts";
 import { formatBlogDate } from "./views-blog.tsx";
+import { mediaImage } from "./media-image.ts";
 
 /**
  * Floating reviews widget. Pure view: the reviews come from the server-resolved render data (published product
@@ -108,8 +109,18 @@ export function ReviewsMarqueeView({ props, ctx }: A<R.ReviewsMarqueeProps>): Re
     { label: props.button1Label, href: props.button1Href, cls: "bsb-btn bsb-btn-primary" },
     { label: props.button2Label, href: props.button2Href, cls: "bsb-btn bsb-btn-outline" },
   ].filter((b) => b.href && b.label);
+  const detail = props.imageMediaId ? ctx?.mediaDetails?.(props.imageMediaId) : null;
+  const imageUrl = detail?.url ?? (props.imageMediaId ? (ctx?.mediaUrl?.(props.imageMediaId) ?? null) : null);
+  const img = imageUrl
+    ? mediaImage(
+        detail
+          ? { url: imageUrl, width: detail.width, height: detail.height, focalX: detail.focalX, focalY: detail.focalY, dominantColor: detail.dominantColor, derivatives: detail.derivatives }
+          : { url: imageUrl },
+        { sizes: "(min-width: 900px) 600px, 100vw" },
+      )
+    : null;
   const head = (
-    <div className={cx("bsb-rm-head", `bsb-rm-pos-${props.textPosition}`)}>
+    <div className={cx("bsb-rm-head", `bsb-rm-pos-${props.textPosition}`, img && "bsb-rm-has-img", img && props.imagePlace === "above" && "bsb-rm-img-above")}>
       {props.title || props.eyebrow ? (
         <div className="bsb-rm-titleblock">
           {props.eyebrow ? <p className="bsb-rm-eyebrow">{props.eyebrow}</p> : null}
@@ -124,6 +135,11 @@ export function ReviewsMarqueeView({ props, ctx }: A<R.ReviewsMarqueeProps>): Re
               {buttons.map((b) => <a key={b.cls} className={b.cls} href={b.href}>{b.label}</a>)}
             </div>
           ) : null}
+        </div>
+      ) : null}
+      {img ? (
+        <div className="bsb-rm-img">
+          <img src={img.src} srcSet={img.srcSet} sizes={img.sizes} alt={props.imageAlt} loading="lazy" style={{ objectPosition: img.objectPosition ?? "center" }} />
         </div>
       ) : null}
     </div>

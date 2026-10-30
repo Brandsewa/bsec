@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Field, FieldLabel, Input, Checkbox, Alert, AlertDescription } from "@bs/ui";
+import { Button, Checkbox, Alert, AlertDescription } from "@bs/ui";
+import { FloatingField } from "./FloatingField.tsx";
 
 export interface ProfileFormProps {
   phone: string | null;
@@ -60,43 +61,10 @@ export function ProfileForm(props: ProfileFormProps) {
         </Alert>
       ) : null}
 
-      <Field className="space-y-1.5">
-        <FieldLabel htmlFor="profile-phone">Mobile number</FieldLabel>
-        <Input
-          id="profile-phone"
-          value={props.phone ?? ""}
-          placeholder="No phone number linked"
-          readOnly
-          disabled
-          className="h-10 sm:h-9 opacity-70"
-        />
-      </Field>
-
-      <Field className="space-y-1.5">
-        <FieldLabel htmlFor="profile-name">Name</FieldLabel>
-        <Input
-          id="profile-name"
-          maxLength={120}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          autoComplete="name"
-          className="h-10 sm:h-9"
-        />
-      </Field>
-
-      <Field className="space-y-1.5">
-        <FieldLabel htmlFor="profile-email">Email</FieldLabel>
-        <Input
-          id="profile-email"
-          required
-          type="email"
-          maxLength={254}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          className="h-10 sm:h-9"
-        />
-      </Field>
+      <FloatingField id="profile-name" label="Name" maxLength={120} autoComplete="name" value={name} onChange={setName} />
+      <FloatingField id="profile-email" label="Email" type="email" required maxLength={254} autoComplete="email" value={email} onChange={setEmail} />
+      {/* the phone number is the login, so it is shown but cannot be edited here */}
+      <FloatingField id="profile-phone" label="Mobile number" disabled value={props.phone ?? ""} onChange={() => undefined} />
 
       <div className="flex items-center gap-2.5 pt-1">
         <Checkbox

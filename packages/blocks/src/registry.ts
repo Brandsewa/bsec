@@ -847,14 +847,6 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
   render: V.SiteFooterView,
 };
 
-export const DEFAULT_SHIPPING_CONTENT = [
-  "Orders are packed within 24 hours and shipped with a tracked courier.",
-  "",
-  "- Delivery time depends on your pincode; the estimate on this page is a guide.",
-  "- Shipping charges, if any, are shown at checkout.",
-  "- Unused items can be returned within the return window shown in our policy.",
-].join(String.fromCharCode(10));
-
 const DEFAULT_PRODUCT_USPS = [
   { icon: "truck" as const, text: "Fast dispatch", description: "Packed and shipped within 24 hours" },
   { icon: "shield" as const, text: "Secure payment", description: "Encrypted checkout, details stay private" },
@@ -967,26 +959,6 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     accordionItems: [],
   },
   render: V.ProductDetailView,
-};
-
-// Product page, second section: tabs (the product's own description, then shipping and returns text written in the theme) beside a picture.
-export const ProductInfoTabsSchema = z.object({
-  descriptionLabel: z.string().min(1).max(30).default("Description"),
-  shippingLabel: z.string().min(1).max(30).default("Shipping & returns"),
-  /** Plain text. A blank line starts a new paragraph; lines starting with "- " become a list. */
-  shippingContent: z.string().max(4000).default(DEFAULT_SHIPPING_CONTENT),
-  /** Picture beside the tabs (media library). Empty shows the placeholder picture. */
-  imageMediaId: z.string().uuid().optional(),
-  imageAlt: z.string().max(120).default(""),
-  imageSide: z.enum(["right", "left"]).default("right"),
-});
-export type ProductInfoTabsProps = z.infer<typeof ProductInfoTabsSchema>;
-export const ProductInfoTabsBlock: BlockDefinition<ProductInfoTabsProps> = {
-  type: "ProductInfoTabs",
-  version: 1,
-  schema: ProductInfoTabsSchema,
-  defaultProps: { descriptionLabel: "Description", shippingLabel: "Shipping & returns", shippingContent: DEFAULT_SHIPPING_CONTENT, imageAlt: "", imageSide: "right" },
-  render: V.ProductInfoTabsView,
 };
 
 /**
@@ -1509,6 +1481,10 @@ export const ReviewsMarqueeSchema = z.object({
   button1Href: hrefSchema.or(z.literal("")).default(""),
   button2Label: z.string().max(40).default("Learn more"),
   button2Href: hrefSchema.or(z.literal("")).default(""),
+  /** Optional picture under (or above) the heading block; it fills the height left in that column. */
+  imageMediaId: z.string().optional(),
+  imageAlt: z.string().max(120).default(""),
+  imagePlace: z.enum(["below", "above"]).default("below"),
   /** Where the heading block sits next to the reviews. "split" puts the heading on top and the description and buttons at the bottom. */
   textPosition: z.enum(["top", "middle", "bottom", "split"]).default("middle"),
   /** Which side the heading sits on; the moving reviews take the other side. */
@@ -1641,7 +1617,7 @@ export const MultiCardItemSchema = z.object({
   iconMediaId: z.string().optional(),
   icon: z.enum(ICON_NAMES).optional(),
   heading: z.string().max(120).default(""),
-  text: z.string().max(400).default(""),
+  text: z.string().max(1000).default(""),
   linkLabel: z.string().max(60).default(""),
   linkHref: hrefSchema.default(""),
   /** A background picture for this card only (overrides the section-wide one). */
@@ -1845,7 +1821,6 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   SiteHeader: SiteHeaderBlock,
   SiteFooter: SiteFooterBlock,
   ProductDetail: ProductDetailBlock,
-  ProductInfoTabs: ProductInfoTabsBlock,
   ProductCustomField: ProductCustomFieldBlock,
   ProductCoupons: ProductCouponsBlock,
   ContactForm: ContactFormBlock,

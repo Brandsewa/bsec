@@ -55,7 +55,7 @@ export function PrivacyRequestForm() {
 
   if (status === "success") {
     return (
-      <div className="rounded-xl bg-[var(--muted)]/50 p-4 space-y-3">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 space-y-3">
         <div className="flex items-center space-x-3 text-[var(--success)]">
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -71,7 +71,7 @@ export function PrivacyRequestForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl bg-[var(--muted)]/50 p-6">
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-6">
       {status === "error" && (
         <Alert variant="destructive" role="alert">
           <AlertDescription className="text-xs">{message}</AlertDescription>

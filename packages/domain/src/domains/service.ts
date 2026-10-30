@@ -9,7 +9,7 @@ import {
   type CustomDomainProvider,
   CloudflareCustomDomainProvider,
 } from "./provider.ts";
-import { checkDomainRouting, type DnsResolverLike, type ProbeFetch, type RoutingDetail, type RoutingTargets } from "./routing.ts";
+import { checkDomainRouting, isApexHostname, type DnsResolverLike, type ProbeFetch, type RoutingDetail, type RoutingTargets } from "./routing.ts";
 
 /** Test seam: the DNS resolver, the expected targets and the HTTP fetch used by the routing check. */
 export interface RoutingDeps {
@@ -36,6 +36,8 @@ export interface CustomDomainRecord {
     cname?: string;
     txt?: { name: string; value: string };
     dcv?: { name: string; value: string };
+    /** True once the provider has verified ownership of the hostname (not just issued the certificate). */
+    ownershipVerified?: boolean;
   } | null;
   routingStatus: string | null;
   routingDetail: RoutingDetail | null;
@@ -200,10 +202,12 @@ export async function addCustomDomainInternal(
     throw new Error(`Conflict: Domain '${hostname}' is already registered or connected to a store.`);
   }
 
+  // A bare domain is pointed with A records that resolve to Cloudflare, and Cloudflare cannot validate a hostname that
+  // already uses it by TXT or HTTP. So ownership is always proven by TXT first, whatever the caller asked for.
+  const prevalidate = Boolean(input.prevalidateTxt) || isApexHostname(hostname);
+
   // 3. Register with Provider Adapter
-  const cfResult = await provider.createCustomHostname(hostname, {
-    ...(input.prevalidateTxt !== undefined ? { prevalidate: input.prevalidateTxt } : {}),
-  });
+  const cfResult = await provider.createCustomHostname(hostname, { prevalidate });
 
   const domainId = randomUUID();
   const isUnconfigured =
@@ -218,6 +222,7 @@ export async function addCustomDomainInternal(
           cname: cfResult.cnameTarget,
           ...(cfResult.txtVerification ? { txt: cfResult.txtVerification } : {}),
           ...(cfResult.dcvTxt ? { dcv: cfResult.dcvTxt } : {}),
+          ownershipVerified: cfResult.status === "active",
         };
 
   // 4. Insert into domains table
@@ -231,7 +236,7 @@ export async function addCustomDomainInternal(
       status: isUnconfigured ? "requested" : cfResult.status,
       sslStatus: isUnconfigured ? "not_configured" : cfResult.sslStatus,
       isPrimary: false,
-      prevalidateTxt: Boolean(input.prevalidateTxt),
+      prevalidateTxt: prevalidate,
       cfCustomHostnameId: isUnconfigured ? null : cfResult.providerHostnameId,
       verification: verificationPayload,
     })
@@ -365,6 +370,14 @@ export async function verifyDomainWithDb(
     };
   }
 
+  // Ask the provider to re-run validation now; otherwise a hostname that failed once waits for its own slow schedule.
+  if (domain.status !== "active" && domain.status !== "degraded" && provider.refreshCustomHostname) {
+    try {
+      await provider.refreshCustomHostname(domain.cfCustomHostnameId, { prevalidate: Boolean(domain.prevalidateTxt) });
+    } catch {
+      // Best effort: the status read below is what decides.
+    }
+  }
   const statusRes = await provider.getCustomHostnameStatus(domain.cfCustomHostnameId);
 
   // Cloudflare "active" only means ownership and the certificate are done. Whether visitors really reach us is a
@@ -399,9 +412,10 @@ export async function verifyDomainWithDb(
 
   const existingVerification = (domain.verification ?? null) as CustomDomainRecord["verification"];
   const nextVerification =
-    existingVerification && (statusRes.dcvTxt || statusRes.txtVerification)
+    existingVerification
       ? {
           ...existingVerification,
+          ownershipVerified: statusRes.status === "active",
           ...(statusRes.txtVerification ? { txt: statusRes.txtVerification } : {}),
           ...(statusRes.dcvTxt ? { dcv: statusRes.dcvTxt } : {}),
         }

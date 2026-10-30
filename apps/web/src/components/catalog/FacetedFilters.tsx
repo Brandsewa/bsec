@@ -327,7 +327,7 @@ export function FacetedFilters({
                   type="button"
                   onClick={clearAllFilters}
                   disabled={isPending}
-                  className="text-xs text-primary hover:underline font-medium"
+                  className="text-xs text-primary hover:opacity-70 transition-opacity font-medium"
                 >
                   Clear all ({filterData.activeFilterCount})
                 </button>
@@ -351,7 +351,7 @@ export function FacetedFilters({
                 type="button"
                 onClick={clearAllFilters}
                 disabled={isPending}
-                className="text-xs text-primary hover:underline font-medium"
+                className="text-xs text-primary hover:opacity-70 transition-opacity font-medium"
               >
                 Clear all ({filterData.activeFilterCount})
               </button>

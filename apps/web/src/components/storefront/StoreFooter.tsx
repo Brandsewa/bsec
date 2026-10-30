@@ -39,12 +39,12 @@ export function StoreFooter({ storeName = "Store" }: StoreFooterProps) {
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/about" className="hover:underline">
+                <Link href="/about" className="hover:opacity-70 transition-opacity">
                   About
                 </Link>
               </li>
               <li>
-                <Link href="/search" className="hover:underline">
+                <Link href="/search" className="hover:opacity-70 transition-opacity">
                   Search
                 </Link>
               </li>
@@ -58,27 +58,27 @@ export function StoreFooter({ storeName = "Store" }: StoreFooterProps) {
             </h4>
             <ul className="mt-3 space-y-2">
               <li>
-                <Link href="/policies/privacy" className="hover:underline">
+                <Link href="/policies/privacy" className="hover:opacity-70 transition-opacity">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/policies/terms" className="hover:underline">
+                <Link href="/policies/terms" className="hover:opacity-70 transition-opacity">
                   Terms of Service
                 </Link>
               </li>
               <li>
-                <Link href="/policies/refund" className="hover:underline">
+                <Link href="/policies/refund" className="hover:opacity-70 transition-opacity">
                   Refund Policy
                 </Link>
               </li>
               <li>
-                <Link href="/policies/shipping" className="hover:underline">
+                <Link href="/policies/shipping" className="hover:opacity-70 transition-opacity">
                   Shipping Policy
                 </Link>
               </li>
               <li>
-                <Link href="/privacy-request" className="hover:underline">
+                <Link href="/privacy-request" className="hover:opacity-70 transition-opacity">
                   Privacy Rights & Requests
                 </Link>
               </li>

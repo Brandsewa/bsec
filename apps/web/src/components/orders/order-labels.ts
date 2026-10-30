@@ -8,6 +8,10 @@ export function describeOrderStatus(status: string): { label: string; tone: "goo
     case "shipped":
     case "fulfilled":
       return { label: "On its way", tone: "good" };
+    case "partially_fulfilled":
+      return { label: "Partly shipped", tone: "good" };
+    case "processing":
+      return { label: "Being prepared", tone: "good" };
     case "returned":
       return { label: "Returned", tone: "neutral" };
     default:

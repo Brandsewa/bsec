@@ -6,7 +6,7 @@ describe("Modern Commerce theme", () => {
     const pages = validateTemplatePages(MODERN_TEMPLATE_PAGES);
     expect(Object.keys(pages).sort()).toEqual(["blog", "blog-post", "cart", "collection", "collections", "footer", "header", "home", "product"]);
     expect(pages["collections"]?.some((b) => b.type === "CollectionGrid" && b.props["showAll"] === true)).toBe(true);
-    expect(pages["product"]?.map((b) => b.type)).toEqual(expect.arrayContaining(["ProductDetail", "ProductInfoTabs"]));
+    expect(pages["product"]?.map((b) => b.type)).toEqual(expect.arrayContaining(["ProductDetail"]));
     expect(pages["cart"]?.some((b) => b.type === "CartContents")).toBe(true);
     expect(pages["blog"]?.some((b) => b.type === "BlogListing")).toBe(true);
     expect(pages["blog-post"]?.some((b) => b.type === "BlogPostContent")).toBe(true);

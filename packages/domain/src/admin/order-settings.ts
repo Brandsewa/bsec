@@ -4,7 +4,7 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { allocateSequenceNumber, type AllocatedSequence } from "../orders/sequences.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
-import { parseOrderProcessingConfig } from "./order-settings-config.ts";
+import { parseOrderProcessingConfig, parseTrackingConfig, type TrackingConfig } from "./order-settings-config.ts";
 
 export interface OrderSettingsRecord {
   prefix: string;
@@ -13,6 +13,7 @@ export interface OrderSettingsRecord {
   currentNextValue: number;
   stockHoldMinutes: number;
   minimumOrderPaise: number;
+  tracking: TrackingConfig;
 }
 
 export interface UpdateOrderSettingsInput {
@@ -21,6 +22,19 @@ export interface UpdateOrderSettingsInput {
   nextValue?: number | undefined;
   stockHoldMinutes?: number | undefined;
   minimumOrderPaise?: number | undefined;
+  tracking?: TrackingConfig | undefined;
+}
+
+/** The store's customer-facing tracking options. Callable from the storefront (no permission: it only reads public settings). */
+export async function readTrackingConfig(db: Db, tenantId: string): Promise<TrackingConfig> {
+  return await withTenant(db, tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ orderSettings: schema.storeSettings.orderSettings })
+      .from(schema.storeSettings)
+      .where(eq(schema.storeSettings.tenantId, tenantId))
+      .limit(1);
+    return parseTrackingConfig({ tracking: (row?.orderSettings as Record<string, unknown> | null | undefined)?.["tracking"] });
+  });
 }
 
 /**
@@ -72,6 +86,7 @@ export async function readOrderSettingsInternal(tx: Db, tenantId: string): Promi
     currentNextValue,
     stockHoldMinutes: processingConfig.stockHoldMinutes,
     minimumOrderPaise: processingConfig.minimumOrderPaise,
+    tracking: parseTrackingConfig(storeSettingsRow?.orderSettings),
   };
 }
 
@@ -142,10 +157,12 @@ export async function updateOrderSettings(
       .where(eq(schema.storeSettings.tenantId, ctx.tenantId))
       .limit(1);
 
+    const newTracking = input.tracking !== undefined ? parseTrackingConfig({ tracking: input.tracking }) : before.tracking;
     const orderSettingsPayload = {
       v: 1,
       stockHoldMinutes: newStockHoldMinutes,
       minimumOrderPaise: newMinimumOrderPaise,
+      tracking: newTracking,
     };
 
     if (existingStoreSettings) {
@@ -184,6 +201,11 @@ export async function updateOrderSettings(
       diffAfter.minimumOrderPaise = newMinimumOrderPaise;
     }
 
+    if (JSON.stringify(newTracking) !== JSON.stringify(before.tracking)) {
+      diffBefore.tracking = before.tracking;
+      diffAfter.tracking = newTracking;
+    }
+
     if (Object.keys(diffAfter).length > 0) {
       await tx.insert(schema.auditLogs).values({
         tenantId: ctx.tenantId,
@@ -206,6 +228,7 @@ export async function updateOrderSettings(
       currentNextValue: newNextValue,
       stockHoldMinutes: newStockHoldMinutes,
       minimumOrderPaise: newMinimumOrderPaise,
+      tracking: newTracking,
     };
   });
 

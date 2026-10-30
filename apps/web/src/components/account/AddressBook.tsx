@@ -4,15 +4,12 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
-  Field,
-  FieldLabel,
-  Input,
-  SimpleSelect,
   Checkbox,
   Badge,
   Alert,
   AlertDescription,
 } from "@bs/ui";
+import { FloatingField } from "./FloatingField.tsx";
 
 export interface SavedAddress {
   id: string;
@@ -137,7 +134,7 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
 
       <ul className="space-y-3">
         {addresses.map((a) => (
-          <li key={a.id} className="rounded-xl bg-[var(--muted)]/50 p-4 text-sm">
+          <li key={a.id} className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 text-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold text-[var(--foreground)] flex items-center gap-2">
@@ -181,122 +178,62 @@ export function AddressBook({ addresses, phone }: { addresses: SavedAddress[]; p
           Add an address
         </Button>
       ) : (
-        <form onSubmit={save} className="space-y-3 rounded-xl bg-[var(--muted)]/50 p-5">
+        <form onSubmit={save} className="space-y-4 border-t border-[var(--border)] pt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
             {editing === "new" ? "New address" : "Edit address"}
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field className="space-y-1.5">
-              <FieldLabel htmlFor="addr-name">Recipient name</FieldLabel>
-              <Input
-                id="addr-name"
-                required
-                maxLength={120}
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="h-10 sm:h-9"
-              />
-            </Field>
-
-            <Field className="space-y-1.5">
-              <FieldLabel htmlFor="addr-phone">Phone</FieldLabel>
-              <Input
-                id="addr-phone"
-                required
-                inputMode="numeric"
-                pattern="[6-9][0-9]{9}"
-                maxLength={10}
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="h-10 sm:h-9"
-              />
-            </Field>
+          <div role="radiogroup" aria-label="Address type" className="flex flex-wrap gap-2">
+            {ADDRESS_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="radio"
+                aria-checked={form.type === t.value}
+                onClick={() => setForm({ ...form, type: t.value })}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  form.type === t.value
+                    ? "border-[var(--foreground)] bg-[var(--background)] text-[var(--foreground)]"
+                    : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--background)]"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
-          <Field className="space-y-1.5">
-            <FieldLabel htmlFor="addr-line1">Address line 1</FieldLabel>
-            <Input
-              id="addr-line1"
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FloatingField id="addr-name" label="Recipient name" required maxLength={120} value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+            <FloatingField
+              id="addr-phone"
+              label="Phone"
               required
-              maxLength={200}
-              value={form.line1}
-              onChange={(e) => setForm({ ...form, line1: e.target.value })}
-              className="h-10 sm:h-9"
+              inputMode="numeric"
+              pattern="[6-9][0-9]{9}"
+              maxLength={10}
+              value={form.phone}
+              onChange={(v) => setForm({ ...form, phone: v.replace(/\D/g, "") })}
             />
-          </Field>
-
-          <Field className="space-y-1.5">
-            <FieldLabel htmlFor="addr-line2">Apartment, suite (optional)</FieldLabel>
-            <Input
-              id="addr-line2"
-              maxLength={200}
-              value={form.line2}
-              onChange={(e) => setForm({ ...form, line2: e.target.value })}
-              className="h-10 sm:h-9"
-            />
-          </Field>
-
-          <Field className="space-y-1.5">
-            <FieldLabel htmlFor="addr-landmark">Landmark (optional)</FieldLabel>
-            <Input
-              id="addr-landmark"
-              maxLength={200}
-              value={form.landmark}
-              onChange={(e) => setForm({ ...form, landmark: e.target.value })}
-              className="h-10 sm:h-9"
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field className="space-y-1.5">
-              <FieldLabel htmlFor="addr-city">City</FieldLabel>
-              <Input
-                id="addr-city"
-                required
-                maxLength={80}
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                className="h-10 sm:h-9"
-              />
-            </Field>
-
-            <Field className="space-y-1.5">
-              <FieldLabel htmlFor="addr-state">State</FieldLabel>
-              <Input
-                id="addr-state"
-                required
-                maxLength={80}
-                value={form.stateCode}
-                onChange={(e) => setForm({ ...form, stateCode: e.target.value })}
-                className="h-10 sm:h-9"
-              />
-            </Field>
-
-            <Field className="space-y-1.5">
-              <FieldLabel htmlFor="addr-pincode">Pincode</FieldLabel>
-              <Input
-                id="addr-pincode"
-                required
-                inputMode="numeric"
-                pattern="[1-9][0-9]{5}"
-                maxLength={6}
-                value={form.pincode}
-                onChange={(e) => setForm({ ...form, pincode: e.target.value })}
-                className="h-10 sm:h-9"
-              />
-            </Field>
           </div>
 
-          <Field className="space-y-1.5">
-            <FieldLabel htmlFor="addr-type">Address Type</FieldLabel>
-            <SimpleSelect
-              id="addr-type"
-              value={form.type}
-              onChange={(val: string) => setForm({ ...form, type: val as "home" | "work" | "other" })}
-              options={ADDRESS_TYPES}
+          <FloatingField id="addr-line1" label="Address line 1" required maxLength={200} value={form.line1} onChange={(v) => setForm({ ...form, line1: v })} />
+          <FloatingField id="addr-line2" label="Apartment, suite (optional)" maxLength={200} value={form.line2} onChange={(v) => setForm({ ...form, line2: v })} />
+          <FloatingField id="addr-landmark" label="Landmark (optional)" maxLength={200} value={form.landmark} onChange={(v) => setForm({ ...form, landmark: v })} />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FloatingField id="addr-city" label="City" required maxLength={80} value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
+            <FloatingField id="addr-state" label="State" required maxLength={80} value={form.stateCode} onChange={(v) => setForm({ ...form, stateCode: v })} />
+            <FloatingField
+              id="addr-pincode"
+              label="Pincode"
+              required
+              inputMode="numeric"
+              pattern="[1-9][0-9]{5}"
+              maxLength={6}
+              value={form.pincode}
+              onChange={(v) => setForm({ ...form, pincode: v.replace(/\D/g, "") })}
             />
-          </Field>
+          </div>
 
           <div className="flex items-center gap-2.5 pt-1">
             <Checkbox

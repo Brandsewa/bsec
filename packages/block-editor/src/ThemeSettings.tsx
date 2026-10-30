@@ -40,6 +40,7 @@ import {
 } from "@bs/blocks";
 import { BlocksPreview } from "./BlocksPreview.tsx";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
+import { HexInput } from "./HexInput.tsx";
 import type { BlockEditorHost } from "./context.tsx";
 import { useFontLink } from "./fonts.ts";
 
@@ -366,17 +367,11 @@ function ThemeColorRow({
             }}
           />
         </label>
-        <input
-          type="text"
-          aria-label={`${title} hex`}
-          value={value ?? ""}
-          placeholder="#000000"
+        <HexInput
+          ariaLabel={`${title} hex`}
+          value={value}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => {
-            const trimmed = e.target.value.trim();
-            if (/^#[0-9a-f]{3,8}$/i.test(trimmed)) onChange(trimmed);
-          }}
+          onCommit={onChange}
           style={{
             flex: 1,
             border: "1px solid #d4d4d8",

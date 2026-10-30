@@ -86,6 +86,8 @@ export async function transitionFulfillment(
   fulfillmentId: string,
   event: FulfillmentTransitionEvent,
   tx?: Db,
+  /** `notify: false` records the transition but does not queue the customer's shipping email (the staff "Notify customer" switch). */
+  opts?: { notify?: boolean },
 ): Promise<TransitionFulfillmentResult> {
   const runner = async (db: Db): Promise<TransitionFulfillmentResult> => {
     // 1. Fetch current fulfillment
@@ -267,7 +269,7 @@ export async function transitionFulfillment(
     // 6. Enqueue domain events if pg-boss runtime is active
     if (rt._jobs) {
       if (targetStatus === "label_created" || targetStatus === "picked_up") {
-        await rt._jobs.send(QUEUE_NAMES.FULFILLMENT_CREATED, {
+        if (opts?.notify !== false) await rt._jobs.send(QUEUE_NAMES.FULFILLMENT_CREATED, {
           fulfillmentId,
           orderId: fulfillment.orderId,
           tenantId: ctx.tenantId,

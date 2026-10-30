@@ -11,6 +11,7 @@ const ICONS = ACCOUNT_ICONS;
 const links: { href: string; label: string; icon: keyof typeof ICONS }[] = [
   { href: "/account", label: "Dashboard", icon: "dashboard" },
   { href: "/account/orders", label: "Orders", icon: "orders" },
+  { href: "/account/returns", label: "Returns", icon: "returns" },
   { href: "/account/reviews", label: "My Reviews", icon: "reviews" },
   { href: "/account/addresses", label: "Address", icon: "address" },
   { href: "/account/profile", label: "Profile", icon: "profile" },

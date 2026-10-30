@@ -117,20 +117,6 @@ export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
     showTrustPoints: false,
     stickyMobileBar: true,
   }),
-  b("mc-product-info", "ProductInfoTabs", {
-    descriptionLabel: "Description",
-    shippingLabel: "Shipping & returns",
-    shippingContent: [
-      "Orders are packed within 24 hours and shipped with a tracked courier.",
-      "",
-      "- Delivery usually takes 3-5 business days across India.",
-      "- You get tracking details as soon as your order ships.",
-      "- Unused items can be returned within 7 days of delivery for a refund or exchange.",
-      "- Cash on delivery is available at checkout.",
-    ].join(String.fromCharCode(10)),
-    imageAlt: "",
-    imageSide: "right",
-  }),
   b("mc-product-reviews", "Reviews", { title: "Customer reviews", showAggregate: true, limit: 6 }),
   // The same carousel as the home page's Product showcase, fed with products related to the one being viewed.
   b("mc-product-more", "ProductShowcase", {

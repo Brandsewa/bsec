@@ -91,4 +91,16 @@ describe("Floating reviews widget", () => {
     expect(render([widget()], data)).not.toContain("bsb-rm-eyebrow");
     expect(render([widget({ eyebrow: "Testimonials" })], data)).toContain('<p class="bsb-rm-eyebrow">Testimonials</p>');
   });
+
+  it("draws a picture under the text by default, or above it, only when one is chosen", () => {
+    const data = { w: { kind: "reviews", reviews: [review(1)] } };
+    const withCtx = (props: Record<string, unknown>) =>
+      renderToStaticMarkup(<>{renderBlockTree([widget(props)], { data: data as never, mediaUrl: (id: string) => `https://img.test/${id}.jpg` })}</>);
+    expect(render([widget()], data)).not.toContain("bsb-rm-img");
+    const below = withCtx({ imageMediaId: "11111111-1111-4111-8111-111111111111", imageAlt: "Our farm" });
+    expect(below).toContain("bsb-rm-img");
+    expect(below).toContain('alt="Our farm"');
+    expect(below).not.toContain("bsb-rm-img-above");
+    expect(withCtx({ imageMediaId: "11111111-1111-4111-8111-111111111111", imagePlace: "above" })).toContain("bsb-rm-img-above");
+  });
 });

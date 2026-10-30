@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Field, FieldLabel, Input, Alert, AlertDescription, ConfirmDialog } from "@bs/ui";
+import { Button, Alert, AlertDescription, ConfirmDialog } from "@bs/ui";
+import { FloatingField } from "./FloatingField.tsx";
 
 export function CustomerChangePassword() {
   const router = useRouter();
@@ -76,23 +77,20 @@ export function CustomerChangePassword() {
           </Alert>
         ) : null}
 
-        <Field className="space-y-1.5">
-          <FieldLabel htmlFor="current-pw">Current password</FieldLabel>
-          <div className="relative">
-            <Input
-              id="current-pw"
-              required
-              type={showPassword ? "text" : "password"}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              className="h-10 sm:h-9 pr-10"
-            />
+        <FloatingField
+          id="current-pw"
+          label="Current password"
+          required
+          type={showPassword ? "text" : "password"}
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={setCurrentPassword}
+          trailing={
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] p-1 text-xs"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
               {showPassword ? (
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -105,39 +103,33 @@ export function CustomerChangePassword() {
                 </svg>
               )}
             </button>
-          </div>
-        </Field>
+          }
+        />
 
-        <Field className="space-y-1.5">
-          <FieldLabel htmlFor="next-pw">New password</FieldLabel>
-          <Input
-            id="next-pw"
-            required
-            type={showPassword ? "text" : "password"}
-            minLength={10}
-            maxLength={128}
-            value={nextPassword}
-            onChange={(e) => setNextPassword(e.target.value)}
-            autoComplete="new-password"
-            className="h-10 sm:h-9"
-          />
-          <span className="block text-[11px] text-[var(--muted-foreground)]">Minimum 10 characters.</span>
-        </Field>
+        <FloatingField
+          id="next-pw"
+          label="New password"
+          required
+          type={showPassword ? "text" : "password"}
+          minLength={10}
+          maxLength={128}
+          autoComplete="new-password"
+          value={nextPassword}
+          onChange={setNextPassword}
+        />
+        <p className="-mt-2 text-[11px] text-[var(--muted-foreground)]">Minimum 10 characters.</p>
 
-        <Field className="space-y-1.5">
-          <FieldLabel htmlFor="confirm-pw">Confirm new password</FieldLabel>
-          <Input
-            id="confirm-pw"
-            required
-            type={showPassword ? "text" : "password"}
-            minLength={10}
-            maxLength={128}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-            className="h-10 sm:h-9"
-          />
-        </Field>
+        <FloatingField
+          id="confirm-pw"
+          label="Confirm new password"
+          required
+          type={showPassword ? "text" : "password"}
+          minLength={10}
+          maxLength={128}
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+        />
 
         <Button type="submit" size="md" disabled={busy} loading={busy}>
           {busy ? "Updating…" : "Update password"}

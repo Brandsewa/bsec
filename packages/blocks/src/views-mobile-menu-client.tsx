@@ -112,3 +112,49 @@ export function MobileMenu({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+interface DropEl {
+  closest(selector: string): DropEl | null;
+  classList: { add(c: string): void; remove(c: string): void };
+  contains(other: unknown): boolean;
+  blur?(): void;
+}
+interface DropDoc {
+  activeElement: DropEl | null;
+  querySelectorAll(selector: string): ArrayLike<DropEl>;
+  addEventListener(type: string, listener: (e: { target: unknown }) => void, capture?: boolean): void;
+  removeEventListener(type: string, listener: (e: { target: unknown }) => void, capture?: boolean): void;
+}
+
+/**
+ * Desktop dropdowns open on hover or focus, and a client-side page change keeps the header (and the pointer) where it was, so a menu
+ * stayed open after a click. This closes it on any click inside it and lets it open again once the pointer or focus moves elsewhere.
+ * Renders nothing.
+ */
+export function NavDropdownCloser() {
+  useEffect(() => {
+    const doc = (globalThis as unknown as { document: DropDoc }).document;
+    const onClick = (e: { target: unknown }) => {
+      const item = (e.target as DropEl).closest?.(".bsb-has-dropdown");
+      if (!item || !(e.target as DropEl).closest?.(".bsb-dropdown-menu")) return;
+      item.classList.add("bsb-dd-closed");
+      doc.activeElement?.blur?.();
+    };
+    const reopen = (e: { target: unknown }) => {
+      const closed = doc.querySelectorAll(".bsb-dd-closed");
+      for (let i = 0; i < closed.length; i++) {
+        const el = closed[i];
+        if (el && !el.contains(e.target)) el.classList.remove("bsb-dd-closed");
+      }
+    };
+    doc.addEventListener("click", onClick, true);
+    doc.addEventListener("mouseover", reopen);
+    doc.addEventListener("focusin", reopen);
+    return () => {
+      doc.removeEventListener("click", onClick, true);
+      doc.removeEventListener("mouseover", reopen);
+      doc.removeEventListener("focusin", reopen);
+    };
+  }, []);
+  return null;
+}

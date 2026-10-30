@@ -14,6 +14,7 @@ import {
   getRecentBlogPosts,
   listBlogForSitemap,
   listPublicBlogCategories,
+  listBlogPosts,
   listPublicBlogPosts,
   publishBlogPost,
   resolveBlockData,
@@ -143,6 +144,18 @@ describe("blog categories", () => {
 });
 
 describe("blog posts and visibility", () => {
+  it("counts posts per status tab, whatever the open tab, and narrows by search", async () => {
+    const uniq = `Tabcount ${Date.now()}`;
+    await createBlogPost(rt, ownerA, { title: `${uniq} draft` });
+    await createBlogPost(rt, ownerA, { title: `${uniq} live`, status: "published" });
+    const all = await listBlogPosts(rt, ownerA, { search: uniq });
+    expect(all.counts).toEqual({ all: 2, published: 1, scheduled: 0, draft: 1 });
+    // The open tab narrows the list but never the counters.
+    const onlyDrafts = await listBlogPosts(rt, ownerA, { search: uniq, status: "draft" });
+    expect(onlyDrafts.items).toHaveLength(1);
+    expect(onlyDrafts.counts).toEqual(all.counts);
+  });
+
   it("creates drafts, refuses reserved and taken slugs, and suffixes generated ones", async () => {
     const a = await createBlogPost(rt, ownerA, { title: "Hello World" });
     expect(a.slug).toBe("hello-world");

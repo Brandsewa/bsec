@@ -379,7 +379,7 @@ export function CheckoutForm({
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">Contact Information</h2>
           {!signedIn ? (
-            <a href="/account/login" className="text-sm font-semibold text-foreground hover:underline">
+            <a href="/account/login" className="text-sm font-semibold text-foreground hover:opacity-70 transition-opacity">
               Login
             </a>
           ) : null}
@@ -428,14 +428,14 @@ export function CheckoutForm({
             ))}
             <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-sm">
               {savedAddresses.length > 1 ? (
-                <button type="button" onClick={() => setChooseOpen(true)} className="font-semibold text-foreground hover:underline">
+                <button type="button" onClick={() => setChooseOpen(true)} className="font-semibold text-foreground hover:opacity-70 transition-opacity">
                   Choose another address
                 </button>
               ) : null}
-              <button type="button" onClick={startNewAddress} className="font-semibold text-foreground hover:underline">
+              <button type="button" onClick={startNewAddress} className="font-semibold text-foreground hover:opacity-70 transition-opacity">
                 Add a new address
               </button>
-              <a href="/account/addresses" className="font-semibold text-foreground hover:underline">
+              <a href="/account/addresses" className="font-semibold text-foreground hover:opacity-70 transition-opacity">
                 Manage addresses
               </a>
             </div>
@@ -455,10 +455,10 @@ export function CheckoutForm({
                     ))}
                   </div>
                   <div className="mt-3 flex justify-end gap-4 text-sm">
-                    <button type="button" onClick={() => { setChooseOpen(false); startNewAddress(); }} className="font-semibold hover:underline">
+                    <button type="button" onClick={() => { setChooseOpen(false); startNewAddress(); }} className="font-semibold hover:opacity-70 transition-opacity">
                       Add a new address
                     </button>
-                    <a href="/account/addresses" className="font-semibold hover:underline">
+                    <a href="/account/addresses" className="font-semibold hover:opacity-70 transition-opacity">
                       Manage addresses
                     </a>
                   </div>
@@ -469,7 +469,7 @@ export function CheckoutForm({
         ) : (
           <>
             {savedAddresses.length > 0 ? (
-              <button type="button" onClick={() => { const a = savedAddresses.find((x) => x.id === selectedId) ?? savedAddresses.find((x) => addressFields(x).state); if (a) pickSaved(a); }} className="mb-2.5 text-sm font-semibold text-foreground hover:underline">
+              <button type="button" onClick={() => { const a = savedAddresses.find((x) => x.id === selectedId) ?? savedAddresses.find((x) => addressFields(x).state); if (a) pickSaved(a); }} className="mb-2.5 text-sm font-semibold text-foreground hover:opacity-70 transition-opacity">
                 Use a saved address
               </button>
             ) : null}
@@ -852,7 +852,7 @@ function SavedAddressCard({ a, chosen, onPick, onEdit }: { a: SavedCheckoutAddre
         {!usable ? <p className="text-xs text-destructive">Choose the state again to use this address.</p> : null}
       </div>
       {onEdit ? (
-        <button type="button" onClick={onEdit} className="shrink-0 text-xs font-semibold text-foreground hover:underline">
+        <button type="button" onClick={onEdit} className="shrink-0 text-xs font-semibold text-foreground hover:opacity-70 transition-opacity">
           Edit
         </button>
       ) : null}
