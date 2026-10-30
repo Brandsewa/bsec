@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-30
 - **Agent:** claude
-- **Branch:** `fix/e2e-markets-login`
+- **Branch:** `fix/e2e-markets-login` (merged in #155, 19c5e8a)
 - **Area:** e2e
 - **Type:** fix
 - **Supersedes:** none

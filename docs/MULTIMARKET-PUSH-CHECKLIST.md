@@ -1,5 +1,7 @@
 # Multi-market: push and merge checklist
 
+> **Done 2026-10-30:** pushed and merged (#150, then the CI fixes #155 and #156); production deploy succeeded. The browser walkthrough and sandbox runs below were not done before merging: the owner chose to test on the live server. Kept as the record of what was skipped.
+
 Branch: `docs/multimarket-phase0` (local only). Owner rule (2026-10-28): nothing is pushed or merged until the owner says so. PRs 149 and 150 are open and stay untouched until then.
 
 ## Before pushing (all must be true)

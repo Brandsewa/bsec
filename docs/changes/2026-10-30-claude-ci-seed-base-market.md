@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-30
 - **Agent:** claude
-- **Branch:** `fix/ci-seed-base-market`
+- **Branch:** `fix/ci-seed-base-market` (merged in #156, e975098)
 - **Area:** ci
 - **Type:** fix
 - **Supersedes:** none
