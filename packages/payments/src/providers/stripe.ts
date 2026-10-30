@@ -165,6 +165,21 @@ export class StripeProvider implements PaymentProvider {
     };
   }
 
+  /** Reads a Checkout Session, so the shopper's return can settle the order without waiting for the webhook. */
+  async retrieveSession(sessionId: string): Promise<{ paymentStatus: string; amountTotal: number | null; currency: string | null; paymentIntentId: string | null; orderId: string | null }> {
+    const s = await this.call<{ payment_status?: string; amount_total?: number; currency?: string; payment_intent?: string | null; client_reference_id?: string | null }>(
+      "GET",
+      `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    );
+    return {
+      paymentStatus: s.payment_status ?? "unpaid",
+      amountTotal: typeof s.amount_total === "number" ? s.amount_total : null,
+      currency: s.currency ? s.currency.toUpperCase() : null,
+      paymentIntentId: s.payment_intent ?? null,
+      orderId: s.client_reference_id ?? null,
+    };
+  }
+
   /** Stripe Checkout captures automatically, so "authorize" reads the session's payment state. */
   async authorize(_ctx: TenantContext, intent: PaymentIntentModel): Promise<AuthorizeResult> {
     const pi = intent.providerPaymentId;

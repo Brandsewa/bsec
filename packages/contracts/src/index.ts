@@ -25,6 +25,7 @@ import { storefrontContract } from "./storefront.ts";
 import { platformNotificationsContract } from "./notifications.ts";
 
 export * from "./admin.ts";
+export * from "./markets.ts";
 export * from "./finance.ts";
 export * from "./blog.ts";
 export * from "./notifications.ts";
@@ -88,3 +89,5 @@ export type PlatformClient = ContractRouterClient<PlatformContract>;
 
 export type { ContractRouterClient };
 export type StoreClient = ContractRouterClient<StoreContract>;
+export * from "./money.ts";
+export * from "./units.ts";

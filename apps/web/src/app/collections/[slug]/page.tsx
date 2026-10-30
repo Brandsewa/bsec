@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -53,10 +54,11 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
         requestId: crypto.randomUUID(),
       };
 
-      const [res, seoSettings, storeSettings] = await Promise.all([
+      const [res, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontCollection(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (res?.collection) {
@@ -83,6 +85,7 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
           hasFilterOrSortParams,
           page,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {
@@ -128,6 +131,8 @@ export default async function CollectionDetailPage({
   let collectionData: Awaited<ReturnType<typeof getStorefrontCollection>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
   let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
 
   try {
@@ -141,9 +146,13 @@ export default async function CollectionDetailPage({
     }
 
     tenantId = access.tenantId;
+    const marketCtx = await getMarketContext(tenantId);
+    const marketId = marketCtx.marketId;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
 
     // Check if the theme's collection template defines a filterMenuHandle
-    template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
     const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
     const templateSize = Number(listingForSize?.props?.["pageSize"]);
     const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
@@ -177,7 +186,7 @@ export default async function CollectionDetailPage({
       inStockOnly: inStockOnly || undefined,
       filterMenuHandle,
       filters: filterParams,
-    });
+    }, marketId);
   } catch {
     notFound();
   }
@@ -227,6 +236,8 @@ export default async function CollectionDetailPage({
       filterData={collectionData?.filterData}
       filters={sp}
       options={options}
+      currency={marketCurrency}
+      locale={marketLocale}
     />
   );
 
@@ -239,7 +250,11 @@ export default async function CollectionDetailPage({
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderCollectionListing: (options) => listing(options) }}
+          context={{
+            currency: marketCurrency,
+            locale: marketLocale,
+            renderCollectionListing: (options) => listing(options),
+          }}
         />
       ) : (
         listing()

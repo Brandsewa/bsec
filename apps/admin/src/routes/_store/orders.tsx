@@ -31,6 +31,7 @@ import {
 } from "../../components/data-table/use-table-state.ts";
 import { DateRangePicker } from "@bs/ui";
 import { StatusBadge, money } from "../../components/order-parts.tsx";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { ScrollTabs } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
@@ -165,6 +166,7 @@ export function ordersListInput(s: OrdersSearch, paging: { limit: number; offset
 type OrderRow = Awaited<ReturnType<typeof client.admin.orders.list>>["items"][number];
 
 function OrderStatsStrip() {
+  const storeCurrency = useStoreCurrency();
   const stats = useQuery(orpc.admin.orders.stats.queryOptions());
   if (stats.isLoading) {
     return (
@@ -183,8 +185,8 @@ function OrderStatsStrip() {
       <MetricCard label="Total orders" value={data.totalOrders.toLocaleString("en-IN")} icon={ShoppingBag} />
       <MetricCard label="Open orders" value={data.openOrders.toLocaleString("en-IN")} icon={Clock} />
       <MetricCard label="Paid orders" value={data.paidOrders.toLocaleString("en-IN")} icon={PackageCheck} />
-      <MetricCard label="Total revenue" value={money(data.totalRevenue)} />
-      <MetricCard label="Average order value" value={money(data.avgOrderValue)} />
+      <MetricCard label="Total revenue" value={money(data.totalRevenue, storeCurrency)} />
+      <MetricCard label="Average order value" value={money(data.avgOrderValue, storeCurrency)} />
     </div>
   );
 }
@@ -258,7 +260,7 @@ const ASK_COPY: Record<AskKind, { title: string; description: string; confirm: s
   cancel: { title: "Cancel", description: "This stops fulfillment and releases reserved stock. It cannot be undone.", confirm: "Cancel" },
 };
 
-const EXPORT_HEADER = ["Order", "Placed at", "Customer name", "Customer email", "Phone", "Order status", "Payment", "Fulfillment", "Items", "Total (INR)"];
+const EXPORT_HEADER = ["Order", "Placed at", "Customer name", "Customer email", "Phone", "Order status", "Payment", "Fulfillment", "Items", "Total", "Currency", "Base Total", "Base Currency"];
 const exportRow = (o: OrderRow) => [
   o.number,
   new Date(o.placedAt).toISOString(),
@@ -270,6 +272,9 @@ const exportRow = (o: OrderRow) => [
   o.fulfillmentStatus,
   o.itemsCount,
   (o.grandTotal / 100).toFixed(2),
+  o.currency ?? "INR",
+  o.baseGrandTotal != null ? (o.baseGrandTotal / 100).toFixed(2) : "",
+  o.baseCurrency ?? "",
 ];
 const stamp = () => new Date().toISOString().slice(0, 10);
 
@@ -278,6 +283,7 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 // ---------------------------------------------------------------------------------------------------------------
 
 export function OrdersPage() {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [s, update] = useUrlTableState(parseOrdersSearch);
@@ -510,7 +516,20 @@ export function OrdersPage() {
       header: "Total",
       sort: { asc: "total_asc", desc: "total_desc" },
       className: "text-right font-medium text-foreground",
-      cell: (o) => money(o.grandTotal),
+      cell: (o) => {
+        const orderCurrency = o.currency ?? storeCurrency;
+        const diffFromBase = o.baseGrandTotal != null && o.baseCurrency && orderCurrency !== o.baseCurrency;
+        return (
+          <div className="flex flex-col items-end">
+            <span>{money(o.grandTotal, orderCurrency)}</span>
+            {diffFromBase && o.baseGrandTotal != null && o.baseCurrency ? (
+              <span className="text-[11px] font-normal text-muted-foreground">
+                (~{money(o.baseGrandTotal, o.baseCurrency)})
+              </span>
+            ) : null}
+          </div>
+        );
+      },
     },
   ];
   const visibility = useColumnVisibility("orders", columns);
@@ -748,29 +767,40 @@ export function OrdersPage() {
             onSortChange={(v) => setFilter({ sort: v === "placed_desc" ? undefined : v })}
             onRowClick={(o) => go(o.id)}
             rowActions={rowMenu}
-            renderCard={(o, ctx) => (
-              <div className="flex items-start gap-3 p-3" onClick={() => go(o.id)}>
-                <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox aria-label={`Select ${o.number}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
-                </div>
-                <div className="grid min-w-0 flex-1 gap-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{o.number}</span>
-                    <span className="font-medium text-foreground">{money(o.grandTotal)}</span>
+            renderCard={(o, ctx) => {
+              const orderCurrency = o.currency ?? storeCurrency;
+              const diffFromBase = o.baseGrandTotal != null && o.baseCurrency && orderCurrency !== o.baseCurrency;
+              return (
+                <div className="flex items-start gap-3 p-3" onClick={() => go(o.id)}>
+                  <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox aria-label={`Select ${o.number}`} checked={ctx.selected} onCheckedChange={() => ctx.toggle()} />
                   </div>
-                  <p className="truncate text-foreground">{o.customerName ?? o.customerEmail}</p>
-                  {o.customerName ? <p className="truncate text-muted-foreground">{o.customerEmail}</p> : null}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <StatusBadge status={o.paymentStatus} />
-                    <StatusBadge status={o.fulfillmentStatus} />
-                    <span className="text-muted-foreground">
-                      {new Date(o.placedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} · {o.itemsCount} items
-                    </span>
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-foreground">{o.number}</span>
+                      <div className="flex flex-col items-end">
+                        <span className="font-medium text-foreground">{money(o.grandTotal, orderCurrency)}</span>
+                        {diffFromBase && o.baseGrandTotal != null && o.baseCurrency ? (
+                          <span className="text-[11px] font-normal text-muted-foreground">
+                            (~{money(o.baseGrandTotal, o.baseCurrency)})
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className="truncate text-foreground">{o.customerName ?? o.customerEmail}</p>
+                    {o.customerName ? <p className="truncate text-muted-foreground">{o.customerEmail}</p> : null}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={o.paymentStatus} />
+                      <StatusBadge status={o.fulfillmentStatus} />
+                      <span className="text-muted-foreground">
+                        {new Date(o.placedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} · {o.itemsCount} items
+                      </span>
+                    </div>
                   </div>
+                  <div onClick={(e) => e.stopPropagation()}>{rowMenu(o)}</div>
                 </div>
-                <div onClick={(e) => e.stopPropagation()}>{rowMenu(o)}</div>
-              </div>
-            )}
+              );
+            }}
           />
 
           <Pagination

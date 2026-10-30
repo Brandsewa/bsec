@@ -84,6 +84,20 @@ describe("Admin Catalog & Inventory Routes", () => {
     expect(mod.Route.options.pendingComponent).toBeDefined();
     expect(mod.Route.options.component).toBeDefined();
   });
+
+  it("exports valid Route definition with pendingComponent for settings markets", async () => {
+    const mod = await import("../src/routes/_store/settings/markets.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
+
+  it("exports valid Route definition with pendingComponent for settings markets detail", async () => {
+    const mod = await import("../src/routes/_store/settings/markets_.$id.tsx");
+    expect(mod.Route).toBeDefined();
+    expect(mod.Route.options.pendingComponent).toBeDefined();
+    expect(mod.Route.options.component).toBeDefined();
+  });
 });
 
 describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () => {

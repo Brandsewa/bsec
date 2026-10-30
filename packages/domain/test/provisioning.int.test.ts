@@ -162,6 +162,19 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
       cod: { enabled: true, feePaise: 0 },
     });
 
+    // Verify the base market (ADR-040): one per store, India, in the store currency, covering IN
+    const baseMarkets = await platformDb.db
+      .select()
+      .from(schema.markets)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseMarkets).toHaveLength(1);
+    expect(baseMarkets[0]).toMatchObject({ isBase: true, currency: "INR", handle: "in", status: "active" });
+    const baseCountries = await platformDb.db
+      .select()
+      .from(schema.marketCountries)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseCountries.map((c) => c.country)).toEqual(["IN"]);
+
     // Verify Warehouse Location
     const locations = await platformDb.db
       .select()
@@ -383,5 +396,185 @@ describe("M8 Atomic Tenant Provisioning Engine (PLAN §5.1, §6.4, §7 / ADR-016
 
     const checkDash = validateSubdomainFormat("-invalid");
     expect(checkDash.valid).toBe(false);
+  });
+
+  it("provisions a US store with USD, imperial units, US shipping zone, and base market", async () => {
+    const slug = `us-store-${Date.now().toString(36)}`;
+    const result = await provisionTenant(rtPlatform, {
+      storeName: "Brooklyn Roasters",
+      slug,
+      country: "US",
+      owner: {
+        email: `us-owner-${Date.now()}@example.com`,
+        name: "John Doe",
+        password: "SuperSecurePassword123!",
+      },
+      business: {
+        legalName: "Brooklyn Roasters LLC",
+        line1: "123 Main St",
+        city: "Brooklyn",
+        state: "NY",
+        pincode: "11201",
+      },
+      planCode: "starter",
+      source: "self_service",
+    });
+
+    expect(result.tenantId).toBeDefined();
+
+    // Verify tenant attributes
+    const [tenant] = await platformDb.db
+      .select()
+      .from(schema.tenants)
+      .where(sql`id = ${result.tenantId}`);
+    expect(tenant).toBeDefined();
+    expect(tenant!.country).toBe("US");
+    expect(tenant!.currency).toBe("USD");
+    expect(tenant!.timezone).toBe("America/New_York");
+    expect(tenant!.locale).toBe("en-US");
+
+    // Verify store settings: imperial, lb, no GSTIN
+    const [settings] = await platformDb.db
+      .select()
+      .from(schema.storeSettings)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(settings).toBeDefined();
+    expect(settings!.unitSystem).toBe("imperial");
+    expect(settings!.weightUnit).toBe("lb");
+    expect(settings!.currency).toBe("USD");
+    expect(settings!.timezone).toBe("America/New_York");
+    expect((settings!.address as Record<string, unknown>)?.countryCode).toBe("US");
+    expect(settings!.checkout).toMatchObject({
+      cod: { enabled: false },
+      tax: { gstin: null, sellerState: null, pricesIncludeTax: false },
+    });
+
+    // Verify base market: United States, USD, exclusive tax
+    const baseMarkets = await platformDb.db
+      .select()
+      .from(schema.markets)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseMarkets).toHaveLength(1);
+    expect(baseMarkets[0]).toMatchObject({
+      isBase: true,
+      name: "United States",
+      handle: "us",
+      currency: "USD",
+      taxDisplay: "exclusive",
+      status: "active",
+    });
+
+    const baseCountries = await platformDb.db
+      .select()
+      .from(schema.marketCountries)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseCountries.map((c) => c.country)).toEqual(["US"]);
+
+    // Verify shipping zone & sensible USD rates
+    const zones = await platformDb.db
+      .select()
+      .from(schema.shippingZones)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(zones).toHaveLength(1);
+    expect(zones[0]!.name).toBe("United States (National)");
+    expect(zones[0]!.countries).toEqual(["US"]);
+    expect(zones[0]!.marketId).toBe(baseMarkets[0]!.id);
+
+    const rates = await platformDb.db
+      .select()
+      .from(schema.shippingRates)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(rates.length).toBeGreaterThanOrEqual(2);
+    const flat = rates.find((r) => r.rateType === "flat");
+    const free = rates.find((r) => r.rateType === "free_above_threshold");
+    expect(flat?.pricePaise).toBe(500); // $5.00
+    expect(free?.thresholdPaise).toBe(5000); // $50.00
+  });
+
+  it("provisions a Canadian store with CAD, metric units, CA shipping zone, and base market", async () => {
+    const slug = `ca-store-${Date.now().toString(36)}`;
+    const result = await provisionTenant(rtPlatform, {
+      storeName: "Montreal Organics",
+      slug,
+      country: "CA",
+      owner: {
+        email: `ca-owner-${Date.now()}@example.com`,
+        name: "Jean Dupont",
+        password: "SuperSecurePassword123!",
+      },
+      business: {
+        legalName: "Montreal Organics Inc",
+        line1: "456 Rue Saint-Denis",
+        city: "Montreal",
+        state: "QC",
+        pincode: "H2X 3K4",
+      },
+      planCode: "growth",
+      source: "self_service",
+    });
+
+    expect(result.tenantId).toBeDefined();
+
+    // Verify tenant attributes
+    const [tenant] = await platformDb.db
+      .select()
+      .from(schema.tenants)
+      .where(sql`id = ${result.tenantId}`);
+    expect(tenant).toBeDefined();
+    expect(tenant!.country).toBe("CA");
+    expect(tenant!.currency).toBe("CAD");
+    expect(tenant!.timezone).toBe("America/Toronto");
+    expect(tenant!.locale).toBe("en-CA");
+
+    // Verify store settings: metric, kg, no GSTIN
+    const [settings] = await platformDb.db
+      .select()
+      .from(schema.storeSettings)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(settings).toBeDefined();
+    expect(settings!.unitSystem).toBe("metric");
+    expect(settings!.weightUnit).toBe("kg");
+    expect(settings!.currency).toBe("CAD");
+    expect(settings!.timezone).toBe("America/Toronto");
+    expect((settings!.address as Record<string, unknown>)?.countryCode).toBe("CA");
+    expect(settings!.checkout).toMatchObject({
+      cod: { enabled: false },
+      tax: { gstin: null, sellerState: null, pricesIncludeTax: false },
+    });
+
+    // Verify base market: Canada, CAD, exclusive tax
+    const baseMarkets = await platformDb.db
+      .select()
+      .from(schema.markets)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(baseMarkets).toHaveLength(1);
+    expect(baseMarkets[0]).toMatchObject({
+      isBase: true,
+      name: "Canada",
+      handle: "ca",
+      currency: "CAD",
+      taxDisplay: "exclusive",
+      status: "active",
+    });
+
+    // Verify shipping zone & sensible CAD rates
+    const zones = await platformDb.db
+      .select()
+      .from(schema.shippingZones)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(zones).toHaveLength(1);
+    expect(zones[0]!.name).toBe("Canada (National)");
+    expect(zones[0]!.countries).toEqual(["CA"]);
+    expect(zones[0]!.marketId).toBe(baseMarkets[0]!.id);
+
+    const rates = await platformDb.db
+      .select()
+      .from(schema.shippingRates)
+      .where(sql`tenant_id = ${result.tenantId}`);
+    expect(rates.length).toBeGreaterThanOrEqual(2);
+    const flat = rates.find((r) => r.rateType === "flat");
+    const free = rates.find((r) => r.rateType === "free_above_threshold");
+    expect(flat?.pricePaise).toBe(700); // $7.00 CAD
+    expect(free?.thresholdPaise).toBe(7500); // $75.00 CAD
   });
 });

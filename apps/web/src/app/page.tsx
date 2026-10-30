@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import {
@@ -61,6 +62,8 @@ export default async function HomePage() {
   let renderData: { data: Record<string, BlockData>; media: Record<string, string> } | undefined;
   let host = "localhost";
   let storeName = "Store";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
   const logoUrl: string | null = null;
   let isMarketing = false;
 
@@ -82,8 +85,12 @@ export default async function HomePage() {
         requestId: crypto.randomUUID(),
       };
 
+      const marketCtx = await getMarketContext(access.tenantId);
+      marketCurrency = marketCtx.currency;
+      marketLocale = marketCtx.locale;
+
       const [homeData, storeSettingsData] = await Promise.all([
-        getCachedStorefrontHomePage(access.tenantId).catch(() => null),
+        getCachedStorefrontHomePage(access.tenantId, marketCtx.marketId).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
       ]);
 
@@ -157,7 +164,14 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
-      <BlockRenderer blocks={blocksToRender} renderData={renderData} />
+      <BlockRenderer
+        blocks={blocksToRender}
+        renderData={renderData}
+        context={{
+          currency: marketCurrency,
+          locale: marketLocale,
+        }}
+      />
       <GoogleOneTapPrompt />
     </main>
   );

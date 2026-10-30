@@ -17,16 +17,22 @@ export function ThemeChrome({
   renderData,
   storeName,
   logoUrl,
+  currency = "INR",
+  locale = "en-IN",
 }: {
   blocks: BlockInstance[];
   renderData?: BlockRenderData | undefined;
   storeName: string;
   logoUrl?: string | null | undefined;
+  currency?: string | undefined;
+  locale?: string | undefined;
 }) {
   const media = renderData?.media ?? {};
   return (
     <>
       {renderBlockTree(blocks, {
+        currency,
+        locale,
         data: renderData?.data,
         mediaUrl: (id) => media[id] ?? null,
         storeName,

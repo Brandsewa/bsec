@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull, min, notInArray, sql } from "drizzle-orm";
 import { type Db, schema, shippingZones, shippingRates, withTenant } from "@bs/db";
+import { formatMoney } from "@bs/contracts/money";
 import type {
   SaveShippingZonesInput,
   ShippingSettings,
@@ -50,6 +51,7 @@ export function calculateRateFromRule(
   },
   subtotalPaise: number = 0,
   weightGrams: number = 0,
+  currency: string = "INR",
 ): ShippingRateCalculation {
   // A pure "free above threshold" rule (price 0, as a new store is seeded with) only applies once the cart reaches the
   // threshold. One that has its own price (what the admin's shipping settings write: "₹70, free above ₹1200") is always
@@ -70,7 +72,7 @@ export function calculateRateFromRule(
 
   let description = `${rate.name} within ${estimatedDays}`;
   if (isFree && rate.thresholdPaise != null) {
-    description = `Free delivery on orders over ₹${(rate.thresholdPaise / 100).toFixed(0)}`;
+    description = `Free delivery on orders over ${formatMoney(rate.thresholdPaise, currency)}`;
   } else if (isFree && rate.pricePaise === 0) {
     description = "Free standard delivery";
   }
@@ -92,6 +94,11 @@ export interface ShippingContextOptions {
   weightGrams?: number | undefined;
   /** Where the order ships. Without it the store's default zone is used. */
   destination?: ShippingDestination | undefined;
+  /**
+   * The market the order is in (ADR-040). Only that market's zones apply (the base market also keeps zones with no market).
+   * Without it every zone is considered, as before markets existed.
+   */
+  market?: { id: string; isBase: boolean } | undefined;
 }
 
 type TenantTx = Parameters<Parameters<typeof withTenant>[2]>[0];
@@ -108,12 +115,22 @@ export async function cartWeightGrams(tx: TenantTx, lines: Array<{ variantId: st
   return lines.reduce((sum, l) => sum + (byId.get(l.variantId) ?? 0) * l.quantity, 0);
 }
 
-async function loadZones(tx: TenantTx, tenantId: string) {
+async function loadZones(tx: TenantTx, tenantId: string, market?: ShippingContextOptions["market"]) {
   let zones = await tx
     .select()
     .from(shippingZones)
-    .where(eq(shippingZones.tenantId, tenantId))
+    .where(
+      market
+        ? and(
+            eq(shippingZones.tenantId, tenantId),
+            market.isBase ? sql`(${shippingZones.marketId} = ${market.id} OR ${shippingZones.marketId} IS NULL)` : eq(shippingZones.marketId, market.id),
+          )
+        : eq(shippingZones.tenantId, tenantId),
+    )
     .orderBy(sql`${shippingZones.isDefault} DESC, ${shippingZones.createdAt} ASC`);
+
+  // A market that is not the base market never gets a zone invented for it: no zone means we do not ship there.
+  if (market && !market.isBase) return zones;
 
   // Self-healing provisioning if tenant has no shipping zones yet
   if (zones.length === 0) {
@@ -165,7 +182,7 @@ async function resolveZoneRates(
   subtotalPaise: number,
   opts: ShippingContextOptions,
 ): Promise<{ zone: { id: string; name: string } | null; rates: ShippingRateCalculation[] }> {
-  const zones = await loadZones(tx, tenantId);
+  const zones = await loadZones(tx, tenantId, opts.market);
   const zone = pickShippingZone(zones, opts.destination);
   if (!zone) return { zone: null, rates: [] };
 
@@ -243,6 +260,7 @@ export async function getAdminShippingSettings(
       resultZones.push({
         id: zone.id,
         name: zone.name,
+        marketId: zone.marketId ?? null,
         countries: zone.countries,
         states: zone.states,
         isDefault: zone.isDefault,
@@ -296,6 +314,7 @@ export async function updateAdminShippingSettings(
           name: input.zoneName,
           countries: ["IN"],
           isDefault: true,
+          marketId: input.marketId ?? null,
         })
         .returning();
       defaultZone = created;
@@ -304,6 +323,7 @@ export async function updateAdminShippingSettings(
         .update(shippingZones)
         .set({
           name: input.zoneName,
+          ...(input.marketId !== undefined ? { marketId: input.marketId } : {}),
           updatedAt: sql`now()`,
         })
         .where(and(eq(shippingZones.tenantId, tenantId), eq(shippingZones.id, defaultZone.id)));
@@ -434,14 +454,38 @@ export async function previewShippingRate(
   }
 
   return withTenant(db, tenantId, async (tx) => {
+    let marketOpt: ShippingContextOptions["market"] = undefined;
+    let currency = "INR";
+    if (input.marketId) {
+      const [m] = await tx
+        .select()
+        .from(schema.markets)
+        .where(and(eq(schema.markets.tenantId, tenantId), eq(schema.markets.id, input.marketId)))
+        .limit(1);
+      if (m) {
+        marketOpt = { id: m.id, isBase: m.isBase };
+        currency = m.currency;
+      }
+    } else {
+      const [baseM] = await tx
+        .select()
+        .from(schema.markets)
+        .where(and(eq(schema.markets.tenantId, tenantId), eq(schema.markets.isBase, true)))
+        .limit(1);
+      if (baseM) {
+        currency = baseM.currency;
+      }
+    }
+
     const resolved = await resolveZoneRates(tx, tenantId, input.subtotalPaise, {
       weightGrams: input.weightGrams ?? 0,
       destination: { country: input.destinationCountry, state: input.destinationState },
+      market: marketOpt,
     });
     const zoneName = resolved.zone?.name ?? "Domestic (India)";
 
     const previewRates = resolved.rates.map((r) => {
-      let trace = `Zone: ${zoneName}; Rate: ${r.title} ₹${(r.amount / 100).toFixed(0)}`;
+      let trace = `Zone: ${zoneName}; Rate: ${r.title} ${formatMoney(r.amount, currency)}`;
       if (r.isFree) {
         trace += ` (Free delivery applied)`;
       } else if (!r.applicable) {
@@ -514,7 +558,14 @@ export async function saveAdminShippingZones(
 
     const keepZoneIds: string[] = [];
     for (const z of zones) {
-      const values = { name: z.name, countries: z.countries.map((c) => c.toUpperCase()), states: z.states, isDefault: z.isDefault, updatedAt: sql`now()` };
+      const values = {
+        name: z.name,
+        countries: z.countries.map((c) => c.toUpperCase()),
+        states: z.states,
+        isDefault: z.isDefault,
+        marketId: z.marketId ?? null,
+        updatedAt: sql`now()`,
+      };
       let zoneId = z.id;
       if (zoneId && existingIds.has(zoneId)) {
         await tx.update(shippingZones).set(values).where(and(eq(shippingZones.tenantId, tenantId), eq(shippingZones.id, zoneId)));

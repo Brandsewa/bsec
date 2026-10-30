@@ -26,6 +26,8 @@ export interface CustomerOrderSummary {
   discountTotal?: number | undefined;
   shippingTotal: number;
   grandTotal: number;
+  /** The currency the order was charged in (ADR-040). */
+  currency: string;
   placedAt: Date;
   shipsOn?: string | null | undefined;
   itemsCount?: number | undefined;
@@ -63,6 +65,14 @@ export interface CustomerOrderDetail extends CustomerOrderSummary {
   phone: string;
   shippingAddress: unknown;
   billingAddress: unknown;
+  policySnapshot?: {
+    market?: string | null | undefined;
+    marketName?: string | null | undefined;
+    text?: string | null | undefined;
+    cancellation?: unknown;
+    returnSettings?: unknown;
+    capturedAt?: string | undefined;
+  } | null | undefined;
   items: OrderItemSummary[];
   tracking: OrderTracking;
 }
@@ -206,6 +216,7 @@ export async function getCustomerOrders(
         subtotal: orders.subtotal,
         shippingTotal: orders.shippingTotal,
         grandTotal: orders.grandTotal,
+        currency: orders.currency,
         placedAt: orders.placedAt,
       })
       .from(orders)
@@ -304,12 +315,14 @@ export async function getCustomerOrderDetail(
       discountTotal: Number(order.discountTotal ?? 0),
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
+      currency: order.currency,
       placedAt: order.placedAt,
       shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
       billingAddress: order.billingAddress,
+      policySnapshot: (order.policySnapshot ?? null) as CustomerOrderDetail["policySnapshot"],
       items: items.map((it) => ({
         id: it.id,
         variantId: it.variantId,
@@ -381,12 +394,14 @@ export async function getOrderByActionToken(
       discountTotal: Number(order.discountTotal ?? 0),
       shippingTotal: order.shippingTotal,
       grandTotal: order.grandTotal,
+      currency: order.currency,
       placedAt: order.placedAt,
       shipsOn: order.shipsOn ? String(order.shipsOn) : null,
       email: order.email,
       phone: order.phone,
       shippingAddress: order.shippingAddress,
       billingAddress: order.billingAddress,
+      policySnapshot: (order.policySnapshot ?? null) as CustomerOrderDetail["policySnapshot"],
       items: items.map((it) => ({
         id: it.id,
         variantId: it.variantId,

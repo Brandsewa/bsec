@@ -58,6 +58,8 @@ export async function listPlatformPlans(rt: Runtime) {
     name: p.name,
     priceMonthlyPaise: Number(p.priceMonthlyPaise),
     priceYearlyPaise: Number(p.priceYearlyPaise),
+    priceMonthlyUsdCents: p.priceMonthlyUsdCents !== null ? Number(p.priceMonthlyUsdCents) : null,
+    priceYearlyUsdCents: p.priceYearlyUsdCents !== null ? Number(p.priceYearlyUsdCents) : null,
     activeSubscribersCount: countMap.get(p.id) ?? 0,
     features: p.limits,
   }));

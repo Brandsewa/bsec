@@ -154,13 +154,19 @@ export async function startRazorpayPaymentByToken(rt: Runtime, tenantId: string,
 }
 
 export interface SettleInput {
-  /** Razorpay order id the payment belongs to. */
+  /** The provider's order id the payment belongs to (Razorpay order, Stripe Checkout Session, PayPal order). */
   providerOrderId: string;
   providerPaymentId: string;
-  /** Amount Razorpay reports for the payment, in paise, when known (webhooks); checked against the order. */
+  /** Amount the provider reports for the payment, in minor units, when known; checked against the order. */
   amount?: number | undefined;
-  source: "browser" | "webhook";
+  /** Currency the provider reports, when known; checked against the order (ADR-040: a wrong currency is never accepted). */
+  currency?: string | undefined;
+  /** Which provider took the payment. Defaults to Razorpay. */
+  provider?: "razorpay" | "stripe" | "paypal" | undefined;
+  source: "browser" | "webhook" | "return";
 }
+
+const PROVIDER_LABEL: Record<string, string> = { razorpay: "Razorpay", stripe: "Stripe", paypal: "PayPal" };
 
 export type SettleResult = "paid" | "already_paid" | "ignored";
 
@@ -169,11 +175,18 @@ export type SettleResult = "paid" | "already_paid" | "ignored";
  * no-op. A payment whose amount does not match the order is recorded but never marks it paid.
  */
 export async function settleRazorpayPayment(db: Db, tenantId: string, input: SettleInput): Promise<SettleResult> {
+  return settleProviderPayment(db, tenantId, input);
+}
+
+/** The same idempotent, amount- and currency-checked settle for every online provider. */
+export async function settleProviderPayment(db: Db, tenantId: string, input: SettleInput): Promise<SettleResult> {
+  const provider = input.provider ?? "razorpay";
+  const label = PROVIDER_LABEL[provider] ?? provider;
   const outcome = await withTenant(db, tenantId, async (tx): Promise<{ result: SettleResult; orderId?: string }> => {
     const [intent] = await tx
       .select()
       .from(schema.paymentIntents)
-      .where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.providerOrderId, input.providerOrderId)))
+      .where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.providerOrderId, input.providerOrderId), eq(schema.paymentIntents.provider, provider)))
       .limit(1);
     if (!intent) return { result: "ignored" };
 
@@ -181,14 +194,21 @@ export async function settleRazorpayPayment(db: Db, tenantId: string, input: Set
     if (!order) return { result: "ignored" };
     if (intent.status === "captured" || order.paymentStatus === "paid") return { result: "already_paid", orderId: order.id };
 
-    if (input.amount !== undefined && input.amount !== Number(intent.amount)) {
+    const currencyWrong = input.currency !== undefined && input.currency.toUpperCase() !== intent.currency.toUpperCase();
+    if (currencyWrong || (input.amount !== undefined && input.amount !== Number(intent.amount))) {
       await tx.insert(schema.orderEvents).values({
         tenantId,
         orderId: order.id,
         type: "payment.amount_mismatch",
-        message: "A Razorpay payment did not match the order total and was not accepted. Check it in your Razorpay dashboard.",
+        message: `A ${label} payment did not match the order total and was not accepted. Check it in your ${label} dashboard.`,
         actorType: "system",
-        data: { providerPaymentId: input.providerPaymentId, expected: Number(intent.amount), received: input.amount },
+        data: {
+          providerPaymentId: input.providerPaymentId,
+          expected: Number(intent.amount),
+          received: input.amount ?? null,
+          expectedCurrency: intent.currency,
+          receivedCurrency: input.currency ?? null,
+        },
       });
       return { result: "ignored" };
     }
@@ -198,7 +218,7 @@ export async function settleRazorpayPayment(db: Db, tenantId: string, input: Set
       tenantId,
       intentId: intent.id,
       providerPaymentId: input.providerPaymentId,
-      method: "razorpay",
+      method: provider,
       status: "captured",
       raw: { source: input.source },
     });
@@ -215,9 +235,9 @@ export async function settleRazorpayPayment(db: Db, tenantId: string, input: Set
       tenantId,
       orderId: order.id,
       type: "payment.captured",
-      message: "Payment received through Razorpay",
+      message: `Payment received through ${label}`,
       actorType: "system",
-      data: { provider: "razorpay", providerPaymentId: input.providerPaymentId, source: input.source },
+      data: { provider, providerPaymentId: input.providerPaymentId, source: input.source },
     });
     return { result: "paid", orderId: order.id };
   });

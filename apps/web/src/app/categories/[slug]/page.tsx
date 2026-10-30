@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -50,10 +51,11 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
         requestId: crypto.randomUUID(),
       };
 
-      const [res, seoSettings, storeSettings] = await Promise.all([
+      const [res, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontCategory(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (res?.category) {
@@ -70,6 +72,7 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
           hasFilterOrSortParams,
           page,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {
@@ -116,6 +119,8 @@ export default async function CategoryDetailPage({
   let categoryData: Awaited<ReturnType<typeof getStorefrontCategory>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
   let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
   let limit = 12;
 
@@ -130,8 +135,12 @@ export default async function CategoryDetailPage({
     }
 
     tenantId = access.tenantId;
+    const marketCtx = await getMarketContext(tenantId);
+    const marketId = marketCtx.marketId;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
     // Categories are drawn with the theme's collection template, the same page collections use.
-    template = await getCachedThemePage(tenantId, "collection").catch(() => null);
+    template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
     const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
     const templateSize = Number(listingForSize?.props?.["pageSize"]);
     const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
@@ -220,6 +229,8 @@ export default async function CategoryDetailPage({
       options={options}
       basePath={`/categories/${category.slug}`}
       archive={{ href: "/categories", label: "Categories" }}
+      currency={marketCurrency}
+      locale={marketLocale}
     />
   );
 
@@ -231,7 +242,11 @@ export default async function CategoryDetailPage({
         <BlockRenderer
           blocks={template.blocks}
           renderData={template.renderData}
-          context={{ renderCollectionListing: (options) => listing(options) }}
+          context={{
+            currency: marketCurrency,
+            locale: marketLocale,
+            renderCollectionListing: (options) => listing(options),
+          }}
         />
       ) : (
         listing()

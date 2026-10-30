@@ -110,20 +110,20 @@ export function OrderDetailLayout({
                     </div>
                   </div>
                   <div className="shrink-0 font-semibold text-foreground">
-                    <Money paise={item.total} />
+                    <Money paise={item.total} currency={order.currency} />
                   </div>
                 </div>
               ))}
             </div>
             <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span><Money paise={order.subtotal} /></span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span><Money paise={order.subtotal} currency={order.currency} /></span></div>
               {(order.discountTotal ?? 0) > 0 && (
-                <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>−<Money paise={order.discountTotal ?? 0} /></span></div>
+                <div className="flex justify-between text-muted-foreground"><span>Discount</span><span>−<Money paise={order.discountTotal ?? 0} currency={order.currency} /></span></div>
               )}
               {order.shippingTotal > 0 && (
-                <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span><Money paise={order.shippingTotal} /></span></div>
+                <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span><Money paise={order.shippingTotal} currency={order.currency} /></span></div>
               )}
-              <div className="flex justify-between border-t border-border pt-2 text-base font-bold text-foreground"><span>Grand Total</span><span><Money paise={order.grandTotal} /></span></div>
+              <div className="flex justify-between border-t border-border pt-2 text-base font-bold text-foreground"><span>Grand Total</span><span><Money paise={order.grandTotal} currency={order.currency} /></span></div>
             </div>
           </div>
         </div>

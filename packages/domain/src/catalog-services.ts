@@ -8,6 +8,7 @@ import { cleanRichDescription, type RichDescriptionValue } from "./rich-descript
 import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
+import { syncVariantMarketPrices } from "./markets/service.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -582,6 +583,7 @@ export async function createProduct(
         .returning();
       if (variant) {
         createdVariants.push(variant);
+        await syncVariantMarketPrices(tx, ctx.tenantId, [variant.id]);
         if (v.imageMediaId) {
           await syncMediaUsages(tx, ctx, {
             ownerType: "variant",
@@ -842,6 +844,7 @@ export async function updateVariant(
     if (!row) {
       throw new Error(`Variant not found: "${input.id}"`);
     }
+    if (input.price !== undefined || input.compareAtPrice !== undefined) await syncVariantMarketPrices(tx, ctx.tenantId, [row.id]);
 
     if (input.imageMediaId !== undefined) {
       await syncMediaUsages(tx, ctx, {

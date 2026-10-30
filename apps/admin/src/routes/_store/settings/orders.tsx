@@ -9,6 +9,8 @@ import { Field } from "@bs/ui";
 import { SimpleSelect, Switch } from "@bs/ui";
 import type { TrackingSettings } from "@bs/contracts";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -72,6 +74,7 @@ function OrderSettingsForm({
     tracking: TrackingSettings;
   };
 }) {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const initialStockHold = initial.stockHoldMinutes ?? 30;
   const initialMinRupees = Math.round((initial.minimumOrderPaise ?? 0) / 100);
@@ -261,7 +264,7 @@ function OrderSettingsForm({
                     }
                   }}
                 />
-                <span className="text-xs text-muted-foreground">₹</span>
+                <span className="text-xs text-muted-foreground">{currencySymbol(storeCurrency)}</span>
               </div>
             </Field>
           </div>

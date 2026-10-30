@@ -26,6 +26,9 @@ export interface StoreSettingsRecord extends StoreConfig {
   storeName: string;
   currency: string;
   timezone: string;
+  country?: string | undefined;
+  unitSystem: "metric" | "imperial";
+  weightUnit: "g" | "kg" | "oz" | "lb";
   legalName: string | null;
   supportEmail: string | null;
   supportPhone: string | null;
@@ -38,6 +41,8 @@ export interface UpdateStoreSettingsInput {
   storeName?: string | undefined;
   currency?: string | undefined;
   timezone?: string | undefined;
+  unitSystem?: "metric" | "imperial" | undefined;
+  weightUnit?: "g" | "kg" | "oz" | "lb" | undefined;
   legalName?: string | null | undefined;
   supportEmail?: string | null | undefined;
   supportPhone?: string | null | undefined;
@@ -95,12 +100,15 @@ function toAddress(raw: unknown): StoreAddressRecord | null {
 
 type SettingsRow = typeof schema.storeSettings.$inferSelect;
 
-function toRecord(row: SettingsRow, tenantId: string): StoreSettingsRecord {
+function toRecord(row: SettingsRow, tenantId: string, tenantCountry?: string): StoreSettingsRecord {
   return {
     tenantId,
     storeName: row.storeName,
     currency: row.currency,
     timezone: row.timezone,
+    country: tenantCountry,
+    unitSystem: (row.unitSystem as "metric" | "imperial") ?? "metric",
+    weightUnit: (row.weightUnit as "g" | "kg" | "oz" | "lb") ?? "kg",
     legalName: row.legalName ?? null,
     supportEmail: row.supportEmail ?? null,
     supportPhone: row.supportPhone ?? null,
@@ -113,7 +121,7 @@ function toRecord(row: SettingsRow, tenantId: string): StoreSettingsRecord {
 
 async function tenantDefaults(tx: Db, tenantId: string) {
   const [tenant] = await tx
-    .select({ name: schema.tenants.name, currency: schema.tenants.currency, timezone: schema.tenants.timezone })
+    .select({ name: schema.tenants.name, currency: schema.tenants.currency, timezone: schema.tenants.timezone, country: schema.tenants.country })
     .from(schema.tenants)
     .where(eq(schema.tenants.id, tenantId))
     .limit(1);
@@ -121,6 +129,7 @@ async function tenantDefaults(tx: Db, tenantId: string) {
     storeName: tenant?.name ?? "My store",
     currency: tenant?.currency ?? "INR",
     timezone: tenant?.timezone ?? "Asia/Kolkata",
+    country: tenant?.country ?? "IN",
   };
 }
 
@@ -129,11 +138,13 @@ export async function getStoreSettings(rt: Runtime, ctx: TenantContext): Promise
   assertPermission(ctx, "settings.write");
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [row] = await tx.select().from(schema.storeSettings).limit(1);
-    if (row) return toRecord(row, ctx.tenantId);
     const d = await tenantDefaults(tx, ctx.tenantId);
+    if (row) return toRecord(row, ctx.tenantId, d.country);
     return {
       tenantId: ctx.tenantId,
       ...d,
+      unitSystem: "metric",
+      weightUnit: "kg",
       legalName: null,
       supportEmail: null,
       supportPhone: null,
@@ -145,7 +156,7 @@ export async function getStoreSettings(rt: Runtime, ctx: TenantContext): Promise
   });
 }
 
-const AUDIT_FIELDS = ["storeName", "currency", "timezone", "legalName", "supportEmail", "supportPhone", "address", "autoPublishReviews"] as const;
+const AUDIT_FIELDS = ["storeName", "currency", "timezone", "unitSystem", "weightUnit", "legalName", "supportEmail", "supportPhone", "address", "autoPublishReviews"] as const;
 
 /** Writes the audit_logs row for a store settings change (AGENTS.md rule 6). No secrets exist here; the
  * checkout/tax groups are audited through their own canonical editors, not this aggregate's diff. */
@@ -154,6 +165,8 @@ async function writeSettingsAudit(tx: Db, ctx: TenantContext, before: StoreSetti
     storeName: r.storeName,
     currency: r.currency,
     timezone: r.timezone,
+    unitSystem: r.unitSystem,
+    weightUnit: r.weightUnit,
     legalName: r.legalName,
     supportEmail: r.supportEmail,
     supportPhone: r.supportPhone,
@@ -191,7 +204,8 @@ export async function updateStoreSettings(
   }
   const result = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.storeSettings).limit(1);
-    const before = existing ? toRecord(existing, ctx.tenantId) : null;
+    const d = await tenantDefaults(tx, ctx.tenantId);
+    const before = existing ? toRecord(existing, ctx.tenantId, d.country) : null;
     const current = parseStoreConfig(existing?.checkout);
     const rawCheckout = (existing?.checkout && typeof existing.checkout === "object" ? existing.checkout : {}) as Record<string, unknown>;
     const checkout = {
@@ -200,14 +214,14 @@ export async function updateStoreSettings(
       tax: input.tax ?? current.tax,
     };
 
-    // The address jsonb gains countryCode "IN" (V1 India-only) unless the caller set one; existing
+    // The address jsonb gains countryCode (from tenant country, fallback "IN") unless the caller set one; existing
     // stored values are never rewritten (Settings rebuild prompt §D).
     const address =
       input.address === undefined
         ? undefined
         : input.address === null
           ? null
-          : { countryCode: input.address.countryCode ?? before?.address?.countryCode ?? "IN", ...input.address };
+          : { countryCode: input.address.countryCode ?? before?.address?.countryCode ?? d.country ?? "IN", ...input.address };
 
     const fields = {
       ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
@@ -216,12 +230,13 @@ export async function updateStoreSettings(
       ...(address !== undefined ? { address } : {}),
       ...(input.orderPrefix !== undefined ? { orderPrefix: input.orderPrefix } : {}),
       ...(input.autoPublishReviews !== undefined ? { autoPublishReviews: input.autoPublishReviews } : {}),
+      ...(input.unitSystem !== undefined ? { unitSystem: input.unitSystem } : {}),
+      ...(input.weightUnit !== undefined ? { weightUnit: input.weightUnit } : {}),
       checkout,
       updatedAt: new Date(),
     };
 
     if (!existing) {
-      const d = await tenantDefaults(tx, ctx.tenantId);
       const [created] = await tx
         .insert(schema.storeSettings)
         .values({
@@ -229,12 +244,14 @@ export async function updateStoreSettings(
           storeName: input.storeName ?? d.storeName,
           currency: input.currency ?? d.currency,
           timezone: input.timezone ?? d.timezone,
+          unitSystem: input.unitSystem ?? (d.country === "US" ? "imperial" : "metric"),
+          weightUnit: input.weightUnit ?? (input.unitSystem === "imperial" || d.country === "US" ? "lb" : "kg"),
           autoPublishReviews: input.autoPublishReviews ?? false,
           ...fields,
         })
         .returning();
       if (!created) throw new Error("Failed to initialize store settings");
-      const record = toRecord(created, ctx.tenantId);
+      const record = toRecord(created, ctx.tenantId, d.country);
       await writeSettingsAudit(tx, ctx, null, record);
       return record;
     }
@@ -250,7 +267,7 @@ export async function updateStoreSettings(
       .where(eq(schema.storeSettings.id, existing.id))
       .returning();
     if (!updated) throw new Error("Failed to update store settings");
-    const after = toRecord(updated, ctx.tenantId);
+    const after = toRecord(updated, ctx.tenantId, d.country);
     await writeSettingsAudit(tx, ctx, before, after);
     return after;
   });

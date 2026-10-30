@@ -2,6 +2,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToString } from "react-dom/server";
 
 vi.mock("server-only", () => ({}));
+// The market lookups need a real request and the markets tables; they are covered by the domain real-database tests.
+vi.mock("@/server/market.ts", () => ({
+  getMarketContext: async () => ({ markets: [], market: null, suggestion: null, marketId: null, currency: "INR", locale: "en-IN", prefix: "" }),
+}));
+
 
 const req = { host: "demo.bcom.si" };
 

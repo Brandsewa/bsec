@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../lib/orpc.ts";
 
 export function Plans() {
@@ -38,25 +39,46 @@ export function Plans() {
         <div>
           <h2 className="text-sm font-semibold text-foreground mb-3">Subscription Plans</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {(plans || []).map((p) => (
-              <div key={p.id} className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3 hover:border-primary/40 transition-colors">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-base text-foreground">{p.name}</h3>
-                  <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground uppercase">{p.code}</span>
-                </div>
-                <div>
-                  <span className="text-2xl font-bold text-foreground">₹{(p.priceMonthlyPaise / 100).toLocaleString("en-IN")}</span>
-                  <span className="text-xs text-muted-foreground"> / month</span>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    ₹{(p.priceYearlyPaise / 100).toLocaleString("en-IN")} billed yearly
+            {(plans || []).map((p) => {
+              const maxExtraMarkets =
+                p.features && typeof p.features === "object" && "max_extra_markets" in p.features
+                  ? (p.features as Record<string, unknown>).max_extra_markets
+                  : 1;
+
+              return (
+                <div key={p.id} className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3 hover:border-primary/40 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-base text-foreground">{p.name}</h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground uppercase">{p.code}</span>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-foreground">{formatMoney(p.priceMonthlyPaise, "INR")}</span>
+                      <span className="text-xs text-muted-foreground"> / month</span>
+                      {p.priceMonthlyUsdCents != null ? (
+                        <span className="text-xs font-semibold text-muted-foreground ml-2">
+                          ({formatMoney(p.priceMonthlyUsdCents, "USD")} USD)
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatMoney(p.priceYearlyPaise, "INR")} billed yearly
+                      {p.priceYearlyUsdCents != null ? ` (${formatMoney(p.priceYearlyUsdCents, "USD")} USD)` : ""}
+                    </div>
+                  </div>
+                  <div className="space-y-1 pt-2 border-t border-border/60 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Extra markets allowed: </span>
+                      <strong className="font-semibold text-foreground">{String(maxExtraMarkets)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Active Subscribers: </span>
+                      <strong className="font-semibold text-foreground">{p.activeSubscribersCount} stores</strong>
+                    </div>
                   </div>
                 </div>
-                <div className="pt-2 border-t border-border/60 text-xs">
-                  <span className="text-muted-foreground">Active Subscribers: </span>
-                  <strong className="font-semibold text-foreground">{p.activeSubscribersCount} stores</strong>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -85,10 +107,10 @@ export function Plans() {
                     <TableRow key={inv.id} className="hover:bg-muted/30 transition-colors">
                       <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{inv.number}</TableCell>
                       <TableCell className="text-xs">{inv.tenantName || inv.tenantId}</TableCell>
-                      <TableCell className="text-xs">₹{(inv.amountPaise / 100).toFixed(2)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">₹{(inv.taxPaise / 100).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs">{formatMoney(inv.amountPaise, "INR")}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatMoney(inv.taxPaise, "INR")}</TableCell>
                       <TableCell className="text-xs font-semibold text-foreground">
-                        ₹{((inv.amountPaise + inv.taxPaise) / 100).toFixed(2)}
+                        {formatMoney(inv.amountPaise + inv.taxPaise, "INR")}
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 capitalize">

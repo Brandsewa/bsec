@@ -45,6 +45,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [037](037-cashfree-second-gateway.md) | Cashfree as a second payment gateway (platform billing and store connections) | Accepted |
 | [038](038-google-sign-in.md) | Google sign-in: platform client for our team and store owners, store-owned client for customers | Accepted |
 | [039](039-notification-manager.md) | Notification manager: event catalog, dispatcher, in-app inbox, branded email | Accepted |
+| [040](040-markets.md) | Markets: one base market plus extra markets, merchant as seller of record | Accepted |
 
-**Next number: 039.**
+**Next number: 041.**
 

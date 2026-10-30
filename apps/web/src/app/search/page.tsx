@@ -1,4 +1,5 @@
 import React from "react";
+import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -85,6 +86,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   let results: Awaited<ReturnType<typeof searchStorefrontProducts>> = { items: [], total: 0 };
   let host = "localhost";
   let emptyMessage = DEFAULT_PAGES.search.emptyMessage;
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
 
   if (q) {
     try {
@@ -94,6 +97,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
       if (access.tenantId) {
+        const marketCtx = await getMarketContext(access.tenantId);
+        marketCurrency = marketCtx.currency;
+        marketLocale = marketCtx.locale;
         const tenantCtx = {
           tenantId: access.tenantId,
           storeStatus: access.mode ?? "live",
@@ -101,6 +107,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           roles: ["store_admin"],
           permissions: ["products.read", "settings.write"],
           requestId: crypto.randomUUID(),
+          marketId: marketCtx.marketId,
         };
 
         results = await searchStorefrontProducts(rt, tenantCtx, q, { page, limit });
@@ -176,7 +183,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <div>
             <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 lg:gap-6">
               {results.items.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} currency={marketCurrency} locale={marketLocale} />
               ))}
             </div>
 

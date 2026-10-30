@@ -2,7 +2,7 @@ import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle, CheckCircle2, Clock, ShieldAlert, AlertCircle, CreditCard, Copy, Plus, Banknote, Globe } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, FormSkeleton, PageSkeleton, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, toast } from "@bs/ui";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, EmptyState, FormSkeleton, PageSkeleton, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SimpleSelect, toast } from "@bs/ui";
 import type { StorePaymentProvider } from "@bs/contracts";
 import { Badge } from "@bs/ui";
 import { Alert } from "@bs/ui";
@@ -11,6 +11,8 @@ import { Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -162,6 +164,8 @@ function CodConfigurationForm({
   disabled: boolean;
   onSaved: () => void;
 }) {
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
   const queryClient = useQueryClient();
   const updateMutation = useMutation(orpc.admin.paymentMethods.updateCod.mutationOptions());
 
@@ -200,7 +204,7 @@ function CodConfigurationForm({
 
     const feeNum = Number(form.feeRupees);
     if (!Number.isFinite(feeNum) || feeNum < 0) {
-      toast.error("Please enter a valid handling fee (₹0 or greater).");
+      toast.error(`Please enter a valid handling fee (${sym}0 or greater).`);
       return;
     }
 
@@ -208,7 +212,7 @@ function CodConfigurationForm({
     if (form.minOrderRupees.trim()) {
       const minNum = Number(form.minOrderRupees);
       if (!Number.isFinite(minNum) || minNum < 0) {
-        toast.error("Please enter a valid minimum order value (₹0 or greater).");
+        toast.error(`Please enter a valid minimum order value (${sym}0 or greater).`);
         return;
       }
       minOrderPaise = Math.round(minNum * 100);
@@ -308,7 +312,7 @@ function CodConfigurationForm({
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field id="feeRupees" label="COD fee (₹)" hint="Additional fee (0 for free).">
+          <Field id="feeRupees" label={`COD fee (${sym})`} hint="Additional fee (0 for free).">
             <Input
               id="feeRupees"
               type="number"
@@ -320,7 +324,7 @@ function CodConfigurationForm({
             />
           </Field>
 
-          <Field id="minOrder" label="Min order (₹)" hint="Optional minimum order limit.">
+          <Field id="minOrder" label={`Min order (${sym})`} hint="Optional minimum order limit.">
             <Input
               id="minOrder"
               type="number"
@@ -333,7 +337,7 @@ function CodConfigurationForm({
             />
           </Field>
 
-          <Field id="maxOrder" label="Max order (₹)" hint="Optional maximum order limit.">
+          <Field id="maxOrder" label={`Max order (${sym})`} hint="Optional maximum order limit.">
             <Input
               id="maxOrder"
               type="number"
@@ -388,9 +392,16 @@ function GatewayStateBadge({ provider }: { provider: StorePaymentProvider }) {
   }
   if (provider.state === "active") {
     return (
-      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-[11px]">
-        <CheckCircle2 className="h-3 w-3" /> Active
-      </Badge>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-[11px]">
+          <CheckCircle2 className="h-3 w-3" /> Active
+        </Badge>
+        {provider.checkoutLive ? (
+          <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 gap-1 text-[11px]">
+            Checkout live
+          </Badge>
+        ) : null}
+      </div>
     );
   }
   if (provider.state === "live_blocked") {
@@ -418,6 +429,7 @@ const GATEWAY_BLURB: Record<StorePaymentProvider["provider"], string> = {
   razorpay: "Accept UPI, cards, netbanking and wallets in rupees.",
   stripe: "Accept cards through Stripe-hosted Checkout (the shopper pays on stripe.com).",
   cashfree: "Accept UPI, cards, netbanking and wallets in rupees through your own Cashfree account.",
+  paypal: "Accept PayPal and international cards in 20+ currencies.",
 };
 
 /**
@@ -545,6 +557,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
   const [keyId, setKeyId] = useState("");
   const [keySecret, setKeySecret] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [mode, setMode] = useState<"test" | "live">("test");
   const [busy, setBusy] = useState<GatewayAction | "save" | null>(null);
   const domainsQuery = useQuery(orpc.admin.domains.list.queryOptions());
   const { store } = useRouteContext({ from: "/_store" });
@@ -562,8 +575,9 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
   if (!provider) return <Sheet open={false} onOpenChange={onClose} />;
   const isRazorpay = provider.provider === "razorpay";
   const isCashfree = provider.provider === "cashfree";
-  // Razorpay and Cashfree both pair an id with a secret; Stripe has a single secret key.
-  const hasKeyId = isRazorpay || isCashfree;
+  const isPayPal = provider.provider === "paypal";
+  // Razorpay, Cashfree, and PayPal pair an id (Key ID, App ID, or Client ID) with a secret; Stripe has a single secret key.
+  const hasKeyId = isRazorpay || isCashfree || isPayPal;
   const locked = !canManage || !provider.platformEnabled;
   // Use the store's real primary host so the URL can be pasted into the gateway dashboard as is.
   const domains = domainsQuery.data ?? [];
@@ -636,6 +650,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                     ...(hasKeyId ? { keyId: keyId.trim() } : {}),
                     keySecret: keySecret.trim(),
                     ...(webhookSecret.trim() ? { webhookSecret: webhookSecret.trim() } : {}),
+                    ...(isPayPal ? { mode } : {}),
                   }),
                 () => "Keys saved. Run Test connection next.",
               ).then((ok) => {
@@ -651,28 +666,59 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
               {provider.keyHint ? "Replace keys" : "Add keys"}
               <span className="ml-2 font-normal text-muted-foreground">Stored encrypted and never shown again.</span>
             </p>
+            {isPayPal ? (
+              <Field
+                id="gw-paypal-mode"
+                label="Environment / Mode"
+                hint="PayPal credentials do not specify their environment in the key string. Choose Sandbox for testing."
+              >
+                {locked ? (
+                  <Input id="gw-paypal-mode" value={mode === "test" ? "Sandbox (test mode)" : "Live (production)"} disabled className="bg-muted text-muted-foreground" />
+                ) : (
+                  <SimpleSelect
+                    value={mode}
+                    onChange={(val) => setMode(val as "test" | "live")}
+                    options={[
+                      { value: "test", label: "Sandbox (test mode)" },
+                      { value: "live", label: "Live (production)" },
+                    ]}
+                  />
+                )}
+              </Field>
+            ) : null}
             {hasKeyId ? (
               <Field
                 id="gw-key-id"
-                label={isCashfree ? "App ID" : "Key ID"}
+                label={isCashfree ? "App ID" : isPayPal ? "Client ID" : "Key ID"}
                 hint={
                   isCashfree
                     ? "From Cashfree, Developers, API keys. Use the sandbox (test) App ID first."
-                    : "Starts with rzp_test_ (rzp_live_ only if live mode is allowed)."
+                    : isPayPal
+                      ? "From PayPal Developer Dashboard > Apps & Credentials (REST app)."
+                      : "Starts with rzp_test_ (rzp_live_ only if live mode is allowed)."
                 }
               >
-                <Input id="gw-key-id" autoComplete="off" value={keyId} disabled={locked} onChange={(e) => setKeyId(e.target.value)} placeholder={isCashfree ? "TEST10..." : "rzp_test_..."} />
+                <Input
+                  id="gw-key-id"
+                  autoComplete="off"
+                  value={keyId}
+                  disabled={locked}
+                  onChange={(e) => setKeyId(e.target.value)}
+                  placeholder={isCashfree ? "TEST10..." : isPayPal ? "Enter PayPal REST client ID" : "rzp_test_..."}
+                />
               </Field>
             ) : null}
             <Field
               id="gw-key-secret"
-              label={isRazorpay ? "Key secret" : "Secret key"}
+              label={isRazorpay ? "Key secret" : isPayPal ? "Client Secret" : "Secret key"}
               hint={
                 isRazorpay
                   ? undefined
                   : isCashfree
                     ? "Starts with cfsk_ma_test_ (cfsk_ma_prod_ only if live mode is allowed). Cashfree also uses it to sign webhooks."
-                    : "Starts with sk_test_ (sk_live_ only if live mode is allowed)."
+                    : isPayPal
+                      ? "From PayPal Developer Dashboard > Apps & Credentials (REST app secret)."
+                      : "Starts with sk_test_ (sk_live_ only if live mode is allowed)."
               }
             >
               <Input
@@ -682,27 +728,29 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 value={keySecret}
                 disabled={locked}
                 onChange={(e) => setKeySecret(e.target.value)}
-                placeholder={isRazorpay ? "" : isCashfree ? "cfsk_ma_test_..." : "sk_test_..."}
+                placeholder={isRazorpay ? "" : isCashfree ? "cfsk_ma_test_..." : isPayPal ? "" : "sk_test_..."}
               />
             </Field>
             {isCashfree ? null : (
             <Field
               id="gw-webhook"
-              label="Webhook signing secret"
+              label={isPayPal ? "Webhook ID" : "Webhook signing secret"}
               hint={
                 isRazorpay
                   ? "Optional now; from your Razorpay webhook settings."
-                  : "From the Stripe webhook endpoint you create below (starts with whsec_). Needed to activate."
+                  : isPayPal
+                    ? "From the webhook you register in PayPal Developer Dashboard. Needed to activate."
+                    : "From the Stripe webhook endpoint you create below (starts with whsec_). Needed to activate."
               }
             >
               <Input
                 id="gw-webhook"
-                type="password"
+                type={isPayPal ? "text" : "password"}
                 autoComplete="off"
                 value={webhookSecret}
                 disabled={locked}
                 onChange={(e) => setWebhookSecret(e.target.value)}
-                placeholder={isRazorpay ? "" : "whsec_..."}
+                placeholder={isRazorpay ? "" : isPayPal ? "e.g. 8JH201..." : "whsec_..."}
               />
             </Field>
             )}
@@ -716,7 +764,9 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
             <p className="text-muted-foreground">
               {isCashfree
                 ? "Add this endpoint in Cashfree (Developers, Webhooks) and subscribe to the payment events. Cashfree signs it with your secret key, so there is nothing more to paste."
-                : `Add this endpoint in your ${provider.displayName} dashboard, then paste its signing secret above.`}
+                : isPayPal
+                  ? "Add this endpoint in PayPal (Apps & Credentials > Webhooks) and subscribe to payment capture & refund events. Then copy the Webhook ID and paste it above."
+                  : `Add this endpoint in your ${provider.displayName} dashboard, then paste its signing secret above.`}
             </p>
             <p className="break-all rounded bg-muted p-1.5 font-mono text-[10px]">{webhookUrl}</p>
             <Button

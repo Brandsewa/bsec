@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { MARKETING_PAGES } from "./components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "./server/hosts.ts";
+import { MARKET_COOKIE, MARKET_PREFIX_HEADER, PATH_HEADER } from "./lib/market-constants.ts";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -75,6 +76,7 @@ export async function middleware(request: NextRequest) {
     isBypass?: boolean | undefined;
     message?: string | undefined;
     headline?: string | null | undefined;
+    marketPrefixes?: { prefix: string; handle: string }[] | undefined;
   };
 
   try {
@@ -168,8 +170,30 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // A market URL prefix such as /us (ADR-040): strip it before routing and tell the page which market it asked for.
+  const firstSegment = pathname.split("/")[1] ?? "";
+  const requestedPrefix = firstSegment ? `/${firstSegment.toLowerCase()}` : "";
+  const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix === requestedPrefix) : undefined;
+  // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
+  // so the layout can write hreflang links and the market switcher can return to the same page.
+  const forwarded = new Headers(request.headers);
+  forwarded.delete(MARKET_PREFIX_HEADER);
+  const hasMarkets = (access.marketPrefixes?.length ?? 0) > 0;
+  if (matchedMarket) {
+    const stripped = request.nextUrl.clone();
+    stripped.pathname = pathname.slice(firstSegment.length + 1) || "/";
+    forwarded.set(MARKET_PREFIX_HEADER, requestedPrefix);
+    forwarded.set(PATH_HEADER, stripped.pathname + stripped.search);
+    const rewritten = NextResponse.rewrite(stripped, { request: { headers: forwarded } });
+    // Remember the choice so links without the prefix keep the shopper in this market (a strictly necessary cookie).
+    rewritten.cookies.set({ name: MARKET_COOKIE, value: matchedMarket.handle, path: "/", sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 });
+    if (access.noindex) rewritten.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return rewritten;
+  }
+  if (hasMarkets) forwarded.set(PATH_HEADER, request.nextUrl.pathname + request.nextUrl.search);
+
   // Allowed request (live, bypass, unlocked password)
-  const response = NextResponse.next();
+  const response = NextResponse.next({ request: { headers: forwarded } });
   if (access.noindex) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }

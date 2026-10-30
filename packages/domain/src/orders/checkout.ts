@@ -1,4 +1,11 @@
 import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
+import { isHostedProviderReady } from "../payments/online-checkout.ts";
+import { formatMoney, minorUnitExponent } from "@bs/contracts/money";
+import { loadCheckoutMarket, toBaseCurrencyAmount } from "../markets/lookup.ts";
+import { computeTax, type TaxResult } from "../markets/rules.ts";
+import { gatewayCurrencyCheck } from "../markets/gateways.ts";
+import { addressProblem, phoneProblem, postalCodeProblem } from "../markets/addresses.ts";
+import type { Db } from "@bs/db";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -55,7 +62,7 @@ export interface PlaceOrderInput {
   country?: string | undefined;
   /** Method id of one of the store's shipping rates; the first configured rate when omitted. */
   shippingMethod?: string | undefined;
-  paymentMethod: "cod" | "razorpay" | "online";
+  paymentMethod: "cod" | "razorpay" | "stripe" | "paypal" | "online";
   notes?: string | undefined;
   customerId?: string | undefined;
   marketingConsent?: boolean | undefined;
@@ -78,24 +85,36 @@ export interface ShipToInput {
 }
 
 /** What goes wrong with a business or delivery-address block, as a Bad Request message; null when it is fine. Pure, so it is tested without a database. */
-export function checkoutContactProblem(input: Pick<PlaceOrderInput, "businessOrder" | "shipTo">): string | null {
+export function checkoutContactProblem(input: Pick<PlaceOrderInput, "businessOrder" | "shipTo" | "country">): string | null {
   const biz = input.businessOrder;
+  const billingCountry = (toCountryCode(input.country) ?? "IN").toUpperCase();
   if (biz) {
     const name = biz.companyName?.trim() ?? "";
     if (!name) return "Bad Request: Company name is required for a business order";
     if (name.length > 120) return "Bad Request: Company name is too long";
     const taxId = biz.taxId?.trim();
     if (taxId) {
-      const r = validateGstin(taxId.toUpperCase());
-      if (!r.valid) return `Bad Request: Tax ID (GSTIN) is not valid: ${r.error ?? "check the number"}`;
+      // GSTIN is an Indian number; for other countries the buyer's tax number is kept as typed.
+      if (billingCountry === "IN") {
+        const r = validateGstin(taxId.toUpperCase());
+        if (!r.valid) return `Bad Request: Tax ID (GSTIN) is not valid: ${r.error ?? "check the number"}`;
+      } else if (taxId.length > 30) {
+        return "Bad Request: Tax ID is too long";
+      }
     }
   }
   const ship = input.shipTo;
   if (ship) {
     if (!ship.fullName?.trim()) return "Bad Request: Shipping name is required";
     if (!ship.addressLine1?.trim() || !ship.city?.trim() || !ship.state?.trim()) return "Bad Request: Shipping address is incomplete";
-    if (!/^[1-9][0-9]{5}$/.test(ship.pincode?.trim() ?? "")) return "Bad Request: Shipping pincode must be 6 digits";
-    if (!/^[6-9][0-9]{9}$/.test((ship.phone ?? "").replace(/\D/g, ""))) return "Bad Request: Shipping contact needs a valid 10-digit mobile number";
+    const shipCountry = (toCountryCode(ship.country) ?? billingCountry).toUpperCase();
+    if (shipCountry === "IN") {
+      if (!/^[1-9][0-9]{5}$/.test(ship.pincode?.trim() ?? "")) return "Bad Request: Shipping pincode must be 6 digits";
+      if (!/^[6-9][0-9]{9}$/.test((ship.phone ?? "").replace(/\D/g, ""))) return "Bad Request: Shipping contact needs a valid 10-digit mobile number";
+    } else {
+      if (postalCodeProblem(shipCountry, ship.pincode)) return "Bad Request: Shipping postal code is not valid";
+      if (phoneProblem(shipCountry, ship.phone)) return "Bad Request: Shipping contact needs a valid phone number";
+    }
     if (ship.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ship.email.trim())) return "Bad Request: Shipping contact email is not valid";
   }
   return null;
@@ -193,31 +212,60 @@ export async function placeOrder(
       throw new Error(`Bad Request: ${cart.discountNotice}. Remove the code to continue.`);
     }
 
-    // 2. Calculate amounts (in paise) using canonical shipping calculation (PLAN §5.4, §7 / M7)
+    // 1b. The cart's market decides currency, prices, countries, zones, gateways and tax (ADR-040). A store without
+    // markets yet is the legacy India store and behaves exactly as before.
+    const mkt = await loadCheckoutMarket(tx as unknown as Db, tenantId, cart.marketId);
+    const rawDestination = toCountryCode(input.shipTo?.country ?? input.country);
+    const destCountry = rawDestination ?? (mkt.isBase ? "IN" : (mkt.countries[0] ?? "IN"));
+    if (!mkt.legacy && mkt.countries.length > 0 && !mkt.countries.includes(destCountry)) {
+      throw new Error(`Bad Request: This order cannot be shipped to ${destCountry} from the ${mkt.name} store. Choose your country again to see the right prices.`);
+    }
+    const billingProblem = addressProblem({ country: (toCountryCode(input.country) ?? destCountry), state: input.state, postalCode: input.pincode, ...(input.phone ? { phone: input.phone } : {}) });
+    if (billingProblem) throw new Error(`Bad Request: ${billingProblem}`);
+
+    // 2. Calculate amounts (in minor units) using canonical shipping calculation (PLAN §5.4, §7 / M7)
     const subtotal = cart.subtotal;
     // Zone, weight tiers and price tiers are all decided here on the server from the cart and the shipping address.
     const resolvedRates = await getTenantShippingRates(tx, tenantId, subtotal, {
       weightGrams: await cartWeightGrams(tx, cart.items.map((i) => ({ variantId: i.variantId, quantity: i.quantity }))),
-      destination: { country: toCountryCode(input.shipTo?.country ?? input.country) ?? "IN", state: input.shipTo?.state ?? input.state },
+      destination: { country: destCountry, state: input.shipTo?.state ?? input.state },
+      ...(mkt.id ? { market: { id: mkt.id, isBase: mkt.isBase } } : {}),
     });
+    if (!mkt.isBase && resolvedRates.length === 0) {
+      throw new Error("Bad Request: There is no shipping available to your address yet.");
+    }
     if (input.shippingMethod && !resolvedRates.some((r) => r.method === input.shippingMethod)) {
       throw new Error("Bad Request: the chosen shipping method is not available for this store");
     }
     const shipping = (input.shippingMethod ? resolvedRates.find((r) => r.method === input.shippingMethod) : undefined) ?? resolvedRates[0];
     const shippingBase = shipping ? shipping.amount : 0;
-    const isCod = input.paymentMethod === "cod";
+    const chosenMethod = input.paymentMethod === "online" ? "razorpay" : input.paymentMethod;
+    const isCod = chosenMethod === "cod";
     const paymentMethodsList = await getTenantPaymentMethods(tx, tenantId);
+
+    // Only the gateways this market offers, and only ones that can charge in its currency.
+    if (mkt.paymentProviders && !mkt.paymentProviders.includes(chosenMethod)) {
+      throw new Error("Bad Request: This payment method is not available in your region. Please choose another.");
+    }
+    const gatewayCheck = gatewayCurrencyCheck({ provider: chosenMethod, currency: mkt.currency, merchantCountry: mkt.merchantCountry });
+    if (gatewayCheck.blocking && !mkt.legacy) throw new Error(`Bad Request: ${gatewayCheck.blocking}`);
 
     if (isCod) {
       const codMethod = paymentMethodsList.find((m) => m.provider === "cod");
       if (!codMethod || codMethod.status !== "active") {
         throw new Error("Cash on delivery is not available for this store");
       }
-    } else {
+    } else if (chosenMethod === "razorpay") {
       const onlineMethod = paymentMethodsList.find((m) => m.provider === "razorpay");
       if (!onlineMethod || onlineMethod.status !== "active" || !(await isRazorpayCheckoutReady(rt._db.db, tenantId))) {
         throw new Error("Online payment is not available for this store. Please choose Cash on Delivery.");
       }
+    } else if (chosenMethod === "stripe" || chosenMethod === "paypal") {
+      if (!(await isHostedProviderReady(rt._db.db, tenantId, chosenMethod))) {
+        throw new Error("Bad Request: This payment method is not available for the store right now. Please choose another way to pay.");
+      }
+    } else {
+      throw new Error("Bad Request: Unknown payment method");
     }
 
     const codMethodRecord = paymentMethodsList.find((m) => m.provider === "cod");
@@ -277,27 +325,48 @@ export async function placeOrder(
       codFee,
       discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
     });
-    const { shippingTotal, grandTotal, discountTotal } = pricing;
+    const { shippingTotal, discountTotal } = pricing;
+    const money = (n: number) => formatMoney(n, mkt.currency);
+
+    // Merchant-entered tax of the market (ADR-040): added on top for tax-exclusive prices, carved out for inclusive ones.
+    // Per-line discounts are allocated first so tax is charged on what the shopper actually pays.
+    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    let marketTax: TaxResult | null = null;
+    if (mkt.taxCollect) {
+      marketTax = computeTax({
+        lineAmounts: cart.items.map((it, idx) => Math.max(0, it.lineTotal - (lineDiscounts[idx] ?? 0))),
+        shippingAmount: shippingTotal,
+        taxShippingToo: mkt.taxShippingToo,
+        pricesIncludeTax: mkt.pricesIncludeTax,
+        country: destCountry,
+        region: input.shipTo?.state ?? input.state,
+        rules: mkt.taxRules,
+      });
+    }
+    const grandTotal = pricing.grandTotal + (marketTax?.addedTotal ?? 0);
+
+    // Store-currency limits (minimum order, COD min/max) only mean something in the store's own currency.
+    const sameAsStoreCurrency = mkt.currency === mkt.baseCurrency;
 
     // Minimum order value enforcement (on server-computed goods total after discount)
     const goodsTotal = Math.max(0, subtotal - (discountTotal ?? 0));
-    if (orderSettings.minimumOrderPaise > 0 && goodsTotal < orderSettings.minimumOrderPaise) {
+    if (sameAsStoreCurrency && orderSettings.minimumOrderPaise > 0 && goodsTotal < orderSettings.minimumOrderPaise) {
       const shortfallPaise = orderSettings.minimumOrderPaise - goodsTotal;
       throw new Error(
-        `Order total (₹${(goodsTotal / 100).toFixed(2)}) is below the minimum required order amount of ₹${(orderSettings.minimumOrderPaise / 100).toFixed(2)}. Please add ₹${(shortfallPaise / 100).toFixed(2)} more to your cart.`
+        `Order total (${money(goodsTotal)}) is below the minimum required order amount of ${money(orderSettings.minimumOrderPaise)}. Please add ${money(shortfallPaise)} more to your cart.`
       );
     }
 
     // COD min/max order value enforcement (on grand total or goods total)
-    if (isCod) {
+    if (isCod && sameAsStoreCurrency) {
       if (codCfg.minOrderPaise != null && grandTotal < codCfg.minOrderPaise) {
         throw new Error(
-          `Order total (₹${(grandTotal / 100).toFixed(2)}) is below the minimum COD amount of ₹${(codCfg.minOrderPaise / 100).toFixed(2)}.`
+          `Order total (${money(grandTotal)}) is below the minimum COD amount of ${money(codCfg.minOrderPaise)}.`
         );
       }
       if (codCfg.maxOrderPaise != null && grandTotal > codCfg.maxOrderPaise) {
         throw new Error(
-          `Order total (₹${(grandTotal / 100).toFixed(2)}) exceeds the maximum allowed COD amount of ₹${(codCfg.maxOrderPaise / 100).toFixed(2)}.`
+          `Order total (${money(grandTotal)}) exceeds the maximum allowed COD amount of ${money(codCfg.maxOrderPaise)}.`
         );
       }
     }
@@ -500,7 +569,9 @@ export async function placeOrder(
     // GST place of supply is where the goods are delivered, which is the shipping address when it differs from billing.
     const destinationState = (input.shipTo?.state ?? input.state)?.trim();
 
-    if (gstV2Enabled) {
+    // GST is the base (India) market's engine; a market using the generic tax rows, or a non-base export market, skips it.
+    const useGst = gstV2Enabled && mkt.isBase && !mkt.taxCollect;
+    if (useGst) {
       if (!sellerState || !sellerState.trim()) {
         throw new Error("Bad Request: Seller state is missing. Please configure your registered state in Settings > Taxes.");
       }
@@ -509,15 +580,13 @@ export async function placeOrder(
       }
     }
 
-    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
-    
     // Resolve tax classes for items if gst_v2 is active
     interface ItemTaxResolved {
       hsn: string | null;
       rateBps: number;
     }
     const itemTaxInfo: ItemTaxResolved[] = [];
-    if (gstV2Enabled) {
+    if (useGst) {
       for (const it of cart.items) {
         const v = variantMap.get(it.variantId);
         const resolved = await resolveTaxClass(tx, tenantId, v?.taxClassId);
@@ -528,7 +597,7 @@ export async function placeOrder(
       }
     }
 
-    const taxCalc = gstV2Enabled
+    const taxCalc = useGst
       ? calculateTax({
           lines: cart.items.map((it, idx) => {
             const taxInfo = itemTaxInfo[idx];
@@ -549,7 +618,7 @@ export async function placeOrder(
         })
       : null;
 
-    const orderTaxTotal = taxCalc ? taxCalc.totalTax : 0;
+    const orderTaxTotal = marketTax ? marketTax.containedTotal : taxCalc ? taxCalc.totalTax : 0;
 
     // 6b. Insert Order
     await tx.insert(orders).values({
@@ -559,10 +628,16 @@ export async function placeOrder(
       customerId: effectiveCustomerId,
       email: input.email,
       phone: input.phone ?? "",
-      currency: "INR",
+      currency: mkt.currency,
       status: "pending",
       paymentStatus: isCod ? "cod_pending" : "pending",
       fulfillmentStatus: "unfulfilled",
+      marketId: mkt.id,
+      baseCurrency: mkt.baseCurrency,
+      fxRate: !mkt.isBase && mkt.fxRate ? String(mkt.fxRate) : null,
+      baseGrandTotal: mkt.isBase ? grandTotal : toBaseCurrencyAmount(grandTotal, mkt.fxRate, minorUnitExponent(mkt.currency), minorUnitExponent(mkt.baseCurrency)),
+      taxBreakdown: marketTax ? marketTax.lines : null,
+      policySnapshot: mkt.policy && !mkt.legacy ? { market: mkt.handle, marketName: mkt.name, ...mkt.policy, capturedAt: new Date().toISOString() } : null,
       subtotal,
       discountTotal,
       shippingTotal,
@@ -577,7 +652,7 @@ export async function placeOrder(
             city: input.shipTo.city.trim(),
             state: input.shipTo.state.trim(),
             pincode: input.shipTo.pincode.trim(),
-            country: input.shipTo.country ?? "IN",
+            country: input.shipTo.country ?? destCountry,
             // The delivery contact, kept apart from the buyer's own email and phone.
             phone: input.shipTo.phone.replace(/\D/g, ""),
             ...(input.shipTo.email?.trim() ? { email: input.shipTo.email.trim().toLowerCase() } : {}),
@@ -589,7 +664,7 @@ export async function placeOrder(
             city: input.city,
             state: input.state,
             pincode: input.pincode,
-            country: input.country ?? "IN",
+            country: input.country ?? destCountry,
           },
       billingAddress: {
         fullName: input.fullName,
@@ -598,7 +673,7 @@ export async function placeOrder(
         city: input.city,
         state: input.state,
         pincode: input.pincode,
-        country: input.country ?? "IN",
+        country: input.country ?? destCountry,
         ...(input.businessOrder
           ? {
               companyName: input.businessOrder.companyName.trim(),
@@ -667,9 +742,9 @@ export async function placeOrder(
       id: intentId,
       tenantId,
       orderId,
-      provider: isCod ? "cod" : "razorpay",
+      provider: chosenMethod,
       amount: grandTotal,
-      currency: "INR",
+      currency: mkt.currency,
       status: isCod ? "cod_pending" : "created",
       idempotencyKey: input.idempotencyKey ?? null,
     });
@@ -744,13 +819,13 @@ export async function placeOrder(
       orderId,
       orderNumber: seq.formatted,
       status: "pending",
-      paymentMethod: input.paymentMethod,
+      paymentMethod: chosenMethod,
       subtotal,
       discountTotal,
       shippingTotal,
       codFee,
       grandTotal,
-      currency: "INR",
+      currency: mkt.currency,
       orderToken: orderViewRawToken,
       redirectUrl: `/orders/${orderViewRawToken}/thank-you`,
       codToken: codRawToken,

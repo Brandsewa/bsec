@@ -6,6 +6,9 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { readStoreConfig } from "./store-config.ts";
 import { assertPaymentProviderEnabled } from "./payment-providers.ts";
 import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
+import { isHostedProviderReady } from "../payments/online-checkout.ts";
+import { loadCheckoutMarket } from "../markets/lookup.ts";
+import { gatewayCurrencyCheck } from "../markets/gateways.ts";
 import {
   getTenantPaymentMethods,
   parseCodPublicConfig,
@@ -48,6 +51,43 @@ export async function getStorefrontPaymentOptions(rt: Runtime, tenantId: string)
       maxOrderPaise: codCfg.maxOrderPaise,
     },
     online: { available: onlineAvailable },
+  };
+}
+
+export interface StorefrontCheckoutOptions extends StorefrontPaymentOptions {
+  currency: string;
+  /** Countries this market sells to, base country first; one entry means the checkout fixes the country. */
+  countries: string[];
+  defaultCountry: string;
+  /** What the shopper can pick, in order: cod, razorpay (shown as online), stripe, paypal. Empty = no way to pay. */
+  methods: Array<"cod" | "razorpay" | "stripe" | "paypal">;
+}
+
+/**
+ * What the shopper may choose at checkout in a given market (ADR-040): only the gateways that market offers, only ones that
+ * can charge in its currency, and only ones the store has really connected and activated. COD limits are shown only in the
+ * store currency. A store without markets gets exactly what it always had.
+ */
+export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string, marketId: string | null | undefined): Promise<StorefrontCheckoutOptions> {
+  const base = await getStorefrontPaymentOptions(rt, tenantId);
+  const mkt = await withTenant(rt._db.db, tenantId, (tx) => loadCheckoutMarket(tx, tenantId, marketId));
+  const methods: StorefrontCheckoutOptions["methods"] = [];
+  const offered = (p: string) => (mkt.paymentProviders === null || mkt.paymentProviders.includes(p)) && (mkt.legacy || !gatewayCurrencyCheck({ provider: p, currency: mkt.currency, merchantCountry: mkt.merchantCountry }).blocking);
+  if (base.cod.enabled && offered("cod")) methods.push("cod");
+  if (base.online.available && offered("razorpay")) methods.push("razorpay");
+  if (offered("stripe") && (await isHostedProviderReady(rt._db.db, tenantId, "stripe"))) methods.push("stripe");
+  if (offered("paypal") && (await isHostedProviderReady(rt._db.db, tenantId, "paypal"))) methods.push("paypal");
+  const sameCurrency = mkt.currency === mkt.baseCurrency;
+  const countries = mkt.countries.length > 0 ? mkt.countries : ["IN"];
+  const home = countries.includes(mkt.merchantCountry) ? mkt.merchantCountry : (countries[0] ?? "IN");
+  return {
+    ...base,
+    cod: sameCurrency ? base.cod : { ...base.cod, minOrderPaise: null, maxOrderPaise: null, feePaise: 0 },
+    online: { available: methods.includes("razorpay") },
+    currency: mkt.currency,
+    countries: [home, ...countries.filter((c) => c !== home)],
+    defaultCountry: home,
+    methods,
   };
 }
 

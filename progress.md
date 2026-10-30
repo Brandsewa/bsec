@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `docs/multimarket-phase0` (local only, nothing pushed; PRs 149 and 150 stay open) · multi-market stores: BUILT end to end (Phase 0 to 7 work packages WP-1a/b/c, WP-2 to WP-6 merged locally and gated); NOT yet done: a browser walkthrough with screenshots, PayPal/Stripe sandbox runs, and the single push and merge; plan `docs/MULTIMARKET-PLAN.md`, hand-off `docs/MULTIMARKET-HANDOFF.md`, push steps `docs/MULTIMARKET-PUSH-CHECKLIST.md` · 2026-10-29
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29
 - claude · `fix/header-bg-dropdown-followups` · follow-ups to the 2026-10-29 batch: header background regression, dropdown spacing and close on click, TOC closed by default, image option on Floating reviews; change record `docs/changes/2026-10-29-claude-header-dropdown-followups.md` · 2026-10-29
 - claude · `fix/domain-ownership-before-a-records` · bare custom domains: TXT ownership first, A records only after (Cloudflare refuses TXT/HTTP validation once A records resolve to it), immediate provider re-check; change record `docs/changes/2026-10-28-claude-domain-ownership-before-a-records.md` · 2026-10-28
@@ -18,6 +19,17 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - claude · `feat/platform-billing-b5-b6` · platform billing (charge merchants with Razorpay subscriptions): B1 merged; B1 to B4 merged; B5 (dunning) and B6 (invoice PDF) built on `feat/platform-billing-b5-b6`, B7 to B9 next; plan `docs/PLATFORM-BILLING-PLAN.md`, ADR-036 · 2026-10-18
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
+
+## M15 · Multi-market stores (ADR-040): built locally, not pushed (2026-10-29)
+
+**What exists** (all gated with typecheck, lint, docs:check and real-Postgres tests; see `docs/changes/2026-10-28-claude-multimarket-phase1.md` and the Antigravity change records `...-antigravity-multimarket-*.md`): base and extra markets with plan limits (Starter 1, Growth 2, Pro 5 extra), per-market currency, derived/fixed prices, catalog, gateways (Razorpay, Stripe, PayPal; sandbox only), shipping zones, returns text, merchant-entered tax, country-aware signup and addresses, metric/imperial units, URL-prefix markets with switcher, suggestion banner, hreflang and market sitemap, money formatting in storefront, domain, admin and Super Admin, Brand Sewa PayPal billing for non-India merchants.
+
+**Known gaps (not claimed done)**
+- [ ] No browser walkthrough has been done with evidence (storefront market bar and `/us` pages, Markets admin screens, signup country picker, shipping editor, order policy text, admin base totals). The WP-7 report has no screenshots.
+- [ ] PayPal and Stripe were exercised with mocked HTTP only; sandbox keys were not available. PayPal Subscriptions for an India-registered account was never checked (billing uses Orders v2 links per cycle).
+- [ ] `e2e/markets.spec.ts` was written but not run; the web and admin e2e suites were not run against a local stack.
+- [ ] Owner to-dos outside the code: PayPal purpose code and PAN for withdrawals in India; ask the CA about GST LUT for invoices to foreign merchants; a lawyer to review the merchant terms (merchant owns tax and policy duties) and the "own gateway account, no pooled funds" model.
+- [ ] Do not enable a second market on a real store until the browser pass is done.
 
 ## M14 · Theme Builder Layout, Responsive Controls & Widget Modernization (2026-10-24)
 
@@ -418,6 +430,8 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 ### Decisions on record
 - Razorpay, Shiprocket and Resend keys, Sentry and uptime accounts: set up at the very end (2026-09-29).
 - Payment gateways (owner, 2026-10-08): Razorpay and Stripe only, test mode only. Super Admin enables a gateway for the platform and separately allows live mode; each store then connects its own keys and activates it (`docs/ADMIN-IMPROVEMENTS-PLAN.md` 6.4). PayPal, shipping, live keys and online checkout wiring are still deferred.
+- Multi-market (owner, 2026-10-28, `docs/MULTIMARKET-PLAN.md`, ADR-040): PayPal joins Razorpay and Stripe (sandbox only; Brand Sewa billing of global merchants by PayPal in USD, Indian merchants stay on Razorpay in INR); manual exchange rates; merchant-entered taxes; duties not collected; subfolder markets only; market limits are extra markets on top of the base (Starter 1, Growth 2, Enterprise 5); merchant is seller of record and uses their own gateway accounts; first pilot is the Indian store selling abroad; built and verified one phase at a time.
+- Multi-market answers (owner, 2026-10-28): sandbox first for PayPal; plan limits count extra markets on top of the base; Brand Sewa prices INR for India (Razorpay) and USD for global merchants (PayPal, USD only); first pilot is the Indian store selling abroad; push and merge once at the end.
 - SMS and WhatsApp (owner, 2026-10-08): Zoho CPaaS, configured but not enrolled.
 - Hardening and load testing: after all phases are built (2026-09-29).
 - Shipping rates are per store, never hardcoded.

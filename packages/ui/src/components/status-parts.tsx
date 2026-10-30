@@ -57,16 +57,24 @@ export function StatusBadge({ status, label, children, tone = "neutral", dot = f
 export interface MoneyProps {
   paise?: number;
   amountInPaise?: number;
+  /** ISO 4217 code of the amount ("INR", "USD"). Minor units are always two decimals for these. Defaults to INR. */
   currency?: string;
+  /** Locale for digit grouping; defaults to the usual one for the currency (en-IN for INR). */
+  locale?: string;
   className?: string;
 }
 
-export function Money({ paise, amountInPaise, currency = "₹", className }: MoneyProps) {
+const DEFAULT_MONEY_LOCALE: Record<string, string> = { INR: "en-IN", USD: "en-US", CAD: "en-CA" };
+
+export function Money({ paise, amountInPaise, currency = "INR", locale, className }: MoneyProps) {
   const value = paise ?? amountInPaise ?? 0;
-  const formatted = `${currency}${(value / 100).toLocaleString("en-IN", {
+  const code = /^[A-Za-z]{3}$/.test(currency) ? currency.toUpperCase() : "INR";
+  const formatted = new Intl.NumberFormat(locale ?? DEFAULT_MONEY_LOCALE[code] ?? "en-US", {
+    style: "currency",
+    currency: code,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })}`;
+  }).format(value / 100);
   return (
     <span className={cn("font-mono tabular-nums", className)}>
       {formatted}

@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Status | **Proposed, not started.** Owner decisions recorded in section 12 (2026-10-28); questions A-D answered; no open questions remain |
+| Status | **Built locally (2026-10-29), not pushed; browser pass and sandbox runs pending, see `docs/MULTIMARKET-PUSH-CHECKLIST.md`.** Original status: proposed, not started. Owner decisions recorded in section 12 (2026-10-28); questions A-D answered; no open questions remain |
 | Author | Claude Code (planner/verifier), 2026-10-28 |
 | Builders | assigned per phase by the owner (section 11) |
-| Related | ADR-002 (RLS), ADR-004 (cache), ADR-008 (payment adapter), ADR-013/015 (quotas), ADR-017 (custom domains), `docs/CUSTOM-DOMAIN-ROUTING-PLAN.md`, `docs/ORDERS-RETURNS-PLAN.md`, `docs/FINANCE-PLAN.md`, `docs/PLATFORM-BILLING-PLAN.md`. **New ADR-039 (markets) is written in Phase 0.** |
+| Related | ADR-002 (RLS), ADR-004 (cache), ADR-008 (payment adapter), ADR-013/015 (quotas), ADR-017 (custom domains), `docs/CUSTOM-DOMAIN-ROUTING-PLAN.md`, `docs/ORDERS-RETURNS-PLAN.md`, `docs/FINANCE-PLAN.md`, `docs/PLATFORM-BILLING-PLAN.md`. **New ADR-040 (markets) is written in Phase 0.** |
 | Launch scope | India, USA, Canada. Other countries are added later as data, not code |
 
 ## 1. Goal
@@ -79,7 +79,7 @@ Checked in the review pass (2026-10-28, grep counts, not a full read):
 | Stripe appears only in the webhook route, not checkout | `apps/web/src/app/api/webhooks/[provider]/route.ts` | Confirms Phase 4 must build the Stripe checkout path |
 | Platform billing is Razorpay-only with INR plan prices | `saas/billing.ts` (`plan_currency: "INR"`), `plans.price_*_paise` | Phase 4B adds a PayPal provider and a USD price per plan |
 
-Latest migration is 0081; latest ADR is 038. Shiprocket and any shipping integration stay untouched (rule 14); this plan only changes shipping **rate configuration**, which is per-store data (rule 12).
+Latest migration is 0082 (notification manager); latest ADR is 039. This plan uses ADR-040. Shiprocket and any shipping integration stay untouched (rule 14); this plan only changes shipping **rate configuration**, which is per-store data (rule 12).
 
 ## 4. Concepts and data model
 
@@ -206,7 +206,7 @@ v1 has **one generic tax engine for every country**: a market has `collect tax: 
 - **India**: existing GST with place-of-supply state stays as is for the India market; prices tax-inclusive. For non-India markets of an Indian store the merchant chooses "charge GST on exports: no (zero-rated) / yes"; we do not decide LUT status.
 - **USA**: the merchant adds a row per state where they collect (destination-based); prices tax-exclusive by default. States without a row collect nothing.
 - **Canada**: the merchant adds rows per province (for example GST + PST, or one HST row); prices tax-exclusive by default.
-- Rounding: tax computed per line in minor units, half-up, then summed (documented in ADR-039 so invoices reconcile).
+- Rounding: tax computed per line in minor units, half-up, then summed (documented in ADR-040 so invoices reconcile).
 - Later: a tax-service adapter (Stripe Tax or similar) behind the same interface.
 - **Duties and import taxes**: v1 shopper pays on delivery (DAP), stated at checkout for cross-border markets; no collection. Later: DDP via a provider adapter.
 - Tax is calculated server-side from market + shipping address + tax class, stored on the order lines, shown on invoice (invoice template per market: GSTIN for India, tax lines for US/CA).
@@ -260,7 +260,7 @@ Each phase is its own branch and PR, ships behind the `multi_market` flag, passe
 
 | # | Phase | Scope | Acceptance criteria |
 |---|---|---|---|
-| 0 | **Decisions and ADR** | Verify PayPal Orders v2 / Subscriptions availability for an Indian platform account and the currency lists of PayPal and Razorpay international; write ADR-039 (market model, money rules, tax rounding, resolution order, cache key, "merchant is seller of record"); update `AGENTS.md` rule 14 and `progress.md` decisions and "In flight" | ADR merged; rule 14 text matches decision 2; verification notes with sources in the ADR |
+| 0 | **Decisions and ADR** | Verify PayPal Orders v2 / Subscriptions availability for an Indian platform account and the currency lists of PayPal and Razorpay international; write ADR-040 (market model, money rules, tax rounding, resolution order, cache key, "merchant is seller of record"); update `AGENTS.md` rule 14 and `progress.md` decisions and "In flight" | ADR merged; rule 14 text matches decision 2; verification notes with sources in the ADR |
 | 1B | **Signup outside India** | Country picker at signup (IN, US, CA from `platform_countries`) sets currency, timezone, locale, unit system, default shipping zone and which tax-ID fields show; GSTIN optional and India-only; provisioning stops hardcoding `IN` | A US and a Canadian test merchant sign up locally and get a USD/CAD store with an imperial or metric default and a matching zone; Indian signup unchanged (existing tests green) |
 | 1 | **Foundation, no behaviour change** | `money.ts` (exponents, formatting), `units.ts`, remove hardcoded `₹`/`en-IN`/`paise` (audit list in the change record), `store_settings.unit_system`, imperial display for weight inputs, `markets` + `market_countries` tables, backfill one base market per store, `orders/carts` get `market_id`/base fields (nullable, backfilled) | All existing stores behave identically; round-trip unit tests; isolation suite green; backfill test on a database seeded with the old shape; migration is expand-only |
 | 2 | **Markets CRUD, subfolder URLs and resolver** | Contracts, domain service, admin Markets list/editor (General tab), Super Admin country registry and quota, middleware rewrite for `/us`-style prefixes, resolver (path, cookie, `CF-IPCountry`), switcher and banner, `market` in cache keys, hreflang + canonical, sitemap per market | Add USA market; `/us/products/x` renders with the US market; `CF-IPCountry: US` shows the banner, never a redirect; explicit switch persists; cache test proves two markets do not share a cached price; hreflang set validates; product page JS budget re-measured |
@@ -284,7 +284,7 @@ Suggested ownership (the owner decides, per AGENTS.md section 6): Claude does Ph
 | Cache serving the wrong market's price | `market` in the cache key; test with two markets; no per-request shared state |
 | Breaking live India store (Taste of Hills) | Phase 1 is expand-only with backfill; flag-gated; COD India regression test every phase; migration rehearsed on a copy |
 | FX loss and rate staleness | Manual rate (decision 3); adjust % margin; order snapshots rate; 30-day staleness reminder |
-| Brand Sewa drifting into regulated roles (aggregator, merchant of record, tax agent) | Section 1A rules are written into ADR-039; any future "take a fee from orders" or "collect duties" feature needs a new ADR and legal review |
+| Brand Sewa drifting into regulated roles (aggregator, merchant of record, tax agent) | Section 1A rules are written into ADR-040; any future "take a fee from orders" or "collect duties" feature needs a new ADR and legal review |
 | Wrong tax | Merchant-entered rates with a clear disclaimer; fixtures per jurisdiction; tax-engine adapter later |
 | Gateway not available to merchant's country | Availability rules in Super Admin; connect screen explains why |
 | Product page JS budget | Server-rendered switcher; measure each phase |

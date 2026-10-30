@@ -47,6 +47,7 @@ export async function loadEmailOrder(tx: Q, tenantId: string, orderId: string): 
     .from(schema.orderItems)
     .where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, orderId)));
   const address = (order.shippingAddress ?? null) as EmailOrder["shippingAddress"];
+  const policySnapshot = order.policySnapshot as { text?: string | null } | null;
   return {
     number: order.number,
     placedAt: order.placedAt instanceof Date ? order.placedAt.toISOString() : undefined,
@@ -56,8 +57,10 @@ export async function loadEmailOrder(tx: Q, tenantId: string, orderId: string): 
     shippingTotal: Number(order.shippingTotal),
     codFee: Number(order.codFee ?? 0),
     grandTotal: Number(order.grandTotal),
+    currency: order.currency,
     paymentStatus: order.paymentStatus,
     shippingAddress: address,
+    policyText: policySnapshot?.text ?? null,
   };
 }
 

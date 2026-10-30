@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, Input, PageContainer, PageSkeleton, SimpleSelect, toast } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { fetchMe } from "../../lib/auth.ts";
@@ -42,6 +43,8 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const price = (p: (typeof plans)[number]) => (billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise);
   const discounted = !freeEnds && chosen && coupon && (!coupon.planCode || coupon.planCode === chosen.code) ? Math.round((price(chosen) * (100 - coupon.percentOff)) / 100) : 0;
 
+  const planCurrency = (p: unknown): string => (p && typeof p === "object" && "currency" in p && typeof (p as { currency?: unknown }).currency === "string" ? (p as { currency: string }).currency : "INR");
+
   return (
     <PageContainer size="small">
       <div className="mx-auto max-w-lg space-y-5 py-10">
@@ -76,7 +79,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                   value={chosenPlan}
                   onChange={setPlanCode}
                   placeholder="Choose a plan"
-                  options={plans.map((p) => ({ value: p.code, label: `${p.name} (₹${(price(p) / 100).toLocaleString("en-IN")}/${billed === "yearly" ? "yr" : "mo"})` }))}
+                  options={plans.map((p) => ({ value: p.code, label: `${p.name} (${formatMoney(price(p), planCurrency(p))}/${billed === "yearly" ? "yr" : "mo"})` }))}
                 />
               </div>
               <div className="space-y-1.5">
@@ -99,11 +102,11 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
             ) : null}
             {freeEnds ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
-                To open your store we set up automatic payment through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; about ₹1 is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged {chosen ? `₹${(price(chosen) / 100).toLocaleString("en-IN")}` : "the plan price"} every {billed === "yearly" ? "year" : "month"} automatically, and you can stop it any time before then.
+                To open your store we set up automatic payment through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; about {formatMoney(100, planCurrency(chosen))} is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged {chosen ? `${formatMoney(price(chosen), planCurrency(chosen))}` : "the plan price"} every {billed === "yearly" ? "year" : "month"} automatically, and you can stop it any time before then.
               </p>
             ) : chosen && discounted ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
-                Your coupon takes {billing?.firstPaymentCoupon?.percentOff}% off your first payment: you pay ₹{(discounted / 100).toLocaleString("en-IN")} instead of ₹{(price(chosen) / 100).toLocaleString("en-IN")} to open your store. After that it renews automatically at ₹{(price(chosen) / 100).toLocaleString("en-IN")} every {billed === "yearly" ? "year" : "month"}, and you can stop it any time.
+                Your coupon takes {billing?.firstPaymentCoupon?.percentOff}% off your first payment: you pay {formatMoney(discounted, planCurrency(chosen))} instead of {formatMoney(price(chosen), planCurrency(chosen))} to open your store. After that it renews automatically at {formatMoney(price(chosen), planCurrency(chosen))} every {billed === "yearly" ? "year" : "month"}, and you can stop it any time.
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">

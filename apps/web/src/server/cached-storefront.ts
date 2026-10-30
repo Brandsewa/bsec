@@ -34,6 +34,8 @@ import {
   type StorefrontCategoryDetail,
   type StorefrontCategoryCard,
   type TenantContext,
+  listStorefrontMarkets,
+  type StorefrontMarket,
 } from "@bs/domain";
 import { renderBlockDocument, resolveDefaultPages, walkBlocks, type BlockInstance } from "@bs/blocks";
 import { server } from "./runtime.ts";
@@ -53,7 +55,7 @@ import { server } from "./runtime.ts";
 /**
  * Helper to build standard tenant context for cached storefront reads.
  */
-function createStorefrontTenantContext(tenantId: string): TenantContext {
+function createStorefrontTenantContext(tenantId: string, marketId?: string | null): TenantContext {
   return {
     tenantId,
     storeStatus: "live",
@@ -61,18 +63,29 @@ function createStorefrontTenantContext(tenantId: string): TenantContext {
     roles: ["store_admin"],
     permissions: ["products.read", "settings.write", "content.write", "theme.publish"],
     requestId: crypto.randomUUID(),
+    // The market is an argument of every cached loader below, so it is part of the cache key: two markets never share a price (ADR-040).
+    marketId: marketId ?? null,
   };
+}
+
+/** The markets a shopper can pick (base + active). Tagged like the rest of the shell, so a market edit refreshes it. */
+export async function getCachedStorefrontMarkets(tenantId: string): Promise<StorefrontMarket[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return listStorefrontMarkets(rt, tenantId);
 }
 
 export async function getCachedStorefrontProduct(
   tenantId: string,
   slug: string,
+  marketId?: string | null,
 ): Promise<StorefrontProductDetail | null> {
   "use cache";
   // Tag before the lookup: a "not found" (e.g. a draft that is published later) must be invalidated too.
   cacheTag(tenantTag(tenantId, "product"));
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const product = await getStorefrontProduct(rt, tenantCtx, slug);
 
   if (product) {
@@ -86,6 +99,7 @@ export async function getCachedStorefrontCollection(
   tenantId: string,
   slug: string,
   options?: CatalogListingOptions,
+  marketId?: string | null,
 ): Promise<StorefrontCollectionDetail | null> {
   "use cache";
   cacheTag(tenantTag(tenantId, "collection"));
@@ -94,7 +108,7 @@ export async function getCachedStorefrontCollection(
   // Filter menu changes also invalidate collection listings.
   cacheTag(tenantTag(tenantId, "nav"));
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const res = await getStorefrontCollection(rt, tenantCtx, slug, options);
 
   if (res?.collection) {
@@ -135,12 +149,13 @@ export async function getCachedStorefrontCategory(
   tenantId: string,
   slug: string,
   options?: CatalogListingOptions,
+  marketId?: string | null,
 ): Promise<StorefrontCategoryDetail | null> {
   "use cache";
   cacheTag(tenantTag(tenantId, "category"));
   cacheTag(tenantTag(tenantId, "product"));
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const res = await getStorefrontCategory(rt, tenantCtx, slug, options);
 
   if (res?.category) {
@@ -185,10 +200,10 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   return resolvePageRenderData(rt, tenantCtx, rendered.blocks);
 }
 
-export async function getCachedStorefrontHomePage(tenantId: string) {
+export async function getCachedStorefrontHomePage(tenantId: string, marketId?: string | null) {
   "use cache";
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const home = await getStorefrontHomePage(rt, tenantCtx);
 
   cacheTag(tenantTag(tenantId, "page", "home"));
@@ -198,13 +213,13 @@ export async function getCachedStorefrontHomePage(tenantId: string) {
   return { ...home, renderData };
 }
 
-export async function getCachedStorefrontPage(tenantId: string, slug: string) {
+export async function getCachedStorefrontPage(tenantId: string, slug: string, marketId?: string | null) {
   "use cache";
   // Tag before the lookup so a page that did not exist yet (or was unpublished) refreshes when it is published.
   cacheTag(tenantTag(tenantId, "page", slug));
   cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const page = await getStorefrontPage(rt, tenantCtx, slug);
   if (!page) return page;
 
@@ -212,7 +227,7 @@ export async function getCachedStorefrontPage(tenantId: string, slug: string) {
   return { ...page, renderData };
 }
 
-export async function getCachedStorefrontPageByPath(tenantId: string, pathSegments: string[]) {
+export async function getCachedStorefrontPageByPath(tenantId: string, pathSegments: string[], marketId?: string | null) {
   "use cache";
   const targetSlug = pathSegments[pathSegments.length - 1];
   if (targetSlug) {
@@ -220,7 +235,7 @@ export async function getCachedStorefrontPageByPath(tenantId: string, pathSegmen
   }
   cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const result = await getStorefrontPageByPath(rt, tenantCtx, pathSegments);
   if (!result) return null;
 
@@ -259,22 +274,22 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
  * Product page: the data of the theme's Product showcase blocks that list related products, for one product. Refreshes when
  * products or collections change, like the rest of the product page.
  */
-export async function getCachedRelatedShowcaseData(tenantId: string, productId: string, blocks: BlockInstance[]) {
+export async function getCachedRelatedShowcaseData(tenantId: string, productId: string, blocks: BlockInstance[], marketId?: string | null) {
   "use cache";
   cacheTag(tenantTag(tenantId, "product"));
   cacheTag(tenantTag(tenantId, "collection"));
   const { rt } = server();
-  return resolveRelatedBlockData(rt, createStorefrontTenantContext(tenantId), { productId, blocks });
+  return resolveRelatedBlockData(rt, createStorefrontTenantContext(tenantId, marketId), { productId, blocks });
 }
 
-export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageKey) {
+export async function getCachedThemePage(tenantId: string, key: ThemeSystemPageKey, marketId?: string | null) {
   "use cache";
   cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES[key].slug));
   if (key === "header" || key === "footer") {
     cacheTag(tenantTag(tenantId, "nav"));
   }
   const { rt } = server();
-  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const tenantCtx = createStorefrontTenantContext(tenantId, marketId);
   const page = await getStorefrontThemePage(rt, tenantCtx, key);
   if (!page) return null;
   const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks: page.blocks });

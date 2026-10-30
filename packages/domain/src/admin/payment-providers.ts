@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { CashfreeProvider, StripeProvider, cashfreeModeOfSecret, decryptSecret, encryptSecret } from "@bs/payments";
+import { CashfreeProvider, PayPalProvider, StripeProvider, cashfreeModeOfSecret, decryptSecret, encryptSecret } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
@@ -16,10 +16,10 @@ import { getTenantPaymentSecrets } from "../payments/credentials.ts";
  * Disabling a provider at platform level never strands money: saved keys, in-flight payments, webhooks for existing
  * intents and refunds are untouched. It only blocks new key saves, activations and new payment intents.
  */
-export type OnlineProvider = "razorpay" | "stripe" | "cashfree";
-export const ONLINE_PROVIDERS: readonly OnlineProvider[] = ["razorpay", "stripe", "cashfree"];
+export type OnlineProvider = "razorpay" | "stripe" | "cashfree" | "paypal";
+export const ONLINE_PROVIDERS: readonly OnlineProvider[] = ["razorpay", "stripe", "cashfree", "paypal"];
 
-const PROVIDER_NAMES: Record<OnlineProvider, string> = { razorpay: "Razorpay", stripe: "Stripe", cashfree: "Cashfree" };
+const PROVIDER_NAMES: Record<OnlineProvider, string> = { razorpay: "Razorpay", stripe: "Stripe", cashfree: "Cashfree", paypal: "PayPal" };
 
 export type ProviderState = "not_connected" | "connected_test" | "active" | "live_blocked";
 
@@ -52,11 +52,14 @@ const KEY_PATTERNS: Record<OnlineProvider, RegExp> = {
   // Cashfree: the App ID is a short alphanumeric id (sandbox ones start with TEST); the secret looks like cfsk_ma_test_... or
   // cfsk_ma_prod_... . Kept loose on purpose: the connection test is the real check.
   cashfree: /^[A-Za-z0-9_-]{16,200}$/,
+  // PayPal REST app: the client id and secret are long URL-safe strings; the connection test is the real check.
+  paypal: /^[A-Za-z0-9_-]{16,200}$/,
 };
 const CASHFREE_APP_ID = /^[A-Za-z0-9]{6,60}$/;
 
 function modeOfKey(provider: OnlineProvider, key: string): "test" | "live" {
   if (provider === "cashfree") return cashfreeModeOfSecret(key);
+  if (provider === "paypal") return "test"; // PayPal keys do not say; the merchant chooses sandbox or live explicitly
   return provider === "razorpay" ? (key.startsWith("rzp_live_") ? "live" : "test") : key.startsWith("sk_live_") ? "live" : "test";
 }
 
@@ -105,7 +108,7 @@ async function loadStoreView(
       .from(schema.tenantSecrets)
       .where(eq(schema.tenantSecrets.provider, provider));
     const byName = new Map(secrets.map((s) => [s.keyName, s]));
-    const hasKeys = provider === "razorpay" || provider === "cashfree" ? byName.has("key_id") && byName.has("key_secret") : byName.has("key_secret");
+    const hasKeys = provider === "razorpay" || provider === "cashfree" || provider === "paypal" ? byName.has("key_id") && byName.has("key_secret") : byName.has("key_secret");
 
     // A disabled provider is shown only to stores that already hold keys for it.
     if (!platformRow.enabled && !hasKeys) return null;
@@ -118,12 +121,12 @@ async function loadStoreView(
 
     let keyHint: string | null = null;
     let mode: "test" | "live" | null = null;
-    const keyRow = provider === "razorpay" || provider === "cashfree" ? byName.get("key_id") : byName.get("key_secret");
+    const keyRow = provider === "razorpay" || provider === "cashfree" || provider === "paypal" ? byName.get("key_id") : byName.get("key_secret");
     if (keyRow) {
       try {
         const plain = decryptSecret({ ciphertext: keyRow.ciphertext, iv: keyRow.iv });
         keyHint = `…${plain.slice(-4)}`;
-        mode = provider === "cashfree" ? null : modeOfKey(provider, plain);
+        mode = provider === "cashfree" ? null : provider === "paypal" ? ((method?.mode as "test" | "live" | null) ?? "test") : modeOfKey(provider, plain);
       } catch {
         keyHint = null;
       }
@@ -160,7 +163,7 @@ async function loadStoreView(
       lastTestError: typeof setup.lastTestError === "string" ? setup.lastTestError : null,
       webhookPath: `/api/webhooks/${provider}?tenantId=${tenantId}`,
       tenantId,
-      checkoutLive: provider === "razorpay",
+      checkoutLive: provider === "razorpay" || provider === "stripe" || provider === "paypal",
     };
   });
 }
@@ -306,6 +309,62 @@ export async function saveCashfreeCredentials(
   return getStorePaymentProvider(rt, ctx, "cashfree");
 }
 
+/**
+ * Saves the store's own PayPal REST app credentials (client id, secret) and the webhook id PayPal assigns when the store
+ * registers the webhook URL. PayPal keys do not say sandbox or live, so the merchant chooses; live is refused until the
+ * platform allows it for PayPal (sandbox first, ADR-040). Money goes to the merchant's own PayPal account.
+ */
+export async function savePayPalCredentials(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { clientId: string; clientSecret: string; webhookId?: string | undefined; mode: "test" | "live" },
+): Promise<StorePaymentProviderView> {
+  assertPermission(ctx, "payments.manage");
+  const { liveModeAllowed } = await assertPaymentProviderEnabled(rt._db.db, "paypal");
+  const clientId = input.clientId.trim();
+  const clientSecret = input.clientSecret.trim();
+  if (!KEY_PATTERNS.paypal.test(clientId) || !KEY_PATTERNS.paypal.test(clientSecret)) {
+    throw new Error("Bad Request: enter the Client ID and Secret of your PayPal REST app (PayPal Developer Dashboard, Apps and Credentials)");
+  }
+  const webhookId = input.webhookId?.trim();
+  if (webhookId !== undefined && webhookId !== "" && !/^[A-Za-z0-9]{8,40}$/.test(webhookId)) {
+    throw new Error("Bad Request: the PayPal webhook ID is letters and digits only");
+  }
+  if (input.mode === "live" && !liveModeAllowed) {
+    throw new Error("Precondition: live mode is not allowed yet. Use your PayPal sandbox app until the platform allows live mode.");
+  }
+  const entries: Array<[string, string]> = [
+    ["key_id", clientId],
+    ["key_secret", clientSecret],
+    ...(webhookId ? ([["webhook_secret", webhookId]] as Array<[string, string]>) : []),
+  ];
+  const encrypted = entries.map(([keyName, value]) => ({ keyName, ...encryptOrExplain(value) }));
+  const updatedBy = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    for (const e of encrypted) {
+      await tx
+        .insert(schema.tenantSecrets)
+        .values({ tenantId: ctx.tenantId, provider: "paypal", keyName: e.keyName, ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy })
+        .onConflictDoUpdate({
+          target: [schema.tenantSecrets.tenantId, schema.tenantSecrets.provider, schema.tenantSecrets.keyName],
+          set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
+        });
+    }
+    await upsertMethodRow(tx, ctx.tenantId, "paypal", "PayPal", { status: "pending_setup", mode: input.mode, setup: { lastTestOk: null, lastTestAt: null, lastTestError: null } });
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: updatedBy,
+      action: "paypal_credentials.saved",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { mode: { before: null, after: input.mode }, webhookConfigured: { before: null, after: Boolean(webhookId) } },
+    });
+  });
+  return getStorePaymentProvider(rt, ctx, "paypal");
+}
+
 export async function clearProviderCredentials(rt: Runtime, ctx: TenantContext, provider: OnlineProvider): Promise<StorePaymentProviderView | null> {
   assertPermission(ctx, "payments.manage");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
@@ -365,7 +424,7 @@ async function upsertMethodRow(
       displayName,
       status: next.status,
       mode: next.mode,
-      sortOrder: provider === "razorpay" ? 1 : provider === "stripe" ? 2 : 3,
+      sortOrder: provider === "razorpay" ? 1 : provider === "stripe" ? 2 : provider === "cashfree" ? 3 : 4,
       publicConfig: { v: 1 },
       setupState,
       version: 1,
@@ -407,6 +466,17 @@ export async function testPaymentProviderConnection(
         r.ok && r.livemode !== undefined && (r.livemode ? "live" : "test") !== declared
           ? { ok: false, error: "The key's mode does not match what Stripe reports." }
           : { ok: r.ok, mode: r.ok ? declared : undefined, error: r.error };
+    }
+  } else if (provider === "paypal") {
+    if (!creds.keyId || !creds.keySecret) {
+      result = { ok: false, error: "Save your PayPal Client ID and Secret first." };
+    } else {
+      const [m] = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+        tx.select({ mode: schema.paymentMethods.mode }).from(schema.paymentMethods).where(and(eq(schema.paymentMethods.tenantId, ctx.tenantId), eq(schema.paymentMethods.provider, "paypal"))).limit(1),
+      );
+      const declared = (m?.mode as "test" | "live" | null) ?? "test";
+      const r = await new PayPalProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, mode: declared === "live" ? "live" : "sandbox", fetchFn }).testConnection();
+      result = { ok: r.ok, mode: r.ok ? declared : undefined, error: r.error };
     }
   } else if (provider === "cashfree") {
     if (!creds.keyId || !creds.keySecret) {
@@ -474,6 +544,9 @@ export async function setPaymentProviderActive(
       throw new Error("Precondition: live keys are not allowed yet. Use test keys until the platform allows live mode.");
     }
     if (view.lastTestOk !== true) throw new Error("Precondition: run Test connection successfully before activating.");
+    if (provider === "paypal" && !view.hasWebhookSecret) {
+      throw new Error("Precondition: add the webhook ID from your PayPal developer dashboard before activating.");
+    }
     if (provider === "stripe" && !view.hasWebhookSecret) {
       throw new Error("Precondition: add the webhook signing secret from your Stripe dashboard before activating.");
     }

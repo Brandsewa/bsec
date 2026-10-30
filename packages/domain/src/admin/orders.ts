@@ -43,6 +43,9 @@ export interface OrderListItem {
   paymentStatus: string;
   fulfillmentStatus: string;
   grandTotal: number;
+  currency?: string;
+  baseGrandTotal?: number | null;
+  baseCurrency?: string | null;
   placedAt: string;
   shipsOn?: string | null | undefined;
   itemsCount: number;
@@ -153,6 +156,9 @@ export async function listAdminOrders(
         paymentStatus: schema.orders.paymentStatus,
         fulfillmentStatus: schema.orders.fulfillmentStatus,
         grandTotal: schema.orders.grandTotal,
+        currency: schema.orders.currency,
+        baseGrandTotal: schema.orders.baseGrandTotal,
+        baseCurrency: schema.orders.baseCurrency,
         placedAt: schema.orders.placedAt,
         shipsOn: schema.orders.shipsOn,
         archivedAt: schema.orders.archivedAt,
@@ -204,6 +210,9 @@ export async function listAdminOrders(
         paymentStatus: r.paymentStatus,
         fulfillmentStatus: r.fulfillmentStatus,
         grandTotal: Number(r.grandTotal),
+        currency: r.currency,
+        baseGrandTotal: r.baseGrandTotal != null ? Number(r.baseGrandTotal) : null,
+        baseCurrency: r.baseCurrency ?? null,
         placedAt: r.placedAt.toISOString(),
         shipsOn: r.shipsOn ? String(r.shipsOn) : null,
         itemsCount: itemCounts.get(r.id) ?? 0,
@@ -323,6 +332,9 @@ export async function getAdminOrderDetail(
         shippingTotal: Number(order.shippingTotal),
         taxTotal: Number(order.taxTotal),
         grandTotal: Number(order.grandTotal),
+        currency: order.currency,
+        baseGrandTotal: order.baseGrandTotal != null ? Number(order.baseGrandTotal) : null,
+        baseCurrency: order.baseCurrency ?? null,
         codFee: Number(order.codFee),
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,

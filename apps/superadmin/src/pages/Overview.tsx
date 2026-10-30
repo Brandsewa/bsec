@@ -15,16 +15,12 @@ import {
   UserPlus,
 } from "lucide-react";
 import { Button, MetricCard, PageContainer, PageHeader, PageSkeleton } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 
-function formatRupees(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(rupees);
+function formatRupees(paise: number, currency = "INR"): string {
+  return formatMoney(paise, currency);
 }
 
 function formatBytes(bytes: number): string {

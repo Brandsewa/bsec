@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getMarketContext } from "@/server/market.ts";
 import { z } from "zod";
 import {
   evaluateStorefrontAccess,
@@ -73,10 +74,10 @@ export async function POST(req: Request) {
     const cookieToken = await getCookieValue(CART_COOKIE_NAME, req);
     let token = parsed.data.token || cookieToken;
 
-    if (!token) {
-      const initialCart = await getOrCreateCart(rt, tenantCtx);
-      token = initialCart.token;
-    }
+    const marketId = (await getMarketContext(access.tenantId)).marketId;
+    // Creates the cart in the shopper's market, or moves an existing one there, so the price added is the price shown.
+    const initialCart = await getOrCreateCart(rt, tenantCtx, token || undefined, undefined, marketId);
+    token = initialCart.token;
 
     const cart = await addToCart(rt, tenantCtx, {
       token,

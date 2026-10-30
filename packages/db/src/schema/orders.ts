@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   text,
   timestamp,
   unique,
@@ -14,6 +15,7 @@ import {
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
 import { citext } from "./custom-types.ts";
 import { variants } from "./catalog.ts";
+import { markets } from "./markets.ts";
 
 /**
  * Orders (PLAN §5.7 / M4).
@@ -27,7 +29,17 @@ export const orders = tenantTable(
     customerId: uuid("customer_id"),
     email: citext("email").notNull(),
     phone: text("phone").notNull(),
+    /** The charged (presentment) currency. */
     currency: text("currency").notNull().default("INR"),
+    /** ADR-040: the market, the store base currency, the rate used and the total in base currency. null on older orders. */
+    marketId: uuid("market_id"),
+    baseCurrency: text("base_currency"),
+    fxRate: numeric("fx_rate", { precision: 18, scale: 8 }),
+    baseGrandTotal: bigint("base_grand_total", { mode: "number" }),
+    /** [{ name, rateBps, amount }] from the generic market tax engine (ADR-040). */
+    taxBreakdown: jsonb("tax_breakdown"),
+    /** The market policy text as it was at purchase; later edits never change an existing order. */
+    policySnapshot: jsonb("policy_snapshot"),
     status: text("status").notNull().default("pending"),
     paymentStatus: text("payment_status").notNull().default("pending"),
     fulfillmentStatus: text("fulfillment_status").notNull().default("unfulfilled"),
@@ -66,6 +78,7 @@ export const orders = tenantTable(
     index("orders_tenant_placed_at_idx").on(t.tenantId, t.placedAt),
     index("orders_tenant_ships_on_idx").on(t.tenantId, t.shipsOn).where(sql`ships_on is not null`),
     index("orders_tenant_archived_at_idx").on(t.tenantId, t.archivedAt),
+    tenantForeignKey({ tableTenantId: t.tenantId, column: t.marketId, target: markets, name: "orders_market_fk", onDelete: "restrict" }),
   ],
 );
 

@@ -4,6 +4,7 @@ import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React, { useState } from "react";
 import Link from "next/link";
 import type { StorefrontCartItem } from "@bs/domain";
+import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
 export interface CartItemRowProps {
   item: StorefrontCartItem;
@@ -13,9 +14,11 @@ export interface CartItemRowProps {
 
 export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowProps) {
   const [updating, setUpdating] = useState(false);
+  const money = useMoney();
+  const { locale } = useMarket();
 
-  const formattedLineTotal = `₹${(item.lineTotal / 100).toLocaleString("en-IN")}`;
-  const formattedUnitPrice = `₹${(item.unitPriceSnapshot / 100).toLocaleString("en-IN")}`;
+  const formattedLineTotal = money(item.lineTotal);
+  const formattedUnitPrice = money(item.unitPriceSnapshot);
 
   const handleQuantityChange = async (newQty: number) => {
     if (newQty < 0 || updating) return;
@@ -84,7 +87,7 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
               </span>
               <span className="text-[11px] text-amber-800 dark:text-amber-300">
                 {item.variant.preorderShipsOn && item.variant.preorderShipsOn >= new Date().toISOString().slice(0, 10)
-                  ? `Ships on ${new Date(`${item.variant.preorderShipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                  ? `Ships on ${new Date(`${item.variant.preorderShipsOn}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short" })}`
                   : "Ships soon"}
               </span>
             </div>

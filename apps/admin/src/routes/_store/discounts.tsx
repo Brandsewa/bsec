@@ -16,6 +16,8 @@ import { useBulkRunner } from "../../components/data-table/use-bulk-runner.ts";
 import { useTableSelection } from "../../components/data-table/use-table-selection.ts";
 import { compactSearch, oneOf, parsePaging, text, useColumnVisibility, useDebouncedValue, useUrlTableState } from "../../components/data-table/use-table-state.ts";
 import { StatusBadge } from "../../components/order-parts.tsx";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { ScrollTabs } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
@@ -103,8 +105,8 @@ export const Route = createFileRoute("/_store/discounts")({
   component: DiscountsPage,
 });
 
-const benefit = (d: DiscountRow) =>
-  d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `₹${d.value / 100} off` : d.type === "free_shipping" ? "Free shipping" : "Buy X get Y";
+const benefit = (d: DiscountRow, currency = "INR") =>
+  d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `${formatMoney(d.value, currency)} off` : d.type === "free_shipping" ? "Free shipping" : "Buy X get Y";
 
 const EXPORT_HEADER = ["Code", "Title", "Type", "Value", "Used", "Usage limit", "Status", "Combinable", "Starts", "Ends", "Created"];
 const exportRow = (d: DiscountRow) => [
@@ -126,6 +128,7 @@ const exportRow = (d: DiscountRow) => [
 // ---------------------------------------------------------------------------------------------------------------
 
 export function DiscountsPage() {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const [s, update] = useUrlTableState(parseDiscountsSearch);
   const bulk = useBulkRunner();
@@ -228,7 +231,7 @@ export function DiscountsPage() {
       ),
     },
     { id: "title", header: "Title", sort: { asc: "title_asc", desc: "title_desc" }, className: "font-medium text-foreground", cell: (d) => d.title },
-    { id: "benefit", header: "Benefit", className: "font-medium text-foreground", cell: benefit },
+    { id: "benefit", header: "Benefit", className: "font-medium text-foreground", cell: (d) => benefit(d, storeCurrency) },
     {
       id: "usage",
       header: "Usage",

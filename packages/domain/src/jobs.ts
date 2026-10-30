@@ -1,4 +1,5 @@
 import { PgBoss } from "pg-boss";
+import { formatMoney } from "@bs/contracts/money";
 import type { Logger } from "pino";
 import { QUEUE_NAMES } from "@bs/db";
 import { createDb, type Db, type DbHandle, withTenant } from "@bs/db";
@@ -106,14 +107,13 @@ export async function handleOrderCreatedJob(
     const prefs = await withTenant(db, tenantId, async (tx) => readNotificationPreferences(tx, tenantId));
     const [fullOrder] = await withTenant(db, tenantId, async (tx) => {
       return await tx
-        .select({ number: schema.orders.number, grandTotal: schema.orders.grandTotal, shippingAddress: schema.orders.shippingAddress })
+        .select({ number: schema.orders.number, grandTotal: schema.orders.grandTotal, currency: schema.orders.currency, shippingAddress: schema.orders.shippingAddress })
         .from(schema.orders)
         .where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, orderId)))
         .limit(1);
     });
     const customerName = String((fullOrder?.shippingAddress as Record<string, unknown> | null)?.fullName ?? "A customer");
-    const total = Number(fullOrder?.grandTotal ?? 0) / 100;
-    const amount = `₹${total.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+    const amount = formatMoney(Number(fullOrder?.grandTotal ?? 0), fullOrder?.currency ?? "INR");
     await dispatchNotification(db, {
       eventKey: "store_new_order",
       tenantId,

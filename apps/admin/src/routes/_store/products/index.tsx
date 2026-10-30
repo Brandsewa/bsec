@@ -2,6 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Archive, Copy, Download, ExternalLink, FileCheck, FilePen, MoreHorizontal, Package, Plus, Trash2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@bs/ui";
 import { Checkbox } from "@bs/ui";
@@ -100,10 +102,9 @@ export function productsListInput(s: ProductsSearch, paging: { limit: number; of
 
 type ProductRow = Awaited<ReturnType<typeof client.admin.products.list>>["items"][number];
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
-function formatPriceRange(min: number | null | undefined, max: number | null | undefined): string {
+function formatPriceRange(min: number | null | undefined, max: number | null | undefined, currency = "INR"): string {
   if (min == null || max == null) return "—";
-  return min === max ? inr.format(min / 100) : `${inr.format(min / 100)} – ${inr.format(max / 100)}`;
+  return min === max ? formatMoney(min, currency) : `${formatMoney(min, currency)} – ${formatMoney(max, currency)}`;
 }
 
 const useStatusCount = (status?: ProductStatus) =>
@@ -125,13 +126,14 @@ export const Route = createFileRoute("/_store/products/")({
   component: ProductsPage,
 });
 
-const EXPORT_HEADER = ["Title", "Slug", "Status", "Min price (INR)", "Max price (INR)", "Variants", "Stock", "Tags", "Updated"];
-const exportRow = (p: ProductRow) => [
+const EXPORT_HEADER = ["Title", "Slug", "Status", "Min price", "Max price", "Currency", "Variants", "Stock", "Tags", "Updated"];
+const exportRow = (p: ProductRow, currency: string) => [
   p.title,
   p.slug,
   p.status,
   p.priceMin == null ? "" : (p.priceMin / 100).toFixed(2),
   p.priceMax == null ? "" : (p.priceMax / 100).toFixed(2),
+  currency,
   p.variantCount ?? 0,
   p.stock ?? 0,
   p.tags.join("; "),
@@ -143,6 +145,7 @@ const exportRow = (p: ProductRow) => [
 // ---------------------------------------------------------------------------------------------------------------
 
 export function ProductsPage() {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [s, update] = useUrlTableState(parseProductsSearch);
@@ -206,14 +209,14 @@ export function ProductsPage() {
   async function exportProducts(source: "selection" | "matching") {
     try {
       if (source === "selection" && !sel.allResults) {
-        downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, sel.picked.map(exportRow)));
+        downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, sel.picked.map((p) => exportRow(p, storeCurrency))));
         toast.success(`Exported ${sel.picked.length} product${sel.picked.length === 1 ? "" : "s"}.`);
         return;
       }
       const { rows: all, total: count } = await fetchAllPages((offset, limit) => client.admin.products.list(productsListInput(s, { limit, offset })), {
         onProgress: (done, of) => bulk.setProgress({ label: "Exporting products", done, total: of }),
       });
-      downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, all.map(exportRow)));
+      downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, all.map((p) => exportRow(p, storeCurrency))));
       toast.success(all.length < count ? `Exported the first ${all.length.toLocaleString("en-IN")} of ${count.toLocaleString("en-IN")} products.` : `Exported ${all.length.toLocaleString("en-IN")} products.`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -246,7 +249,7 @@ export function ProductsPage() {
       ),
     },
     { id: "status", header: "Status", cell: (p) => <StatusBadge status={p.status} /> },
-    { id: "price", header: "Price", className: "text-foreground", cell: (p) => formatPriceRange(p.priceMin, p.priceMax) },
+    { id: "price", header: "Price", className: "text-foreground", cell: (p) => formatPriceRange(p.priceMin, p.priceMax, storeCurrency) },
     {
       id: "stock",
       header: "Stock",

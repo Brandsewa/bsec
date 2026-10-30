@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { formatMoney } from "@bs/contracts/money";
 import { schema, withTenant, type Db, QUEUE_NAMES } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -323,8 +324,25 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
   const photos = Array.isArray(input.photos) ? input.photos.slice(0, 5) : [];
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    const { readReturnSettings } = await import("../admin/return-settings.ts");
-    const settings = await readReturnSettings(tx, ctx.tenantId);
+    const order = await loadOrder(tx, ctx.tenantId, input.orderId);
+    if (order.status !== "delivered") throw new Error("Precondition: Only delivered orders can be returned");
+
+    const { readReturnSettings, resolveMarketReturnSettings } = await import("../admin/return-settings.ts");
+    const baseSettings = await readReturnSettings(tx, ctx.tenantId);
+    const snap = order.policySnapshot as { returnSettings?: unknown; text?: string | null } | null;
+    let settings = baseSettings;
+    if (snap) {
+      settings = resolveMarketReturnSettings(baseSettings, snap.returnSettings, snap.text);
+    } else if (order.marketId) {
+      const [mp] = await tx
+        .select()
+        .from(schema.marketPolicies)
+        .where(and(eq(schema.marketPolicies.tenantId, ctx.tenantId), eq(schema.marketPolicies.marketId, order.marketId)))
+        .limit(1);
+      if (mp) {
+        settings = resolveMarketReturnSettings(baseSettings, mp.returnSettings, mp.policyText);
+      }
+    }
 
     if (!settings.acceptReturns) {
       throw new Error("Precondition: Return requests are not accepted by this store");
@@ -346,9 +364,6 @@ export async function requestReturn(rt: Runtime, ctx: TenantContext, input: Retu
     if (input.resolution === "replacement" && !settings.allowExchanges) {
       throw new Error("Precondition: Exchanges are not available for this store");
     }
-
-    const order = await loadOrder(tx, ctx.tenantId, input.orderId);
-    if (order.status !== "delivered") throw new Error("Precondition: Only delivered orders can be returned");
 
     const [delivered] = await tx
       .select({ at: sql<Date | null>`max(${schema.fulfillments.deliveredAt})` })
@@ -621,7 +636,8 @@ export async function actOnReturn(
         const totalAlreadyRefunded = existingRefunds.reduce((s, r) => s + Number(r.amount), 0);
         const maxRefundable = Math.max(0, order.grandTotal - totalAlreadyRefunded);
         if (amount > maxRefundable) {
-          throw new Error(`Conflict: Refund of ₹${(amount / 100).toFixed(2)} exceeds maximum refundable amount of ₹${(maxRefundable / 100).toFixed(2)}`);
+          const orderCurrency = order.currency ?? "INR";
+          throw new Error(`Conflict: Refund of ${formatMoney(amount, orderCurrency, { alwaysShowFraction: true })} exceeds maximum refundable amount of ${formatMoney(maxRefundable, orderCurrency, { alwaysShowFraction: true })}`);
         }
 
         const [intent] = await tx
@@ -640,6 +656,7 @@ export async function actOnReturn(
             refundMethod: input.refundMethod ?? "manual",
             refundReference: input.refundReference,
             adminNote: input.note,
+            currency: order.currency ?? "INR",
           },
           tx,
         );
@@ -822,8 +839,22 @@ export async function getOrderReturnsByToken(rt: Runtime, tenantId: string, toke
     if (!orderId) return null;
     const order = await loadOrder(tx, tenantId, orderId);
 
-    const { readReturnSettings } = await import("../admin/return-settings.ts");
-    const settings = await readReturnSettings(tx, tenantId);
+    const { readReturnSettings, resolveMarketReturnSettings } = await import("../admin/return-settings.ts");
+    const baseSettings = await readReturnSettings(tx, tenantId);
+    const snap = order.policySnapshot as { returnSettings?: unknown; text?: string | null } | null;
+    let settings = baseSettings;
+    if (snap) {
+      settings = resolveMarketReturnSettings(baseSettings, snap.returnSettings, snap.text);
+    } else if (order.marketId) {
+      const [mp] = await tx
+        .select()
+        .from(schema.marketPolicies)
+        .where(and(eq(schema.marketPolicies.tenantId, tenantId), eq(schema.marketPolicies.marketId, order.marketId)))
+        .limit(1);
+      if (mp) {
+        settings = resolveMarketReturnSettings(baseSettings, mp.returnSettings, mp.policyText);
+      }
+    }
 
     const { readCustomerAccountSettingsInternal } = await import("../admin/customer-account-settings.ts");
     const accountSettings = await readCustomerAccountSettingsInternal(tx, tenantId);

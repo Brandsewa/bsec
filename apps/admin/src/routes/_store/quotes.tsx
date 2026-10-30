@@ -69,6 +69,7 @@ import {
   useUrlTableState,
 } from "../../components/data-table/use-table-state.ts";
 import { money } from "../../components/order-parts.tsx";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -151,13 +152,14 @@ const EXPORT_HEADER = [
   "Product",
   "Variant",
   "Quantity",
-  "Quoted Total (INR)",
+  "Quoted Total",
+  "Currency",
   "Stage",
   "Customer Message",
   "Admin Note",
 ];
 
-const exportRow = (r: QuoteRow) => [
+const exportRow = (r: QuoteRow, currency: string) => [
   r.number,
   new Date(r.createdAt).toISOString(),
   r.name,
@@ -168,6 +170,7 @@ const exportRow = (r: QuoteRow) => [
   r.variantTitle ?? "",
   String(r.quantity),
   r.quotedTotal != null ? (r.quotedTotal / 100).toFixed(2) : "",
+  currency,
   r.derivedStage,
   r.message ?? "",
   r.adminNote ?? "",
@@ -203,6 +206,7 @@ function QuotesRoute() {
 }
 
 function QuoteStatsStrip() {
+  const storeCurrency = useStoreCurrency();
   const stats = useQuery(orpc.admin.quotes.stats.queryOptions());
   if (stats.isLoading) {
     return (
@@ -231,7 +235,7 @@ function QuoteStatsStrip() {
       <MetricCard label="Accepted" value={data.accepted.toLocaleString("en-IN")} icon={CheckCircle2} />
       <MetricCard
         label="Total quoted"
-        value={money(data.totalQuotesValue)}
+        value={money(data.totalQuotesValue, storeCurrency)}
         icon={ShoppingBag}
         className="col-span-2 lg:col-span-1"
       />
@@ -279,6 +283,7 @@ export function QuotesPage({
 }: {
   navigate?: (to: string, opts?: { search?: Record<string, unknown> }) => void;
 }) {
+  const storeCurrency = useStoreCurrency();
   const go = navigate ?? (() => undefined);
   const queryClient = useQueryClient();
   const [s, update] = useUrlTableState(parseQuotesSearch);
@@ -436,7 +441,7 @@ export function QuotesPage({
         header: "Quoted Total",
         cell: (row) => (
           <span className="font-medium text-foreground">
-            {row.quotedTotal != null ? money(row.quotedTotal) : <span className="text-muted-foreground">—</span>}
+            {row.quotedTotal != null ? money(row.quotedTotal, storeCurrency) : <span className="text-muted-foreground">—</span>}
           </span>
         ),
       },
@@ -446,7 +451,7 @@ export function QuotesPage({
         cell: (row) => <StageBadge stage={row.derivedStage} />,
       },
     ],
-    [],
+    [storeCurrency],
   );
 
   const visibility = useColumnVisibility("quotes", columns);
@@ -487,7 +492,7 @@ export function QuotesPage({
     setExporting(true);
     try {
       if (scope === "selection" && !sel.allResults) {
-        const csvContent = toCsv(EXPORT_HEADER, sel.picked.map(exportRow));
+        const csvContent = toCsv(EXPORT_HEADER, sel.picked.map((r) => exportRow(r, storeCurrency)));
         downloadCsv(`quotes-selection-${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
         toast.success(`Exported ${sel.picked.length} quote lead${sel.picked.length === 1 ? "" : "s"}`);
         return;
@@ -499,7 +504,7 @@ export function QuotesPage({
         },
       );
 
-      const csvContent = toCsv(EXPORT_HEADER, (allRows as QuoteRow[]).map(exportRow));
+      const csvContent = toCsv(EXPORT_HEADER, (allRows as QuoteRow[]).map((r) => exportRow(r, storeCurrency)));
       downloadCsv(`quotes-${s.view}-${new Date().toISOString().slice(0, 10)}.csv`, csvContent);
       toast.success(`Exported ${allRows.length} quote leads`);
     } catch (err: unknown) {
@@ -713,7 +718,7 @@ export function QuotesPage({
                   <div className="text-xs text-muted-foreground truncate">{r.name} · {r.productTitle}</div>
                   <div className="flex items-center justify-between text-xs pt-1">
                     <span className="text-muted-foreground">Qty: {r.quantity}</span>
-                    <span className="font-medium text-foreground">{r.quotedTotal != null ? money(r.quotedTotal) : "—"}</span>
+                    <span className="font-medium text-foreground">{r.quotedTotal != null ? money(r.quotedTotal, storeCurrency) : "—"}</span>
                   </div>
                 </div>
               </div>
@@ -776,6 +781,7 @@ function QuoteDetailSheet({
   onChanged: () => void;
   onCreateOrder: (quoteId: string) => void;
 }) {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const detailQuery = useQuery(orpc.admin.quotes.get.queryOptions({ input: { id } }));
 
@@ -921,7 +927,7 @@ function QuoteDetailSheet({
 
                 <div className="flex justify-between items-baseline">
                   <span className="text-xs text-muted-foreground">Agreed Total:</span>
-                  <span className="text-lg font-bold text-foreground">{money(quote.quotedTotal)}</span>
+                  <span className="text-lg font-bold text-foreground">{money(quote.quotedTotal, storeCurrency)}</span>
                 </div>
 
                 {quote.validUntil && (

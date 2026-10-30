@@ -36,6 +36,7 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
   "policies.manage",
   "privacy.manage",
   "audit.read",
+  "markets.manage",
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
@@ -71,6 +72,8 @@ export interface TenantContext {
   roles: readonly string[];
   permissions: readonly string[];
   requestId: string;
+  /** The market a storefront request is in (ADR-040). Storefront reads use it for prices and catalog; absent = base market. */
+  marketId?: string | null | undefined;
 }
 
 /**

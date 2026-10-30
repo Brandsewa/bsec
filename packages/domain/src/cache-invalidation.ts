@@ -34,6 +34,7 @@ export type CacheChange =
   | { type: "blog_post_changed"; postId: string; slug?: string | undefined; previousSlug?: string | undefined; categoryId?: string | null | undefined }
   | { type: "blog_category_changed"; categoryId?: string | undefined }
   | { type: "blog_settings_changed" }
+  | { type: "markets_changed" }
   | {
       type: "home_page_published";
     }
@@ -133,6 +134,12 @@ export function computeInvalidationTags(
       for (const colId of change.collectionIds ?? []) {
         tags.push(tenantTag(tenantId, "collection", colId));
       }
+      break;
+    }
+    case "markets_changed": {
+      // A market's prices, catalog or countries changed: every product, collection and category view can differ per market.
+      for (const kind of ["product", "collection", "category", "store-shell", "nav", "seo"] as const) tags.push(tenantTag(tenantId, kind));
+      tags.push(tenantTag(tenantId, "page", "home"));
       break;
     }
     case "theme_or_brand_published": {

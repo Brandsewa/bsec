@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `feat/storefront-batch-updates` (on top of main 0a045db), 2026-10-29 |
+| Last verified against | `docs/multimarket-phase0` (multi-market stores, ADR-040, migrations 0087 to 0090; merged with main 0a045db), 2026-10-29. Sections 5, 8, 9, 13, 14 and 19 were updated for it; the rest is as of the previous line |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -174,7 +174,7 @@ Gotcha that already bit once: a new Coolify app must also be added to `APP_UUIDS
 
 **Platform action (`apps/superadmin` -> `apps/platform`).** Better Auth session + MFA (`/api/platform/mfa/complete`) -> `apps/platform/src/app.ts` oRPC router (`platformContract`) -> role guard (`assertRoleAtLeast`) -> domain `platform-services` / `platform/*` with the `BYPASSRLS` pool -> `platform_audit_logs` row. Every platform mutation must be audited (`apps/platform/test/audit-coverage.int.test.ts` enforces it).
 
-**Checkout (COD today).** `/checkout` -> `POST /api/storefront/checkout/place-order` -> `orders/checkout.ts` (prices recomputed server-side from the store's own shipping rates and discounts, stock reserved via `inventory_reservations`, order + payment intent in one transaction, idempotency key) -> `order.created` job -> emails. **Online payment (Razorpay, since 2026-10-26):** a store with Razorpay active (its own keys, platform enabled, live mode allowed for live keys: `isRazorpayCheckoutReady`) offers it at checkout. `place-order` saves the order and a `payment_intents` row, then `startRazorpayPayment` creates the Razorpay order with the store's keys (after commit, never env keys); the browser opens Razorpay's modal (`apps/web/src/lib/razorpay-client.ts`) and calls `POST /api/storefront/checkout/razorpay/verify` (signature checked with the store's secret) while the signed `payment.captured` webhook is the backstop; both end in the idempotent, amount-checked `settleRazorpayPayment` (`packages/domain/src/payments/razorpay-checkout.ts`). An unpaid order's page shows "Pay now" (`razorpay/start`). Stripe and Cashfree are not offered at checkout yet.
+**Checkout (COD today).** `/checkout` -> `POST /api/storefront/checkout/place-order` -> `orders/checkout.ts` (prices recomputed server-side from the store's own shipping rates and discounts, stock reserved via `inventory_reservations`, order + payment intent in one transaction, idempotency key) -> `order.created` job -> emails. **Online payment (Razorpay, since 2026-10-26):** a store with Razorpay active (its own keys, platform enabled, live mode allowed for live keys: `isRazorpayCheckoutReady`) offers it at checkout. `place-order` saves the order and a `payment_intents` row, then `startRazorpayPayment` creates the Razorpay order with the store's keys (after commit, never env keys); the browser opens Razorpay's modal (`apps/web/src/lib/razorpay-client.ts`) and calls `POST /api/storefront/checkout/razorpay/verify` (signature checked with the store's secret) while the signed `payment.captured` webhook is the backstop; both end in the idempotent, amount-checked `settleRazorpayPayment` (`packages/domain/src/payments/razorpay-checkout.ts`). An unpaid order's page shows "Pay now" (`razorpay/start`). Stripe and PayPal (hosted pages) are offered per market since ADR-040 (section 19); Cashfree is not offered at checkout yet.
 
 **Background work.** Business code enqueues pg-boss jobs *inside* its transaction; `apps/worker` consumes them (`packages/domain/src/jobs.ts`). See section 11.
 
@@ -228,6 +228,8 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `quotas.ts` | `rate_limit_counters`, `quota_definitions`, `quota_tiers` P, `quota_tier_limits` P, `tenant_size_tiers`, `tenant_quota_overrides`, `quota_events`, `tenant_active_jobs` |
 | `saas.ts` | `plans`, `subscriptions`, `platform_invoices`, `platform_audit_logs`, `theme_templates`, `signup_leads`, `slug_reservations`, `reserved_slugs`, `onboarding_progress`, `tenant_owner_invites`, `exports` |
 | `quotes.ts` | `quote_requests` T |
+| `markets.ts` | `markets` T, `market_countries` T, `platform_countries` P (ADR-040) |
+| `markets-config.ts` | `market_prices`, `market_fx_history`, `market_products`, `market_payment_methods`, `market_policies`, `market_tax_rules` T (ADR-040) |
 | `finance.ts` | `ledger_entries`, `expenses`, `fiscal_periods` T |
 | `index.ts` | `_platform_meta` |
 
@@ -316,6 +318,10 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0084 | `review_source` | `reviews.source` (`customer`, `manual`, `import`); review statuses now also `spam` and `archived` (no constraint, text column) |
 | 0085 | `discount_show_on_storefront` | `discounts.show_on_storefront` (default false): lists the code in the product-page coupon cards; discount status gains `archived` |
 | 0086 | `form_submissions` | `form_submissions` (tenant, forced RLS): contact-form messages from the theme's Contact form block, read in Admin > Form submissions |
+| 0087 | `markets_foundation` | `markets`, `market_countries` (tenant, forced RLS), `platform_countries` (platform, seeded IN/US/CA, `app_rw` read only); `store_settings.unit_system`; `carts.market_id`, `orders.market_id/base_currency/fx_rate/base_grand_total`; backfills one base market per store (ADR-040) |
+| 0088 | `markets_config` | `market_prices`, `market_fx_history`, `market_products`, `market_payment_methods`, `market_policies`, `market_tax_rules` (tenant, forced RLS); `markets.tax_collect/tax_shipping_too/compliance_ack_*`; `shipping_zones.market_id`; `orders.tax_breakdown/policy_snapshot`; PayPal in provider checks and `platform_payment_providers`; `plans.price_*_usd_cents` and `limits.max_extra_markets` (ADR-040) |
+| 0089 | `market_scope_functions` | SQL functions `market_variant_price`, `market_product_visible` and the restrictive `market_visibility` policy on `products`: storefront reads inside `withMarketScope` see the shopper's market prices and catalog (ADR-040) |
+| 0090 | `platform_billing_paypal` | PayPal sandbox/live credential columns on `platform_billing_settings` (platform secrets, encrypted); platform billing of non-India merchants by PayPal Orders v2 links per cycle (ADR-040, WP-5) |
 | 0082 | `notification_manager` | `notification_rules` and `platform_email_branding` (platform, `app_rw` read only), `notification_tenant_rules`, `store_email_branding` and `notifications` (tenant, RLS), `platform_notifications` (Super Admin inbox; `app_rw` INSERT, DELETE, SELECT(id, created_at)), function `notification_platform_recipients(roles)` (the only way the worker learns Super Admin recipients). ADR-039 |
 | 0080 | `subscription_payment_required` | `subscriptions.payment_required` (a self-service store created with the free trial off; the admin shows "Activate your store" until the first payment; cleared by the first charge) |
 
@@ -336,6 +342,8 @@ Contracts are the single source of truth (`packages/contracts`); handlers are in
 
 **`platformContract`** (`apps/platform`): `system` (health, data, retryJob, retryWebhook), `overview`, `tenants` (list/detail/create-for-client/suspend/restore/archive/plan/trial/ownership/notes/bulk ops/schedule deletion), `domains`, `plans`, `signups`, `storage` (list, get, create, update, activate, test, delete), `templates` (theme templates: create, edit in Puck, publish, hide), `support`, `quotas`, `features`, `staff`, `audit`, `integrations` (overview, authOverview, updateGoogleAuth, setGoogleClient, testGoogleClient, channelStats, channelTransactions, listProviders, createProvider, updateProvider, deleteProvider, setDefaultProvider, testProvider). Plain HTTP: `/api/auth/*`, `/api/platform/me`, `/api/platform/mfa/complete`, `/api/platform/staff/accept-invitation`, `/api/platform/exports/:id/download`, `/health`.
 
+Markets (ADR-040, section 19): `admin.markets.*` (14 procedures in `packages/contracts/src/markets.ts`, permission `markets.manage`); storefront routes `storefront/market/select`, `storefront/checkout/pay` (Pay now for any gateway) and `storefront/checkout/return` (Stripe/PayPal return); `/api/webhooks/{stripe,paypal}` are processed like Razorpay's; `/api/webhooks/platform-billing/paypal` is Brand Sewa's own PayPal billing webhook; the status evaluate route also returns `marketPrefixes` for the middleware.
+
 Procedure-level detail: open the contract file; do not duplicate it here.
 
 ---
@@ -351,6 +359,8 @@ Checkout: a signed-in shopper's saved addresses (default first) are offered as c
 **Super Admin (`apps/superadmin/src/pages`)**: Overview, TenantsList, TenantDetail, TenantCreate, Signups, Plans, Quotas, Features, Domains, Storage (StorageSettings), Support, System, Staff, AuditLog, Templates, TemplateEditor, Login, AcceptInvitation, Integrations (IntegrationsHub, NotificationsHub, ChannelPage, PaymentsIntegrations), NotificationManager (`/notifications`: events matrix with in-app, email, SMS and WhatsApp columns, recipients by role and extra emails, platform email branding with live preview; the header bell opens the Stores, Billing and System drawer).
 
 ---
+
+Markets (ADR-040): the storefront accepts an optional URL prefix per extra market (`/us/...`, stripped by `apps/web/src/middleware.ts`, which sets `x-bs-market-prefix` and `x-bs-path` itself and never trusts them from a visitor). Store admin: `settings/markets` (list and wizard), `settings/markets/$id` (General, Pricing, Catalog, Payments, Shipping, Returns, Taxes tabs), PayPal card in `settings/payments`, units and country in `settings/store-details`. Super Admin: Plans (USD prices, `max_extra_markets`), Billing integrations (PayPal).
 
 ## 10. Blocks and themes
 
@@ -440,12 +450,13 @@ In flight: an auth overhaul (forgot/reset password, customer password sign-in, p
 - Writes call the invalidation helpers in `packages/domain/src/cache-invalidation.ts` (typed `CacheChange` events such as `product_updated`, `theme_or_brand_published`). Add a new event there instead of calling `revalidateTag` ad hoc.
 - Known quirk: `revalidateTag(..., "max")` serves one stale load after publish.
 - Host to tenant map: in-memory, 60 s TTL (`host-resolver.ts`, `invalidateHostCache`).
+- Markets: the shopper's market id is an **argument** of every cached storefront loader (`marketId`), so two markets never share a cached price; tags stay tenant-prefixed. `markets_changed` (cache-invalidation.ts) refreshes product, collection, category, shell, nav, seo and home tags. A store with one market passes `null`. The market URL prefixes seen by the middleware are cached 30 s per process in the status evaluate route (a new market answers on its prefix within half a minute).
 
 ---
 
 ## 14. Configuration
 
-Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. Key groups: DB URLs per role, `PREVIEW_BASE_URL` (theme preview links), `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`, optional `CDN_BASE_URL` for Media grid thumbnails), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
+Full per-service env var list, with what breaks when each is missing: **`DEPLOYMENT.md`**. Example local values: `.env.example`. No new env vars for markets. Operational notes in `DEPLOYMENT.md` (PayPal webhooks, Cloudflare visitor-country header). Key groups: DB URLs per role, `PREVIEW_BASE_URL` (theme preview links), `BETTER_AUTH_URL`/`BETTER_AUTH_SECRET` (web and platform use *different* secrets), `TENANT_SECRETS_KEY`, R2 (`R2_*`, `R2_PUBLIC_URL`, optional `CDN_BASE_URL` for Media grid thumbnails), Turnstile, Cloudflare custom-domain keys, Razorpay platform billing keys, `PLATFORM_DOMAIN`/`ADMIN_HOST`/`MARKETING_HOST`, `SUPERADMIN_ORIGINS`, Sentry DSN. Never commit `.env*` (only `.env.example`).
 
 ---
 
@@ -486,6 +497,7 @@ Keep this list honest; remove an item when fixed.
 - ADR for M9 decisions is still to be written (`progress.md`).
 - `progress.md` and `DEPLOYMENT.md` contain test counts and dates that go stale; prefer CI.
 - Procedure-level API docs are the contract files themselves; there is no generated OpenAPI doc checked in.
+- Multi-market (section 19) has been checked by real-database tests and typecheck, but its storefront and admin screens have **not been walked in a browser**, PayPal and Stripe were exercised with mocked HTTP only, and the PayPal sandbox/Stripe test keys were not available. See `docs/MULTIMARKET-PUSH-CHECKLIST.md`.
 - This file lists tables and routes by name, not columns. Columns live in `packages/db/src/schema/*`.
 
 ---
@@ -530,3 +542,26 @@ Keep this list honest; remove an item when fixed.
 - **Collection products** (`CollectionProducts`, collection page only): the collection page's product grid, filters and cards without its own heading, short or long description unless switched on, with a section box, so Heading, Image or Text widgets can sit above and around it. It reuses `CollectionListingSection` through `renderCollectionListing` with `bare: true`; the collection page reads its page size and filter menu from either listing block.
 - **Blog slider** (`BlogShowcase`, in `views-blog.tsx`): Recent posts as a slider or grid with cards per row for each device, and on phones a slider, grid or list (thumbnail optional). Its posts are resolved like Recent posts (`themes/block-data.ts`).
 - **Slider dots** (`blocks.css`): the page indicators are flat rounded lines whose current one stretches, for the hero slider, product showcase (also the product page's related products), Multi card and Blog slider. They show on phones only; arrows cover tablet and desktop. `dotsDesktop` turns them on there too. Style picker removed (one look).
+
+
+---
+
+## 19. Multi-market stores (ADR-040, plan `docs/MULTIMARKET-PLAN.md`, hand-off `docs/MULTIMARKET-HANDOFF.md`)
+
+A store has one **base market** and up to `plans.limits.max_extra_markets` extra markets (Starter 1, Growth 2, Pro 5). A market = countries + one currency + its own prices, catalog, gateways, shipping zones, returns text and tax rows. Brand Sewa stays a software provider: the merchant is seller of record, uses their own gateway accounts, enters their own rates and policies, and acknowledges that before a market can go live.
+
+**Data** (`packages/db/src/schema/markets.ts`, `markets-config.ts`; migrations 0087 to 0090): `markets`, `market_countries` (a country is in one market per store), `market_prices` (derived or fixed per variant), `market_fx_history`, `market_products`, `market_payment_methods`, `market_policies`, `market_tax_rules`, platform `platform_countries` (IN, US, CA). Columns: `store_settings.unit_system`, `carts.market_id`, `orders.market_id/base_currency/fx_rate/base_grand_total/tax_breakdown/policy_snapshot`, `shipping_zones.market_id`, `plans.price_*_usd_cents`. Money is integer minor units plus an ISO code (columns named `*_paise` mean "minor units of the row's currency"). Weight is stored in grams.
+
+**Code** (`packages/domain/src/markets/`): `rules.ts` (price derivation and rounding, merchant-entered tax arithmetic, readiness, prefixes), `gateways.ts` (which gateway can charge which currency), `addresses.ts` (country-aware postal/phone rules, US states, Canadian provinces), `service.ts` (admin service: every mutation checks `markets.manage`, audits, invalidates cache), `lookup.ts` (storefront reads, `pickMarket`, checkout snapshot), `scope.ts` (`withMarketScope`). Pure helpers shared with the browser: `@bs/contracts/money` (`formatMoney`), `@bs/contracts/units`; storefront client components use `useMoney()` backed by the tiny `apps/web/src/lib/money-client.ts` (the product page bundle has little headroom).
+
+**Request flow.** Middleware strips a market prefix and sets the market headers -> `getMarketContext(tenantId)` (`apps/web/src/server/market.ts`) picks the market: URL prefix, then the shopper's `bs_market` cookie, then the base market; the Cloudflare `CF-IPCountry` header (trusted only with `cf-ray`) only produces a **suggestion banner**, never a change of price -> cached loaders take `marketId` -> domain reads run in `withMarketScope`, which sets the transaction-local `app.market_id`; SQL function `market_variant_price` and the restrictive RLS policy `market_visibility` on `products` (migration 0089) then show the market's prices and hide products it does not sell. With the setting empty (admin, worker, base market, single-market stores) both are inert.
+
+**Pricing.** `derivePrice` = base price x merchant rate x (1 + adjustment), then the market's rounding rule; materialised into `market_prices` by `syncVariantMarketPrices` on every variant write path and by `rebuildMarketPrices` when the rate, adjustment, rounding or currency changes; fixed overrides are never overwritten. Exchange rates are manual, audited in `market_fx_history`.
+
+**Checkout.** The cart carries `market_id` and currency (`getOrCreateCart(..., marketId)` reprices a cart moved to another market). `placeOrder` loads the cart's market (`loadCheckoutMarket`; a store without markets is a legacy India store), validates the destination country and address for that country, takes zones and rates from that market only, allows only the gateways that market offers and that can charge in its currency, adds merchant-entered tax (`computeTax`, exclusive or inclusive) unless the India base market uses GST, and snapshots currency, rate, base-currency total, tax breakdown and the market policy text on the order. Stripe and PayPal use hosted pages (`payments/online-checkout.ts`: `startHostedPayment`, `confirmHostedReturn`, `startPaymentByToken`); every online provider settles through `settleProviderPayment`, which is idempotent and rejects a wrong amount or currency; webhooks (`system/webhooks.ts`) are the backstop.
+
+**Brand Sewa billing.** Indian merchants keep Razorpay/Cashfree in INR; merchants outside India see USD prices and pay by PayPal Orders v2 links per cycle (`saas/billing.ts`, platform secrets in `platform_billing_settings`; the mechanism was chosen without a sandbox check of PayPal Subscriptions, see ADR-040). A plan downgrade disables extra markets newest first and never deletes them (`enforceExtraMarketsQuota`).
+
+**SEO.** hreflang links from the layout, market-scoped sitemap URLs, canonical per prefix, JSON-LD currency from the market.
+
+**Rules for future changes.** Never write a currency sign by hand. A new storefront query that shows a price goes through `withMarketScope` (or a loader that takes `marketId`). A new gateway needs an entry in `gatewayCurrencyCheck`. Anything that takes a fee from orders, collects duties or settles funds needs a new ADR and legal review first (ADR-040 section 4).

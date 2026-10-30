@@ -1,3 +1,4 @@
+import { getMarketContext } from "@/server/market.ts";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
 import { ProductShowcaseSchema, type ProductCouponsOptions } from "@bs/blocks";
@@ -45,10 +46,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
         requestId: crypto.randomUUID(),
       };
 
-      const [product, seoSettings, storeSettings] = await Promise.all([
+      const [product, seoSettings, storeSettings, marketCtx] = await Promise.all([
         getStorefrontProduct(rt, tenantCtx, slug),
         getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
       ]);
 
       if (product) {
@@ -59,6 +61,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
           storeStatusMode: access.mode,
           noindex: access.noindex,
           host,
+          prefix: marketCtx?.prefix,
         });
 
         return {
@@ -102,9 +105,14 @@ function findShowcaseProps(node: unknown): Record<string, unknown> | null {
 export default async function ProductDetailPage({ params }: ProductPageProps) {
   const { slug } = await params;
 
-  let product: Awaited<ReturnType<typeof getStorefrontProduct>> = null;
   let host = "localhost";
   let tenantId = "";
+  let marketId: string | null = null;
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
+  let product: Awaited<ReturnType<typeof getCachedStorefrontProduct>> = null;
+
+  let marketCtx: Awaited<ReturnType<typeof getMarketContext>> | null = null;
 
   try {
     const h = await headers();
@@ -117,7 +125,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     }
 
     tenantId = access.tenantId;
-    product = await getCachedStorefrontProduct(tenantId, slug);
+    marketCtx = await getMarketContext(tenantId);
+    marketId = marketCtx.marketId;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
+    product = await getCachedStorefrontProduct(tenantId, slug, marketId);
   } catch {
     notFound();
   }
@@ -137,7 +149,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const productCacheTag = tenantTag(tenantId, "product", product.id);
 
   const storeUrl = `https://${host}`;
-  const productJsonLd = generateProductJsonLd(product, storeUrl);
+  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency);
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: storeUrl },
     { name: "Products", url: `${storeUrl}/products` },
@@ -145,14 +157,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   ]);
 
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
-  const template = await getCachedThemePage(tenantId, "product").catch(() => null);
+  const template = await getCachedThemePage(tenantId, "product", marketId).catch(() => null);
   const media = template?.renderData?.media ?? {};
   // "Related" product carousels are resolved for this product and laid over the theme page's data.
   // "You may also like" always looks like the home page's product carousel and lists products related to this one: the home
   // carousel's card, arrows and dots settings are copied onto it, and an older plain Product carousel on this page is
   // replaced by that related carousel. The product page keeps its own heading, subtitle and count. The theme's "Reviews"
   // block is only a heading placeholder (the real reviews are drawn below the product's own blocks), so it is left out.
-  const homeDesign = template ? await getCachedStorefrontHomePage(tenantId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
+  const homeDesign = template ? await getCachedStorefrontHomePage(tenantId, marketId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
   const adaptedBlocks = (template?.blocks ?? [])
     .filter((b) => b.type !== "Reviews")
     .map((b) => {
@@ -177,22 +189,28 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       const keep = { title: b.props["title"], subtitle: b.props["subtitle"], tabs: b.props["tabs"], limit: b.props["limit"] };
       return { ...b, props: ProductShowcaseSchema.parse({ ...homeDesign, ...keep }) as Record<string, unknown> };
     });
-  const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks).catch(() => ({})) : {};
+  const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks, marketId).catch(() => ({})) : {};
   const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} />
+    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} currency={marketCurrency} locale={marketLocale} />
   );
   // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
   const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
   const customField = (o: { fieldKey: string; showLabel: boolean; label: string }) => (
-    <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} />
+    <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} locale={marketLocale} />
   );
   // Coupon cards: the discounts the store chose to show (Discount > Show on the storefront).
   const coupons = await getCachedStorefrontCoupons(tenantId).catch(() => []);
   const couponCards = (o: ProductCouponsOptions) => (
     <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );
-  const templateContext = { renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options), renderProductCustomField: customField, renderProductCoupons: couponCards };
+const templateContext = {
+    currency: marketCurrency,
+    locale: marketLocale,
+    renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options),
+    renderProductCustomField: customField,
+    renderProductCoupons: couponCards,
+  };
   // The theme's "Reviews" block is only a heading placeholder (the real reviews are drawn below the product's own blocks),
   // so it is left out here; the reviews section has its own heading.
   const templateBlocks = adaptedBlocks;

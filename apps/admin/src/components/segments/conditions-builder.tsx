@@ -129,13 +129,13 @@ function ValueEditor({ condition, onChange }: { condition: Condition; onChange: 
         const [lo, hi] = Array.isArray(condition.value) ? condition.value : [0, 0];
         return (
           <div className="flex items-center gap-1">
-            <Input aria-label="Minimum rupees" type="number" className="w-28" value={lo / 100} onChange={(e) => onChange([Number(e.target.value) * 100, hi])} />
+            <Input aria-label="Minimum amount" type="number" className="w-28" value={lo / 100} onChange={(e) => onChange([Number(e.target.value) * 100, hi])} />
             <span className="text-muted-foreground">and</span>
-            <Input aria-label="Maximum rupees" type="number" className="w-28" value={hi / 100} onChange={(e) => onChange([lo, Number(e.target.value) * 100])} />
+            <Input aria-label="Maximum amount" type="number" className="w-28" value={hi / 100} onChange={(e) => onChange([lo, Number(e.target.value) * 100])} />
           </div>
         );
       }
-      return <Input aria-label="Rupees" type="number" className="w-32" value={typeof condition.value === "number" ? condition.value / 100 : ""} onChange={(e) => onChange(Number(e.target.value) * 100)} />;
+      return <Input aria-label="Amount" type="number" className="w-32" value={typeof condition.value === "number" ? condition.value / 100 : ""} onChange={(e) => onChange(Number(e.target.value) * 100)} />;
     }
     case "datesBetween": {
       const [from, to] = Array.isArray(condition.value) ? condition.value : ["", ""];

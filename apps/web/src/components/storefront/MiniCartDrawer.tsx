@@ -8,12 +8,7 @@ import type { StorefrontCart } from "@bs/domain";
 // Subpath import: the package barrel would put every block into the browser bundle.
 import { SvgIcon } from "@bs/blocks/svg-icon";
 import { useMiniCartConfig } from "./MiniCartConfig.tsx";
-
-/** Whole rupees without decimals, matching the product and cart pages (₹249, ₹2,699). */
-function inr(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: rupees % 1 === 0 ? 0 : 2 }).format(rupees);
-}
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 const HEADING_FONT = { fontFamily: "var(--bs-font-heading, inherit)" } as const;
 
@@ -39,6 +34,7 @@ export function MiniCartDrawer({
   const copy = useMiniCartConfig();
   const panelRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
+  const money = useMoney();
 
   // Escape closes; Tab stays inside the panel; the page behind does not scroll; focus moves in, and back to the opener on close.
   useEffect(() => {
@@ -142,7 +138,7 @@ export function MiniCartDrawer({
                         {item.product.title}
                       </Link>
                       {variantLabel ? <p className="text-xs leading-snug text-muted-foreground">{variantLabel}</p> : null}
-                      <p className="mt-1 text-sm font-bold">{inr(item.lineTotal)}</p>
+                      <p className="mt-1 text-sm font-bold">{money(item.lineTotal)}</p>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       <button type="button" disabled={busy} onClick={() => void change("DELETE", { itemId: item.id })} className="-mr-1 h-6 w-6 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label={`Remove ${item.product.title}`}>
@@ -182,7 +178,7 @@ export function MiniCartDrawer({
             <div className="border-t border-border bg-background px-6 pb-4 pt-5">
               {copy.showFreeShippingBar && threshold ? (
                 <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3" data-testid="mini-cart-shipping-bar">
-                  <p className="text-sm font-medium">{reached ? "You have unlocked free shipping" : `Add ${inr(threshold - subtotal)} more for free shipping`}</p>
+                  <p className="text-sm font-medium">{reached ? "You have unlocked free shipping" : `Add ${money(threshold - subtotal)} more for free shipping`}</p>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Progress to free shipping">
                     <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />
                   </div>
@@ -193,7 +189,7 @@ export function MiniCartDrawer({
                 <span className="text-xl font-bold" style={HEADING_FONT}>
                   Total
                 </span>
-                <span className="text-3xl font-extrabold tracking-tight">{inr(subtotal)}</span>
+                <span className="text-3xl font-extrabold tracking-tight">{money(subtotal)}</span>
               </div>
               {copy.totalNote ? <p className="mt-1 text-sm text-muted-foreground">{copy.totalNote}</p> : null}
 

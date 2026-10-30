@@ -34,6 +34,7 @@ import {
 } from "../../components/data-table/use-table-state.ts";
 import { DateRangePicker } from "@bs/ui";
 import { money } from "../../components/order-parts.tsx";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { ScrollTabs } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
 import { downloadCsv, toCsv } from "../../lib/csv.ts";
@@ -133,14 +134,15 @@ const MARKETING_BADGE: Record<string, { label: string; variant: "default" | "sec
   invalid: { label: "Invalid", variant: "destructive" },
 };
 
-const EXPORT_HEADER = ["Name", "Email", "Phone", "Status", "Orders", "Total spent (INR)", "Last order", "Marketing state", "Consent updated", "Tags", "Joined"];
-const exportRow = (c: CustomerRow) => [
+const EXPORT_HEADER = ["Name", "Email", "Phone", "Status", "Orders", "Total spent", "Currency", "Last order", "Marketing state", "Consent updated", "Tags", "Joined"];
+const exportRow = (c: CustomerRow, currency: string) => [
   c.name,
   c.email,
   c.phone,
   c.status,
   c.ordersCount,
   (c.totalSpent / 100).toFixed(2),
+  currency,
   c.lastOrderAt ? new Date(c.lastOrderAt).toISOString() : "",
   MARKETING_BADGE[c.marketingState]?.label ?? c.marketingState,
   c.marketingUpdatedAt ? new Date(c.marketingUpdatedAt).toISOString() : "",
@@ -154,6 +156,7 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 // ---------------------------------------------------------------------------------------------------------------
 
 function CustomerStatsStrip() {
+  const storeCurrency = useStoreCurrency();
   const stats = useQuery(orpc.admin.customers.stats.queryOptions());
   if (stats.isLoading) {
     return (
@@ -174,8 +177,8 @@ function CustomerStatsStrip() {
       <MetricCard label="New this month" value={d.newThisMonth.toLocaleString("en-IN")} icon={UsersRound} />
       <MetricCard label="Repeat customers" value={d.repeat.toLocaleString("en-IN")} icon={UserCheck} />
       <MetricCard label="Marketing subscribers" value={d.subscribers.toLocaleString("en-IN")} icon={ShieldCheck} />
-      <MetricCard label="Total spend" value={money(d.totalSpend)} icon={ShoppingBag} />
-      <MetricCard label="Average order value" value={money(d.averageOrderValue)} />
+      <MetricCard label="Total spend" value={money(d.totalSpend, storeCurrency)} icon={ShoppingBag} />
+      <MetricCard label="Average order value" value={money(d.averageOrderValue, storeCurrency)} />
     </div>
   );
 }
@@ -368,6 +371,7 @@ export const Route = createFileRoute("/_store/customers")({
 // ---------------------------------------------------------------------------------------------------------------
 
 export function CustomersPage() {
+  const storeCurrency = useStoreCurrency();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [s, update] = useUrlTableState(parseCustomersSearch);
@@ -484,7 +488,7 @@ export function CustomersPage() {
   async function exportCustomers(source: "selection" | "matching") {
     try {
       if (source === "selection" && !sel.allResults) {
-        downloadCsv(`customers-${stamp()}.csv`, toCsv(EXPORT_HEADER, sel.picked.map(exportRow)));
+        downloadCsv(`customers-${stamp()}.csv`, toCsv(EXPORT_HEADER, sel.picked.map((c) => exportRow(c, storeCurrency))));
         toast.success(`Exported ${sel.picked.length} customer${sel.picked.length === 1 ? "" : "s"}.`);
         return;
       }
@@ -495,7 +499,7 @@ export function CustomersPage() {
       const { rows: all, total: count } = await fetchAllPages((offset, limit) => client.admin.customers.list(exportInput(offset, limit)), {
         onProgress: (done, of) => bulk.setProgress({ label: "Exporting customers", done, total: of }),
       });
-      downloadCsv(`customers-${stamp()}.csv`, toCsv(EXPORT_HEADER, all.map(exportRow)));
+      downloadCsv(`customers-${stamp()}.csv`, toCsv(EXPORT_HEADER, all.map((c) => exportRow(c, storeCurrency))));
       toast.success(all.length < count ? `Exported the first ${all.length.toLocaleString("en-IN")} of ${count.toLocaleString("en-IN")} customers.` : `Exported ${all.length.toLocaleString("en-IN")} customers.`);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -523,7 +527,7 @@ export function CustomersPage() {
     },
     { id: "phone", header: "Phone", optional: true, defaultHidden: true, className: "text-muted-foreground", cell: (c) => c.phone },
     { id: "orders", header: "Orders", sort: { asc: "orders_asc", desc: "orders_desc" }, className: "font-medium text-foreground", cell: (c) => `${c.ordersCount} orders` },
-    { id: "spent", header: "Total spent", sort: { asc: "spent_asc", desc: "spent_desc" }, className: "text-right font-medium text-foreground", cell: (c) => money(c.totalSpent) },
+    { id: "spent", header: "Total spent", sort: { asc: "spent_asc", desc: "spent_desc" }, className: "text-right font-medium text-foreground", cell: (c) => money(c.totalSpent, storeCurrency) },
     {
       id: "lastOrder",
       header: "Last order",
@@ -783,7 +787,7 @@ export function CustomersPage() {
                       <span className="truncate font-medium text-foreground">{c.name || "Unnamed"}</span>
                       {c.isGuest ? <Badge variant="outline">Guest</Badge> : null}
                     </span>
-                    <span className="font-medium text-foreground">{money(c.totalSpent)}</span>
+                    <span className="font-medium text-foreground">{money(c.totalSpent, storeCurrency)}</span>
                   </div>
                   <p className="truncate text-muted-foreground">{c.email}</p>
                 </div>

@@ -4,6 +4,7 @@ import type { Runtime } from "../runtime.ts";
 import { escapeHtml } from "../system/email-templates.ts";
 import { dispatchNotification } from "../notifications/dispatcher.ts";
 import { LAPSED_TRIAL_TIER } from "./plan-tiers.ts";
+import { enforceExtraMarketsQuota } from "../markets/service.ts";
 
 /**
  * Dunning for paid subscriptions (billing B5). When a charge fails the webhook marks the subscription past due and stamps
@@ -124,6 +125,7 @@ export async function runBillingDunningSweep(rt: Runtime, now: Date = new Date()
           .insert(schema.tenantSizeTiers)
           .values({ tenantId: sub.tenantId, tier: LAPSED_TRIAL_TIER })
           .onConflictDoUpdate({ target: schema.tenantSizeTiers.tenantId, set: { tier: LAPSED_TRIAL_TIER, updatedAt: now } });
+        await enforceExtraMarketsQuota(tx, sub.tenantId, 0);
         await tx.insert(schema.platformAuditLogs).values({
           actorType: "system",
           action: "billing.store_limited",

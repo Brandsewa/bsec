@@ -1,8 +1,10 @@
 import { oc } from "@orpc/contract";
+import { marketsContract } from "./markets.ts";
 import { z } from "zod";
 import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
+import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -147,6 +149,9 @@ export const StoreSettings = z.object({
   storeName: z.string(),
   currency: z.string(),
   timezone: z.string(),
+  country: z.string().optional(),
+  unitSystem: z.enum(UNIT_SYSTEMS).default("metric"),
+  weightUnit: z.enum(WEIGHT_UNITS).default("kg"),
   legalName: z.string().nullable().optional(),
   supportEmail: z.string().nullable().optional(),
   supportPhone: z.string().nullable().optional(),
@@ -1166,6 +1171,7 @@ export type ShippingRateItem = z.infer<typeof ShippingRateItem>;
 export const ShippingZoneItem = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  marketId: z.string().uuid().nullable().optional(),
   countries: z.array(z.string()),
   /** Empty = the whole country; otherwise only these states. */
   states: z.array(z.string()).default([]),
@@ -1184,6 +1190,7 @@ export const UpdateShippingInput = z.object({
   standardRatePaise: z.number().int().min(0).default(0),
   expressRatePaise: z.number().int().min(0).default(15000),
   freeShippingThresholdPaise: z.number().int().min(0).nullable().optional(),
+  marketId: z.string().uuid().nullable().optional(),
 });
 export type UpdateShippingInput = z.infer<typeof UpdateShippingInput>;
 
@@ -1207,6 +1214,7 @@ export type SaveShippingRate = z.infer<typeof SaveShippingRate>;
 export const SaveShippingZone = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80),
+  marketId: z.string().uuid().nullable().optional(),
   countries: z.array(z.string().length(2)).min(1).max(250),
   states: z.array(z.string().trim().min(1).max(60)).max(60).default([]),
   isDefault: z.boolean(),
@@ -1270,7 +1278,7 @@ export type PaymentsStatus = z.infer<typeof PaymentsStatus>;
 
 /** A payment provider as one store sees it (ADMIN-IMPROVEMENTS-PLAN §6.4). Never carries a key or secret. */
 export const StorePaymentProvider = z.object({
-  provider: z.enum(["razorpay", "stripe", "cashfree"]),
+  provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
   displayName: z.string(),
   platformEnabled: z.boolean(),
   liveModeAllowed: z.boolean(),
@@ -1632,7 +1640,7 @@ export type CustomDomainVerifyResult = z.infer<typeof CustomDomainVerifyResult>;
 // --- Settings Phase 5 Payment Methods Schemas (Slice 5A, SETTINGS-SCHEMA §6.1) ---
 export const PaymentMethodItem = z.object({
   id: z.string().uuid(),
-  provider: z.enum(["cod", "razorpay"]),
+  provider: z.enum(["cod", "razorpay", "stripe", "cashfree", "paypal"]),
   displayName: z.string(),
   status: z.enum(["disabled", "pending_setup", "active", "unavailable", "error"]),
   mode: z.enum(["live", "test"]).nullable().optional(),
@@ -1698,7 +1706,8 @@ export const PlanAndBillingView = z.object({
   billing: z.object({
     available: z.boolean(),
     testMode: z.boolean(),
-    provider: z.enum(["razorpay", "cashfree"]),
+    provider: z.enum(["razorpay", "cashfree", "paypal"]),
+    currency: z.string().optional(),
     hasSubscription: z.boolean(),
     authorized: z.boolean(),
     activationRequired: z.boolean(),
@@ -1731,6 +1740,8 @@ export const AvailablePlanSummary = z.object({
   name: z.string(),
   priceMonthlyPaise: z.number().int(),
   priceYearlyPaise: z.number().int(),
+  priceMonthlyUsdCents: z.number().int().nullable().optional(),
+  priceYearlyUsdCents: z.number().int().nullable().optional(),
   isCurrent: z.boolean(),
 });
 export type AvailablePlanSummary = z.infer<typeof AvailablePlanSummary>;
@@ -1823,6 +1834,7 @@ export const ShippingPreviewInput = z.object({
   destinationCountry: z.string().length(2).optional(),
   destinationState: z.string().optional(),
   destinationPincode: z.string().optional(),
+  marketId: z.string().uuid().nullable().optional(),
 });
 export type ShippingPreviewInput = z.infer<typeof ShippingPreviewInput>;
 
@@ -2086,6 +2098,7 @@ export const StoreGoogleSigninView = z.object({
 export type StoreGoogleSigninView = z.infer<typeof StoreGoogleSigninView>;
 
 export const adminContract = {
+  markets: marketsContract,
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
     approve: oc
@@ -2140,22 +2153,24 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/payment-providers/{provider}/credentials" })
       .input(
         z.object({
-          provider: z.enum(["razorpay", "stripe", "cashfree"]),
+          provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
           /** Razorpay key id (rzp_test_...) or Cashfree App ID; not used for Stripe. */
           keyId: z.string().min(6).max(100).optional(),
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
           webhookSecret: z.string().min(6).max(200).optional(),
+          /** PayPal only: sandbox ("test") or live. PayPal keys do not say which. */
+          mode: z.enum(["test", "live"]).optional(),
         }),
       )
       .output(StorePaymentProvider),
     clearCredentials: oc
       .route({ method: "DELETE", path: "/admin/payment-providers/{provider}/credentials" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]) }))
       .output(StorePaymentProvider.nullable()),
     test: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/test" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]) }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]) }))
       .output(
         z.object({
           ok: z.boolean(),
@@ -2166,7 +2181,7 @@ export const adminContract = {
       ),
     setActive: oc
       .route({ method: "POST", path: "/admin/payment-providers/{provider}/active" })
-      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree"]), active: z.boolean() }))
+      .input(z.object({ provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]), active: z.boolean() }))
       .output(StorePaymentProvider),
   },
   paymentMethods: {
@@ -2232,6 +2247,8 @@ export const adminContract = {
           storeName: z.string().min(1).max(120).optional(),
           currency: z.string().min(3).max(3).optional(),
           timezone: StoreTimezone.optional(),
+          unitSystem: z.enum(UNIT_SYSTEMS).optional(),
+          weightUnit: z.enum(WEIGHT_UNITS).optional(),
           legalName: z.string().max(200).nullable().optional(),
           supportEmail: z.string().email().nullable().optional(),
           supportPhone: z.string().max(30).nullable().optional(),
@@ -3472,6 +3489,9 @@ export const adminContract = {
               paymentStatus: z.string(),
               fulfillmentStatus: z.string(),
               grandTotal: z.number(),
+              currency: z.string().optional(),
+              baseGrandTotal: z.number().nullable().optional(),
+              baseCurrency: z.string().nullable().optional(),
               placedAt: z.string(),
               shipsOn: z.string().nullable().optional(),
               itemsCount: z.number(),
@@ -3503,6 +3523,9 @@ export const adminContract = {
             shippingTotal: z.number(),
             taxTotal: z.number(),
             grandTotal: z.number(),
+            currency: z.string().optional(),
+            baseGrandTotal: z.number().nullable().optional(),
+            baseCurrency: z.string().nullable().optional(),
             codFee: z.number(),
             shippingAddress: z.unknown(),
             billingAddress: z.unknown().nullable().optional(),

@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
+import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";
 import { SvgIcon, normalizeElementOrder, type ProductDetailOptions } from "@bs/blocks";
 import { customFieldBody } from "./ProductCustomField.tsx";
@@ -11,10 +12,6 @@ import { ProductBuyProvider, SkuLine, VariantOptions, PriceBlock, PurchaseAction
 import { ProductDescription } from "./ProductDescription.tsx";
 import { DeliveryEstimate } from "./DeliveryEstimate.tsx";
 import { MobileBuyBar } from "./MobileBuyBar.tsx";
-
-// Server-side copy of the price format (VariantSelector's is a client module and cannot be called from here).
-const formatInr = (paise: number) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: paise % 100 === 0 ? 0 : 2 }).format(paise / 100);
 
 export const DEFAULT_PRODUCT_DETAIL_OPTIONS: ProductDetailOptions = {
   galleryPosition: "left",
@@ -61,6 +58,8 @@ export function ProductDetailSection({
   paymentImageUrl,
   customFields = [],
   coupons = [],
+  currency = "INR",
+  locale,
 }: {
   product: StorefrontProductDetail;
   /** The product's custom field values, for accordion rows that pull one. */
@@ -70,10 +69,13 @@ export function ProductDetailSection({
   options?: ProductDetailOptions | undefined;
   /** Resolved URL of the theme's secure-payment picture (media library); the built-in badge is used when absent. */
   paymentImageUrl?: string | undefined;
+  currency?: string | undefined;
+  locale?: string | undefined;
 }) {
   const prices = (product.variants ?? []).map((v) => v.price);
   const lowest = prices.length > 0 ? Math.min(...prices) : 0;
-  const priceLabel = prices.length > 1 && Math.max(...prices) !== lowest ? `From ${formatInr(lowest)}` : formatInr(lowest);
+  const fmt = (minor: number) => formatMoney(minor, currency, { ...(locale ? { locale } : {}) });
+  const priceLabel = prices.length > 1 && Math.max(...prices) !== lowest ? `From ${fmt(lowest)}` : fmt(lowest);
   const longDescription = descriptionText(product.descriptionJson);
   const usps = options.showUsps ? (options.usps ?? []).slice(0, 4) : [];
 

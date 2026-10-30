@@ -4,7 +4,7 @@ import { sanitizePaymentPayload } from "@bs/payments";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
 import type { Jobs } from "../jobs.ts";
 import type { Runtime } from "../runtime.ts";
-import { settleRazorpayPayment } from "../payments/razorpay-checkout.ts";
+import { settleProviderPayment, settleRazorpayPayment } from "../payments/razorpay-checkout.ts";
 
 export interface ReceiveWebhookInput {
   provider: string;
@@ -87,7 +87,7 @@ export async function resolveWebhookTenant(
 
   if (hasEntityIdentifier) {
     const matched = await withTenant(db, claimedTenantId, async (tx) => {
-      if (params.provider === "razorpay") {
+      if (params.provider === "razorpay" || params.provider === "stripe" || params.provider === "paypal") {
         if (params.providerOrderId) {
           const res = await tx.execute<{ id: string }>(sql`
             SELECT id FROM payment_intents
@@ -312,6 +312,42 @@ export async function processWebhookInboxItem(
             source: "webhook",
           });
         }
+      }
+    } else if (provider === "stripe") {
+      // A paid Checkout Session settles the order; the amount and currency Stripe reports are checked against it.
+      const data = (payload.data as { object?: Record<string, unknown> } | undefined)?.object;
+      if (
+        (payload.type === "checkout.session.completed" || payload.type === "checkout.session.async_payment_succeeded") &&
+        item.tenant_id &&
+        data &&
+        data.payment_status === "paid" &&
+        typeof data.id === "string"
+      ) {
+        await settleProviderPayment(db, item.tenant_id, {
+          provider: "stripe",
+          providerOrderId: data.id,
+          providerPaymentId: typeof data.payment_intent === "string" ? data.payment_intent : data.id,
+          ...(typeof data.amount_total === "number" ? { amount: data.amount_total } : {}),
+          ...(typeof data.currency === "string" ? { currency: data.currency.toUpperCase() } : {}),
+          source: "webhook",
+        });
+      }
+    } else if (provider === "paypal") {
+      const resource = payload.resource as
+        | { id?: string; amount?: { value?: string; currency_code?: string }; supplementary_data?: { related_ids?: { order_id?: string } } }
+        | undefined;
+      const orderRef = resource?.supplementary_data?.related_ids?.order_id;
+      if (payload.event_type === "PAYMENT.CAPTURE.COMPLETED" && item.tenant_id && resource?.id && orderRef) {
+        const cur = resource.amount?.currency_code;
+        const exp = cur && ["JPY", "HUF", "TWD"].includes(cur.toUpperCase()) ? 0 : 2;
+        await settleProviderPayment(db, item.tenant_id, {
+          provider: "paypal",
+          providerOrderId: orderRef,
+          providerPaymentId: resource.id,
+          ...(resource.amount?.value ? { amount: Math.round(Number(resource.amount.value) * 10 ** exp) } : {}),
+          ...(cur ? { currency: cur } : {}),
+          source: "webhook",
+        });
       }
     } else if (provider === "cod") {
       const eventType = payload.event;

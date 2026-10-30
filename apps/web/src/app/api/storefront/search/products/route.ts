@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import {
   evaluateStorefrontAccess,
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
       roles: ["store_admin"],
       permissions: ["products.read"],
       requestId: crypto.randomUUID(),
+      marketId: (await getMarketContext(access.tenantId)).marketId,
     };
 
     const result = await searchStorefrontProducts(rt, tenantCtx, query, { limit: 8, log: false });

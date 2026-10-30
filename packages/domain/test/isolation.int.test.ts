@@ -125,6 +125,20 @@ import {
   acceptInvitation,
   clearRazorpayCredentials,
   listStorePaymentProviders,
+  listMarkets,
+  getMarketDetail,
+  createMarket,
+  updateMarket,
+  setMarketCountries,
+  setMarketStatus,
+  deleteMarket,
+  listMarketPricing,
+  setFixedMarketPrices,
+  setMarketPaymentMethods,
+  setMarketPolicy,
+  setMarketTaxRules,
+  acknowledgeMarketCompliance,
+  setMarketProductVisibility,
   saveStripeCredentials,
   getStorePaymentProvider,
   clearProviderCredentials,
@@ -948,7 +962,31 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     return { error: e.message };
   };
 
-  async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantContext) {
+  /** Gives the context's store a base market and one extra market (the plan limit), and returns the extra market's id. */
+async function isoMarket(rt: Runtime, ctx: TenantContext): Promise<string> {
+  await listMarkets(rt, ctx); // permission check first, so a caller without markets.manage is refused before anything is created
+  await rtPlatform._db.db.execute(sql`INSERT INTO markets (tenant_id, name, handle, is_base, currency, tax_display)
+    SELECT ${ctx.tenantId}::uuid, 'India', 'in', true, 'INR', 'inclusive'
+    WHERE NOT EXISTS (SELECT 1 FROM markets WHERE tenant_id = ${ctx.tenantId}::uuid AND is_base)`);
+  await rtPlatform._db.db.execute(sql`INSERT INTO market_countries (tenant_id, market_id, country)
+    SELECT m.tenant_id, m.id, 'IN' FROM markets m WHERE m.tenant_id = ${ctx.tenantId}::uuid AND m.is_base
+    ON CONFLICT DO NOTHING`);
+  const { markets } = await listMarkets(rt, ctx);
+  const extra = markets.find((m) => !m.isBase);
+  if (extra) return extra.id;
+  return (await createMarket(rt, ctx, { name: "Iso Market", currency: "USD", countries: ["US"], fxRate: 0.012 })).id;
+}
+
+async function isoVariant(ctx: TenantContext): Promise<{ productId: string; variantId: string }> {
+  await rtPlatform._db.db.execute(sql`INSERT INTO products (tenant_id, title, slug, status) VALUES (${ctx.tenantId}::uuid, 'Iso Market Product', 'iso-market-product', 'published') ON CONFLICT (tenant_id, slug) DO NOTHING`);
+  const prod = await rtPlatform._db.db.execute<{ id: string }>(sql`SELECT id FROM products WHERE tenant_id = ${ctx.tenantId}::uuid AND slug = 'iso-market-product'`);
+  const productId = prod.rows[0]!.id;
+  await rtPlatform._db.db.execute(sql`INSERT INTO variants (tenant_id, product_id, sku, title, price) VALUES (${ctx.tenantId}::uuid, ${productId}::uuid, ${"ISO-MK-" + ctx.tenantId.slice(-6)}, 'Default', 100000) ON CONFLICT DO NOTHING`);
+  const v = await rtPlatform._db.db.execute<{ id: string }>(sql`SELECT id FROM variants WHERE tenant_id = ${ctx.tenantId}::uuid AND product_id = ${productId}::uuid LIMIT 1`);
+  return { productId, variantId: v.rows[0]!.id };
+}
+
+async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantContext) {
     switch (procPath) {
       case "memberships.roles":
         return await listStoreRoles(rt, ctx);
@@ -2294,6 +2332,47 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
         return await getBlogSettings(rt, ctx);
       case "blog.settings.update":
         return await updateBlogSettings(rt, ctx, { postsPerPage: 9 });
+      // --- Markets (ADR-040) ---
+      case "markets.list":
+        return await listMarkets(rt, ctx);
+      case "markets.get":
+        return await getMarketDetail(rt, ctx, await isoMarket(rt, ctx));
+      case "markets.create": {
+        await isoMarket(rt, ctx); // the plan allows one extra market: reuse it when it already exists
+        return await listMarkets(rt, ctx);
+      }
+      case "markets.update":
+        return await updateMarket(rt, ctx, await isoMarket(rt, ctx), { name: "Iso Market" });
+      case "markets.setCountries":
+        return await setMarketCountries(rt, ctx, await isoMarket(rt, ctx), ["US"]);
+      case "markets.setStatus":
+        return await setMarketStatus(rt, ctx, await isoMarket(rt, ctx), "disabled");
+      case "markets.delete": {
+        const id = await isoMarket(rt, ctx);
+        const r = await deleteMarket(rt, ctx, id);
+        await isoMarket(rt, ctx);
+        return r;
+      }
+      case "markets.listPrices":
+        return await listMarketPricing(rt, ctx, { marketId: await isoMarket(rt, ctx) });
+      case "markets.setFixedPrices": {
+        const id = await isoMarket(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setFixedMarketPrices(rt, ctx, { marketId: id, items: [{ variantId: v.variantId, price: 1234 }] });
+      }
+      case "markets.setPaymentMethods":
+        return await setMarketPaymentMethods(rt, ctx, await isoMarket(rt, ctx), []);
+      case "markets.setPolicy":
+        return await setMarketPolicy(rt, ctx, await isoMarket(rt, ctx), { returnSettings: null, cancellation: null, policyText: "Iso policy" });
+      case "markets.setTaxRules":
+        return await setMarketTaxRules(rt, ctx, await isoMarket(rt, ctx), [{ country: "US", region: "CA", taxName: "Tax", rateBps: 700 }]);
+      case "markets.acknowledgeCompliance":
+        return await acknowledgeMarketCompliance(rt, ctx, await isoMarket(rt, ctx));
+      case "markets.setProductVisibility": {
+        const id = await isoMarket(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setMarketProductVisibility(rt, ctx, id, [{ productId: v.productId, published: true }]);
+      }
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -2570,13 +2649,16 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
           const ownerOnly = proc === "payments.saveRazorpay" || proc === "payments.clearRazorpay" || proc === "paymentMethods.updateCod" || proc === "paymentProviders.saveCredentials" || proc === "paymentProviders.clearCredentials" || proc === "paymentProviders.test" || proc === "paymentProviders.setActive";
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
           const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
+          const marketsOnly = false;
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
           if (maintenanceOwnerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only (the )?store owners?/i);
           }
-          const runCtx = ownerOnly
+          const runCtx = marketsOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }
+            : ownerOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }
             : maintenanceOwnerOnly
               ? { ...authCtx!, roles: ["store_owner"] }

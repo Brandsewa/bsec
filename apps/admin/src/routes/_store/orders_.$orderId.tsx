@@ -404,9 +404,9 @@ function OrderDetailPage() {
                     <p className="min-w-0 truncate font-medium text-foreground">{it.productTitle}</p>
                     <p className="shrink-0 text-foreground">
                       <span className="text-muted-foreground">
-                        {money(it.unitPrice)} × {it.quantity}
+                        {money(it.unitPrice, order.currency ?? "INR")} × {it.quantity}
                       </span>
-                      <span className="ml-3 font-medium">{money(it.total)}</span>
+                      <span className="ml-3 font-medium">{money(it.total, order.currency ?? "INR")}</span>
                     </p>
                   </div>
                   <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -443,14 +443,17 @@ function OrderDetailPage() {
               <CardTitle>Summary</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-              <Row label="Subtotal" value={money(order.subtotal)} />
-              {order.discountTotal > 0 ? <Row label="Discount" value={`−${money(order.discountTotal)}`} /> : null}
-              <Row label="Shipping" value={money(order.shippingTotal)} />
-              {order.codFee > 0 ? <Row label="COD fee" value={money(order.codFee)} /> : null}
-              <Row label="Tax" value={money(order.taxTotal)} />
+              <Row label="Subtotal" value={money(order.subtotal, order.currency ?? "INR")} />
+              {order.discountTotal > 0 ? <Row label="Discount" value={`−${money(order.discountTotal, order.currency ?? "INR")}`} /> : null}
+              <Row label="Shipping" value={money(order.shippingTotal, order.currency ?? "INR")} />
+              {order.codFee > 0 ? <Row label="COD fee" value={money(order.codFee, order.currency ?? "INR")} /> : null}
+              <Row label="Tax" value={money(order.taxTotal, order.currency ?? "INR")} />
               <div className="border-t border-border pt-2">
-                <Row label="Total" value={money(order.grandTotal)} strong />
+                <Row label="Total" value={money(order.grandTotal, order.currency ?? "INR")} strong />
               </div>
+              {order.baseGrandTotal != null && order.baseCurrency && (order.currency ?? "INR") !== order.baseCurrency ? (
+                <div className="text-right text-xs text-muted-foreground">Base total: ~{money(order.baseGrandTotal, order.baseCurrency)}</div>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -650,10 +653,10 @@ function OrderDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Refund {order.number}</DialogTitle>
-            <DialogDescription>Order total {money(order.grandTotal)}. Enter the amount to refund in rupees.</DialogDescription>
+            <DialogDescription>Order total {money(order.grandTotal, order.currency ?? "INR")}. Enter the amount to refund in the order currency.</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="refund-amount">Amount (₹)</FieldLabel>
+            <FieldLabel htmlFor="refund-amount">Amount ({order.currency ?? "INR"})</FieldLabel>
             <Input id="refund-amount" inputMode="decimal" value={refundRupees} onChange={(e) => setRefundRupees(e.target.value)} />
           </Field>
           <Field>

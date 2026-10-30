@@ -5,6 +5,8 @@ import { priceOrder } from "@bs/domain/pricing";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
+import { phoneProblem, postalCodeProblem, regionsFor } from "@bs/domain/addresses";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 export const INDIAN_STATES_AND_UTS = [
   "Andaman and Nicobar Islands",
@@ -56,11 +58,24 @@ export interface CheckoutShippingRate {
 
 export interface CheckoutPaymentOptions {
   codEnabled: boolean;
-  /** Cash-on-delivery handling fee in paise (0 = none). */
+  /** Cash-on-delivery handling fee in minor units (0 = none). */
   codFeePaise: number;
   /** False until real online payments exist: the option is then not shown. */
   onlineAvailable: boolean;
+  /** What this market offers, in order (ADR-040). When absent the store has only COD and Razorpay, as before markets. */
+  methods?: Array<"cod" | "razorpay" | "stripe" | "paypal"> | undefined;
 }
+
+/** The countries the shopper's market sells to. One country: the checkout fixes it and shows no country field. */
+export interface CheckoutRegion {
+  countries: string[];
+  defaultCountry: string;
+}
+
+const COUNTRY_LABELS: Record<string, string> = { IN: "India", US: "United States", CA: "Canada" };
+const PHONE_PREFIX: Record<string, string> = { IN: "+91", US: "+1", CA: "+1" };
+
+type PaymentChoice = "cod" | "online" | "stripe" | "paypal";
 
 /** One address from the signed-in shopper's address book. */
 export interface SavedCheckoutAddress {
@@ -102,12 +117,13 @@ export interface CheckoutFormProps {
   shippingRates: CheckoutShippingRate[];
   paymentOptions: CheckoutPaymentOptions;
   consent: StorefrontCheckoutConsent;
-  paymentMethod?: "cod" | "online";
-  onPaymentMethodChange?: (method: "cod" | "online") => void;
+  region?: CheckoutRegion | undefined;
+  paymentMethod?: PaymentChoice;
+  onPaymentMethodChange?: (method: PaymentChoice) => void;
   shippingMethod?: string;
   onShippingMethodChange?: (method: string) => void;
-  /** Called with the state the order ships to, on first render and whenever it changes, so shipping options can follow it. */
-  onShippingStateChange?: (state: string) => void;
+  /** Called with the state and country the order ships to, on first render and whenever they change, so shipping options can follow. */
+  onShippingStateChange?: (state: string, country: string) => void;
 }
 
 export function CheckoutForm({
@@ -118,6 +134,7 @@ export function CheckoutForm({
   shippingRates,
   paymentOptions,
   consent,
+  region = { countries: ["IN"], defaultCountry: "IN" },
   paymentMethod: controlledPaymentMethod,
   onPaymentMethodChange,
   shippingMethod: controlledShippingMethod,
@@ -125,6 +142,7 @@ export function CheckoutForm({
   onShippingStateChange,
 }: CheckoutFormProps) {
   const router = useRouter();
+  const money = useMoney();
 
   // A saved address (the default one, else the first that fits) is chosen up front when the shopper has any.
   const initialSaved = savedAddresses.find((a) => addressFields(a).state) ?? null;
@@ -147,7 +165,8 @@ export function CheckoutForm({
   const [fullName, setFullName] = useState(initial?.fullName ?? "");
   const [addressLine1, setAddressLine1] = useState(initial?.addressLine1 ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
-  const [state, setState] = useState(initial?.state ?? "Maharashtra");
+  const [country, setCountry] = useState(region.defaultCountry);
+  const [state, setState] = useState(initial?.state ?? (region.defaultCountry === "IN" ? "Maharashtra" : ""));
   const [pincode, setPincode] = useState(initial?.pincode ?? "");
 
   const pickSaved = (a: SavedCheckoutAddress) => {
@@ -178,20 +197,28 @@ export function CheckoutForm({
   const [shipPhone, setShipPhone] = useState("");
   const [shipAddress1, setShipAddress1] = useState("");
   const [shipCity, setShipCity] = useState("");
-  const [shipState, setShipState] = useState("Maharashtra");
+  const [shipCountry, setShipCountry] = useState(region.defaultCountry);
+  const [shipState, setShipState] = useState(region.defaultCountry === "IN" ? "Maharashtra" : "");
   const [shipPincode, setShipPincode] = useState("");
+  const changeCountry = (c: string, set: (v: string) => void, setRegion: (v: string) => void) => {
+    set(c);
+    setRegion(c === "IN" ? "Maharashtra" : "");
+  };
 
   // Method
   const [internalShippingMethod, setInternalShippingMethod] = useState<string>(shippingRates[0]?.method ?? "");
   const shippingMethod = controlledShippingMethod ?? internalShippingMethod;
-  const [internalPaymentMethod, setInternalPaymentMethod] = useState<"cod" | "online">(paymentOptions.codEnabled ? "cod" : "online");
+  const available: PaymentChoice[] = paymentOptions.methods
+    ? paymentOptions.methods.map((m) => (m === "razorpay" ? "online" : m))
+    : [...(paymentOptions.codEnabled ? (["cod"] as const) : []), ...(paymentOptions.onlineAvailable ? (["online"] as const) : [])];
+  const [internalPaymentMethod, setInternalPaymentMethod] = useState<PaymentChoice>(available[0] ?? "cod");
   const paymentMethod = controlledPaymentMethod ?? internalPaymentMethod;
-  const setPaymentMethod = (method: "cod" | "online") => {
+  const setPaymentMethod = (method: PaymentChoice) => {
     if (controlledPaymentMethod === undefined) setInternalPaymentMethod(method);
     onPaymentMethodChange?.(method);
   };
-  const noPaymentMethod = !paymentOptions.codEnabled && !paymentOptions.onlineAvailable;
-  const codFeePaise = paymentMethod === "cod" && paymentOptions.codEnabled ? paymentOptions.codFeePaise : 0;
+  const noPaymentMethod = available.length === 0;
+  const codFeePaise = paymentMethod === "cod" && available.includes("cod") ? paymentOptions.codFeePaise : 0;
   const [notes, setNotes] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -205,9 +232,10 @@ export function CheckoutForm({
 
   // Shipping options follow the state the order ships to (the separate shipping address when one is used).
   const shippingState = shipDifferent ? shipState : state;
+  const shippingCountry = shipDifferent ? shipCountry : country;
   useEffect(() => {
-    if (shippingState) onShippingStateChange?.(shippingState);
-  }, [shippingState, onShippingStateChange]);
+    if (shippingState) onShippingStateChange?.(shippingState, shippingCountry);
+  }, [shippingState, shippingCountry, onShippingStateChange]);
 
   const handleShippingChange = (method: string) => {
     if (controlledShippingMethod === undefined) {
@@ -222,17 +250,18 @@ export function CheckoutForm({
     e.preventDefault();
     setError(null);
 
-    // Validate phone: 10 digits starting with 6-9
+    // Phone and postal code are checked for the country being shipped to (India keeps its exact rules).
     const cleanPhone = phone.replace(/\D/g, "");
-    if (!/^[6-9][0-9]{9}$/.test(cleanPhone)) {
-      setError("Please enter a valid 10-digit Indian mobile number");
+    const phoneIssue = phoneProblem(country, phone);
+    if (phoneIssue) {
+      setError(country === "IN" ? "Please enter a valid 10-digit Indian mobile number" : phoneIssue);
       return;
     }
 
-    // Validate pincode: 6 digits
     const cleanPincode = pincode.trim();
-    if (!/^[1-9][0-9]{5}$/.test(cleanPincode)) {
-      setError("Please enter a valid 6-digit Indian Pincode");
+    const postalIssue = postalCodeProblem(country, cleanPincode);
+    if (postalIssue) {
+      setError(country === "IN" ? "Please enter a valid 6-digit Indian Pincode" : postalIssue);
       return;
     }
 
@@ -246,7 +275,8 @@ export function CheckoutForm({
         setError("Please enter the company name for a business order");
         return;
       }
-      if (taxId && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) {
+      // GSTIN is an Indian tax number; elsewhere the buyer's tax number is kept as typed.
+      if (country === "IN" && taxId && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(taxId)) {
         setError("The Tax ID (GSTIN) should be 15 characters, like 22AAAAA0000A1Z5");
         return;
       }
@@ -258,12 +288,12 @@ export function CheckoutForm({
         setError("Please fill in all required shipping address fields");
         return;
       }
-      if (!/^[1-9][0-9]{5}$/.test(shipPincode.trim())) {
-        setError("Please enter a valid 6-digit pincode for the shipping address");
+      if (postalCodeProblem(shipCountry, shipPincode.trim())) {
+        setError(shipCountry === "IN" ? "Please enter a valid 6-digit pincode for the shipping address" : "Please enter a valid postal code for the shipping address");
         return;
       }
-      if (!/^[6-9][0-9]{9}$/.test(cleanShipPhone)) {
-        setError("Please enter a valid 10-digit contact number for the shipping address");
+      if (phoneProblem(shipCountry, shipPhone)) {
+        setError("Please enter a valid contact number for the shipping address");
         return;
       }
     }
@@ -287,6 +317,7 @@ export function CheckoutForm({
           city: city.trim(),
           state: state.trim(),
           pincode: cleanPincode,
+          country,
           shippingMethod,
           paymentMethod,
           notes: notes.trim() || undefined,
@@ -301,6 +332,7 @@ export function CheckoutForm({
                 city: shipCity.trim(),
                 state: shipState.trim(),
                 pincode: shipPincode.trim(),
+                country: shipCountry,
               }
             : undefined,
           termsConsent: consent.termsRequired ? termsAccepted : undefined,
@@ -320,6 +352,11 @@ export function CheckoutForm({
         }
         // Online payment: the order exists and is unpaid; take the payment now. Closing the window or a failed payment
         // lands on the order page, which offers "Pay now" again.
+        // Stripe and PayPal: the shopper pays on the provider's own page and comes back to the order page.
+        if (data.checkoutUrl) {
+          window.location.assign(data.checkoutUrl);
+          return;
+        }
         if (data.razorpay && data.orderToken) {
           const outcome = await payWithRazorpay(data.razorpay, data.orderToken);
           if (outcome.status === "failed") {
@@ -352,7 +389,7 @@ export function CheckoutForm({
             <TextField id="checkout-fullname" label="Full name *" required value={fullName} onChange={setFullName} />
           </div>
           <TextField id="checkout-email" label="Email address *" type="email" required value={email} onChange={setEmail} />
-          <PhoneField id="checkout-phone" label="Phone number *" value={phone} onChange={setPhone} />
+          <PhoneField id="checkout-phone" label="Phone number *" value={phone} onChange={setPhone} country={country} />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
@@ -439,6 +476,9 @@ export function CheckoutForm({
         <AddressFields
           idPrefix="checkout"
           showName={false}
+          country={country}
+          countries={region.countries}
+          onCountryChange={(c) => changeCountry(c, setCountry, setState)}
           values={{ fullName, addressLine1, city, state, pincode }}
           onChange={(k, v) => {
             if (k === "fullName") setFullName(v);
@@ -461,11 +501,14 @@ export function CheckoutForm({
                 <TextField id="checkout-ship-name" label="Full name *" required value={shipName} onChange={setShipName} />
               </div>
               <TextField id="checkout-ship-email" label="Contact email (optional)" type="email" value={shipEmail} onChange={setShipEmail} />
-              <PhoneField id="checkout-ship-phone" label="Contact phone *" value={shipPhone} onChange={setShipPhone} required />
+              <PhoneField id="checkout-ship-phone" label="Contact phone *" value={shipPhone} onChange={setShipPhone} required country={shipCountry} />
             </div>
             <AddressFields
               idPrefix="checkout-ship"
               showName={false}
+              country={shipCountry}
+              countries={region.countries}
+              onCountryChange={(c) => changeCountry(c, setShipCountry, setShipState)}
               values={{ fullName: shipName, addressLine1: shipAddress1, city: shipCity, state: shipState, pincode: shipPincode }}
               onChange={(k, v) => {
                 if (k === "fullName") setShipName(v);
@@ -503,7 +546,7 @@ export function CheckoutForm({
                 </div>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {rate.amount === 0 ? "Free" : `₹${(rate.amount / 100).toLocaleString("en-IN")}`}
+                {rate.amount === 0 ? "Free" : money(rate.amount)}
               </span>
             </label>
           ))}
@@ -514,7 +557,7 @@ export function CheckoutForm({
       <section className={CARD}>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Payment Method</h2>
         <div className="space-y-2">
-          {paymentOptions.codEnabled && (
+          {available.includes("cod") && (
             <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
               <div className="flex items-center gap-3">
                 <input
@@ -529,30 +572,36 @@ export function CheckoutForm({
                   <p className="text-sm font-semibold text-foreground">Cash on Delivery (COD)</p>
                   <p className="text-xs text-muted-foreground">
                     Pay with cash or UPI upon delivery
-                    {paymentOptions.codFeePaise > 0 ? ` (₹${(paymentOptions.codFeePaise / 100).toLocaleString("en-IN")} handling fee)` : ""}
+                    {paymentOptions.codFeePaise > 0 ? ` (${money(paymentOptions.codFeePaise)} handling fee)` : ""}
                   </p>
                 </div>
               </div>
             </label>
           )}
 
-          {paymentOptions.onlineAvailable && (
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
-              <div className="flex items-center gap-3">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  value="online"
-                  checked={paymentMethod === "online"}
-                  onChange={() => setPaymentMethod("online")}
-                  className="text-primary focus:ring-primary"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">UPI / Card / NetBanking</p>
-                  <p className="text-xs text-muted-foreground">Pay securely online</p>
+          {([
+            ["online", "UPI / Card / NetBanking", "Pay securely online"],
+            ["stripe", "Credit or debit card", "Pay securely on Stripe's payment page"],
+            ["paypal", "PayPal", "Pay with your PayPal account or card"],
+          ] as const).map(([value, title, hint]) =>
+            available.includes(value) ? (
+              <label key={value} className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={value}
+                    checked={paymentMethod === value}
+                    onChange={() => setPaymentMethod(value)}
+                    className="text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{title}</p>
+                    <p className="text-xs text-muted-foreground">{hint}</p>
+                  </div>
                 </div>
-              </div>
-            </label>
+              </label>
+            ) : null,
           )}
 
           {noPaymentMethod && (
@@ -640,14 +689,14 @@ export function CheckoutForm({
         disabled={loading || noPaymentMethod}
         className="w-full rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {loading ? "Processing Order..." : `Place Order (₹${(
+        {loading ? "Processing Order..." : `Place Order (${money(
           priceOrder({
             subtotal: cart.subtotal,
             shipping: currentShippingPaise,
             codFee: codFeePaise,
             discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
-          }).grandTotal / 100
-        ).toLocaleString("en-IN")})`}
+          }).grandTotal,
+        )})`}
       </button>
     </form>
   );
@@ -696,11 +745,12 @@ function TextField({
   );
 }
 
-function PhoneField({ id, label, value, onChange, required = true }: { id: string; label: string; value: string; onChange: (v: string) => void; required?: boolean }) {
+function PhoneField({ id, label, value, onChange, required = true, country = "IN" }: { id: string; label: string; value: string; onChange: (v: string) => void; required?: boolean; country?: string }) {
+  const prefix = PHONE_PREFIX[country];
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute bottom-[0.55rem] left-3 text-sm font-medium text-muted-foreground">+91</span>
-      <input id={id} type="tel" required={required} maxLength={10} value={value} onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))} placeholder=" " className={`${FIELD_CLASS} pl-11`} />
+      {prefix ? <span className="pointer-events-none absolute bottom-[0.55rem] left-3 text-sm font-medium text-muted-foreground">{prefix}</span> : null}
+      <input id={id} type="tel" required={required} maxLength={country === "IN" ? 10 : 15} value={value} onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))} placeholder=" " className={`${FIELD_CLASS} ${prefix ? (prefix.length > 2 ? "pl-11" : "pl-9") : ""}`} />
       <label htmlFor={id} className={LABEL_TOP}>
         {label}
       </label>
@@ -710,30 +760,76 @@ function PhoneField({ id, label, value, onChange, required = true }: { id: strin
 
 type AddressKey = "fullName" | "addressLine1" | "city" | "state" | "pincode";
 
-/** Name, street, city, state and pincode: used once for the billing and shipping address, and again for a separate shipping address. */
-function AddressFields({ idPrefix, values, onChange, showName = true }: { idPrefix: string; values: Record<AddressKey, string>; onChange: (key: AddressKey, value: string) => void; showName?: boolean }) {
+/** Name, street, city, state and postal code: used once for the billing and shipping address, and again for a separate shipping address. */
+function AddressFields({
+  idPrefix,
+  values,
+  onChange,
+  showName = true,
+  country = "IN",
+  countries = ["IN"],
+  onCountryChange,
+}: {
+  idPrefix: string;
+  values: Record<AddressKey, string>;
+  onChange: (key: AddressKey, value: string) => void;
+  showName?: boolean;
+  country?: string;
+  countries?: string[];
+  onCountryChange?: (country: string) => void;
+}) {
+  const regions = regionsFor(country);
+  const indian = country === "IN";
+  const postalLabel = indian ? "Pincode *" : country === "US" ? "ZIP code *" : country === "CA" ? "Postal code *" : "Postal code *";
+  const regionLabel = country === "CA" ? "Province *" : indian || country === "US" ? "State *" : "State / region *";
   return (
     <div className="space-y-3">
-      {showName ? <TextField id={`${idPrefix}-fullname`} label="Full name *" required value={values.fullName} onChange={(v) => onChange("fullName", v)} /> : null}
-      <TextField id={`${idPrefix}-address1`} label="Address (flat, building, street) *" required value={values.addressLine1} onChange={(v) => onChange("addressLine1", v)} />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <TextField id={`${idPrefix}-city`} label="City *" required value={values.city} onChange={(v) => onChange("city", v)} />
+      {countries.length > 1 ? (
         <div className="relative">
-          <select id={`${idPrefix}-state`} value={values.state} onChange={(e) => onChange("state", e.target.value)} className={`${FIELD_CLASS} appearance-none pr-8`}>
-            {INDIAN_STATES_AND_UTS.map((st) => (
-              <option key={st} value={st}>
-                {st}
+          <select id={`${idPrefix}-country`} value={country} onChange={(e) => onCountryChange?.(e.target.value)} className={`${FIELD_CLASS} appearance-none pr-8`}>
+            {countries.map((c) => (
+              <option key={c} value={c}>
+                {COUNTRY_LABELS[c] ?? c}
               </option>
             ))}
           </select>
-          <label htmlFor={`${idPrefix}-state`} className={LABEL_TOP}>
-            State *
+          <label htmlFor={`${idPrefix}-country`} className={LABEL_TOP}>
+            Country *
           </label>
-          <svg aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-          </svg>
         </div>
-        <TextField id={`${idPrefix}-pincode`} label="Pincode *" required maxLength={6} value={values.pincode} onChange={(v) => onChange("pincode", v.replace(/\D/g, ""))} />
+      ) : null}
+      {showName ? <TextField id={`${idPrefix}-fullname`} label="Full name *" required value={values.fullName} onChange={(v) => onChange("fullName", v)} /> : null}
+      <TextField id={`${idPrefix}-address1`} label={indian ? "Address (flat, building, street) *" : "Address (street, apartment) *"} required value={values.addressLine1} onChange={(v) => onChange("addressLine1", v)} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <TextField id={`${idPrefix}-city`} label="City *" required value={values.city} onChange={(v) => onChange("city", v)} />
+        {indian || regions.length > 0 ? (
+          <div className="relative">
+            <select id={`${idPrefix}-state`} value={values.state} required onChange={(e) => onChange("state", e.target.value)} className={`${FIELD_CLASS} appearance-none pr-8`}>
+              {regions.length > 0 ? <option value="">Select</option> : null}
+              {(indian ? INDIAN_STATES_AND_UTS.map((st) => ({ code: st, name: st })) : regions).map((st) => (
+                <option key={st.code} value={st.code}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
+            <label htmlFor={`${idPrefix}-state`} className={LABEL_TOP}>
+              {regionLabel}
+            </label>
+            <svg aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+        ) : (
+          <TextField id={`${idPrefix}-state`} label={regionLabel} required value={values.state} onChange={(v) => onChange("state", v)} />
+        )}
+        <TextField
+          id={`${idPrefix}-pincode`}
+          label={postalLabel}
+          required
+          maxLength={indian ? 6 : 10}
+          value={values.pincode}
+          onChange={(v) => onChange("pincode", indian ? v.replace(/\D/g, "") : v.toUpperCase())}
+        />
       </div>
     </div>
   );

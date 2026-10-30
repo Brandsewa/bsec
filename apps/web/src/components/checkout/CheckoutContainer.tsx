@@ -4,7 +4,8 @@ import React, { useCallback, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { priceOrder } from "@bs/domain/pricing";
-import { CheckoutForm, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
+import { CheckoutForm, type CheckoutRegion, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
+import { useMoney } from "@/components/market/MarketProvider.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
 
 export interface CheckoutContainerProps {
@@ -19,21 +20,24 @@ export interface CheckoutContainerProps {
   savedAddresses?: SavedCheckoutAddress[];
   customerEmail?: string;
   signedIn?: boolean;
+  /** The countries this market ships to (ADR-040); omitted for India-only stores. */
+  region?: CheckoutRegion | undefined;
 }
 
-export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn, region }: CheckoutContainerProps) {
   const router = useRouter();
+  const money = useMoney();
   const summaryId = useId();
   // The store's shipping options can depend on where the order ships (zones by state), so they refresh when the shopper
   // picks a state. The server prices the order again when it is placed, so this only keeps what is shown accurate.
   const [shippingRates, setShippingRates] = useState<CheckoutShippingRate[]>(initialRates);
   const [shippingMethod, setShippingMethod] = useState<string>(initialRates[0]?.method ?? "");
-  const refreshRates = useCallback(async (state: string) => {
+  const refreshRates = useCallback(async (state: string, country: string) => {
     try {
       const res = await fetch("/api/storefront/checkout/shipping-rates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state }),
+        body: JSON.stringify({ state, country }),
       });
       if (!res.ok) return;
       const data = (await res.json()) as { rates?: Array<{ id: string; title: string; description: string; amount: number; estimatedDays: string }> };
@@ -47,8 +51,10 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
   }, []);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">(paymentOptions.codEnabled ? "cod" : "online");
-  const codFeePaise = paymentMethod === "cod" && paymentOptions.codEnabled ? paymentOptions.codFeePaise : 0;
+  const firstMethod = paymentOptions.methods ? (paymentOptions.methods[0] === "razorpay" ? "online" : paymentOptions.methods[0]) : paymentOptions.codEnabled ? "cod" : "online";
+  const [paymentMethod, setPaymentMethod] = useState<"cod" | "online" | "stripe" | "paypal">(firstMethod ?? "cod");
+  const codOffered = paymentOptions.methods ? paymentOptions.methods.includes("cod") : paymentOptions.codEnabled;
+  const codFeePaise = paymentMethod === "cod" && codOffered ? paymentOptions.codFeePaise : 0;
 
   const shippingPaise = shippingRates.find((r) => r.method === shippingMethod)?.amount ?? shippingRates[0]?.amount ?? 0;
   const total = priceOrder({
@@ -57,7 +63,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
     codFee: codFeePaise,
     discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
   }).grandTotal;
-  const totalLabel = `₹${(total / 100).toLocaleString("en-IN")}`;
+  const totalLabel = money(total);
 
   return (
     <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-12 lg:gap-10">
@@ -98,6 +104,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
           savedAddresses={savedAddresses ?? []}
           customerEmail={customerEmail ?? ""}
           signedIn={signedIn ?? false}
+          region={region}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}

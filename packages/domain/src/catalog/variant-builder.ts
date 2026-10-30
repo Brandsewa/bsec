@@ -5,6 +5,7 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { loadProductDetailInternal } from "../catalog-services.ts";
+import { syncVariantMarketPrices } from "../markets/service.ts";
 import {
   MAX_VARIANTS_PER_PRODUCT,
   comboTitle,
@@ -153,6 +154,10 @@ export async function setProductOptions(rt: Runtime, ctx: TenantContext, input: 
       }
     }
 
+    if (unmatchedCombos.length > 0) {
+      const ids = await tx.select({ id: schema.variants.id }).from(schema.variants).where(and(eq(schema.variants.productId, input.productId), eq(schema.variants.tenantId, ctx.tenantId)));
+      await syncVariantMarketPrices(tx, ctx.tenantId, ids.map((r) => r.id));
+    }
     await audit(tx, ctx, "product.options_updated", input.productId, {
       options: options.map((o) => ({ name: o.name, values: o.values })),
       created: unmatchedCombos.length,
@@ -228,6 +233,7 @@ export async function createVariant(rt: Runtime, ctx: TenantContext, input: Crea
       })
       .returning();
     if (!created) throw new Error("Failed to create variant");
+    await syncVariantMarketPrices(tx, ctx.tenantId, [created.id]);
     if (input.imageMediaId) {
       await syncMediaUsages(tx, ctx, { ownerType: "variant", ownerId: created.id, field: "image", mediaIds: [input.imageMediaId] });
     }

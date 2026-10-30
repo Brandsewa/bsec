@@ -85,7 +85,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Discount:</span>
               <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                −<Money paise={order.discountTotal ?? 0} />
+                −<Money paise={order.discountTotal ?? 0} currency={order.currency} />
               </span>
             </div>
           )}
@@ -94,14 +94,14 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
               <span className="text-muted-foreground">Estimated dispatch:</span>
               <span className="font-semibold text-amber-700 dark:text-amber-400">
                 {order.shipsOn >= new Date().toISOString().slice(0, 10)
-                  ? `Ships on or after ${new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
+                  ? `Ships on or after ${new Date(`${order.shipsOn}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}`
                   : "Ships soon"}
               </span>
             </div>
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Total:</span>
-            <span className="font-bold text-foreground"><Money paise={order.grandTotal} /></span>
+            <span className="font-bold text-foreground"><Money paise={order.grandTotal} currency={order.currency} /></span>
           </div>
         </div>
 
@@ -117,10 +117,21 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
                   </span>
                 ) : null}
               </span>
-              <span className="text-muted-foreground"><Money paise={item.total} /></span>
+              <span className="text-muted-foreground"><Money paise={item.total} currency={order.currency} /></span>
             </div>
           ))}
         </div>
+
+        {order.policySnapshot?.text ? (
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              {order.policySnapshot.marketName ? `${order.policySnapshot.marketName} Policy` : "Return & Cancellation Policy"}
+            </h3>
+            <p className="text-xs text-muted-foreground whitespace-pre-line">
+              {order.policySnapshot.text}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {order.paymentStatus === "pending" && !cancelled ? (

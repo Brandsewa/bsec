@@ -13,6 +13,8 @@ import {
   DialogTitle,
   Input,
 } from "@bs/ui";
+import { formatMoney } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 /** What the picker and the assignment list need to know about a product (the list item and the collection detail both fit). */
@@ -25,12 +27,11 @@ export interface PickedProduct {
   priceMax?: number | null | undefined;
 }
 
-const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const PAGE = 50;
 
-function priceText(p: PickedProduct): string {
+function priceText(p: PickedProduct, currency = "INR"): string {
   if (p.priceMin == null) return "";
-  return p.priceMax != null && p.priceMax !== p.priceMin ? `${inr.format(p.priceMin / 100)} – ${inr.format(p.priceMax / 100)}` : inr.format(p.priceMin / 100);
+  return p.priceMax != null && p.priceMax !== p.priceMin ? `${formatMoney(p.priceMin, currency)} – ${formatMoney(p.priceMax, currency)}` : formatMoney(p.priceMin, currency);
 }
 
 /**
@@ -69,6 +70,7 @@ export function ProductPickerDialog({
 }
 
 function PickerBody({ selected, onCancel, onSave }: { selected: PickedProduct[]; onCancel: () => void; onSave: (products: PickedProduct[]) => void }) {
+  const storeCurrency = useStoreCurrency();
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [limit, setLimit] = useState(PAGE);
@@ -140,7 +142,7 @@ function PickerBody({ selected, onCancel, onSave }: { selected: PickedProduct[];
                     <span className="block truncate text-xs text-muted-foreground">
                       {[
                         p.variantCount != null ? `${p.variantCount} variant${p.variantCount === 1 ? "" : "s"}` : null,
-                        priceText(p) || null,
+                        priceText(p, storeCurrency) || null,
                         p.stock != null ? (p.stock > 0 ? `${p.stock} in stock` : "Out of stock") : null,
                         p.primaryCategoryName ?? null,
                       ]

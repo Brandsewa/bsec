@@ -96,12 +96,13 @@ afterAll(async () => {
 });
 
 describe("platform payment providers (real DB)", () => {
-  it("lists Razorpay, Stripe and Cashfree with live mode closed (after the seed reset in beforeAll)", async () => {
+  it("lists Razorpay, Stripe, Cashfree and PayPal with live mode closed (after the seed reset in beforeAll)", async () => {
     const list = await listPlatformPaymentProviders(rtPlatform, adminId);
     expect(list.map((p) => [p.provider, p.enabled, p.liveModeAllowed])).toEqual([
       ["razorpay", true, false],
       ["stripe", false, false],
       ["cashfree", false, false],
+      ["paypal", false, false],
     ]);
   });
 

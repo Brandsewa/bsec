@@ -46,6 +46,8 @@ import { DateRangePicker, ScrollTabs, SimpleSelect } from "@bs/ui";
 import { canExportFinance, downloadFinanceCsv } from "../../lib/finance-export.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { client, orpc } from "../../lib/orpc.ts";
+import { formatMoney, currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 
 export type ExpensePeriod = "all" | "7d" | "30d" | "90d" | "ytd";
 
@@ -81,15 +83,12 @@ export const Route = createFileRoute("/_store/finance_/expenses")({
   component: ExpensesPage,
 });
 
-function formatPaise(paise: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(paise / 100);
+function formatPaise(paise: number, currency = "INR"): string {
+  return formatMoney(paise, currency);
 }
 
 export function ExpensesPage() {
+  const storeCurrency = useStoreCurrency();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
@@ -200,7 +199,7 @@ export function ExpensesPage() {
       id: "amount",
       header: "Amount",
       cell: (row) => (
-        <span className="font-mono font-semibold">{formatPaise(row.amount)}</span>
+        <span className="font-mono font-semibold">{formatPaise(row.amount, storeCurrency)}</span>
       ),
     },
     {
@@ -318,12 +317,12 @@ export function ExpensesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <MetricCard
               label="Selected Period Expenses"
-              value={formatPaise(data?.periodTotalPaise ?? 0)}
+              value={formatPaise(data?.periodTotalPaise ?? 0, storeCurrency)}
               description="Sum of operational costs in this period view"
             />
             <MetricCard
               label="Outstanding Unpaid Bills"
-              value={formatPaise(data?.allTimeUnpaidPaise ?? 0)}
+              value={formatPaise(data?.allTimeUnpaidPaise ?? 0, storeCurrency)}
               description="All-time recorded expenses pending payment"
             />
           </div>
@@ -333,7 +332,7 @@ export function ExpensesPage() {
         {data && data.allTimeUnpaidPaise > 0 && search.paidFrom !== "unpaid" && (
           <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3.5 flex items-center justify-between text-sm">
             <span className="text-amber-800 dark:text-amber-300">
-              You have <strong>{formatPaise(data.allTimeUnpaidPaise)}</strong> in unpaid bills
+              You have <strong>{formatPaise(data.allTimeUnpaidPaise, storeCurrency)}</strong> in unpaid bills
               awaiting settlement.
             </span>
             <Button
@@ -519,6 +518,7 @@ export function ExpensesPage() {
           title="Unsettle Expense Bill?"
           description={`This will reverse the settlement entry on the ledger (crediting cash and restoring accounts payable for ${formatPaise(
             unsettleTarget.amount,
+            storeCurrency,
           )}).`}
           confirmLabel="Unsettle Bill"
           pending={unsettleMutation.isPending}
@@ -575,6 +575,7 @@ function ExpenseFormModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const storeCurrency = useStoreCurrency();
   const editing = !!expense;
   const [date, setDate] = useState(expense?.date ?? new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState<ExpenseCategoryChoice>((expense?.category as ExpenseCategoryChoice | undefined) ?? "rent");
@@ -687,7 +688,7 @@ function ExpenseFormModal({
       category,
       paidFrom,
       amount: paise,
-      currency: "INR",
+      currency: storeCurrency,
       payee: payee.trim() || undefined,
       note: note.trim() || undefined,
       receiptMediaId: receiptMediaId ?? undefined,
@@ -755,7 +756,7 @@ function ExpenseFormModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Amount (₹)</Label>
+                <Label>Amount ({currencySymbol(storeCurrency)})</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -910,6 +911,7 @@ function SettleExpenseModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const storeCurrency = useStoreCurrency();
   const [settledAt, setSettledAt] = useState(new Date().toISOString().slice(0, 10));
   const [paidFrom, setPaidFrom] = useState<"cash_bank" | "cash_gateway" | "cash_on_hand">("cash_bank");
   const [note, setNote] = useState("");
@@ -944,7 +946,7 @@ function SettleExpenseModal({
           <DialogHeader>
             <DialogTitle>Mark Bill as Paid</DialogTitle>
             <DialogDescription>
-              Settle {formatPaise(expense.amount)} for {expense.category.replace(/_/g, " ")}.
+              Settle {formatPaise(expense.amount, storeCurrency)} for {expense.category.replace(/_/g, " ")}.
               This will debit Accounts Payable and credit your selected cash account.
             </DialogDescription>
           </DialogHeader>

@@ -2,6 +2,7 @@ import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import Link from "next/link";
 import type { StorefrontProductSummary } from "@bs/domain";
+import { formatMoney } from "@bs/contracts/money";
 import { CardCartButton } from "./CardCartButton.tsx";
 
 export interface ProductCardProps {
@@ -18,18 +19,15 @@ export interface ProductCardProps {
   hoverSecondImage?: boolean | undefined;
   /** Above the fold: load the picture straight away instead of lazily. */
   priority?: boolean | undefined;
+  currency?: string | undefined;
+  locale?: string | undefined;
 }
 
 /**
- * Formats paise minor units to INR currency string.
+ * Formats minor units to currency string (defaults to INR).
  */
-export function formatInrPrice(paise: number): string {
-  const rupees = paise / 100;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: rupees % 1 === 0 ? 0 : 2,
-  }).format(rupees);
+export function formatInrPrice(minor: number, currency = "INR", locale?: string): string {
+  return formatMoney(minor, currency, { ...(locale ? { locale } : {}) });
 }
 
 /**
@@ -48,15 +46,18 @@ export function ProductCard({
   showViewProduct = true,
   hoverSecondImage = false,
   priority = false,
+  currency = "INR",
+  locale,
 }: ProductCardProps) {
   const isRange = product.priceMin !== product.priceMax;
-  const formattedPrice = isRange ? `${formatInrPrice(product.priceMin)} - ${formatInrPrice(product.priceMax)}` : formatInrPrice(product.priceMin);
+  const fmt = (minor: number) => formatMoney(minor, currency, { ...(locale ? { locale } : {}) });
+  const formattedPrice = isRange ? `${fmt(product.priceMin)} - ${fmt(product.priceMax)}` : fmt(product.priceMin);
 
   let savingsPercent: number | null = null;
   let formattedCompareAt: string | null = null;
   if (product.compareAtPriceMin && product.compareAtPriceMin > product.priceMin) {
     savingsPercent = Math.round(((product.compareAtPriceMin - product.priceMin) / product.compareAtPriceMin) * 100);
-    formattedCompareAt = formatInrPrice(product.compareAtPriceMin);
+    formattedCompareAt = fmt(product.compareAtPriceMin);
   }
 
   const imageUrl = product.primaryImage?.url;

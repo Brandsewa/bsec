@@ -1,7 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { PageContainer, PageHeader, PageSkeleton, InfoTip, toast } from "@bs/ui";
+import { currencySymbol } from "@bs/contracts/money";
+import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { Alert } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
@@ -20,11 +22,11 @@ export const Route = createFileRoute("/_store/discounts_/$id")({
 
 type DiscountType = "percent" | "fixed" | "free_shipping";
 
-const TYPE_LABEL: Record<DiscountType, string> = {
+const typeLabel = (sym: string): Record<DiscountType, string> => ({
   percent: "Percentage off",
-  fixed: "Fixed amount off (₹)",
+  fixed: `Fixed amount off (${sym})`,
   free_shipping: "Free shipping",
-};
+});
 
 /** "" → undefined, otherwise a whole number (or NaN if it isn't one). */
 function optionalInt(raw: string): number | undefined {
@@ -66,6 +68,9 @@ type LoadedDiscount = Awaited<ReturnType<typeof client.admin.discounts.get>>;
 function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const storeCurrency = useStoreCurrency();
+  const sym = currencySymbol(storeCurrency);
+  const labels = typeLabel(sym);
 
   const initialType = (discount.type === "buy_x_get_y" ? "percent" : discount.type) as DiscountType;
   const [code, setCode] = useState(discount.code ?? "");
@@ -177,16 +182,21 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
               <FieldGroup>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
-                    <FieldLabel htmlFor="discount-type">Type</FieldLabel>
+                    <div className="flex items-center gap-1.5">
+                      <FieldLabel htmlFor="discount-type">Type</FieldLabel>
+                      {type === "fixed" ? (
+                        <InfoTip>Fixed-amount discounts only apply to orders placed in the store's base currency ({storeCurrency}).</InfoTip>
+                      ) : null}
+                    </div>
                     <SimpleSelect
                       id="discount-type"
                       value={type}
                       onChange={(v) => setType(v as DiscountType)}
-                      options={(Object.keys(TYPE_LABEL) as DiscountType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] }))}
+                      options={(Object.keys(labels) as DiscountType[]).map((t) => ({ value: t, label: labels[t] }))}
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="discount-value">Value ({type === "percent" ? "%" : "₹"})</FieldLabel>
+                    <FieldLabel htmlFor="discount-value">Value ({type === "percent" ? "%" : sym})</FieldLabel>
                     <Input
                       id="discount-value"
                       type="number"
@@ -200,7 +210,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                   </Field>
                 </div>
                 <Field>
-                  <FieldLabel htmlFor="discount-min">Minimum order value (₹, optional)</FieldLabel>
+                  <FieldLabel htmlFor="discount-min">Minimum order value ({sym}, optional)</FieldLabel>
                   <Input id="discount-min" type="number" min={0} step="1" value={minSubtotal} onChange={(e) => setMinSubtotal(e.target.value)} placeholder="No minimum" />
                 </Field>
               </FieldGroup>
@@ -272,8 +282,8 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                   ? "Free shipping"
                   : type === "percent"
                     ? `${value || 0}% off`
-                    : `₹${value || 0} off`}
-                {minSubtotal ? ` on orders over ₹${minSubtotal}` : ""}
+                    : `${sym}${value || 0} off`}
+                {minSubtotal ? ` on orders over ${sym}${minSubtotal}` : ""}
                 {usageLimit ? `, first ${usageLimit} uses` : ""}.
               </p>
               {create.isError ? <Alert variant="destructive">{errorMessage(create.error)}</Alert> : null}

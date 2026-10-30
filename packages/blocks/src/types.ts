@@ -180,6 +180,9 @@ export interface RenderContext {
   renderProductCard?: ((product: BlockProduct, opts: { showPrice: boolean; showRating: boolean }) => ReactNode) | undefined;
   /** Stable id of the block being rendered (for data lookup). */
   blockId?: string | undefined;
+  /** The shopper's market currency and locale for prices (ADR-040). Prices render as INR when the host gives none. */
+  currency?: string | undefined;
+  locale?: string | undefined;
   /** Store details for the header and footer. */
   storeName?: string | undefined;
   logoUrl?: string | null | undefined;
