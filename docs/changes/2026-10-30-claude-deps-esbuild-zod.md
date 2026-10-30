@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-30
 - **Agent:** claude
-- **Branch:** `fix/deps-esbuild-zod-overrides` (not merged yet)
+- **Branch:** `fix/deps-esbuild-zod-overrides` (merged in #160, 60c55eb)
 - **Area:** deps
 - **Type:** fix
 - **Supersedes:** none
