@@ -1,16 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const ADMIN = process.env.ADMIN_URL ?? "http://127.0.0.1:8080";
 const EMAIL = process.env.E2E_EMAIL ?? "";
 const PASSWORD = process.env.E2E_PASSWORD ?? "";
 
 async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
   await page.goto("/");
-  if (page.url().includes("/login")) {
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "Sign in" }).click();
-  }
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login/);
 }
 
 test.describe("Settings > Markets Admin UI", () => {
