@@ -29,13 +29,13 @@
   },
   "devDependencies": {
     "@types/node": "24.19.0",
-    "eslint": "10.12.0",
-    "oxlint": "1.88.0",
-    "turbo": "2.11.8",
+    "eslint": "10.13.0",
+    "oxlint": "1.90.0",
+    "turbo": "2.11.10",
     "typescript": "6.0.3",
     "vitest": "5.0.5"
   },
   "dependencies": {
-    "geist": "1.7.2"
+    "geist": "1.8.2"
   }
 }
