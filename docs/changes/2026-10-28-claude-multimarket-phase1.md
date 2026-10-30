@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-28
 - **Agent:** claude
-- **Branch:** `docs/multimarket-phase0` (local only; owner rule: nothing is pushed or merged until the whole feature is built)
+- **Branch:** `docs/multimarket-phase0` (merged in #150, a23f5a7)
 - **Area:** db, domain, contracts, payments, web
 - **Type:** feature
 - **Supersedes:** none

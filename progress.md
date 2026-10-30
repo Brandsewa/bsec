@@ -3,7 +3,6 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `docs/multimarket-phase0` (local only, nothing pushed; PRs 149 and 150 stay open) · multi-market stores: BUILT end to end (Phase 0 to 7 work packages WP-1a/b/c, WP-2 to WP-6 merged locally and gated); NOT yet done: a browser walkthrough with screenshots, PayPal/Stripe sandbox runs, and the single push and merge; plan `docs/MULTIMARKET-PLAN.md`, hand-off `docs/MULTIMARKET-HANDOFF.md`, push steps `docs/MULTIMARKET-PUSH-CHECKLIST.md` · 2026-10-29
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29
 - claude · `fix/header-bg-dropdown-followups` · follow-ups to the 2026-10-29 batch: header background regression, dropdown spacing and close on click, TOC closed by default, image option on Floating reviews; change record `docs/changes/2026-10-29-claude-header-dropdown-followups.md` · 2026-10-29
 - claude · `fix/domain-ownership-before-a-records` · bare custom domains: TXT ownership first, A records only after (Cloudflare refuses TXT/HTTP validation once A records resolve to it), immediate provider re-check; change record `docs/changes/2026-10-28-claude-domain-ownership-before-a-records.md` · 2026-10-28
@@ -20,16 +19,19 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 - claude · `feat/blog-system` · blog system built end to end (phases 1-5), awaiting owner review and merge; plan `docs/BLOG-PLAN.md`, ADR-033, change records `docs/changes/2026-10-15-claude-blog-*` · 2026-10-15
 
-## M15 · Multi-market stores (ADR-040): built locally, not pushed (2026-10-29)
+## M15 · Multi-market stores (ADR-040): live on production (2026-10-30)
 
-**What exists** (all gated with typecheck, lint, docs:check and real-Postgres tests; see `docs/changes/2026-10-28-claude-multimarket-phase1.md` and the Antigravity change records `...-antigravity-multimarket-*.md`): base and extra markets with plan limits (Starter 1, Growth 2, Pro 5 extra), per-market currency, derived/fixed prices, catalog, gateways (Razorpay, Stripe, PayPal; sandbox only), shipping zones, returns text, merchant-entered tax, country-aware signup and addresses, metric/imperial units, URL-prefix markets with switcher, suggestion banner, hreflang and market sitemap, money formatting in storefront, domain, admin and Super Admin, Brand Sewa PayPal billing for non-India merchants.
+Merged in #150 (a23f5a7); the first two `main` runs failed at the staging smoke test and the production deploy was skipped by the pipeline both times, so production never saw a broken build. Fixes: #155 (e2e sign-in helper), #156 (CI seed creates a base market). The `main` run for #156 passed the smoke test and deployed. Full story, decisions and lessons: [`docs/changes/2026-10-30-claude-multimarket-release.md`](docs/changes/2026-10-30-claude-multimarket-release.md). Plan `docs/MULTIMARKET-PLAN.md`, decision `docs/adr/040-markets.md`, system description `docs/ARCHITECTURE.md` section 19, hand-off `docs/MULTIMARKET-HANDOFF.md`.
+
+**What exists:** base and extra markets with plan limits (Starter 1, Growth 2, Enterprise 5 extra), per-market currency, derived/fixed prices, catalog, gateways (Razorpay, Stripe, PayPal; sandbox/test only), shipping zones, returns text, merchant-entered tax, country-aware signup and addresses, metric/imperial units, `/us`-style URL prefixes with a switcher and suggestion banner, hreflang and market sitemap, currency-aware money everywhere, Brand Sewa PayPal billing (USD) for non-India merchants.
 
 **Known gaps (not claimed done)**
-- [ ] No browser walkthrough has been done with evidence (storefront market bar and `/us` pages, Markets admin screens, signup country picker, shipping editor, order policy text, admin base totals). The WP-7 report has no screenshots.
-- [ ] PayPal and Stripe were exercised with mocked HTTP only; sandbox keys were not available. PayPal Subscriptions for an India-registered account was never checked (billing uses Orders v2 links per cycle).
-- [ ] `e2e/markets.spec.ts` was written but not run; the web and admin e2e suites were not run against a local stack.
-- [ ] Owner to-dos outside the code: PayPal purpose code and PAN for withdrawals in India; ask the CA about GST LUT for invoices to foreign merchants; a lawyer to review the merchant terms (merchant owns tax and policy duties) and the "own gateway account, no pooled funds" model.
-- [ ] Do not enable a second market on a real store until the browser pass is done.
+- [ ] Owner is walking the live admin and storefront; defects go to new fix PRs. No screenshot walkthrough exists in the repo.
+- [ ] PayPal and Stripe only exercised with mocked HTTP; sandbox runs not done. PayPal Subscriptions for an India-registered account was never checked (billing uses Orders v2 links per cycle).
+- [ ] Do not enable a second market on a store with real customers until the live walkthrough is done.
+- [ ] Stores created outside provisioning (raw SQL, `infra/loadtest/seed.ts`) have no base market; the Markets admin cannot create a market for them.
+- [ ] Owner to-dos outside the code: PayPal purpose code and PAN for withdrawals in India; ask the CA about GST LUT for invoices to foreign merchants; a lawyer to review the merchant terms (merchant owns tax and policy duties) and the own-gateway, no-pooled-funds model.
+- [ ] Cloudflare IP Geolocation must be on for the zone for the suggestion banner (see `DEPLOYMENT.md`).
 
 ## M14 · Theme Builder Layout, Responsive Controls & Widget Modernization (2026-10-24)
 

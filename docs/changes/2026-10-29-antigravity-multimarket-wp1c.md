@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-29
 - **Agent:** antigravity
-- **Branch:** `feat/multimarket-wp1c` (not merged yet)
+- **Branch:** `feat/multimarket-wp1c` (merged in #150, a23f5a7)
 - **Area:** admin, superadmin, contracts, domain
 - **Type:** feature
 - **Supersedes:** none

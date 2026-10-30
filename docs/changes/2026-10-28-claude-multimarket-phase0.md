@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-28
 - **Agent:** claude
-- **Branch:** `docs/multimarket-phase0` (stacked on `docs/multimarket-plan`, PR 149; not merged yet)
+- **Branch:** `docs/multimarket-phase0` (merged in #150, a23f5a7)
 - **Area:** docs
 - **Type:** docs
 - **Supersedes:** none

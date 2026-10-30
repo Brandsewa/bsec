@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-29
 - **Agent:** antigravity
-- **Branch:** `feat/multimarket-wp7` (not merged yet)
+- **Branch:** `feat/multimarket-wp7` (merged in #150, a23f5a7)
 - **Area:** domain, db, contracts, auth, blocks, platform, admin, web, e2e
 - **Type:** test
 - **Supersedes:** none

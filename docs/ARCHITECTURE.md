@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Last verified against | `docs/multimarket-phase0` (multi-market stores, ADR-040, migrations 0087 to 0090; merged with main 0a045db), 2026-10-29. Sections 5, 8, 9, 13, 14 and 19 were updated for it; the rest is as of the previous line |
+| Last verified against | `main` e975098 (multi-market stores live, ADR-040, migrations 0087 to 0090; section 19), 2026-10-30. Sections 5, 8, 9, 13, 14 and 19 were updated for multi-market; the rest is as of the previous verification |
 | Verified how | files read from the working tree; `pnpm docs:check` for the mechanical parts. Facts marked *(from code)* were read, not run. |
 | Owner | whoever changes the area (see the update triggers in section 0) |
 
@@ -497,7 +497,7 @@ Keep this list honest; remove an item when fixed.
 - ADR for M9 decisions is still to be written (`progress.md`).
 - `progress.md` and `DEPLOYMENT.md` contain test counts and dates that go stale; prefer CI.
 - Procedure-level API docs are the contract files themselves; there is no generated OpenAPI doc checked in.
-- Multi-market (section 19) has been checked by real-database tests and typecheck, but its storefront and admin screens have **not been walked in a browser**, PayPal and Stripe were exercised with mocked HTTP only, and the PayPal sandbox/Stripe test keys were not available. See `docs/MULTIMARKET-PUSH-CHECKLIST.md`.
+- Multi-market (section 19) is live. It was checked by real-database tests, typecheck and one browser e2e (`e2e/markets.spec.ts`); PayPal and Stripe were exercised with mocked HTTP only (no sandbox runs). Open items: `progress.md` M15.
 - This file lists tables and routes by name, not columns. Columns live in `packages/db/src/schema/*`.
 
 ---

@@ -4,9 +4,9 @@ Read this with `docs/MULTIMARKET-PLAN.md` and `docs/adr/040-markets.md`. Written
 
 **Everything stays local until the whole build is done** (owner rule, 2026-10-28): commit on local branches, do not push, do not open or merge PRs, do not turn on live provider keys. All work so far is on the local branch `docs/multimarket-phase0` in the worktree `C:\dev\bsec-multimarket` (the plan docs and ADR-040 are also on `main` via PR 149). Antigravity works in its **own worktree branched from `docs/multimarket-phase0`**, one chat per work package below, in the order given.
 
-## 0. Where we are (2026-10-29)
+## 0. Where we are (2026-10-30)
 
-Waves 1 to 3 (WP-1a/1b/1c, WP-2, WP-3, WP-4, WP-5, WP-6) are built by Antigravity, verified by Claude and merged on the local branch `docs/multimarket-phase0`. WP-7 (test round) ran the automated gate (domain 3,212, web 243, admin 108, platform 138 and the rest pass) but its walkthrough has no evidence. WP-8 (this documentation) is done. **Remaining before any push:** a browser walkthrough with screenshots, PayPal/Stripe sandbox runs with the owner's keys, then the steps in `docs/MULTIMARKET-PUSH-CHECKLIST.md`. The "not built" wording in sections 3 and 5 below describes the state when the hand-off was written; the work packages listed there are now merged.
+**Done and live** (PRs #150, #155, #156; see `docs/changes/2026-10-30-claude-multimarket-release.md`). Every work package (WP-1a/1b/1c, WP-2 to WP-8) is merged. The checklist and the "not built" wording in sections 3 and 5 describe the state when this hand-off was written and are kept as history. Open items are the known gaps in `progress.md` M15.
 
 ## 1. Status
 
