@@ -85,7 +85,7 @@ export function ProductExportDialog({ open, onOpenChange, selectedIds, filter }:
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Export products</DialogTitle>
           <DialogDescription>One row per variant. The file can be edited and imported back.</DialogDescription>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchImageSafely, type Resolver, type Transport } from "../src/catalog/bulk-io/image-fetch.ts";
+import { fetchImageSafely, pinnedLookup, type Resolver, type Transport } from "../src/catalog/bulk-io/image-fetch.ts";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 async function* body(...chunks: Uint8Array[]) {
@@ -59,5 +59,14 @@ describe("fetchImageSafely", () => {
 
   it("turns a DNS failure into a readable error", async () => {
     await expect(fetchImageSafely("https://nope.example.com/a.png", { resolve: async () => { throw new Error("ENOTFOUND"); }, transport: async () => ok() })).rejects.toThrow(/could not be found/);
+  });
+});
+
+describe("pinnedLookup", () => {
+  it("answers with a list when Node asks for all addresses, and a single address otherwise", () => {
+    const out: unknown[] = [];
+    pinnedLookup("93.184.216.34")("example.com", { all: true }, (e, a, f) => out.push([e, a, f]));
+    pinnedLookup("2606:4700::1111")("example.com", {}, (e, a, f) => out.push([e, a, f]));
+    expect(out).toEqual([[null, [{ address: "93.184.216.34", family: 4 }], undefined], [null, "2606:4700::1111", 6]]);
   });
 });

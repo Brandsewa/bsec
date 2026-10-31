@@ -1,4 +1,5 @@
 import dns from "node:dns/promises";
+import type { LookupAddress, LookupOptions } from "node:dns";
 import https from "node:https";
 import type { IncomingHttpHeaders } from "node:http";
 import { checkImageUrl, IMAGE_MAX_BYTES, isBlockedAddress, sniffImageMime } from "./image-guard.ts";
@@ -31,9 +32,18 @@ export interface FetchedImage {
 
 export class ImageFetchError extends Error {}
 
+type LookupCb = (err: Error | null, address: string | LookupAddress[], family?: number) => void;
+
+/** A `lookup` that always answers with the address that passed the checks. Node 20+ asks for a list (`all: true`) and expects one back. */
+export const pinnedLookup = (ip: string) => (_host: string, opts: LookupOptions, cb: LookupCb): void => {
+  const family = ip.includes(":") ? 6 : 4;
+  if (opts.all) cb(null, [{ address: ip, family }]);
+  else cb(null, ip, family);
+};
+
 const defaultResolver: Resolver = async (hostname) => (await dns.lookup(hostname, { all: true })).map((a) => a.address);
 
-const defaultTransport: Transport = (url, ip, signal) =>
+export const defaultTransport: Transport = (url, ip, signal) =>
   new Promise((resolve, reject) => {
     const req = https.request(
       {
@@ -45,7 +55,7 @@ const defaultTransport: Transport = (url, ip, signal) =>
         servername: url.hostname,
         headers: { host: url.host, "user-agent": "BrandSewaImageImport/1.0", accept: "image/*" },
         // The pinned address: the TLS name stays the hostname, the socket goes to the IP that was checked.
-        lookup: (_h, _o, cb) => cb(null, ip, ip.includes(":") ? 6 : 4),
+        lookup: pinnedLookup(ip),
         signal,
       },
       (res) => {

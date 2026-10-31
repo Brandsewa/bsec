@@ -216,7 +216,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import products from CSV</DialogTitle>
           <DialogDescription>
@@ -286,7 +286,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
           />
         ) : null}
 
-        {phase.step === "running" ? <ProgressView run={live} sendingNote={phase.sending ? `Saving products… ${n(phase.sent)} of ${n(phase.total)} sent` : "All products sent. Images are still downloading on the server; you can close this window and check later under Import history."} /> : null}
+        {phase.step === "running" ? <ProgressView run={live} sendingNote={phase.sending ? `Saving products… ${n(phase.sent)} of ${n(phase.total)} sent` : "All products sent. Images are still downloading on the server; you can close this window; they keep downloading and appear on the products as they finish."} /> : null}
 
         {phase.step === "running" && !phase.sending ? (
           <div className="flex justify-end"><Button variant="outline" size="sm" onClick={() => { reset(); onOpenChange(false); onImported(); }}>Close and keep downloading</Button></div>
