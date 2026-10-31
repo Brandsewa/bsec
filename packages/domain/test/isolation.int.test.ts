@@ -122,6 +122,12 @@ import {
   createPage,
   ensureThemeTemplatePage,
   createProduct,
+  exportProductRows,
+  previewProductImport,
+  startProductImportRun,
+  commitProductImportBatch,
+  getProductImportRun,
+  listProductImportRuns,
   acceptInvitation,
   clearRazorpayCredentials,
   listStorePaymentProviders,
@@ -1059,6 +1065,22 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         });
       case "products.update":
         return await updateProduct(rt, ctx, { id: testProductA, title: "Updated Product A" });
+      case "products.exportRows":
+        return await exportProductRows(rt, ctx, { fields: ["title"], limit: 5 });
+      case "products.importPreview":
+        return await previewProductImport(rt, ctx, { products: [{ row: 2, handle: `iso-imp-${Date.now()}`, title: "Iso Import", optionNames: [], variants: [{ row: 2, optionValues: [], price: 100 }], imageUrls: [], customFields: {}, fields: ["title"] }] });
+      case "products.importStart":
+        return await startProductImportRun(rt, ctx, { total: 1, conflictPolicy: "skip", mode: "create_and_update" });
+      case "products.importBatch": {
+        const run = await startProductImportRun(rt, ctx, { total: 1, conflictPolicy: "skip", mode: "create_and_update" });
+        return await commitProductImportBatch(rt, ctx, { runId: run.id, products: [{ row: 2, handle: `iso-imp-b-${Date.now()}`, title: "Iso Import Batch", optionNames: [], variants: [{ row: 2, optionValues: [], price: 100 }], imageUrls: [], customFields: {}, fields: ["title"] }] });
+      }
+      case "products.importRun": {
+        const run = await startProductImportRun(rt, ctx, { total: 1, conflictPolicy: "skip", mode: "create_and_update" });
+        return await getProductImportRun(rt, ctx, { id: run.id });
+      }
+      case "products.importRuns":
+        return await listProductImportRuns(rt, ctx);
       case "products.delete": {
         const p = await createProduct(rt, ctx, {
           title: `To Delete-${Date.now()}`,
@@ -2656,7 +2678,13 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           if (maintenanceOwnerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/only (the )?store owners?/i);
           }
-          const runCtx = marketsOnly
+          const exportOnly = proc === "products.exportRows";
+          if (exportOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/exports.run/);
+          }
+          const runCtx = exportOnly
+            ? { ...authCtx!, roles: ["store_owner"], permissions: [...authCtx!.permissions, "exports.run"] }
+            : marketsOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }
             : ownerOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }

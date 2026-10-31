@@ -1,4 +1,5 @@
 import { and, asc, eq, gt, ilike, inArray, isNull } from "drizzle-orm";
+import { FINANCE_EXPORT_ROLES } from "@bs/auth";
 import { minorUnitExponent } from "@bs/contracts/money";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../../runtime.ts";
@@ -63,8 +64,9 @@ const yn = (b: boolean) => (b ? "yes" : "no");
  */
 export async function exportProductRows(rt: Runtime, ctx: TenantContext, input: ExportRowsInput): Promise<ExportRowsResult> {
   assertPermission(ctx, "products.read");
-  // Bulk export hands over the whole catalogue, so it also needs the export permission (ADR-022).
+  // Bulk export hands over the whole catalogue: store owner and store admin only, with the export permission (ADR-022).
   assertPermission(ctx, "exports.run");
+  if (!ctx.roles.some((r) => FINANCE_EXPORT_ROLES.includes(r))) throw new Error("Forbidden: only the store owner and store admin can export products");
   const db = rt._db.db;
   const limit = Math.min(Math.max(input.limit ?? 100, 1), EXPORT_PAGE_MAX);
   const cfEnabled = await customFieldsEnabled(db, ctx.tenantId);

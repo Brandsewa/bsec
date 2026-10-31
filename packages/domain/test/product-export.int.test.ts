@@ -100,3 +100,10 @@ describe("exportProductRows (real Postgres)", () => {
     await expect(exportProductRows(rt, ctxNoExport, { fields: "all" })).rejects.toThrow();
   });
 });
+
+describe("exportProductRows roles", () => {
+  it("is refused for staff who are not store owner or store admin, even with the permission", async () => {
+    const custom = { ...ctxA, roles: ["catalog_manager"] };
+    await expect(exportProductRows(rt, custom, { fields: "all" })).rejects.toThrow(/store owner and store admin/);
+  });
+});
