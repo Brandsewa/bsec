@@ -824,7 +824,8 @@ export async function placeOrder(
     }
 
     // 12. Enqueue order.created job if boss runtime is present
-    if (rt._jobs) {
+    // An online order is only a hold until it is paid: the confirmation email and store alert go out when payment settles.
+    if (rt._jobs && isCod) {
       await rt._jobs.send(QUEUE_NAMES.ORDER_CREATED, { orderId, tenantId });
     }
 

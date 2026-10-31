@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
-import { schema, withTenant, type Db } from "@bs/db";
+import { schema, withTenant, QUEUE_NAMES, type Db } from "@bs/db";
 import { RazorpayProvider, decryptSecret } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
@@ -164,6 +164,8 @@ export interface SettleInput {
   /** Which provider took the payment. Defaults to Razorpay. */
   provider?: "razorpay" | "stripe" | "paypal" | undefined;
   source: "browser" | "webhook" | "return";
+  /** Used to send the order confirmation once the order is paid (online orders are not announced before that). */
+  jobs?: { send(queue: string, data: object): Promise<unknown> } | undefined;
 }
 
 const PROVIDER_LABEL: Record<string, string> = { razorpay: "Razorpay", stripe: "Stripe", paypal: "PayPal" };
@@ -256,6 +258,7 @@ export async function settleProviderPayment(db: Db, tenantId: string, input: Set
   // Stock is committed after the order is saved as paid (same order as the existing webhook path).
   if (outcome.result === "paid" && outcome.orderId) {
     await commitReservation(db, tenantId, { orderId: outcome.orderId });
+    await input.jobs?.send(QUEUE_NAMES.ORDER_CREATED, { orderId: outcome.orderId, tenantId });
   }
   return outcome.result;
 }
@@ -305,5 +308,6 @@ export async function confirmRazorpayPayment(rt: Runtime, tenantId: string, inpu
     providerOrderId: input.razorpayOrderId,
     providerPaymentId: input.razorpayPaymentId,
     source: "browser",
+    jobs: rt._jobs,
   });
 }

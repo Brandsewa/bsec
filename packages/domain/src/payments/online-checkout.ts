@@ -162,6 +162,7 @@ export async function confirmHostedReturn(
       ...(session.amountTotal !== null ? { amount: session.amountTotal } : {}),
       ...(session.currency ? { currency: session.currency } : {}),
       source: "return",
+      jobs: rt._jobs,
     });
   }
 
@@ -178,6 +179,7 @@ export async function confirmHostedReturn(
     ...(captured.amount !== undefined ? { amount: captured.amount } : {}),
     ...(captured.currency ? { currency: captured.currency } : {}),
     source: "return",
+    jobs: rt._jobs,
   });
 }
 
