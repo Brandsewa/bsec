@@ -500,6 +500,13 @@ export async function handleCustomerImportJob(
   log.info({ tenantId: data.tenantId, created: res.created, updated: res.updated, failed: res.errors.length }, "customers.import processed");
 }
 
+// Download and attach the images of one imported product (docs/PRODUCT-BULK-IO-PLAN.md section 4)
+export async function handleProductImportImagesJob(db: Db, log: Logger, data: import("./catalog/bulk-io/import-images.ts").ImportImageJob): Promise<void> {
+  const { processImportImageTask } = await import("./catalog/bulk-io/import-images.ts");
+  const res = await processImportImageTask(db, data);
+  log.info({ tenantId: data.tenantId, runId: data.runId, productId: data.task.productId, ok: res.ok, failed: res.failed }, "products.import_images processed");
+}
+
 export async function handleMaintenanceStartJob(
   db: Db,
   log: Logger,
@@ -1082,6 +1089,20 @@ export async function startJobs(opts: {
       }
     },
   );
+
+  // Handle products.import_images (product bulk import): a few products at a time, each product sequentially.
+  await boss.work<import("./catalog/bulk-io/import-images.ts").ImportImageJob>(QUEUE_NAMES.PRODUCTS_IMPORT_IMAGES, { localConcurrency: 3 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        await withTenantJobSlot(job.data.tenantId, async () => {
+          await handleProductImportImagesJob(db, opts.log, job.data);
+        });
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "products.import_images failed");
+        throw err;
+      }
+    }
+  });
 
   // Handle finance.post job (docs/FINANCE-PLAN.md §3.3, §3.5)
   await boss.work<{ tenantId: string; kind: string; id: string }>(

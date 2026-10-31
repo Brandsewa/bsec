@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { schema, withTenant } from "@bs/db";
+import { QUEUE_NAMES, schema, withTenant } from "@bs/db";
 import type { Runtime } from "../../runtime.ts";
 import { assertPermission, type TenantContext } from "../../context.ts";
 import { createProduct, getProduct, updateProduct, updateVariant } from "../../catalog-services.ts";
@@ -475,7 +475,19 @@ export async function commitProductImportBatch(
     }
   }
 
-  const updated = await recordBatch(rt, ctx, input.runId, counters, errors, input.products.length);
+  let updated = await recordBatch(rt, ctx, input.runId, counters, errors, input.products.length);
+  // Side effects after commit, through pg-boss (ADR-006). Without a queue the images are reported as failed, never silently dropped.
+  for (const task of imageTasks) {
+    try {
+      if (!rt._jobs) throw new Error("background jobs are not available");
+      await rt._jobs.send(QUEUE_NAMES.PRODUCTS_IMPORT_IMAGES, { tenantId: ctx.tenantId, runId: input.runId, actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null, task });
+    } catch (e) {
+      for (const url of task.urls) {
+        await recordImportImageResult(rt, ctx.tenantId, input.runId, { ok: false, error: { row: 0, handle: task.handle, kind: "image", message: `${url.slice(0, 120)}: not downloaded (${errMsg(e)})` } });
+      }
+    }
+  }
+  if (imageTasks.length) updated = await getProductImportRun(rt, ctx, { id: input.runId });
   return { run: updated, imageTasks };
 }
 

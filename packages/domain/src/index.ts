@@ -214,3 +214,5 @@ export * from "./catalog/bulk-io/export.ts";
 export * from "./catalog/bulk-io/columns.ts";
 export * from "./catalog/bulk-io/import.ts";
 export * from "./catalog/bulk-io/parse.ts";
+export * from "./catalog/bulk-io/import-images.ts";
+export * from "./catalog/bulk-io/image-fetch.ts";
