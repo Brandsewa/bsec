@@ -519,6 +519,7 @@ export async function getPlatformTenantDetail(
             interval: sub.interval,
             currentPeriodStart: sub.currentPeriodStart?.toISOString(),
             currentPeriodEnd: sub.currentPeriodEnd?.toISOString(),
+            paymentRequired: sub.paymentRequired,
           }
         : null,
       invoices: invoices.map((i) => ({
@@ -885,6 +886,60 @@ export async function extendPlatformTenantTrial(
     }, meta);
 
     return { ok: true, trialEndsAt: newTrialEnd.toISOString() };
+  });
+}
+
+/**
+ * Opens a store that is stuck on "Activate your store" (self-service signup with the free trial off, payment_required) without a
+ * payment: the owner's manual path while platform billing (PayPal for non-India merchants) is not live. The store runs as a
+ * trial on its plan for `days`, then the normal trial sweep applies (restricted tier until it pays). Audited with the reason.
+ */
+export async function activatePlatformTenantStore(
+  rt: Runtime,
+  platformStaffUserId: string,
+  tenantId: string,
+  opts: { days: number; reason: string },
+  meta?: AuditMeta,
+) {
+  await assertPlatformStaff(rt, platformStaffUserId);
+  const db = rt._db.db;
+
+  return db.transaction(async (tx) => {
+    const [sub] = await tx.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, tenantId)).limit(1);
+    if (!sub) throw new Error(`Tenant has no subscription: ${tenantId}`);
+    if (!sub.paymentRequired) throw new Error("This store is not waiting for activation");
+
+    const periodEnd = new Date(Date.now() + opts.days * 24 * 60 * 60 * 1000);
+    await tx
+      .update(schema.subscriptions)
+      .set({
+        status: "trialing",
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: periodEnd,
+        paymentRequired: false,
+        pastDueSince: null,
+        dunningStage: 0,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(schema.subscriptions.id, sub.id));
+    await tx.update(schema.tenants).set({ trialEndsAt: periodEnd, updatedAt: sql`now()` }).where(eq(schema.tenants.id, tenantId));
+
+    // Back on the plan's own tier: the trial sweep put a store that never paid on the restricted one.
+    const [plan] = sub.planId ? await tx.select({ code: schema.plans.code }).from(schema.plans).where(eq(schema.plans.id, sub.planId)).limit(1) : [];
+    const tier = tierForPlan(plan?.code);
+    await tx
+      .insert(schema.tenantSizeTiers)
+      .values({ tenantId, tier })
+      .onConflictDoUpdate({ target: [schema.tenantSizeTiers.tenantId], set: { tier, updatedAt: sql`now()` } });
+
+    await writePlatformAudit(tx, platformStaffUserId, "tenant.activate", "tenant", tenantId, tenantId, {
+      days: opts.days,
+      reason: opts.reason,
+      activeUntil: periodEnd.toISOString(),
+      tier,
+    }, meta);
+
+    return { ok: true, activeUntil: periodEnd.toISOString() };
   });
 }
 

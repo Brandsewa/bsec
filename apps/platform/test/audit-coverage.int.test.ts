@@ -140,6 +140,15 @@ const CASES: Record<string, Case> = {
   "tenants.archive": { role: "platform_admin", action: "tenant.archive", input: async () => ({ id: (await mkStore()).tenantId }) },
   "tenants.changePlan": { role: "platform_admin", action: "tenant.change_plan", input: async () => ({ id: (await mkStore()).tenantId, planCode: "growth" }) },
   "tenants.extendTrial": { role: "platform_admin", action: "tenant.extend_trial", input: async () => ({ id: (await mkStore()).tenantId, additionalDays: 7 }) },
+  "tenants.activate": {
+    role: "platform_admin",
+    action: "tenant.activate",
+    input: async () => {
+      const s = await mkStore();
+      await rt._db.db.update(schema.subscriptions).set({ paymentRequired: true }).where(eq(schema.subscriptions.tenantId, s.tenantId));
+      return { id: s.tenantId, days: 30, reason: "test store" };
+    },
+  },
   "tenants.transferOwnership": {
     role: "platform_admin",
     action: "tenant.transfer_ownership",

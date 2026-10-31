@@ -48,6 +48,7 @@ import {
   archivePlatformTenant,
   changePlatformTenantPlan,
   extendPlatformTenantTrial,
+  activatePlatformTenantStore,
   transferPlatformTenantOwnership,
   addPlatformTenantNote,
   bulkSuspendPlatformTenants,
@@ -381,6 +382,10 @@ export const platformRouter = os.router({
     extendTrial: os.tenants.extendTrial.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return extendPlatformTenantTrial(context.rt, staffUserId, input.id, input.additionalDays, context.meta);
+    }),
+    activate: os.tenants.activate.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return activatePlatformTenantStore(context.rt, staffUserId, input.id, { days: input.days, reason: input.reason }, context.meta);
     }),
     transferOwnership: os.tenants.transferOwnership.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
