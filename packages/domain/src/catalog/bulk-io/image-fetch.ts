@@ -88,7 +88,9 @@ export async function fetchImageSafely(rawUrl: string, deps: { resolve?: Resolve
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), IMAGE_FETCH_TIMEOUT_MS);
     try {
-      const res = await transport(url, addresses[0]!, ac.signal);
+      const pinned = addresses[0];
+      if (!pinned) throw new ImageFetchError("the host could not be found");
+      const res = await transport(url, pinned, ac.signal);
       if (res.status >= 300 && res.status < 400) {
         res.destroy();
         const loc = res.headers["location"];

@@ -5,7 +5,7 @@ import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../../runtime.ts";
 import { assertPermission, type TenantContext } from "../../context.ts";
 import { publicMediaUrl } from "../../media/storage.ts";
-import { CUSTOM_FIELD_PREFIX, PRODUCT_COLUMNS, type ColumnGroup } from "./columns.ts";
+import { CUSTOM_FIELD_PREFIX, PRODUCT_COLUMNS, type ColumnGroup } from "@bs/contracts/product-bulk-io";
 import { customFieldsEnabled } from "../custom-fields.ts";
 
 export const EXPORT_PAGE_MAX = 200;

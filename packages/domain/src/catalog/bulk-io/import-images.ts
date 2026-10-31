@@ -76,7 +76,8 @@ export async function processImportImageTask(
       const product = await getProduct(rt, ctx, { id: task.productId });
       for (const [sku, url] of wantsVariants) {
         const variant = product.variants.find((v) => v.sku.toLowerCase() === sku.toLowerCase());
-        if (variant) await updateVariant(rt, ctx, { id: variant.id, imageMediaId: mediaByUrl.get(url)! });
+        const linked = mediaByUrl.get(url);
+        if (variant && linked) await updateVariant(rt, ctx, { id: variant.id, imageMediaId: linked });
       }
     } catch {
       // The gallery images are already attached; a variant link problem is not worth failing the product.

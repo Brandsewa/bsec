@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { autoMapHeaders } from "../src/catalog/bulk-io/columns.ts";
-import { importDescriptionToText, toRichTextHtml } from "../src/catalog/bulk-io/description.ts";
+import { autoMapHeaders } from "@bs/contracts/product-bulk-io";
+import { importDescriptionToText, toRichTextHtml } from "@bs/contracts/product-bulk-io";
 import { checkImageUrl, isBlockedAddress, sniffImageMime } from "../src/catalog/bulk-io/image-guard.ts";
-import { parsePriceCell, parseProductRows } from "../src/catalog/bulk-io/parse.ts";
+import { parsePriceCell, parseProductRows } from "@bs/contracts/product-bulk-io";
 
 describe("autoMapHeaders", () => {
   it("matches our headers, Shopify headers and custom fields, each field once", () => {

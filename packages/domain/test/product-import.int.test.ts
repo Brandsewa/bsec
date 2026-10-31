@@ -23,6 +23,7 @@ let env: TestDb;
 let rt: Runtime;
 let ctxA: TenantContext;
 let ctxB: TenantContext;
+const queued: Array<{ queue: string; data: unknown }> = [];
 
 async function tenant(rtPlatform: Runtime, label: string): Promise<TenantContext> {
   const run = Math.random().toString(36).slice(2, 7);
@@ -49,7 +50,12 @@ async function run(rows: string[][], policy: ConflictPolicy = "update", mode: Im
 beforeAll(async () => {
   env = await startTestDb();
   const rtPlatform = createRuntime({ service: "platform", databaseUrl: env.as("app_platform"), poolMax: 5 });
-  rt = createRuntime({ service: "web", databaseUrl: env.as("app_rw"), poolMax: 5 });
+  rt = createRuntime({
+    service: "web",
+    databaseUrl: env.as("app_rw"),
+    poolMax: 5,
+    jobs: { isRunning: () => true, stop: async () => {}, send: async (queue, data) => (queued.push({ queue, data }), "job-id") },
+  });
   ctxA = await tenant(rtPlatform, "a");
   ctxB = await tenant(rtPlatform, "b");
   await createCategory(rt, ctxA, { name: "Tops" });
@@ -70,6 +76,8 @@ describe("product import (real Postgres)", () => {
     expect(res.run).toMatchObject({ created: 2, failed: 0, productsDone: 2, imagesTotal: 1 });
     expect(res.run.status).toBe("running"); // an image is still pending
     expect(res.imageTasks).toHaveLength(1);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.queue).toBe("products.import_images");
     expect(res.imageTasks[0]?.urls).toEqual(["https://cdn.example.com/a.jpg"]);
 
     const tee = await find("imp-tee");

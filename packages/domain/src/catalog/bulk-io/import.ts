@@ -5,8 +5,8 @@ import { assertPermission, type TenantContext } from "../../context.ts";
 import { createProduct, getProduct, updateProduct, updateVariant } from "../../catalog-services.ts";
 import { createVariant, deleteVariant } from "../variant-builder.ts";
 import { customFieldsEnabled, setResourceCustomFields } from "../custom-fields.ts";
-import { toRichTextHtml } from "./description.ts";
-import { type ImportProduct, type ImportVariant } from "./parse.ts";
+import { toRichTextHtml } from "@bs/contracts/product-bulk-io";
+import { type ImportProduct, type ImportVariant } from "@bs/contracts/product-bulk-io";
 
 /**
  * Product import (docs/PRODUCT-BULK-IO-PLAN.md sections 4 and 7). The browser parses and maps the CSV, then sends products
@@ -313,7 +313,9 @@ async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, cate
     ...(seo ? { seo } : {}),
     ...(categoryId ? { primaryCategoryId: categoryId } : {}),
     ...(options.length ? { options } : {}),
-    variants: p.variants.map((v, i) => ({
+    variants: p.variants.map((v, i) => {
+      const ov = optionValuesOf(p, v);
+      return {
       sku: variantSku(p, v, i),
       title: variantTitle(v, i),
       price: v.price ?? 0,
@@ -321,8 +323,9 @@ async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, cate
       ...(v.costPrice ? { costPrice: v.costPrice } : {}),
       ...(v.trackInventory !== undefined ? { trackInventory: v.trackInventory } : {}),
       ...(v.allowBackorder !== undefined ? { allowBackorder: v.allowBackorder } : {}),
-      ...(optionValuesOf(p, v) ? { optionValues: optionValuesOf(p, v)! } : {}),
-    })),
+      ...(ov ? { optionValues: ov } : {}),
+      };
+    }),
   });
   // Barcode and weight are not part of the create input; set them on the new variants by SKU.
   for (const [i, v] of p.variants.entries()) {
@@ -358,6 +361,7 @@ async function updateOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, exis
   const bySku = new Map(current.variants.map((v) => [v.sku.toLowerCase(), v]));
   const seen = new Set<string>();
   for (const [i, v] of p.variants.entries()) {
+    const ov = optionValuesOf(p, v);
     // A file row without a SKU updates the product's only variant, otherwise it is a new variant with a generated SKU.
     const target = v.sku ? bySku.get(v.sku.toLowerCase()) : current.variants.length === 1 && p.variants.length === 1 ? current.variants[0] : undefined;
     if (target) {
@@ -372,14 +376,14 @@ async function updateOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, exis
         ...(v.weightGrams !== undefined ? { weightGrams: v.weightGrams } : {}),
         ...(v.trackInventory !== undefined ? { trackInventory: v.trackInventory } : {}),
         ...(v.allowBackorder !== undefined ? { allowBackorder: v.allowBackorder } : {}),
-        ...(optionValuesOf(p, v) ? { optionValues: optionValuesOf(p, v)! } : {}),
+        ...(ov ? { optionValues: ov } : {}),
       });
     } else if (v.price === undefined) {
       warnings.push(`Variant ${v.sku ?? i + 1} is new and has no price, so it was not added`);
     } else {
       const sku = variantSku(p, v, current.variants.length + i);
       seen.add(sku.toLowerCase());
-      await createVariant(rt, ctx, { productId: existingId, sku, title: variantTitle(v, i), price: v.price, ...(v.compareAtPrice ? { compareAtPrice: v.compareAtPrice } : {}), ...(v.costPrice ? { costPrice: v.costPrice } : {}), ...(v.barcode ? { barcode: v.barcode } : {}), ...(v.weightGrams !== undefined ? { weightGrams: v.weightGrams } : {}), ...(optionValuesOf(p, v) ? { optionValues: optionValuesOf(p, v)! } : {}) });
+      await createVariant(rt, ctx, { productId: existingId, sku, title: variantTitle(v, i), price: v.price, ...(v.compareAtPrice ? { compareAtPrice: v.compareAtPrice } : {}), ...(v.costPrice ? { costPrice: v.costPrice } : {}), ...(v.barcode ? { barcode: v.barcode } : {}), ...(v.weightGrams !== undefined ? { weightGrams: v.weightGrams } : {}), ...(ov ? { optionValues: ov } : {}) });
     }
   }
   if (replace && p.variants.length) {
@@ -457,10 +461,11 @@ export async function commitProductImportBatch(
         handle: p.handle,
         urls: p.imageUrls,
         ...(p.imageAlt ? { alt: p.imageAlt } : {}),
-        variantImages: Object.fromEntries(p.variants.filter((v) => v.imageUrl).map((v, i) => [variantSku(p, v, i), v.imageUrl!])),
+        variantImages: Object.fromEntries(p.variants.flatMap((v, i) => (v.imageUrl ? [[variantSku(p, v, i), v.imageUrl] as const] : []))),
       });
     }
-    if (outcome.productId) {
+    const savedId = outcome.productId;
+    if (savedId) {
       await withTenant(rt._db.db, ctx.tenantId, (tx) =>
         tx.insert(schema.auditLogs).values({
           tenantId: ctx.tenantId,
@@ -468,7 +473,7 @@ export async function commitProductImportBatch(
           actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
           action: outcome.kind === "created" ? "product.created" : "product.updated",
           targetType: "product",
-          targetId: outcome.productId!,
+          targetId: savedId,
           diff: { source: "import", runId: input.runId, policy: run.conflictPolicy },
         }),
       );
@@ -538,13 +543,14 @@ export async function recordImportImageResult(rt: Runtime, tenantId: string, run
     const imagesDone = row.imagesDone + (result.ok ? 1 : 0);
     const imagesFailed = row.imagesFailed + (result.ok ? 0 : 1);
     const finished = row.productsDone >= row.productsTotal && imagesDone + imagesFailed >= row.imagesTotal;
-    const addError = result.error && stored.length < MAX_STORED_ERRORS;
+    const err = result.error;
+    const addError = err !== undefined && stored.length < MAX_STORED_ERRORS;
     await tx
       .update(schema.productImportRuns)
       .set({
         imagesDone,
         imagesFailed,
-        ...(addError ? { errors: [...stored, result.error!] } : {}),
+        ...(addError && err ? { errors: [...stored, err] } : {}),
         ...(result.error && !addError ? { errorsTruncated: row.errorsTruncated + 1 } : {}),
         updatedAt: new Date(),
         ...(finished ? { status: row.failed > 0 || imagesFailed > 0 ? "completed_with_errors" : "completed", finishedAt: new Date() } : {}),

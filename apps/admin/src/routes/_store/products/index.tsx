@@ -10,7 +10,6 @@ import { Checkbox } from "@bs/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
 import { DataTable, type Column } from "../../../components/data-table/data-table.tsx";
-import { fetchAllPages } from "../../../components/data-table/fetch-all.ts";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
 import { TableToolbar } from "../../../components/data-table/table-toolbar.tsx";
 import { BulkBar, ColumnsMenu, FilterChips, type FilterChip } from "../../../components/data-table/toolbar-parts.tsx";
@@ -32,7 +31,8 @@ import { DateRangePicker } from "@bs/ui";
 import { StatusBadge } from "../../../components/order-parts.tsx";
 import { ScrollTabs } from "@bs/ui";
 import { SimpleSelect } from "@bs/ui";
-import { downloadCsv, toCsv } from "../../../lib/csv.ts";
+import { ProductExportDialog } from "../../../components/product/bulk/product-export-dialog.tsx";
+import { ProductImportDialog } from "../../../components/product/bulk/product-import-dialog.tsx";
 import { errorMessage } from "../../../lib/errors.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
 
@@ -126,20 +126,6 @@ export const Route = createFileRoute("/_store/products/")({
   component: ProductsPage,
 });
 
-const EXPORT_HEADER = ["Title", "Slug", "Status", "Min price", "Max price", "Currency", "Variants", "Stock", "Tags", "Updated"];
-const exportRow = (p: ProductRow, currency: string) => [
-  p.title,
-  p.slug,
-  p.status,
-  p.priceMin == null ? "" : (p.priceMin / 100).toFixed(2),
-  p.priceMax == null ? "" : (p.priceMax / 100).toFixed(2),
-  currency,
-  p.variantCount ?? 0,
-  p.stock ?? 0,
-  p.tags.join("; "),
-  p.updatedAt,
-];
-
 // ---------------------------------------------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------------------------------------------
@@ -152,6 +138,8 @@ export function ProductsPage() {
   const bulk = useBulkRunner();
   const setFilter = (patch: Record<string, unknown>) => update({ ...patch, page: undefined });
   const [toDelete, setToDelete] = useState<ProductRow[] | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const go = (id: string) => void navigate({ to: "/products/$id", params: { id } });
 
@@ -205,25 +193,6 @@ export function ProductsPage() {
         refresh();
       },
     });
-
-  async function exportProducts(source: "selection" | "matching") {
-    try {
-      if (source === "selection" && !sel.allResults) {
-        downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, sel.picked.map((p) => exportRow(p, storeCurrency))));
-        toast.success(`Exported ${sel.picked.length} product${sel.picked.length === 1 ? "" : "s"}.`);
-        return;
-      }
-      const { rows: all, total: count } = await fetchAllPages((offset, limit) => client.admin.products.list(productsListInput(s, { limit, offset })), {
-        onProgress: (done, of) => bulk.setProgress({ label: "Exporting products", done, total: of }),
-      });
-      downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_HEADER, all.map((p) => exportRow(p, storeCurrency))));
-      toast.success(all.length < count ? `Exported the first ${all.length.toLocaleString("en-IN")} of ${count.toLocaleString("en-IN")} products.` : `Exported ${all.length.toLocaleString("en-IN")} products.`);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    } finally {
-      bulk.setProgress(null);
-    }
-  }
 
   const columns: Column<ProductRow>[] = [
     {
@@ -367,11 +336,11 @@ export function ProductsPage() {
         description="Manage your product catalog, prices, variants, and categories."
         aside={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" disabled={bulk.busy || total === 0} onClick={() => void exportProducts("matching")}>
+            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => setExportOpen(true)}>
               <Download className="mr-1.5 size-3.5" aria-hidden />
               Export
             </Button>
-            <Button variant="outline" size="sm" disabled title="Coming soon">
+            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => setImportOpen(true)}>
               <Upload className="mr-1.5 size-3.5" aria-hidden />
               Import
             </Button>
@@ -432,7 +401,7 @@ export function ProductsPage() {
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "archived")}>
               <Archive className="mr-1.5" /> Archive
             </Button>
-            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => void exportProducts("selection")}>
+            <Button variant="outline" size="sm" disabled={bulk.busy} onClick={() => setExportOpen(true)}>
               <Download className="mr-1.5" /> Export
             </Button>
             <Button variant="destructive" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => setToDelete(sel.picked)}>
@@ -506,6 +475,13 @@ export function ProductsPage() {
           void remove(items);
         }}
       />
+      <ProductExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        selectedIds={sel.allResults ? [] : sel.picked.map((p) => p.id)}
+        filter={{ ...(s.status !== "all" ? { status: s.status } : {}), ...(s.q ? { search: s.q } : {}) }}
+      />
+      <ProductImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={refresh} />
     </PageContainer>
   );
 }

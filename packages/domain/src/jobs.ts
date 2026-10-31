@@ -1,4 +1,5 @@
 import { PgBoss } from "pg-boss";
+import type { ImportImageJob } from "./catalog/bulk-io/import-images.ts";
 import { formatMoney } from "@bs/contracts/money";
 import type { Logger } from "pino";
 import { QUEUE_NAMES } from "@bs/db";
@@ -501,7 +502,7 @@ export async function handleCustomerImportJob(
 }
 
 // Download and attach the images of one imported product (docs/PRODUCT-BULK-IO-PLAN.md section 4)
-export async function handleProductImportImagesJob(db: Db, log: Logger, data: import("./catalog/bulk-io/import-images.ts").ImportImageJob): Promise<void> {
+export async function handleProductImportImagesJob(db: Db, log: Logger, data: ImportImageJob): Promise<void> {
   const { processImportImageTask } = await import("./catalog/bulk-io/import-images.ts");
   const res = await processImportImageTask(db, data);
   log.info({ tenantId: data.tenantId, runId: data.runId, productId: data.task.productId, ok: res.ok, failed: res.failed }, "products.import_images processed");
@@ -1091,7 +1092,7 @@ export async function startJobs(opts: {
   );
 
   // Handle products.import_images (product bulk import): a few products at a time, each product sequentially.
-  await boss.work<import("./catalog/bulk-io/import-images.ts").ImportImageJob>(QUEUE_NAMES.PRODUCTS_IMPORT_IMAGES, { localConcurrency: 3 }, async (batch) => {
+  await boss.work<ImportImageJob>(QUEUE_NAMES.PRODUCTS_IMPORT_IMAGES, { localConcurrency: 3 }, async (batch) => {
     for (const job of batch) {
       try {
         await withTenantJobSlot(job.data.tenantId, async () => {

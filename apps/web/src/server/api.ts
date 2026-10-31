@@ -1374,7 +1374,7 @@ export const storeRouter = os.router({
       importRuns: os.admin.products.importRuns
         .use(requireAdmin)
         .use(requirePermission("products.read"))
-        .handler(({ context, input }) => {
+        .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listProductImportRuns(context.rt, context.tenantCtx).catch((e) => {
             throw mapAuthError(e);

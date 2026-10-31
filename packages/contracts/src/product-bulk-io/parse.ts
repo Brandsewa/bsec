@@ -1,4 +1,4 @@
-import { toMinorUnits } from "@bs/contracts/money";
+import { toMinorUnits } from "../money.ts";
 import { CUSTOM_FIELD_PREFIX } from "./columns.ts";
 import { importDescriptionToText } from "./description.ts";
 
@@ -125,15 +125,16 @@ export function parseProductRows(
       products.push(product);
     }
     current = product;
+    const owner: ImportProduct = product;
     const fail = (error: string) => {
-      issues.push({ row: rowNo, handle: product!.handle, error });
-      bad.add(product!.handle);
+      issues.push({ row: rowNo, handle: owner.handle, error });
+      bad.add(owner.handle);
     };
 
     // Product-level fields: the first non-blank value wins.
     const text = (key: string, apply: (p: ImportProduct, v: string) => void) => {
       const v = get(key);
-      if (v) apply(product!, v === CLEAR_TOKEN ? "" : v);
+      if (v) apply(owner, v === CLEAR_TOKEN ? "" : v);
     };
     text("title", (p, v) => (p.title ??= v));
     text("shortDescription", (p, v) => (p.shortDescription ??= v));
