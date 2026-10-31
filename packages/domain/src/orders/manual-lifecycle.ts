@@ -955,7 +955,7 @@ export async function cancelOrderByToken(
 
 /**
  * The shopper left an online payment unpaid (closed the gateway window, cancelled, or the payment failed). The held order is
- * cancelled (stock and discount returned), and its items go back into the cart marked abandoned, so the shopper can retry from
+ * removed (never shown as an order), and its items go back into the cart marked abandoned, so the shopper can retry from
  * checkout and the store sees it under Abandoned checkouts. Does nothing to an order that is paid or not an online order, so a
  * payment that completed in the meantime is never undone. Not gated by the self-service cancellation setting: no order was
  * ever confirmed to the shopper.
@@ -984,12 +984,33 @@ export async function abandonUnpaidOnlineOrder(
   });
   if (!target) return { restored: false };
 
-  await cancelOrderByTokenInternal(rt, tenantId, orderToken, { reason: "Payment not completed" });
+  await withTenant(db, tenantId, async (tx) => {
+    // The order was only a hold for the payment and was never announced (no email, no store alert), so it is removed, not
+    // left behind as a cancelled order. Its stock reservation and discount use go with it.
+    const id = target.orderId;
+    const intents = await tx.select({ id: schema.paymentIntents.id }).from(schema.paymentIntents).where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, id)));
+    if (intents.length > 0) {
+      await tx.delete(schema.paymentAttempts).where(and(eq(schema.paymentAttempts.tenantId, tenantId), inArray(schema.paymentAttempts.intentId, intents.map((i) => i.id))));
+      await tx.delete(schema.paymentIntents).where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, id)));
+    }
+    await tx.delete(schema.discountRedemptions).where(and(eq(schema.discountRedemptions.tenantId, tenantId), eq(schema.discountRedemptions.orderId, id)));
+    await tx.delete(schema.inventoryReservations).where(and(eq(schema.inventoryReservations.tenantId, tenantId), eq(schema.inventoryReservations.orderId, id)));
+    await tx.delete(schema.orderNotes).where(and(eq(schema.orderNotes.tenantId, tenantId), eq(schema.orderNotes.orderId, id)));
+    await tx.delete(schema.orderEvents).where(and(eq(schema.orderEvents.tenantId, tenantId), eq(schema.orderEvents.orderId, id)));
+    await tx.delete(schema.actionTokens).where(and(eq(schema.actionTokens.tenantId, tenantId), eq(schema.actionTokens.targetId, id)));
+    await tx.update(schema.quoteRequests).set({ orderId: null }).where(and(eq(schema.quoteRequests.tenantId, tenantId), eq(schema.quoteRequests.orderId, id)));
+  });
+  const itemsBeforeDelete = await withTenant(db, tenantId, async (tx) => {
+    const rows = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
+    await tx.delete(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
+    await tx.delete(schema.orders).where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, target.orderId)));
+    return rows;
+  });
 
   await withTenant(db, tenantId, async (tx) => {
     const [cart] = await tx.select().from(schema.carts).where(and(eq(schema.carts.tenantId, tenantId), eq(schema.carts.token, cartToken))).limit(1);
     if (!cart) return;
-    const items = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
+    const items = itemsBeforeDelete;
     await tx.delete(schema.cartItems).where(eq(schema.cartItems.cartId, cart.id));
     for (const i of items) {
       await tx.insert(schema.cartItems).values({ tenantId, cartId: cart.id, variantId: i.variantId, quantity: i.quantity, unitPriceSnapshot: i.unitPrice });
