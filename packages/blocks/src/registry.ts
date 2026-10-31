@@ -8,7 +8,7 @@ import {
   hrefSchema,
   httpsImageUrlSchema,
   logoSizeSchema,
-  ICON_NAMES,
+  iconNameSchema,
   itemsSchema,
   justifySchema,
   slotSchema,
@@ -661,8 +661,9 @@ export const ButtonBlock: BlockDefinition<ButtonProps> = {
 };
 
 export const IconSchema = z.object({
-  name: z.enum(ICON_NAMES).default("star"),
-  size: z.enum(["sm", "md", "lg"]).default("md"),
+  name: iconNameSchema.default("star"),
+  /** Unset or "theme": the theme's icon size. A size here wins over the theme. */
+  size: z.enum(["theme", "sm", "md", "lg"]).optional(),
   align: alignSchema.default("left"),
 });
 export type IconProps = z.infer<typeof IconSchema>;
@@ -670,7 +671,7 @@ export const IconBlock: BlockDefinition<IconProps> = {
   type: "Icon",
   version: 1,
   schema: IconSchema,
-  defaultProps: { name: "star", size: "md", align: "left" },
+  defaultProps: { name: "star", align: "left" },
   render: V.IconView,
 };
 
@@ -897,7 +898,7 @@ export const ProductDetailSchema = z.object({
   timeZone: z.string().max(40).default("Asia/Kolkata"),
   showUsps: z.boolean().default(false),
   usps: z
-    .array(z.object({ icon: z.enum(ICON_NAMES).default("check"), text: z.string().min(1).max(40), description: z.string().max(80).optional() }))
+    .array(z.object({ icon: iconNameSchema.default("check"), text: z.string().min(1).max(40), description: z.string().max(80).optional() }))
     .max(4)
     .default(DEFAULT_PRODUCT_USPS),
   /** Order of the buy-box elements (see PRODUCT_ELEMENTS). Empty = the default order, as before. */
@@ -908,7 +909,7 @@ export const ProductDetailSchema = z.object({
   accordionItems: z
     .array(
       z.object({
-        icon: z.enum(ICON_NAMES).default("info"),
+        icon: iconNameSchema.default("info"),
         title: z.string().min(1).max(60),
         /** "custom_field" shows the product's own value of the custom field `fieldKey` (hidden when the product has none); "static" shows `text`. */
         source: z.enum(["static", "custom_field"]).default("static"),
@@ -1615,7 +1616,7 @@ export const FaqSectionBlock: BlockDefinition<FaqSectionProps> = {
 export const MultiCardItemSchema = z.object({
   /** A picture from the media library; wins over `icon`. */
   iconMediaId: z.string().optional(),
-  icon: z.enum(ICON_NAMES).optional(),
+  icon: iconNameSchema.optional(),
   heading: z.string().max(120).default(""),
   text: z.string().max(1000).default(""),
   linkLabel: z.string().max(60).default(""),
@@ -1672,7 +1673,8 @@ export const MultiCardSchema = z.object({
   showHeading: z.boolean().default(true),
   showText: z.boolean().default(true),
   showLink: z.boolean().default(true),
-  iconSize: z.number().int().min(16).max(120).default(48),
+  /** Unset: the theme's icon size (48 when the theme sets none). A size here wins over the theme. */
+  iconSize: z.number().int().min(16).max(120).optional(),
   linkStyle: z.enum(["link", "button"]).default("link"),
   items: z
     .array(MultiCardItemSchema)

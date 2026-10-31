@@ -34,7 +34,7 @@ export function ProductAccordionRows({ items, firstOpen, valueOf }: { items: Non
         <details key={i} className="bsb-pd-acc-item" {...(firstOpen && i === 0 ? { open: true } : null)}>
           <summary className="bsb-pd-acc-head">
             <span className="bsb-pd-acc-icon">
-              <SvgIcon name={it.icon} px={22} />
+              <SvgIcon name={it.icon} px={22} themed />
             </span>
             <span className="bsb-pd-acc-title">{it.title}</span>
             <Chevron />
@@ -103,7 +103,7 @@ export function ProductDetailSample({ props, ctx }: BlockRenderArgs<ProductDetai
         <ul className="bsb-pd-usps" style={{ "--usp-cols": usps.length } as CSSProperties}>
           {usps.map((u, i) => (
             <li key={i} className="bsb-pd-usp">
-              <SvgIcon name={u.icon} px={28} />
+              <SvgIcon name={u.icon} px={28} themed />
               <span>
                 <strong>{u.text}</strong>
                 {u.description ? <span className="bsb-muted">{u.description}</span> : null}

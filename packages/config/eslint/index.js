@@ -15,6 +15,20 @@ const DB_BAN = {
   ],
 };
 
+// ADR-041: Lucide is imported by name so the bundler keeps only the icons a file uses. The catalog helpers pull
+// in all ~1,900 icons; picker and storefront rendering go through @bs/icons instead.
+const ICON_BAN = {
+  paths: [
+    {
+      name: "lucide-react",
+      importNames: ["icons", "DynamicIcon", "dynamicIconImports"],
+      message: "Import each Lucide icon by name (import { Truck } from \"lucide-react\"). For icons chosen by name at runtime use @bs/icons.",
+    },
+  ],
+  patterns: [{ group: ["lucide-react/dynamic", "lucide-react/dynamicIconImports", "lucide-react/dist/*"], message: "Use named imports from lucide-react, or @bs/icons for runtime names." }],
+};
+const mergeBans = (...bans) => ({ paths: bans.flatMap((b) => b.paths), patterns: bans.flatMap((b) => b.patterns) });
+
 /**
  * @param {{ allowDb?: boolean, react?: boolean, routes?: "tanstack" | "next", ignores?: string[] }} [opts]
  */
@@ -33,7 +47,7 @@ export function defineBsConfig(opts = {}) {
         "bs/design-system-guards": "error",
         "@typescript-eslint/consistent-type-imports": "error",
         "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-        ...(allowDb ? {} : { "no-restricted-imports": ["error", DB_BAN] }),
+        "no-restricted-imports": ["error", allowDb ? ICON_BAN : mergeBans(DB_BAN, ICON_BAN)],
       },
     },
     {

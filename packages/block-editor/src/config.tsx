@@ -3,6 +3,7 @@ import type { Config, CustomField, Field } from "@puckeditor/core";
 import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField, fileMediaField } from "./MediaField.tsx";
 import { galleryImagesField } from "./GalleryImagesField.tsx";
+import { iconField } from "./IconField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
@@ -130,7 +131,6 @@ const GAP = { none: "None", sm: "Small", md: "Medium", lg: "Large" };
 const WIDTH = { narrow: "Narrow", default: "Standard", wide: "Wide", full: "Full width" };
 const ITEMS = { start: "Start", center: "Center", end: "End", stretch: "Stretch" };
 const SOURCE = { newest: "Newest products", featured: "Featured products", collection: "From a collection", manual: "Pick by product slug" };
-const ICONS = Object.fromEntries(["check", "star", "heart", "truck", "shield", "leaf", "gift", "phone", "mail", "award", "returns", "support", "clipboard", "cup", "help", "info", "package", "droplet"].map((n) => [n, n]));
 
 type Spec = { label: string; fields: Record<string, Field>; category: "layout" | "content" | "store" | "bcom" };
 
@@ -382,7 +382,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       { includeDisplayControls: false }
     ),
   },
-  Icon: { label: "Icon", category: "content", fields: { name: select("Icon", ICONS), size: select("Size", { sm: "Small", md: "Medium", lg: "Large" }), align: select("Align", ALIGN) } },
+  Icon: { label: "Icon", category: "content", fields: { name: iconField("Icon") as Field, size: select("Size", { theme: "Theme default", sm: "Small", md: "Medium", lg: "Large" }), align: select("Align", ALIGN) } },
   Link: { label: "Link", category: "content", fields: { label: text("Label"), href: link("Link"), newTab: radio("Open in new tab") } },
 
   Hero: { label: "Hero banner", category: "store", fields: { eyebrow: text("Small heading"), title: text("Heading"), subtitle: area("Subheading"), ctaText: text("Main button"), ctaLink: link("Main button link"), secondaryCtaText: text("Second button"), secondaryCtaLink: link("Second button link"), backgroundMediaId: mediaField("Background image") as Field, overlayOpacity: num("Image darkening %", 0, 100), alignment: select("Align", ALIGN), tone: select("Colour (no image)", TONE) } },
@@ -472,7 +472,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         title: "Highlight cards",
         fields: {
           showUsps: toggle("Small highlight cards") as Field,
-          usps: { type: "array", label: "Highlight cards (max 4)", getItemSummary: (i: { text?: string }) => i.text ?? "Card", arrayFields: { icon: select("Icon", ICONS), text: text("Title"), description: text("Short description (optional)") }, defaultItemProps: { icon: "check", text: "Highlight", description: "" } } as Field,
+          usps: { type: "array", label: "Highlight cards (max 4)", getItemSummary: (i: { text?: string }) => i.text ?? "Card", arrayFields: { icon: iconField("Icon") as Field, text: text("Title"), description: text("Short description (optional)") }, defaultItemProps: { icon: "check", text: "Highlight", description: "" } } as Field,
         },
       },
       {
@@ -481,7 +481,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         fields: {
           showAccordion: toggle("Accordion (details rows) in this column") as Field,
           accordionFirstOpen: toggle("Accordion: first row open") as Field,
-          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
+          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
         },
       },
     ]),
@@ -782,7 +782,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           showHeading: radio("Heading"),
           showText: radio("Text"),
           showLink: radio("Link"),
-          iconSize: num("Icon size (px)", 16, 120),
+          iconSize: num("Icon size (px, empty = theme default)", 16, 120),
           linkStyle: select("Link look", { link: "Text link", button: "Button" }),
         },
       },
@@ -795,7 +795,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
             label: "Cards",
             getItemSummary: (i: { heading?: string }) => i.heading || "Card",
             arrayFields: {
-              icon: select("Icon (ignored when a picture is chosen)", ICONS),
+              icon: iconField("Icon (ignored when a picture is chosen)", true) as Field,
               iconMediaId: mediaField("Picture instead of an icon") as Field,
               heading: text("Heading"),
               text: area("Text"),
@@ -1156,7 +1156,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   },
   CartContents: { label: "Cart contents", category: "store", fields: { heading: text("Page heading"), checkoutLabel: text("Checkout button label"), showFreeShippingBar: radio("Free-shipping progress bar (uses the store's shipping settings)"), showTrustPoints: radio("Reassurance lines under the button"), trustPoints: linesField("Reassurance lines (one per line, max 4)", 4) as Field, stickyMobileCheckout: radio("Phone: total and checkout bar while scrolling"), showContinueShopping: radio("Continue shopping link"), summaryPosition: select("Order summary", { right: "Right", left: "Left" }), stickySummary: radio("Keep summary in view while scrolling"), showDiscountCode: radio("Discount code box"), showShippingEstimator: radio("Shipping estimator") } },
   CollectionListing: { label: "Collection products", category: "store", fields: { filterMenuHandle: menuField("Filter menu") as Field, columns: select("Cards per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Cards per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Cards per row: phone", { "1": "1", "2": "2" }), pageSize: select("Products per load", { "12": "12", "24": "24", "36": "36" }), defaultView: select("Default view", { grid: "Grid", list: "List" }), showViewToggle: radio("Grid / list switch"), imageRatio: select("Image shape", { square: "Square", portrait: "Portrait (4:5)" }), cardStyle: rsel("Card style", { borderless: "Borderless", bordered: "Bordered", minimal: "Minimal" }), hoverSecondImage: radio("Second image on hover"), showSaleBadge: radio("Discount badge"), showCategoryBadge: radio("Category label above the product name"), showRatings: radio("Ratings"), showAddToCart: radio("Add to cart icon on image"), showQuickAdd: radio("Quick-buy popup for products with variants"), showViewProduct: radio("View product link in popup"), showBreadcrumb: radio("Breadcrumb"), showFilters: radio("Sort and filters"), filtersCollapsible: radio("Filter sidebar can be hidden"), showDescription: radio("Collection description") } },
-  UspStrip: { label: "Trust strip", category: "store", fields: { items: { type: "array", label: "Points", getItemSummary: (i: { title?: string }) => i.title ?? "Point", arrayFields: { icon: select("Icon", ICONS), title: text("Title"), description: text("Description") }, defaultItemProps: { icon: "check", title: "Title", description: "Description" } } as Field } },
+  UspStrip: { label: "Trust strip", category: "store", fields: { items: { type: "array", label: "Points", getItemSummary: (i: { title?: string }) => i.title ?? "Point", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), description: text("Description") }, defaultItemProps: { icon: "check", title: "Title", description: "Description" } } as Field  } },
 };
 
 const CATEGORY_TITLES = { layout: "Layout", content: "Content", store: "Store widgets", bcom: "BCOM widgets" } as const;

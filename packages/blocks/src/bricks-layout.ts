@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { CSSProperties } from "react";
 import { isValidLayoutValue, type LayoutDevice, LAYOUT_DEVICES, type Corner, CORNERS } from "./layout.ts";
+import { isDarkColor } from "./theme-vars.ts";
 import { hexColorSchema, bgVideoUrlSchema, httpsImageUrlSchema } from "./common.ts";
 
 /**
@@ -420,6 +421,18 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   const bgc_d = d.background?.color;
   const bgc_t = t?.background?.color ?? bgc_d;
   const bgc_m = m?.background?.color ?? bgc_t;
+  // Icon colour for the background this element paints: the theme's dark or light icon colour, chosen from the
+  // colour's brightness per device (ADR-041). Used with the brx-ic class (see bricksIconToneClass).
+  const icon = (c: string | undefined) => {
+    const dark = isDarkColor(c);
+    return dark === undefined ? undefined : dark ? "var(--bs-icon-color-dark, currentColor)" : "var(--bs-icon-color-light, var(--p))";
+  };
+  const ic_d = icon(bgc_d);
+  const ic_t = icon(bgc_t);
+  const ic_m = icon(bgc_m);
+  if (ic_d) style["--brx-d-ic"] = ic_d;
+  if (ic_t) style["--brx-t-ic"] = ic_t;
+  if (ic_m) style["--brx-m-ic"] = ic_m;
   if (bgc_d) style["--brx-d-bg-c"] = bgc_d;
   if (bgc_t) style["--brx-t-bg-c"] = bgc_t;
   if (bgc_m) style["--brx-m-bg-c"] = bgc_m;
@@ -660,6 +673,12 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
  * it stacks. The editor wraps every child in its own element, so its stylesheet needs this to size those wrappers; it is
  * emitted as variables rather than read back from the inline style text.
  */
+/** "brx-ic" when this element paints its own background colour, so icons inside pick the dark or light icon colour automatically. */
+export function bricksIconToneClass(props: BricksLayoutProps): string | undefined {
+  const any = props.background?.color || props.responsive?.tablet?.background?.color || props.responsive?.mobile?.background?.color;
+  return any ? "brx-ic" : undefined;
+}
+
 export function slotBasisVars(props: BricksLayoutProps): Record<string, string> {
   const stacked = (v: string | undefined) => (v === "column" || v === "column-reverse" ? "auto" : "0%");
   const d = props.direction ?? "column";

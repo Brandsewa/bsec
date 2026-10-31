@@ -140,7 +140,13 @@
 .bsb-rounded { border-radius: var(--r); overflow: hidden; }
 .bsb-video { width: 100%; aspect-ratio: 16 / 9; border: 0; background: #000; border-radius: var(--r); }
 .bsb-placeholder { display: grid; place-items: center; background: var(--s); color: var(--m); font-size: 0.8125rem; min-height: 6rem; border-radius: var(--r); }
-.bsb-icon { display: inline-flex; color: var(--p); }
+/* Icon colour (Theme settings, Icons). --bs-ic is the colour for the nearest background: set by the dark, brand and soft tones
+   and, for sections, containers and blocks with their own background colour, picked from that colour's brightness (.brx-ic,
+   see bricksElementStyle). Unset themes keep the original brand colour. */
+.bsb-tone-dark, .bsb-tone-primary { --bs-ic: var(--bs-icon-color-dark, var(--p)); }
+.bsb-tone-surface { --bs-ic: var(--bs-icon-color-light, var(--p)); }
+.brx-ic { --bs-ic: var(--b-ic); }
+.bsb-icon { display: inline-flex; color: var(--bs-ic, var(--bs-icon-color-light, var(--p))); }
 
 /* buttons */
 .bsb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: var(--bs-btn-pad, 0.75rem 1.5rem); font-size: var(--bs-btn-fs, 1rem); border-radius: var(--br); font-weight: 600; text-decoration: none; border: 2px solid var(--p); text-transform: var(--bs-btn-case, none); transition: opacity 0.15s; }
@@ -712,6 +718,7 @@
   --brx-d-ar: initial;  --brx-t-ar: initial;  --brx-m-ar: initial;
   --brx-d-ta: initial;  --brx-t-ta: initial;  --brx-m-ta: initial;
   --brx-d-bg-c: initial;--brx-t-bg-c: initial;--brx-m-bg-c: initial;
+  --brx-d-ic: initial;  --brx-t-ic: initial;  --brx-m-ic: initial;
   --brx-d-c: initial;   --brx-t-c: initial;   --brx-m-c: initial;
   --brx-d-rtl: initial; --brx-t-rtl: initial; --brx-m-rtl: initial;
   --brx-d-rtr: initial; --brx-t-rtr: initial; --brx-m-rtr: initial;
@@ -752,6 +759,7 @@
   --b-ar: var(--brx-d-ar);
   --b-ta: var(--brx-d-ta);
   --b-bg-c: var(--brx-d-bg-c);
+  --b-ic: var(--brx-d-ic);
   --b-c: var(--brx-d-c);
   --b-rtl: var(--brx-d-rtl);
   --b-rtr: var(--brx-d-rtr);
@@ -854,6 +862,7 @@
     --b-ar: var(--brx-t-ar, var(--brx-d-ar));
     --b-ta: var(--brx-t-ta, var(--brx-d-ta));
     --b-bg-c: var(--brx-t-bg-c, var(--brx-d-bg-c));
+    --b-ic: var(--brx-t-ic, var(--brx-d-ic));
     --b-c: var(--brx-t-c, var(--brx-d-c));
     --b-rtl: var(--brx-t-rtl, var(--brx-d-rtl));
     --b-rtr: var(--brx-t-rtr, var(--brx-d-rtr));
@@ -957,6 +966,7 @@
     --b-ar: var(--brx-m-ar, var(--brx-t-ar, var(--brx-d-ar)));
     --b-ta: var(--brx-m-ta, var(--brx-t-ta, var(--brx-d-ta)));
     --b-bg-c: var(--brx-m-bg-c, var(--brx-t-bg-c, var(--brx-d-bg-c)));
+    --b-ic: var(--brx-m-ic, var(--brx-t-ic, var(--brx-d-ic)));
     --b-c: var(--brx-m-c, var(--brx-t-c, var(--brx-d-c)));
     --b-rtl: var(--brx-m-rtl, var(--brx-t-rtl, var(--brx-d-rtl)));
     --b-rtr: var(--brx-m-rtr, var(--brx-t-rtr, var(--brx-d-rtr)));
@@ -1846,7 +1856,7 @@
 .bsb-mc-body { position: relative; flex: 1; display: flex; flex-direction: column; gap: var(--mc-gap, 12px); padding: var(--mc-pad, 24px); }
 .bsb-mc-v-start { justify-content: flex-start; } .bsb-mc-v-center { justify-content: center; } .bsb-mc-v-end { justify-content: flex-end; }
 .bsb-mc-body.bsb-align-center { align-items: center; } .bsb-mc-body.bsb-align-right { align-items: flex-end; }
-.bsb-mc-icon { display: inline-flex; width: var(--mc-icon, 48px); height: var(--mc-icon, 48px); color: var(--p); }
+.bsb-mc-icon { display: inline-flex; width: var(--mc-icon, 48px); height: var(--mc-icon, 48px); color: var(--bs-ic, var(--bs-icon-color-light, var(--p))); }
 .bsb-mc-card-img .bsb-mc-icon, .bsb-mc-card-bg .bsb-mc-icon { color: inherit; }
 .bsb-mc-icon img { width: 100%; height: 100%; object-fit: contain; }
 .bsb-mc-icon svg { width: 100%; height: 100%; }
@@ -1878,4 +1888,4 @@
   .bsb-bs-m-list .bsb-blog-body { min-width: 0; flex: 1; }
   .bsb-bs-nothumb .bsb-blog-media { display: none; }
 }
-.bsb-tone-dark .bsb-mc-icon, .bsb-tone-primary .bsb-mc-icon { color: inherit; }
+.bsb-tone-dark .bsb-mc-icon, .bsb-tone-primary .bsb-mc-icon { color: var(--bs-icon-color-dark, inherit); }

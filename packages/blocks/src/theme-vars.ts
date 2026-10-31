@@ -1,3 +1,4 @@
+import { ICON_WEIGHTS } from "@bs/icons";
 export interface BrandSettingsLike {
   primaryColor?: string | null | undefined;
   secondaryColor?: string | null | undefined;
@@ -31,6 +32,17 @@ export interface ThemeTokensLike {
         /** Secondary ("light") button: background and text colour. Unset: the soft background and the text colour. */
         lightBg?: string | undefined;
         lightText?: string | undefined;
+      }
+    | undefined;
+  /** Default look of icons: size (px), stroke weight (thin, regular, bold) and the icon colour on dark and on light sections. A widget's own setting wins. */
+  icons?:
+    | {
+        size?: number | undefined;
+        weight?: string | undefined;
+        /** Icon colour on dark and brand-coloured sections; unset: the original colours. */
+        darkColor?: string | undefined;
+        /** Icon colour on light sections; unset: the brand colour. */
+        lightColor?: string | undefined;
       }
     | undefined;
   /** Heading sizes in pixels per level and device (see HEADING_LEVELS, DEFAULT_HEADING_SIZES). */
@@ -262,6 +274,18 @@ export function resolveButtonSize(val: unknown): ButtonSize {
 
 export const BUTTON_STYLES = ["solid", "outline", "soft"] as const;
 
+export const MIN_ICON_PX = 12;
+export const MAX_ICON_PX = 96;
+/** The theme's icon size in px, or undefined when it sets none (widgets then keep their own default size). */
+export function resolveIconSize(val: unknown): number | undefined {
+  const n = typeof val === "number" ? val : typeof val === "string" && val.trim() !== "" ? Number(val) : NaN;
+  return Number.isFinite(n) ? Math.min(MAX_ICON_PX, Math.max(MIN_ICON_PX, Math.round(n))) : undefined;
+}
+/** The theme's icon stroke width, or undefined when it sets none. */
+export function resolveIconWeight(val: unknown): number | undefined {
+  return typeof val === "string" && Object.hasOwn(ICON_WEIGHTS, val) ? ICON_WEIGHTS[val as keyof typeof ICON_WEIGHTS] : undefined;
+}
+
 /** One Google Fonts stylesheet URL for the fonts a theme uses (null when none are curated fonts). */
 export function googleFontsHref(tokens: ThemeTokensLike | null | undefined): string | null {
   const names = new Set<string>();
@@ -330,6 +354,14 @@ function sanitizeRadius(val: unknown, fallback: string): string {
     return trimmed;
   }
   return fallback;
+}
+
+/** True when white reads better than near-black on this hex colour; undefined when it is not a hex colour. */
+export function isDarkColor(color: string | undefined): boolean | undefined {
+  if (!color) return undefined;
+  const m = /^#([0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/i.exec(color);
+  if (!m?.[1]) return undefined;
+  return readableOn(color) === "#ffffff";
 }
 
 /** Black or white, whichever reads better on the given hex colour (falls back to white). */
@@ -517,6 +549,10 @@ export function computeThemeTokens(
         ? { bg: `color-mix(in srgb, ${darkBg} 14%, transparent)`, fg: darkBg, bd: "transparent" }
         : { bg: darkBg, fg: darkFg, bd: darkBg };
 
+  const iconSize = resolveIconSize(themeTokens?.icons?.size);
+  const iconWeight = resolveIconWeight(themeTokens?.icons?.weight);
+  const iconDarkColor = sanitizeColor(themeTokens?.icons?.darkColor, "");
+  const iconLightColor = sanitizeColor(themeTokens?.icons?.lightColor, "");
   const sizes = resolveHeadingSizes(themeTokens);
   const sizeVars: Record<string, string> = {};
   for (const level of HEADING_LEVELS) {
@@ -604,6 +640,12 @@ export function computeThemeTokens(
     "--bs-btn-light-bg": lightBg,
     "--bs-btn-light-fg": lightFg,
     "--bs-btn-light-bd": hasLightBg ? lightBg : `color-mix(in srgb, ${text} 15%, ${background})`,
+    // Icon defaults. Size and weight are omitted when unset so each widget keeps its own default; widgets that
+    // set their own size or weight win because their values are inline.
+    ...(iconSize !== undefined ? { "--bs-icon-size": `${iconSize}px` } : {}),
+    ...(iconWeight !== undefined ? { "--bs-icon-weight": String(iconWeight) } : {}),
+    ...(iconDarkColor ? { "--bs-icon-color-dark": iconDarkColor } : {}),
+    ...(iconLightColor ? { "--bs-icon-color-light": iconLightColor } : {}),
     "--bs-heading-weight": String(resolveFontWeight(themeTokens?.fonts?.["headingWeight"], DEFAULT_HEADING_WEIGHT)),
     "--bs-body-weight": String(resolveFontWeight(themeTokens?.fonts?.["bodyWeight"], DEFAULT_BODY_WEIGHT)),
     "--bs-btn-pad": BUTTON_SIZE_METRICS[resolveButtonSize(themeTokens?.buttons?.size)].pad,

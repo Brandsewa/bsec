@@ -6,7 +6,7 @@ import Link from "next/link";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import type { StorefrontCart } from "@bs/domain";
 // Subpath import: the package barrel would put every block into the browser bundle.
-import { SvgIcon } from "@bs/blocks/svg-icon";
+import { LiteSvgIcon } from "@bs/blocks/svg-icon-lite";
 import { useMiniCartConfig } from "./MiniCartConfig.tsx";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 
@@ -210,7 +210,7 @@ export function MiniCartDrawer({
                   {trust.map((t, i) => (
                     <li key={i} className="flex flex-col items-center gap-1.5 text-center text-xs font-medium leading-snug text-muted-foreground">
                       <span className="text-emerald-600">
-                        <SvgIcon name={t.icon} px={20} />
+                        <LiteSvgIcon name={t.icon} px={20} />
                       </span>
                       {t.text}
                     </li>

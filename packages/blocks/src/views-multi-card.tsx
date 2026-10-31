@@ -90,7 +90,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
     "--mc-rad": `${props.cardRadius}px`,
     "--mc-bw": `${props.borderWidth}px`,
     "--mc-gap": `${props.elementGap}px`,
-    "--mc-icon": `${props.iconSize}px`,
+    "--mc-icon": props.iconSize ? `${props.iconSize}px` : "var(--bs-icon-size, 48px)",
     "--mc-minh": `${props.cardMinHeight}px`,
     "--mc-ratio": props.imageRatio.replace(":", " / "),
     ...(props.borderColor ? { "--mc-bc": props.borderColor } : null),
@@ -116,7 +116,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
         <div className={cx("bsb-mc-body", `bsb-mc-v-${props.contentAlign}`, `bsb-align-${props.textAlign}`)}>
           {showIcon ? (
             <span className="bsb-mc-icon" aria-hidden="true">
-              {icon ? <img src={icon} alt="" loading="lazy" /> : <SvgIcon name={it.icon as string} px={props.iconSize} />}
+              {icon ? <img src={icon} alt="" loading="lazy" /> : <SvgIcon name={it.icon as string} px={props.iconSize ?? 48} />}
             </span>
           ) : null}
           {props.showHeading && it.heading ? <h3 className="bsb-mc-title">{it.heading}</h3> : null}

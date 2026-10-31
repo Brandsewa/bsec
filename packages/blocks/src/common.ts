@@ -1,3 +1,4 @@
+import { isIconName } from "@bs/icons";
 import { z } from "zod";
 
 /**
@@ -89,3 +90,6 @@ export const ICON_NAMES = [
   "plus",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
+
+/** Any Lucide icon (@bs/icons allowlist, ADR-041) or a name stored before Lucide. Widening the old enum keeps every saved document valid. */
+export const iconNameSchema = z.string().max(64).refine(isIconName, "Unknown icon");
