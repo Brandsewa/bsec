@@ -950,7 +950,65 @@ export async function cancelOrderByToken(
   if (!accountSettings.allowSelfServeCancellation) {
     throw new Error("Precondition: Self-service order cancellation is disabled for this store");
   }
+  return cancelOrderByTokenInternal(rt, tenantId, token, input);
+}
 
+/**
+ * The shopper left an online payment unpaid (closed the gateway window, cancelled, or the payment failed). The held order is
+ * cancelled (stock and discount returned), and its items go back into the cart marked abandoned, so the shopper can retry from
+ * checkout and the store sees it under Abandoned checkouts. Does nothing to an order that is paid or not an online order, so a
+ * payment that completed in the meantime is never undone. Not gated by the self-service cancellation setting: no order was
+ * ever confirmed to the shopper.
+ */
+export async function abandonUnpaidOnlineOrder(
+  rt: Runtime,
+  tenantId: string,
+  orderToken: string,
+  cartToken: string,
+): Promise<{ restored: boolean }> {
+  const db = rt._db.db;
+  const target = await withTenant(db, tenantId, async (tx) => {
+    const orderId = await orderIdForToken(tx, tenantId, orderToken);
+    if (!orderId) return null;
+    const order = await loadOrder(tx, tenantId, orderId);
+    const [intent] = await tx
+      .select({ provider: schema.paymentIntents.provider, status: schema.paymentIntents.status })
+      .from(schema.paymentIntents)
+      .where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, orderId)))
+      .orderBy(sql`${schema.paymentIntents.createdAt} desc`)
+      .limit(1);
+    const unpaid = ["pending", "unpaid", "failed"].includes(order.paymentStatus ?? "pending");
+    const online = intent && intent.provider !== "cod" && intent.status !== "captured";
+    if (order.status === "cancelled" || !unpaid || !online) return null;
+    return { orderId, order };
+  });
+  if (!target) return { restored: false };
+
+  await cancelOrderByTokenInternal(rt, tenantId, orderToken, { reason: "Payment not completed" });
+
+  await withTenant(db, tenantId, async (tx) => {
+    const [cart] = await tx.select().from(schema.carts).where(and(eq(schema.carts.tenantId, tenantId), eq(schema.carts.token, cartToken))).limit(1);
+    if (!cart) return;
+    const items = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
+    await tx.delete(schema.cartItems).where(eq(schema.cartItems.cartId, cart.id));
+    for (const i of items) {
+      await tx.insert(schema.cartItems).values({ tenantId, cartId: cart.id, variantId: i.variantId, quantity: i.quantity, unitPriceSnapshot: i.unitPrice });
+    }
+    // 'abandoned' is what the Abandoned checkouts list reads; placing the order later marks the cart recovered.
+    await tx
+      .update(schema.carts)
+      .set({ status: "abandoned", email: target.order.email ?? cart.email, phone: target.order.phone ?? cart.phone, lastActivityAt: sql`now()` })
+      .where(eq(schema.carts.id, cart.id));
+  });
+  return { restored: true };
+}
+
+async function cancelOrderByTokenInternal(
+  rt: Runtime,
+  tenantId: string,
+  token: string,
+  input?: { reason?: string | undefined },
+) {
   return await withTenant(rt._db.db, tenantId, async (tx) => {
     const orderId = await orderIdForToken(tx, tenantId, token);
     if (!orderId) throw new Error("Not Found: This order link is not valid any more");

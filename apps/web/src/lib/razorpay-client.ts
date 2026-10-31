@@ -37,7 +37,7 @@ function loadScript(): Promise<RazorpayCtor> {
   });
 }
 
-export type RazorpayOutcome = { status: "paid" } | { status: "dismissed" } | { status: "failed"; message: string };
+export type RazorpayOutcome = { status: "paid" } | { status: "dismissed" } | { status: "failed"; message: string; unconfirmed?: boolean };
 
 /** Opens the Razorpay modal for an order and resolves once the shopper paid (and our server verified it), closed it, or it failed. */
 export async function payWithRazorpay(params: RazorpayParams, orderToken: string, storeName?: string): Promise<RazorpayOutcome> {
@@ -72,12 +72,12 @@ export async function payWithRazorpay(params: RazorpayParams, orderToken: string
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             // The money moved; the store's payment webhook may still confirm it, so the message says so.
-            finish({ status: "failed", message: data.error ?? "We could not confirm your payment yet. If money was deducted, the order will update shortly." });
+            finish({ status: "failed", unconfirmed: true, message: data.error ?? "We could not confirm your payment yet. If money was deducted, the order will update shortly." });
             return;
           }
           finish({ status: "paid" });
         } catch {
-          finish({ status: "failed", message: "We could not confirm your payment yet. If money was deducted, the order will update shortly." });
+          finish({ status: "failed", unconfirmed: true, message: "We could not confirm your payment yet. If money was deducted, the order will update shortly." });
         }
       },
       modal: { ondismiss: () => finish({ status: "dismissed" }) },

@@ -156,6 +156,11 @@ export async function POST(req: Request) {
 
     const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl }, { status: 200 });
 
+    if (paymentMethod !== "cod") {
+      // Keep the cart token aside until the payment finishes: an abandoned payment restores the cart from it.
+      response.cookies.set({ name: "bs_pending_cart", value: token, path: "/", httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 7200 });
+    }
+
     // Clear cart token cookie
     response.cookies.set({
       name: CART_COOKIE_NAME,
