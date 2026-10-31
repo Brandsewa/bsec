@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `fix/online-payment-no-held-order`
+- **Branch:** `fix/online-payment-no-held-order` (merged in #170 with the pending-number change, d88c526; PR #169 closed as included)
 - **Area:** domain (orders, payments, jobs)
 - **Type:** fix
 - **Supersedes:** none (follows `2026-10-31-claude-abandoned-online-payment.md`)
