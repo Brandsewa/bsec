@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { schema, withTenant, QUEUE_NAMES, type Db } from "@bs/db";
 import { RazorpayProvider, decryptSecret } from "@bs/payments";
 import type { Runtime } from "../runtime.ts";
+import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
 import { getTenantPaymentMethods } from "../admin/payment-methods.ts";
 import { readPlatformProviderState } from "../admin/payment-providers.ts";
@@ -225,6 +226,11 @@ export async function settleProviderPayment(db: Db, tenantId: string, input: Set
       raw: { source: input.source },
     });
 
+    // Paid: the held order now takes the store's next real order number (it had a temporary one while unpaid).
+    if (order.number.startsWith("PEND-")) {
+      const seq = await allocateOrderNumber(tx as unknown as Db, tenantId);
+      await tx.update(schema.orders).set({ number: seq.formatted }).where(eq(schema.orders.id, order.id));
+    }
     if (order.status === "pending") {
       await tx
         .update(schema.orders)

@@ -159,6 +159,9 @@ export interface PlaceOrderResult {
  * 9. Clear cart
  * 10. Enqueue order.created job
  */
+/** Temporary number of an online order that is not paid yet; replaced by the store's next real number on payment. */
+export const PENDING_ORDER_NUMBER_PREFIX = "PEND-";
+
 export async function placeOrder(
   rt: Runtime,
   ctx: TenantContext,
@@ -450,7 +453,9 @@ export async function placeOrder(
     }
 
     // 5. Allocate gapless sequential order number respecting store settings (PLAN §11.2, ORDERS-SETTINGS-PLAN §4.1)
-    const seq = await allocateOrderNumber(tx, tenantId);
+    // An online order is only a hold until it is paid, so it gets a temporary number and the real one is allocated when
+    // the payment settles (settleProviderPayment). An abandoned payment therefore never leaves a gap in the sequence.
+    const seq = isCod ? await allocateOrderNumber(tx, tenantId) : { formatted: `${PENDING_ORDER_NUMBER_PREFIX}${randomBytes(4).toString("hex").toUpperCase()}` };
 
     // 5b. Resolve or create customer (PLAN §0b)
     let effectiveCustomerId = input.customerId ?? null;
