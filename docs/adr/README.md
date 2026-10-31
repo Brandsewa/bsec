@@ -46,6 +46,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [038](038-google-sign-in.md) | Google sign-in: platform client for our team and store owners, store-owned client for customers | Accepted |
 | [039](039-notification-manager.md) | Notification manager: event catalog, dispatcher, in-app inbox, branded email | Accepted |
 | [040](040-markets.md) | Markets: one base market plus extra markets, merchant as seller of record | Accepted |
+| [041](041-lucide-icons.md) | Lucide icons: named imports for UI chrome, allowlisted SVG data and lazy picker for content | Accepted |
 
-**Next number: 041.**
+**Next number: 042.**
 

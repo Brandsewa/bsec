@@ -26,6 +26,10 @@ import {
   sanitizeLayoutLength,
   DEFAULT_THEME_COLORS,
   resolveThemeColors,
+  resolveIconSize,
+  resolveIconWeight,
+  MIN_ICON_PX,
+  MAX_ICON_PX,
   type ThemeColorKey,
   type HeadingSizes,
   type SizeDevice,
@@ -283,8 +287,21 @@ export function readThemeSettings(tokens: ThemeTokens) {
       lightText: tokens.buttons?.lightText,
     } as Partial<Record<ButtonColorKey, string>>,
     layout: resolveThemeLayout(tokens),
+    // Icon defaults. Size and weight are undefined while the theme sets none; widgets then keep their own defaults.
+    iconSize: resolveIconSize(tokens.icons?.size),
+    iconWeight: (typeof tokens.icons?.weight === "string" && resolveIconWeight(tokens.icons.weight) !== undefined ? tokens.icons.weight : "") as IconWeightKey | "",
+    // What icons resolve to now on dark and on light sections (shown in the pickers), and what is explicitly set.
+    iconColors: {
+      darkColor: sanitized["--bs-icon-color-dark"] ?? resolvedColors.darkText,
+      lightColor: sanitized["--bs-icon-color-light"] ?? sanitized["--bs-primary"] ?? "#2563eb",
+    } as Record<IconColorKey, string>,
+    iconColorsSet: { darkColor: tokens.icons?.darkColor, lightColor: tokens.icons?.lightColor } as Partial<Record<IconColorKey, string>>,
   };
 }
+
+type IconColorKey = "darkColor" | "lightColor";
+type IconWeightKey = "thin" | "regular" | "bold";
+const ICON_WEIGHT_LABELS: Record<IconWeightKey, string> = { thin: "Thin", regular: "Regular", bold: "Bold" };
 
 type ButtonColorKey = "darkBg" | "darkText" | "lightBg" | "lightText";
 const WEIGHT_LABELS: Record<number, string> = { 400: "Regular (400)", 500: "Medium (500)", 600: "Semibold (600)", 700: "Bold (700)" };
@@ -939,7 +956,7 @@ export interface ThemeSettingsPanelProps {
  */
 export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSettingsPanelProps) {
   const v = useMemo(() => readThemeSettings(tokens), [tokens]);
-  const [openId, setOpenId] = useState<string | null>("colors");
+  const [openId, setOpenId] = useState<string | null>(null);
   const toggle = (id: string) => setOpenId((current) => (current === id ? null : id));
 
   const commit = (patch: {
@@ -957,6 +974,9 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
     bodyWeight?: string;
     buttonColors?: Partial<Record<ButtonColorKey, string | undefined>>;
     layout?: ResolvedThemeLayout;
+    iconSize?: number | undefined;
+    iconWeight?: IconWeightKey | "";
+    iconColors?: Partial<Record<IconColorKey, string | undefined>>;
   }) => {
     const patchColors = patch.colors
       ? (() => {
@@ -976,6 +996,9 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
       colors: { ...v.colors, ...(patchColors ?? {}) },
       buttonColorsSet: { ...v.buttonColorsSet, ...(patch.buttonColors ?? {}) },
       layout: patch.layout ?? v.layout,
+      iconColorsSet: { ...v.iconColorsSet, ...(patch.iconColors ?? {}) },
+      iconSize: "iconSize" in patch ? patch.iconSize : v.iconSize,
+      iconWeight: patch.iconWeight ?? v.iconWeight,
     };
     const { typography: _t, shape: _s, ...rest } = tokens;
     void _t;
@@ -996,6 +1019,12 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
         ...cleanButtonColors(next.buttonColorsSet),
       },
       layout: cleanThemeLayout(next.layout),
+      icons: {
+        ...(next.iconSize !== undefined ? { size: next.iconSize } : {}),
+        ...(next.iconWeight ? { weight: next.iconWeight } : {}),
+        ...(next.iconColorsSet.darkColor ? { darkColor: next.iconColorsSet.darkColor } : {}),
+        ...(next.iconColorsSet.lightColor ? { lightColor: next.iconColorsSet.lightColor } : {}),
+      },
     });
   };
 
@@ -1004,6 +1033,24 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
       <h2 style={{ fontSize: 13, fontWeight: 700, margin: "10px 0 2px" }}>Theme settings</h2>
       <p style={{ fontSize: 11, color: "#71717a", margin: "0 0 4px" }}>{note ?? "Applies to every page of this theme."}</p>
 
+      <Section id="layout" title="Layout" open={openId === "layout"} onToggle={() => toggle("layout")}>
+        <LayoutSettingsEditor layout={v.layout} disabled={disabled} onChange={(layout) => commit({ layout })} />
+      </Section>
+      <Section id="fonts" title="Fonts" open={openId === "fonts"} onToggle={() => toggle("fonts")}>
+        <Field title="Headings">
+          <Dropdown compact ariaLabel="Heading font" value={v.heading} options={FONT_OPTIONS} disabled={disabled} onChange={(value) => commit({ heading: value })} />
+        </Field>
+        <Field title="Body text">
+          <Dropdown compact ariaLabel="Body font" value={v.body} options={FONT_OPTIONS} disabled={disabled} onChange={(value) => commit({ body: value })} />
+        </Field>
+        <Field title="Heading weight">
+          <Dropdown compact ariaLabel="Heading font weight" value={v.headingWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ headingWeight: value })} />
+        </Field>
+        <Field title="Body weight">
+          <Dropdown compact ariaLabel="Body font weight" value={v.bodyWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ bodyWeight: value })} />
+        </Field>
+        <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
+      </Section>
       <Section id="colors" title="Colours" open={openId === "colors"} onToggle={() => toggle("colors")}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {PRESETS.map((p) => (
@@ -1060,33 +1107,11 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
           </div>
         ))}
       </Section>
-
-      <Section id="fonts" title="Fonts" open={openId === "fonts"} onToggle={() => toggle("fonts")}>
-        <Field title="Headings">
-          <Dropdown compact ariaLabel="Heading font" value={v.heading} options={FONT_OPTIONS} disabled={disabled} onChange={(value) => commit({ heading: value })} />
-        </Field>
-        <Field title="Body text">
-          <Dropdown compact ariaLabel="Body font" value={v.body} options={FONT_OPTIONS} disabled={disabled} onChange={(value) => commit({ body: value })} />
-        </Field>
-        <Field title="Heading weight">
-          <Dropdown compact ariaLabel="Heading font weight" value={v.headingWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ headingWeight: value })} />
-        </Field>
-        <Field title="Body weight">
-          <Dropdown compact ariaLabel="Body font weight" value={v.bodyWeight} options={WEIGHT_OPTIONS} disabled={disabled} onChange={(value) => commit({ bodyWeight: value })} />
-        </Field>
-        <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
-      </Section>
-
-      <Section id="layout" title="Layout" open={openId === "layout"} onToggle={() => toggle("layout")}>
-        <LayoutSettingsEditor layout={v.layout} disabled={disabled} onChange={(layout) => commit({ layout })} />
-      </Section>
-
       <Section id="corners" title="Corners" open={openId === "corners"} onToggle={() => toggle("corners")}>
         <Field title="Cards, images and fields">
           <Dropdown compact ariaLabel="Corner style" value={v.radius} options={RADIUS_OPTIONS} disabled={disabled} onChange={(value) => commit({ radius: value })} />
         </Field>
       </Section>
-
       <Section id="buttons" title="Buttons" open={openId === "buttons"} onToggle={() => toggle("buttons")}>
         <Field title="Style">
           <div role="radiogroup" aria-label="Button style" style={{ display: "flex", gap: 6 }}>
@@ -1168,6 +1193,44 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
             disabled={disabled}
             onChange={(hex) => commit({ buttonColors: { lightText: hex } })}
           />
+        </div>
+      </Section>
+      <Section id="icons" title="Icons" open={openId === "icons"} onToggle={() => toggle("icons")}>
+        <p style={{ fontSize: 11, color: "#71717a", margin: 0 }}>Defaults for every icon. A widget or icon that sets its own size or stroke keeps it.</p>
+        <Field title="Icon size (px)" hint="Used where a widget has no size of its own.">
+          <SizeInput key={`icon-size-${v.iconSize ?? "unset"}`} label="Icon size" value={v.iconSize ?? 24} min={MIN_ICON_PX} max={MAX_ICON_PX} disabled={disabled} onCommit={(px) => commit({ iconSize: px })} />
+        </Field>
+        <Field title="Stroke">
+          <div role="radiogroup" aria-label="Icon stroke" style={{ display: "flex", gap: 6 }}>
+            {(Object.keys(ICON_WEIGHT_LABELS) as IconWeightKey[]).map((w) => (
+              <button
+                key={w}
+                type="button"
+                role="radio"
+                aria-checked={(v.iconWeight || "regular") === w}
+                disabled={disabled}
+                onClick={() => commit({ iconWeight: w })}
+                style={{ flex: 1, border: `2px solid ${(v.iconWeight || "regular") === w ? "#111" : "#d4d4d8"}`, background: "#fff", borderRadius: 7, padding: "4px 0", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+              >
+                {ICON_WEIGHT_LABELS[w]}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <div style={{ marginTop: 6, paddingTop: 12, borderTop: "1px dashed #e4e4e7", display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={label}>Icon colour</span>
+            <button
+              type="button"
+              disabled={disabled || (!v.iconSize && !v.iconWeight && Object.values(v.iconColorsSet).every((x) => !x))}
+              onClick={() => commit({ iconSize: undefined, iconWeight: "", iconColors: { darkColor: undefined, lightColor: undefined } })}
+              style={{ border: 0, background: "none", fontSize: 11, color: disabled || (!v.iconSize && !v.iconWeight && Object.values(v.iconColorsSet).every((x) => !x)) ? "#a1a1aa" : "#2563eb", cursor: "pointer", padding: 0 }}
+            >
+              Reset all icon settings
+            </button>
+          </div>
+          <ThemeColorRow title="On dark backgrounds" hint="Icon colour in dark and brand-coloured sections." value={v.iconColors.darkColor} disabled={disabled} onChange={(hex) => commit({ iconColors: { darkColor: hex } })} />
+          <ThemeColorRow title="On light backgrounds" hint="Icon colour in light sections." value={v.iconColors.lightColor} disabled={disabled} onChange={(hex) => commit({ iconColors: { lightColor: hex } })} />
         </div>
       </Section>
     </div>

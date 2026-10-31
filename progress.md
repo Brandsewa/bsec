@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/lucide-icon-pack` · Lucide icon pack: `@bs/icons`, searchable icon picker in the theme editor, lint ban on barrel imports; ADR-041, change record `docs/changes/2026-10-31-claude-lucide-icon-pack.md` · 2026-10-31
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29
 - claude · `fix/header-bg-dropdown-followups` · follow-ups to the 2026-10-29 batch: header background regression, dropdown spacing and close on click, TOC closed by default, image option on Floating reviews; change record `docs/changes/2026-10-29-claude-header-dropdown-followups.md` · 2026-10-29
 - claude · `fix/domain-ownership-before-a-records` · bare custom domains: TXT ownership first, A records only after (Cloudflare refuses TXT/HTTP validation once A records resolve to it), immediate provider re-check; change record `docs/changes/2026-10-28-claude-domain-ownership-before-a-records.md` · 2026-10-28
