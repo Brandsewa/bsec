@@ -83,7 +83,8 @@ export async function startHostedPayment(
 
   const creds = await getTenantPaymentSecrets(db, tenantId, provider);
   const base = opts.baseUrl.replace(/\/+$/, "");
-  const thankYou = `${base}/orders/${encodeURIComponent(opts.orderToken)}/thank-you`;
+  // Cancelling on the provider's page sends the shopper back to checkout, not to an order (the held order is cancelled).
+  const cancelled = `${base}/api/storefront/checkout/abandon?ot=${encodeURIComponent(opts.orderToken)}`;
   const forPayment = { id: orderId, number: order.number, currency: intent.currency, grandTotal: intent.amount, email: order.email, phone: order.phone };
 
   let providerOrderId: string;
@@ -92,7 +93,7 @@ export async function startHostedPayment(
     const stripe = new StripeProvider({
       secretKey: creds.keySecret,
       successUrl: `${base}/api/storefront/checkout/return?provider=stripe&ot=${encodeURIComponent(opts.orderToken)}`,
-      cancelUrl: `${thankYou}?payment=cancelled`,
+      cancelUrl: cancelled,
       fetchFn: deps.fetchFn,
     });
     const created = await stripe.createIntent({ tenantId }, forPayment);
@@ -107,7 +108,7 @@ export async function startHostedPayment(
       brandName: opts.storeName,
       fetchFn: deps.fetchFn,
       returnUrl: `${base}/api/storefront/checkout/return?provider=paypal&ot=${encodeURIComponent(opts.orderToken)}`,
-      cancelUrl: `${thankYou}?payment=cancelled`,
+      cancelUrl: cancelled,
     });
     const created = await paypal.createIntent({ tenantId }, forPayment);
     providerOrderId = created.providerOrderId;

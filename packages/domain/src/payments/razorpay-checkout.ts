@@ -231,6 +231,17 @@ export async function settleProviderPayment(db: Db, tenantId: string, input: Set
     } else {
       await tx.update(schema.orders).set({ paymentStatus: "paid", updatedAt: new Date() }).where(eq(schema.orders.id, order.id));
     }
+    // The cart was kept open while payment was pending (see placeOrder); now that it is paid it is converted and emptied.
+    if (order.cartId) {
+      const [cart] = await tx.select({ status: schema.carts.status }).from(schema.carts).where(eq(schema.carts.id, order.cartId)).limit(1);
+      if (cart && cart.status !== "converted") {
+        await tx.delete(schema.cartItems).where(eq(schema.cartItems.cartId, order.cartId));
+        await tx
+          .update(schema.carts)
+          .set({ status: "converted", lastActivityAt: new Date(), ...(cart.status === "abandoned" ? { recoveredAt: new Date() } : {}) })
+          .where(eq(schema.carts.id, order.cartId));
+      }
+    }
     await tx.insert(schema.orderEvents).values({
       tenantId,
       orderId: order.id,

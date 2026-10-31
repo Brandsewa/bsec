@@ -359,8 +359,20 @@ export function CheckoutForm({
         }
         if (data.razorpay && data.orderToken) {
           const outcome = await payWithRazorpay(data.razorpay, data.orderToken);
-          if (outcome.status === "failed") {
+          if (outcome.status === "failed" && outcome.unconfirmed) {
+            // Money may have moved but we could not confirm it yet: keep the order, its page shows the payment state.
             router.push(`${data.redirectUrl}?payment=failed`);
+            return;
+          }
+          if (outcome.status !== "paid") {
+            // Closed or failed: no order is kept. The held order is cancelled, the cart restored and logged as abandoned.
+            const back = await fetch("/api/storefront/checkout/abandon", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderToken: data.orderToken, reason: outcome.status === "failed" ? "failed" : "cancelled" }),
+            }).then((r) => r.json()).catch(() => ({}));
+            window.dispatchEvent(new Event("cart-updated"));
+            window.location.assign(back.redirectUrl ?? "/checkout?payment=cancelled");
             return;
           }
         }

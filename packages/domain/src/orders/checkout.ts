@@ -797,6 +797,19 @@ export async function placeOrder(
 
     const isAbandoned = cartRow?.status === "abandoned";
 
+    if (!isCod) {
+      // Online payment is not confirmed yet: the cart stays open with the shopper's details. If they never pay (closed the tab)
+      // the abandoned-cart sweep logs it with their email and phone; settleProviderPayment converts it once paid.
+      await tx
+        .update(carts)
+        .set({
+          email: input.email,
+          phone: input.phone,
+          shippingAddress: { fullName: input.fullName, addressLine1: input.addressLine1, city: input.city, state: input.state, pincode: input.pincode, country: input.country ?? null },
+          lastActivityAt: sql`now()`,
+        })
+        .where(eq(carts.id, cart.id));
+    } else {
     await tx
       .update(carts)
       .set({
@@ -808,6 +821,7 @@ export async function placeOrder(
 
     // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
+    }
 
     // 12. Enqueue order.created job if boss runtime is present
     if (rt._jobs) {
