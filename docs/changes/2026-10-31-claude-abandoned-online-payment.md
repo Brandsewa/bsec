@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `fix/abandoned-online-payment`
+- **Branch:** `fix/abandoned-online-payment` (merged in #167, 92318d0)
 - **Area:** domain (orders, payments), web (checkout)
 - **Type:** fix
 - **Supersedes:** none
