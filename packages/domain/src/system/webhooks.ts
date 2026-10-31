@@ -243,6 +243,7 @@ interface WebhookPayloadStructure {
 export async function processWebhookInboxItem(
   db: Db,
   inboxId: string,
+  jobs?: { send(queue: string, data: object): Promise<unknown> } | undefined,
 ): Promise<{ success?: boolean; alreadyProcessed?: boolean; error?: string }> {
   // 1. Atomically claim item for processing
   const claimRes = await db.execute<{
@@ -310,6 +311,7 @@ export async function processWebhookInboxItem(
             providerPaymentId,
             amount: typeof entity?.amount === "number" ? entity.amount : undefined,
             source: "webhook",
+            jobs,
           });
         }
       }
@@ -330,6 +332,7 @@ export async function processWebhookInboxItem(
           ...(typeof data.amount_total === "number" ? { amount: data.amount_total } : {}),
           ...(typeof data.currency === "string" ? { currency: data.currency.toUpperCase() } : {}),
           source: "webhook",
+            jobs,
         });
       }
     } else if (provider === "paypal") {
@@ -347,6 +350,7 @@ export async function processWebhookInboxItem(
           ...(resource.amount?.value ? { amount: Math.round(Number(resource.amount.value) * 10 ** exp) } : {}),
           ...(cur ? { currency: cur } : {}),
           source: "webhook",
+            jobs,
         });
       }
     } else if (provider === "cod") {

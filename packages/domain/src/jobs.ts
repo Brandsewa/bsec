@@ -744,7 +744,7 @@ export async function startJobs(opts: {
     for (const job of batch) {
       try {
         await withTenantJobSlot(job.data?.tenantId, async () => {
-          const res = await processWebhookInboxItem(db, job.data.inboxId);
+          const res = await processWebhookInboxItem(db, job.data.inboxId, { send: (q, d) => boss.send(q, d) });
           opts.log.info({ job_id: job.id, inboxId: job.data.inboxId, success: res.success }, "webhook.process completed");
         });
       } catch (err) {
