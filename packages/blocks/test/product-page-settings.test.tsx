@@ -46,7 +46,7 @@ describe("product page settings", () => {
       { addToCartBg: "url(javascript:1)" },
       { cutoffHour: 24 },
       { deliveryDays: 0 },
-      { usps: [{ icon: "rocket", text: "x" }] },
+      { usps: [{ icon: "not-an-icon", text: "x" }] },
       { usps: Array.from({ length: 5 }, () => ({ icon: "check", text: "x" })) },
       { priceNote: "x".repeat(81) },
     ];

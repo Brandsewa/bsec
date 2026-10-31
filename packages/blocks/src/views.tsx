@@ -15,7 +15,7 @@ import type {
   GalleryViewerImage,
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
-import { bricksElementStyle, normalizeLengthValue, slotBasisVars } from "./bricks-layout.ts";
+import { bricksElementStyle, bricksIconToneClass, normalizeLengthValue, slotBasisVars } from "./bricks-layout.ts";
 import { mediaImage } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -503,7 +503,7 @@ export function UspStripView({ props }: A<R.UspStripProps>): ReactNode {
       <div className="bsb-w bsb-w-wide bsb-grid bsb-gap-md" style={{ "--cols": Math.min(props.items.length, 4), "--cols-m": 2 } as CSSProperties}>
         {props.items.map((it, i) => (
           <div key={i} className="bsb-usp">
-            <span className="bsb-icon"><SvgIcon name={it.icon} px={28} /></span>
+            <span className="bsb-icon"><SvgIcon name={it.icon} px={28} themed /></span>
             <div style={{ fontWeight: 600, fontSize: "0.875rem", marginTop: "0.4rem" }}>{it.title}</div>
             <div className="bsb-muted" style={{ fontSize: "0.75rem", marginTop: "0.2rem" }}>{it.description}</div>
           </div>
@@ -548,7 +548,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
 
   return (
     <section
-      className={cx("bsb brxe-section brx-resp", !hasExplicitBg && props.tone && `bsb-tone-${props.tone}`, props.paddingY && `bsb-py-${props.paddingY}`)}
+      className={cx("bsb brxe-section brx-resp", bricksIconToneClass(props), !hasExplicitBg && props.tone && `bsb-tone-${props.tone}`, props.paddingY && `bsb-py-${props.paddingY}`)}
       style={{
         position: "relative",
         boxSizing: "border-box",
@@ -639,6 +639,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
     <div
       className={cx(
         "bsb brxe-container brx-resp",
+        bricksIconToneClass(props),
         !hasExplicitBg && hasCustomTone && `bsb-tone-${props.tone}`,
         props.paddingY && props.paddingY !== "none" && `bsb-py-${props.paddingY}`,
         props.align && `bsb-align-${props.align}`
@@ -741,7 +742,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
 
   return (
     <div
-      className="bsb brxe-block brx-resp"
+      className={cx("bsb brxe-block brx-resp", bricksIconToneClass(props))}
       style={{
         position: "relative",
         zIndex: 1,
@@ -1243,7 +1244,9 @@ const ICON_PX = { sm: 20, md: 32, lg: 48 } as const;
 export function IconView({ props }: A<R.IconProps>): ReactNode {
   return (
     <div className={cx("bsb", `bsb-align-${props.align}`)}>
-      <span className="bsb-icon"><SvgIcon name={props.name} px={ICON_PX[props.size]} /></span>
+      <span className="bsb-icon">
+        {props.size && props.size !== "theme" ? <SvgIcon name={props.name} px={ICON_PX[props.size]} /> : <SvgIcon name={props.name} px={ICON_PX.md} themed />}
+      </span>
     </div>
   );
 }

@@ -149,7 +149,7 @@ export function ProductDetailSection({
           {usps.map((u, i) => (
             <li key={i} className="flex basis-[calc(50%-0.375rem)] shrink-0 snap-start flex-col items-start gap-2 rounded-xl border border-border bg-surface/60 px-3 py-3 sm:min-w-0 sm:basis-auto sm:gap-2.5 sm:px-4">
               <span className="shrink-0 text-foreground">
-                <SvgIcon name={u.icon} px={30} />
+                <SvgIcon name={u.icon} px={30} themed />
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold leading-snug text-foreground">{u.text}</span>
@@ -166,7 +166,7 @@ export function ProductDetailSection({
             <details key={i} className="group border-b border-border/70" {...(options.accordionFirstOpen !== false && i === 0 ? { open: true } : null)}>
               <summary className="flex cursor-pointer list-none items-center gap-3 px-0.5 py-4 [&::-webkit-details-marker]:hidden">
                 <span className="shrink-0 text-foreground/85">
-                  <SvgIcon name={item.icon} px={22} />
+                  <SvgIcon name={item.icon} px={22} themed />
                 </span>
                 <span className="flex-1 font-medium tracking-wide text-foreground">{item.title}</span>
                 <svg className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
