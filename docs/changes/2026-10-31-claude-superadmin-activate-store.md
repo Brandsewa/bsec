@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `feat/superadmin-activate-store`
+- **Branch:** `feat/superadmin-activate-store` (merged in #171, e58cbb1)
 - **Area:** contracts, domain, platform, superadmin, docs
 - **Type:** feature
 - **Supersedes:** none
@@ -31,5 +31,5 @@ Ran against real Postgres (shared test database, serial): `activate-store.int.te
 
 ## Definition of done
 - [x] Change record, ARCHITECTURE line, real-database tests
-- [ ] Gate (lint, build, test:affected) run before push; CI on the PR
-- [ ] After merge: record PR and commit, delete branch and worktree
+- [x] Gate (lint, build, test:affected) run before push; CI on the PR
+- [x] After merge: PR and commit recorded, branch and worktree deleted. The `main` run deployed it, and the owner confirmed on the live Santuals test store that the Activate store button works
