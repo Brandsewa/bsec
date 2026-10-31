@@ -27,14 +27,6 @@ const BATCH = 50;
 const POLL_MS = 2000;
 const MAP_STORAGE_PREFIX = "bs-product-import-map:";
 
-const STATE_LABEL: Record<string, string> = {
-  new: "New",
-  exists: "Already exists",
-  sku_conflict: "SKU conflict",
-  unknown_category: "Unknown collection",
-  missing_price: "Missing price",
-};
-
 const pct = (done: number, total: number) => (total <= 0 ? 0 : Math.min(100, Math.round((done / total) * 100)));
 const n = (v: number) => v.toLocaleString("en-IN");
 
@@ -81,7 +73,6 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
   const [mode, setMode] = useState<Mode>("create_and_update");
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [filter, setFilter] = useState<"all" | "row" | "conflict" | "image">("all");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const defs = useQuery({ ...orpc.admin.customFields.listDefinitions.queryOptions({ input: { resourceType: "product" } }), enabled: open });
@@ -126,7 +117,6 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
     setRows([]);
     setMapping([]);
     setLive(null);
-    setFilter("all");
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -216,7 +206,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Import products from CSV</DialogTitle>
           <DialogDescription>
@@ -295,7 +285,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
         {phase.step === "done" ? (
           <div className="grid gap-3">
             <ProgressView run={phase.run} sendingNote={null} />
-            <ProblemList problems={phase.run.errors} truncated={phase.run.errorsTruncated} filter={filter} setFilter={setFilter} onDownload={() => downloadProblems(phase.run.errors)} />
+            <ProblemSummary problems={phase.run.errors} truncated={phase.run.errorsTruncated} onDownload={() => downloadProblems(phase.run.errors)} />
             <div className="flex justify-end"><Button size="sm" onClick={() => { reset(); onOpenChange(false); }}>Close</Button></div>
           </div>
         ) : null}
@@ -362,22 +352,16 @@ function ReviewStep({ phase, policy, setPolicy, mode, setMode, busy, onBack, onD
         <SimpleSelect ariaLabel="Import mode" className="w-56" value={mode} onChange={(v) => setMode(v as Mode)} options={[{ value: "create_and_update", label: "Create and update" }, { value: "create_only", label: "Create new only" }, { value: "update_only", label: "Update existing only" }]} />
       </div>
 
-      {preview.items.length ? (
-        <div className="max-h-48 overflow-auto rounded-md border border-border">
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-muted/60 text-left text-muted-foreground"><tr><th className="px-3 py-1.5 font-medium">Row</th><th className="px-3 py-1.5 font-medium">Product</th><th className="px-3 py-1.5 font-medium">Result</th></tr></thead>
-            <tbody>
-              {preview.items.map((it) => (
-                <tr key={`${it.row}-${it.handle}`} className="border-t border-border">
-                  <td className="px-3 py-1.5">{it.row}</td>
-                  <td className="px-3 py-1.5">{it.title || it.handle}</td>
-                  <td className={`px-3 py-1.5 ${it.state === "new" || it.state === "exists" ? "" : "text-destructive"}`}>{STATE_LABEL[it.state]}{it.detail ? ` — ${it.detail}` : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {preview.total > preview.items.length ? <p className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">Showing the first {preview.items.length} of {n(preview.total)} products.</p> : null}
-        </div>
+      {blocked.size + parseIssues.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {[
+            [preview.unknownCategories, "unknown collection"],
+            [preview.skuConflicts, "SKU used by another product"],
+            [preview.items.filter((it) => it.state === "missing_price").length, "missing price"],
+            [parseIssues.length, "invalid rows"],
+          ].filter(([c]) => (c as number) > 0).map(([c, l]) => `${n(c as number)} ${l}`).join(", ")}
+          . Download the problem list to see which rows.
+        </p>
       ) : null}
 
       {problems.length ? (
@@ -434,34 +418,22 @@ function ProgressView({ run, sendingNote }: { run: Run | null; sendingNote: stri
   );
 }
 
-function ProblemList({ problems, truncated, filter, setFilter, onDownload }: { problems: Problem[]; truncated: number; filter: "all" | "row" | "conflict" | "image"; setFilter: (f: "all" | "row" | "conflict" | "image") => void; onDownload: () => void }) {
+/** Counts only: a long error list is read in the downloaded file, never as a table in the dialog. */
+function ProblemSummary({ problems, truncated, onDownload }: { problems: Problem[]; truncated: number; onDownload: () => void }) {
   if (!problems.length) return null;
-  const shown = problems.filter((p) => filter === "all" || p.kind === filter);
+  const count = (kind: string) => problems.filter((p) => p.kind === kind).length;
+  const parts = [
+    [count("row"), "row problems"],
+    [count("conflict"), "conflicts"],
+    [count("image"), "image failures"],
+  ].filter(([c]) => (c as number) > 0).map(([c, l]) => `${n(c as number)} ${l}`);
   return (
-    <section className="grid gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{n(problems.length + truncated)} problem{problems.length + truncated === 1 ? "" : "s"}</h3>
-        <div className="flex items-center gap-2">
-          <SimpleSelect ariaLabel="Filter problems" className="w-44" value={filter} onChange={(v) => setFilter(v as typeof filter)} options={[{ value: "all", label: "All problems" }, { value: "row", label: "Row errors" }, { value: "conflict", label: "Conflicts" }, { value: "image", label: "Image failures" }]} />
-          <Button variant="outline" size="sm" onClick={onDownload}><Download className="mr-1.5 size-3.5" aria-hidden /> Download</Button>
-        </div>
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3">
+      <div className="text-sm">
+        <p className="font-medium">{n(problems.length + truncated)} problem{problems.length + truncated === 1 ? "" : "s"}</p>
+        <p className="text-xs text-muted-foreground">{parts.join(", ")}{truncated > 0 ? `. Only the first ${n(problems.length)} are kept.` : ""}</p>
       </div>
-      <div className="max-h-56 overflow-auto rounded-md border border-border">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-muted/60 text-left text-muted-foreground"><tr><th className="px-3 py-1.5 font-medium">Row</th><th className="px-3 py-1.5 font-medium">Product</th><th className="px-3 py-1.5 font-medium">Type</th><th className="px-3 py-1.5 font-medium">Problem</th></tr></thead>
-          <tbody>
-            {shown.map((p, i) => (
-              <tr key={i} className="border-t border-border align-top">
-                <td className="px-3 py-1.5">{p.row || "—"}</td>
-                <td className="px-3 py-1.5">{p.handle}</td>
-                <td className="px-3 py-1.5">{p.kind === "image" ? "Image" : p.kind === "conflict" ? "Conflict" : "Row"}</td>
-                <td className="px-3 py-1.5">{p.message}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {truncated > 0 ? <p className="text-xs text-muted-foreground">Only the first {n(problems.length)} problems are kept; {n(truncated)} more were not stored.</p> : null}
+      <Button variant="outline" size="sm" onClick={onDownload}><Download className="mr-1.5 size-3.5" aria-hidden /> Download problem list</Button>
     </section>
   );
 }
