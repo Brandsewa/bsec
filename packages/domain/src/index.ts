@@ -210,3 +210,8 @@ export * from "./payments/online-checkout.ts";
 export * from "./markets/lookup.ts";
 export * from "./markets/addresses.ts";
 export * from "./markets/scope.ts";
+export * from "./catalog/bulk-io/export.ts";
+export * from "./catalog/bulk-io/import.ts";
+export * from "./catalog/bulk-io/import-images.ts";
+export * from "./catalog/bulk-io/image-fetch.ts";
+export * from "@bs/contracts/product-bulk-io";

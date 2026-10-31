@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./money": "./src/money.ts",
-    "./units": "./src/units.ts"
+    "./units": "./src/units.ts",
+    "./product-bulk-io": "./src/product-bulk-io/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
