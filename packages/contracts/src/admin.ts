@@ -2097,6 +2097,66 @@ export const StoreGoogleSigninView = z.object({
 });
 export type StoreGoogleSigninView = z.infer<typeof StoreGoogleSigninView>;
 
+// --- Product bulk export and import (docs/PRODUCT-BULK-IO-PLAN.md) ---
+const ProductImportVariantSchema = z.object({
+  row: z.number().int(),
+  sku: z.string().max(200).optional(),
+  title: z.string().max(300).optional(),
+  optionValues: z.array(z.string().max(200)).max(3),
+  price: z.number().int().nonnegative().optional(),
+  compareAtPrice: z.number().int().nonnegative().nullable().optional(),
+  costPrice: z.number().int().nonnegative().nullable().optional(),
+  barcode: z.string().max(100).optional(),
+  weightGrams: z.number().int().nonnegative().optional(),
+  trackInventory: z.boolean().optional(),
+  allowBackorder: z.boolean().optional(),
+  imageUrl: z.string().max(2000).optional(),
+});
+const ProductImportProductSchema = z.object({
+  row: z.number().int(),
+  handle: z.string().min(1).max(200),
+  title: z.string().max(300).optional(),
+  shortDescription: z.string().max(2000).optional(),
+  description: z.string().max(50_000).optional(),
+  status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
+  primaryCategory: z.string().max(200).optional(),
+  tags: z.array(z.string().max(100)).max(100).optional(),
+  productType: z.string().max(200).optional(),
+  hsn: z.string().max(50).optional(),
+  seoTitle: z.string().max(300).optional(),
+  seoDescription: z.string().max(1000).optional(),
+  isFeatured: z.boolean().optional(),
+  returnable: z.boolean().optional(),
+  requiresShipping: z.boolean().optional(),
+  optionNames: z.array(z.string().max(100)).max(3),
+  variants: z.array(ProductImportVariantSchema).max(250),
+  imageUrls: z.array(z.string().max(2000)).max(30),
+  imageAlt: z.string().max(300).optional(),
+  customFields: z.record(z.string(), z.string().max(50_000)),
+  fields: z.array(z.string()).max(100),
+});
+const ProductImportErrorSchema = z.object({ row: z.number(), handle: z.string(), kind: z.enum(["row", "conflict", "image"]), message: z.string() });
+const ProductImportRunSchema = z.object({
+  id: z.string().uuid(),
+  status: z.string(),
+  conflictPolicy: z.enum(["skip", "update", "replace"]),
+  mode: z.enum(["create_only", "update_only", "create_and_update"]),
+  fileName: z.string().nullable(),
+  productsTotal: z.number(),
+  productsDone: z.number(),
+  created: z.number(),
+  updated: z.number(),
+  skipped: z.number(),
+  failed: z.number(),
+  imagesTotal: z.number(),
+  imagesDone: z.number(),
+  imagesFailed: z.number(),
+  errors: z.array(ProductImportErrorSchema),
+  errorsTruncated: z.number(),
+  createdAt: z.string(),
+  finishedAt: z.string().nullable(),
+});
+
 export const adminContract = {
   markets: marketsContract,
   support: {
@@ -2412,6 +2472,53 @@ export const adminContract = {
 
   // Catalog: Products
   products: {
+    /** One page of the bulk CSV export (a row per variant). Needs products.read and exports.run. */
+    exportRows: oc
+      .route({ method: "POST", path: "/admin/products/export" })
+      .input(
+        z.object({
+          fields: z.union([z.literal("all"), z.array(z.string().max(100)).max(100)]),
+          categoryIds: z.array(z.string().uuid()).max(100).optional(),
+          productIds: z.array(z.string().uuid()).max(1000).optional(),
+          status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
+          search: z.string().max(200).optional(),
+          cursor: z.string().uuid().optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+        }),
+      )
+      .output(z.object({ header: z.array(z.string()), rows: z.array(z.array(z.string())), nextCursor: z.string().nullable(), products: z.number() })),
+    /** Dry run of a product CSV import: classifies each product, writes nothing. */
+    importPreview: oc
+      .route({ method: "POST", path: "/admin/products/import/preview" })
+      .input(z.object({ products: z.array(ProductImportProductSchema).max(10_000) }))
+      .output(
+        z.object({
+          total: z.number(),
+          toCreate: z.number(),
+          existing: z.number(),
+          skuConflicts: z.number(),
+          unknownCategories: z.number(),
+          images: z.number(),
+          issues: z.array(ProductImportErrorSchema),
+          items: z.array(z.object({ row: z.number(), handle: z.string(), title: z.string(), state: z.enum(["new", "exists", "sku_conflict", "unknown_category", "missing_price"]), detail: z.string().optional() })),
+        }),
+      ),
+    importStart: oc
+      .route({ method: "POST", path: "/admin/products/import" })
+      .input(z.object({ total: z.number().int().min(1).max(10_000), conflictPolicy: z.enum(["skip", "update", "replace"]), mode: z.enum(["create_only", "update_only", "create_and_update"]), fileName: z.string().max(200).optional() }))
+      .output(ProductImportRunSchema),
+    importBatch: oc
+      .route({ method: "POST", path: "/admin/products/import/{runId}/batch" })
+      .input(z.object({ runId: z.string().uuid(), products: z.array(ProductImportProductSchema).min(1).max(50) }))
+      .output(ProductImportRunSchema),
+    importRun: oc
+      .route({ method: "GET", path: "/admin/products/import/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(ProductImportRunSchema),
+    importRuns: oc
+      .route({ method: "GET", path: "/admin/product-imports" })
+      .input(z.object({}).optional())
+      .output(z.array(ProductImportRunSchema)),
     attachMedia: oc
       .route({ method: "POST", path: "/admin/products/{id}/media" })
       .input(z.object({ id: z.string().uuid(), mediaId: z.string().uuid(), alt: z.string().max(200).optional() }))

@@ -71,6 +71,12 @@ import {
   createPage,
   ensureThemeTemplatePage,
   createProduct,
+  exportProductRows,
+  previewProductImport,
+  startProductImportRun,
+  commitProductImportBatch,
+  getProductImportRun,
+  listProductImportRuns,
   deleteBrand,
   deleteCategory,
   deleteCollection,
@@ -1320,6 +1326,60 @@ export const storeRouter = os.router({
 
     // Catalog: Products
     products: {
+      exportRows: os.admin.products.exportRows
+        .use(requireAdmin)
+        .use(requirePermission("exports.run"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return exportProductRows(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      importPreview: os.admin.products.importPreview
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return previewProductImport(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      importStart: os.admin.products.importStart
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return startProductImportRun(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      importBatch: os.admin.products.importBatch
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return commitProductImportBatch(context.rt, context.tenantCtx, input).then((r) => r.run).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      importRun: os.admin.products.importRun
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProductImportRun(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      importRuns: os.admin.products.importRuns
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listProductImportRuns(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
       attachMedia: os.admin.products.attachMedia
         .use(requireAdmin)
         .use(requirePermission("products.write"))
