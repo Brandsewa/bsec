@@ -61,6 +61,7 @@ export const PlatformTenantDetail = z.object({
       interval: z.string(),
       currentPeriodStart: z.string().optional(),
       currentPeriodEnd: z.string().optional(),
+      paymentRequired: z.boolean().optional(),
     }).nullable(),
     invoices: z.array(z.object({
       id: z.string(),
@@ -329,6 +330,10 @@ export const platformTenantsContract = {
     .route({ method: "POST", path: "/platform/tenants/{id}/extend-trial" })
     .input(z.object({ id: z.string().uuid(), additionalDays: z.number().int().min(1) }))
     .output(z.object({ ok: z.boolean(), trialEndsAt: z.string() })),
+  activate: oc
+    .route({ method: "POST", path: "/platform/tenants/{id}/activate" })
+    .input(z.object({ id: z.string().uuid(), days: z.number().int().min(1).max(365), reason: z.string().trim().min(3).max(500) }))
+    .output(z.object({ ok: z.boolean(), activeUntil: z.string() })),
   transferOwnership: oc
     .route({ method: "POST", path: "/platform/tenants/{id}/transfer-ownership" })
     .input(z.object({ id: z.string().uuid(), newOwnerEmail: z.string().email() }))
