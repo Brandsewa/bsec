@@ -31,3 +31,6 @@ Closing, cancelling or failing the gateway page (Razorpay, Stripe, PayPal) no lo
 
 ## Follow-ups and open questions
 - Real-database test for abandon, settle-converts-cart, and COD unchanged.
+
+## Later changes
+Superseded in behaviour by `2026-10-31-claude-online-payment-no-held-order.md` and `2026-10-31-claude-online-order-pending-number.md` (the held order is deleted, not cancelled; confirmation is sent and the real number allocated only when paid).

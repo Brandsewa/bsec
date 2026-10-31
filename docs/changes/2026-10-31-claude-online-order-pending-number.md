@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `fix/online-payment-pending-number`
+- **Branch:** `fix/online-payment-pending-number` (merged in #170, d88c526)
 - **Area:** domain (orders, payments)
 - **Type:** fix
 - **Supersedes:** none (follows `2026-10-31-claude-online-payment-no-held-order.md`)
@@ -20,7 +20,7 @@ An abandoned online payment consumed an order number and left a gap in the seque
 
 ## Verification
 - Typecheck clean for domain. Heavy integration tests run in CI.
-- NOT verified: a new real-database test for this (owner will run), live Razorpay run. Existing tests that read an online order's number before payment may need updating if CI shows them failing.
+- Owner confirmed in a live Razorpay test (2026-10-31) that cancelling leaves no order and the flow works. Real-database test still owner-run.
 
 ## Docs updated
 - [x] ARCHITECTURE.md: not needed
