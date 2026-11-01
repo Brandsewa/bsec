@@ -352,7 +352,8 @@ export class PayPalBillingSubscriptionProvider implements SubscriptionBillingPro
     }
 
     const _paypal = this.getPayPalProvider();
-    const returnUrl = params.returnUrl || `${process.env.APP_URL || "https://bcom.si"}/settings/plan-and-billing`;
+    // bcom.si is the storefront, which has no /settings page (the merchant saw a 404): the fallback is the admin app.
+    const returnUrl = params.returnUrl || `https://${process.env.ADMIN_HOST?.trim() || "admin.bcom.si"}/`;
     const cancelUrl = returnUrl;
     const amountCents = params.amountUsdCents ?? Math.round((params.amountPaise ?? 0) / 80); // USD cents fallback
     const valueStr = toPayPalAmount(amountCents, "USD");

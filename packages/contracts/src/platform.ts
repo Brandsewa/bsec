@@ -1415,7 +1415,9 @@ const InvoiceProfile = z.object({
 
 export const PlatformBillingSettingsView = z.object({
   invoice: InvoiceProfile,
-  provider: z.enum(["razorpay", "cashfree", "paypal"]),
+  /** The national (INR) gateway. PayPal is the international gateway and is switched on by `paypalEnabled`. */
+  provider: z.enum(["razorpay", "cashfree"]),
+  paypalEnabled: z.boolean(),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
   graceDays: z.number().int(),
@@ -1489,7 +1491,8 @@ export const platformIntegrationsContract = {
     .route({ method: "PATCH", path: "/platform/integrations/billing/settings" })
     .input(
       z.object({
-        provider: z.enum(["razorpay", "cashfree", "paypal"]).optional(),
+        provider: z.enum(["razorpay", "cashfree"]).optional(),
+        paypalEnabled: z.boolean().optional(),
         trial: z.object({ enabled: z.boolean().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
         cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
         paypal: z.object({ test: PayPalKeysInput.optional(), live: PayPalKeysInput.optional() }).optional(),

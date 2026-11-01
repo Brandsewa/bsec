@@ -48,6 +48,7 @@ import { ChannelPage } from "./pages/integrations/ChannelPage.tsx";
 import { PaymentsIntegrations } from "./pages/integrations/PaymentsIntegrations.tsx";
 import { AuthHub } from "./pages/integrations/AuthHub.tsx";
 import { BillingIntegrations } from "./pages/integrations/BillingIntegrations.tsx";
+import { BillingGateway } from "./pages/integrations/BillingGateway.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
 import { ResetPassword } from "./pages/ResetPassword.tsx";
 import { Kit } from "./pages/Kit.tsx";
@@ -463,6 +464,18 @@ const integrationsBillingRoute = createRoute({
   ),
 });
 
+const integrationsBillingGatewayRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/integrations/billing/$gateway",
+  component: BillingGateway,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
 const integrationsPaymentsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/integrations/payments",
@@ -534,6 +547,7 @@ export const routeTree = rootRoute.addChildren([
     integrationsPaymentsRoute,
     integrationsAuthRoute,
     integrationsBillingRoute,
+    integrationsBillingGatewayRoute,
   ]),
 ]);
 

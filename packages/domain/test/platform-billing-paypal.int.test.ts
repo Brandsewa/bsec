@@ -122,7 +122,7 @@ async function makeStore(country = "US") {
 
 const enablePayPal = () =>
   updatePlatformBillingSettings(rt, owner, {
-    provider: "paypal",
+    paypalEnabled: true,
     enabled: true,
     paypal: {
       test: {
@@ -154,7 +154,9 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
     // First save credentials
     await enablePayPal();
     const settings = await getPlatformBillingSettings(rt, owner);
-    expect(settings.provider).toBe("paypal");
+    expect(settings.paypalEnabled).toBe(true);
+    // PayPal is the international gateway; it never becomes the national one.
+    expect(settings.provider).toBe("razorpay");
     expect(settings.paypal?.test?.secretConfigured).toBe(true);
     expect(settings.paypal?.test?.keyId).toBe(PAYPAL_CLIENT_ID);
 
@@ -163,6 +165,26 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
       mode: "test",
     }, undefined, fetch);
     expect(connResult.ok).toBe(true);
+  });
+
+  it("PayPal cannot be chosen as the national gateway, and needs saved credentials to switch on", async () => {
+    await resetBilling();
+    await expect(updatePlatformBillingSettings(rt, owner, { provider: "paypal" as never })).rejects.toThrow(/international gateway/);
+    await expect(updatePlatformBillingSettings(rt, owner, { paypalEnabled: true })).rejects.toThrow(/Client ID and Secret/);
+  });
+
+  it("with PayPal switched off a global merchant has no online payment, and Indian merchants are unaffected by PayPal being on", async () => {
+    fakePayPal();
+    await enablePayPal();
+    await updatePlatformBillingSettings(rt, owner, { paypalEnabled: false, enabled: false });
+    const us = await makeStore("US");
+    expect((await getPlanAndBilling(rt, us.ctx)).billing.available).toBe(false);
+
+    await updatePlatformBillingSettings(rt, owner, { paypalEnabled: true, enabled: true });
+    const india = await makeStore("IN");
+    const view = await getPlanAndBilling(rt, india.ctx);
+    expect(view.billing.provider).toBe("razorpay");
+    expect(view.billing.currency).toBe("INR");
   });
 
   it("global merchant sees USD pricing and subscribes via PayPal Orders v2", async () => {

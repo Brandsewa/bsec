@@ -12,6 +12,8 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   // Which key set is in use. Switching to 'live' is a deliberate owner action.
   mode: text("mode").notNull().default("test"),
   enabled: boolean("enabled").notNull().default(false),
+  // PayPal bills stores outside India in USD; `provider` above is the national (INR) gateway only.
+  paypalEnabled: boolean("paypal_enabled").notNull().default(false),
   // Days a store keeps its plan after a failed payment before it is limited.
   graceDays: integer("grace_days").notNull().default(7),
   testKeyId: text("test_key_id"),
