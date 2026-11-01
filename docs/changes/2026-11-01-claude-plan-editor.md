@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/plan-editor` (not merged yet)
+- **Branch:** `feat/plan-editor` (merged in #184, 3bf4711)
 - **Area:** db, contracts, domain, platform, superadmin, web, admin
 - **Type:** feature
 - **Supersedes:** none
@@ -33,7 +33,7 @@ The owner can now edit, from Super Admin, everything a merchant sees about a pla
 - [x] `docs/ARCHITECTURE.md` (migration 0092, tables, procedures, plan editor paragraph)
 - [x] `docs/PLANS-AND-PRICING-STRATEGY.md`
 - [ ] ADR: not needed (no new architectural rule; billing remains per ADR-014, 036, 037, 040)
-- [x] `progress.md` in-flight line added
+- [x] `progress.md` in-flight line added and removed after merge
 
 ## Follow-ups and open questions
 - Owner: enter the new prices and limits, then sync Razorpay plans; decide the Pro to Scale rename (the code stays `pro`).
