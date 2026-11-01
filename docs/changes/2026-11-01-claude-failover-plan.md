@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `docs/failover-plan` (not created yet; files are uncommitted in the working tree)
+- **Branch:** `docs/failover-plan` (merged in #185, 510ce88)
 - **Area:** infra, docs
 - **Type:** docs
 - **Supersedes:** none
@@ -21,7 +21,7 @@ The owner asked how to keep the site up if the single Hostinger VPS fails, using
 - No ADR yet: one is needed when the replication option in plan section 4.3 is chosen.
 
 ## Verification
-- Ran: nothing executed. `pnpm docs:check` not run yet.
+- Ran: `pnpm docs:check` ok; nothing else executed.
 - Read only: `DEPLOYMENT.md`, `infra/coolify/RUNBOOK.md`, `infra/backups/*`, `infra/runbooks/INCIDENT.md`, `infra/loadtest/CAPACITY-POLICY.md`, `infra/uptime/README.md`, `packages/domain/src/system/rate-limit.ts`, plus a repo grep for database timeouts.
 - NOT verified: Cloudflare Load Balancing price and plan limits; whether a load balancer can be the Cloudflare for SaaS fallback origin; whether platform and Super Admin are actually behind Cloudflare Access (two docs disagree); anything on the live Cloudflare or Hostinger accounts.
 
