@@ -80,7 +80,9 @@ export async function listAdminOrders(
   const offset = input.offset ?? 0;
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
-    const conditions = [];
+    // An online order waiting for its payment has a temporary PEND- number: it is a hold, not an order yet, and is
+    // seen under Abandoned checkouts instead.
+    const conditions = [sql`${schema.orders.number} NOT LIKE 'PEND-%'`];
 
     if (input.view === "unfulfilled") {
       conditions.push(eq(schema.orders.fulfillmentStatus, "unfulfilled"));
@@ -247,8 +249,8 @@ export async function getAdminOrderStats(
       total_revenue: string | number;
     }>(sql`
       SELECT
-        COUNT(*) FILTER (WHERE archived_at IS NULL)::int AS total_orders,
-        COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled', 'returned') AND archived_at IS NULL)::int AS open_orders,
+        COUNT(*) FILTER (WHERE archived_at IS NULL AND number NOT LIKE 'PEND-%')::int AS total_orders,
+        COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled', 'returned') AND archived_at IS NULL AND number NOT LIKE 'PEND-%')::int AS open_orders,
         COUNT(*) FILTER (WHERE payment_status IN ('paid', 'cod_collected'))::int AS paid_orders,
         COALESCE(SUM(grand_total) FILTER (WHERE payment_status IN ('paid', 'cod_collected')), 0)::bigint AS total_revenue
       FROM orders

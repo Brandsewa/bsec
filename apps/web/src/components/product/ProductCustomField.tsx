@@ -49,7 +49,7 @@ export function ProductCustomField({ field, showLabel, label, locale }: { field:
   if (body === null) return null;
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8" data-custom-field={field.key}>
+    <section className="bs-site-w mx-auto px-4 py-4" data-custom-field={field.key}>
       {showLabel ? <h2 className="mb-2 text-lg font-semibold">{title}</h2> : null}
       {body}
     </section>

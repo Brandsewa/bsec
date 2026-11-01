@@ -47,7 +47,10 @@
 .bsb-w { margin-inline: auto; padding-inline: 1rem; width: 100%; }
 .bsb-w-narrow { max-width: 48rem; }
 .bsb-w-default { max-width: 64rem; }
-.bsb-w-wide { max-width: 80rem; }
+/* "Wide" is the theme's site width (Layout settings), plus the 1rem side padding that sits inside .bsb-w; 80rem when the theme sets none. */
+.bsb-w-wide { max-width: calc(var(--bs-site-w-d, 80rem) + 2rem); }
+@media (max-width: 1023px) { .bsb-w-wide { max-width: calc(var(--bs-site-w-t, var(--bs-site-w-d, 80rem)) + 2rem); } }
+@media (max-width: 767px) { .bsb-w-wide { max-width: calc(var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))) + 2rem); } }
 .bsb-w-full { max-width: none; }
 
 .bsb-align-left { text-align: left; }
@@ -168,7 +171,7 @@
 .bsb-hero { position: relative; overflow: hidden; display: flex; align-items: center; min-height: 26rem; }
 .bsb-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .bsb-hero-scrim { position: absolute; inset: 0; background: #000; }
-.bsb-hero-inner { position: relative; z-index: 1; max-width: 72rem; margin-inline: auto; padding: 3rem 1rem; width: 100%; color: #fff; }
+.bsb-hero-inner { position: relative; z-index: 1; max-width: var(--bs-site-w-d, 72rem); margin-inline: auto; padding: 3rem 1rem; width: 100%; color: #fff; }
 .bsb-hero-inner.bsb-no-media { color: var(--pf); }
 .bsb-eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.75rem; font-weight: 700; margin: 0 0 0.75rem; opacity: 0.85; }
 .bsb-hero-copy { max-width: 40rem; }
@@ -196,7 +199,7 @@
 @media (min-width: 1024px) { .bsb-grid.bsb-ccards { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } }
 @media (max-width: 639px) { .bsb-ccards { column-gap: 1rem; row-gap: 2rem; } .bsb-ccard-title { font-size: 1rem; } }
 .bsb-ccard { display: block; text-decoration: none; color: inherit; }
-.bsb-ccard-media { aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; background: transparent; }
+.bsb-ccard-media { aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; }
 .bsb-ccard-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
 .bsb-ccard:hover .bsb-ccard-media img, .bsb-ccard:focus-visible .bsb-ccard-media img { transform: scale(1.03); }
 .bsb-ccard:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: var(--r); }
@@ -231,6 +234,10 @@
 .bsb-site-header { border-bottom: 1px solid var(--b); }
 /* The header and footer always paint their tone, even the default one, which is transparent for ordinary blocks. */
 .bsb-site-header.bsb-tone-default, .bs-block-site-footer.bsb-tone-default { background: var(--bg); }
+/* The header follows the theme's site width (Layout settings); the row's 1rem side padding sits outside it so the logo and menu line up with the sections below. */
+.bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-d, 80rem) + 2rem); }
+@media (max-width: 1023px) { .bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-t, var(--bs-site-w-d, 80rem)) + 2rem); } }
+@media (max-width: 767px) { .bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))) + 2rem); } }
 .bsb-site-header-row { display: flex; align-items: center; gap: 1.5rem; padding-block: 0.75rem; }
 .bsb-site-logo { font-family: var(--fh); font-weight: 700; font-size: 1.25rem; color: inherit; text-decoration: none; display: inline-flex; align-items: center; }
 .bsb-site-nav { display: none; gap: 1.5rem; font-size: 0.9rem; font-weight: 500; flex: 1; align-items: center; }
@@ -270,7 +277,7 @@
 .bsb-dropdown-sublink:hover { color: var(--p); }
 
 .bsb-mobile-menu { display: block; position: relative; }
-@media (min-width: 768px) { .bsb-mobile-menu { display: none; } }
+@media (min-width: 1024px) { .bsb-mobile-menu { display: none; } }
 .bsb-mobile-toggle { cursor: pointer; list-style: none; border: 0; background: transparent; padding: 0; }
 /* Side drawer under the header: most of the screen wide, with a dimmed backdrop; the bottom bar (when there is one) stays visible. */
 .bsb-mobile-scrim {
@@ -316,12 +323,12 @@
 .bsb-mobile-subsublist { padding: 0.25rem 0 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 
 /* Phones have Search in the bottom bar. */
-@media (max-width: 767px) { .bsb-site-actions .bsb-site-search { display: none; } }
+@media (max-width: 1023px) { .bsb-site-actions .bsb-site-search { display: none; } }
 /* On phones the header is logo + account only; Explore (menu), Search and Cart live in the bottom bar. The drawer and cart still mount so the bar can open them. */
-@media (max-width: 767px) { .bsb-mobile-menu .bsb-mobile-toggle, .bsb-site-actions a[href="/cart"] { display: none; } }
+@media (max-width: 1023px) { .bsb-mobile-menu .bsb-mobile-toggle, .bsb-site-actions a[href="/cart"] { display: none; } }
 /* The hidden menu toggle still sat in the row as a flex item with a gap, pushing the logo off the left edge. */
-@media (max-width: 767px) { .bsb-site-header-row { gap: 0; } .bsb-site-header-row > .bsb-mobile-menu { width: 0; flex: 0 0 0; } }
-@media (min-width: 768px) { .bsb-phone-only { display: none; } }
+@media (max-width: 1023px) { .bsb-site-header-row { gap: 0; } .bsb-site-header-row > .bsb-mobile-menu { width: 0; flex: 0 0 0; } }
+@media (min-width: 1024px) { .bsb-phone-only { display: none; } }
 .bsb-site-account { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.25rem; padding: 0 0.75rem; border-radius: 9999px; background: var(--s); color: inherit; text-decoration: none; font-size: 0.875rem; font-weight: 500; max-width: 9rem; }
 .bsb-site-account > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bsb-site-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
@@ -330,7 +337,11 @@
 .bsb-site-header-center .bsb-site-header-row { justify-content: center; flex-wrap: wrap; position: relative; }
 .bsb-site-header-center .bsb-site-nav { flex: 0 1 auto; order: 3; width: 100%; justify-content: center; }
 .bsb-site-header-center .bsb-site-actions { margin-left: 0; position: absolute; right: 1rem; top: 0.75rem; }
-@media (min-width: 768px) { .bsb-site-nav { display: flex; } }
+@media (max-width: 1023px) {
+  .bsb-site-header-center .bsb-site-header-row { justify-content: flex-start; flex-wrap: nowrap; position: static; }
+  .bsb-site-header-center .bsb-site-actions { position: static; margin-left: auto; }
+}
+@media (min-width: 1024px) { .bsb-site-nav { display: flex; } }
 
 /* Logo size per device (SiteHeader.logoSize, SiteFooter.logoSize): desktop first, a smaller screen inherits what it does not set */
 .bsb-logo-img { display: block; object-fit: contain; max-width: 100%; --lg-w: var(--lg-d-w); --lg-h: var(--lg-d-h); width: var(--lg-w, auto); height: var(--lg-h, auto); max-height: var(--lg-h, 40px); }
@@ -361,7 +372,7 @@
 .bsb-hl-logoRight .bsb-site-header-row { flex-direction: row-reverse; }
 .bsb-hl-logoRight .bsb-site-nav { justify-content: flex-start; flex-direction: row-reverse; }
 .bsb-hl-logoRight .bsb-site-actions { margin-left: 0; margin-right: auto; }
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .bsb-hl-logoCenter .bsb-site-header-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5rem; }
   .bsb-hl-logoCenter .bsb-site-logo { grid-column: 2; grid-row: 1; justify-self: center; }
   .bsb-hl-logoCenter .bsb-site-nav { grid-column: 1; grid-row: 1; }
@@ -393,6 +404,10 @@
 .bsb-coupon-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
 .bsb-coupon { display: grid; gap: 0.25rem; padding: 0.75rem 1rem; border: 1.5px dashed var(--b); border-radius: 0.75rem; min-width: 12rem; }
 .bsb-coupon code { font-weight: 700; letter-spacing: 0.04em; }
+/* The footer follows the theme's site width, like the header (Layout settings); the 1rem side padding sits outside it. */
+.bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-d, 80rem) + 2rem); }
+@media (max-width: 1023px) { .bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-t, var(--bs-site-w-d, 80rem)) + 2rem); } }
+@media (max-width: 767px) { .bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))) + 2rem); } }
 .bsb-site-footer-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; margin-top: 2.5rem; font-size: 0.75rem; }
 .bsb-site-footer-bottom p { margin: 0; }
 .bsb-powered { color: inherit; text-decoration: none; opacity: 0.85; }
@@ -1374,7 +1389,16 @@
 @media (min-width: 1024px) { .bsb-grid.bsb-blog-grid { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } }
 .bsb-blog-list { display: flex; flex-direction: column; gap: 2rem; }
 .bsb-blog-card { display: flex; flex-direction: column; gap: 0.875rem; min-width: 0; }
-.bsb-blog-media { display: block; border-radius: var(--r); overflow: hidden; background: var(--s); }
+/* Picture placeholders: while an image is still downloading its box shows a soft moving shimmer (a skeleton) instead of an empty hole. The loaded image simply covers it. */
+.bsb-blog-media, .bsb-ccard-media {
+  background-color: var(--s, #eee);
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--bg, #fff) 55%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: bsb-skel 1.4s linear infinite;
+}
+@keyframes bsb-skel { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .bsb-blog-media, .bsb-ccard-media { animation: none; } }
+.bsb-blog-media { display: block; border-radius: var(--r); overflow: hidden; }
 .bsb-blog-landscape { aspect-ratio: 16 / 10; }
 .bsb-blog-square { aspect-ratio: 1 / 1; }
 .bsb-blog-portrait { aspect-ratio: 4 / 5; }
@@ -1815,7 +1839,19 @@
 /* Hero slider width (HeroSlider.widthMode): always centred, whatever side margins or width the Section panel holds */
 .bsb-lay.bsb-hs-wm-full, .bsb-lay.bsb-hs-wm-contained { margin-left: auto; margin-right: auto; width: 100%; }
 .bsb-lay.bsb-hs-wm-full { max-width: none; }
-.bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, 80rem), calc(100% - 2rem)); }
+.bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-d, 80rem)), calc(100% - 2rem)); }
+@media (max-width: 1023px) { .bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))), calc(100% - 2rem)); } }
+@media (max-width: 767px) { .bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem)))), calc(100% - 2rem)); } }
+
+/* Per-device overrides: tablet (under 1024px), then phone (under 768px) on top of it. A phone with no choice of its own follows the tablet's. */
+@media (max-width: 1023px) {
+  .bsb-lay.bsb-hs-wmt-full { max-width: none; }
+  .bsb-lay.bsb-hs-wmt-contained { max-width: min(var(--mxw, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))), calc(100% - 2rem)); }
+}
+@media (max-width: 767px) {
+  .bsb-lay.bsb-hs-wmm-full { max-width: none; }
+  .bsb-lay.bsb-hs-wmm-contained { max-width: min(var(--mxw, var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem)))), calc(100% - 2rem)); }
+}
 
 /* Hero slider rounded corners (HeroSlider.slideRadius.enabled): the carousel container and every slide get the same shape, 16px when no size is set */
 .bsb-lay.bsb-hs-rounded { border-radius: var(--sr-tl, 16px) var(--sr-tr, 16px) var(--sr-br, 16px) var(--sr-bl, 16px); overflow: hidden; }
@@ -1856,6 +1892,15 @@
 .bsb-mc-body { position: relative; flex: 1; display: flex; flex-direction: column; gap: var(--mc-gap, 12px); padding: var(--mc-pad, 24px); }
 .bsb-mc-v-start { justify-content: flex-start; } .bsb-mc-v-center { justify-content: center; } .bsb-mc-v-end { justify-content: flex-end; }
 .bsb-mc-body.bsb-align-center { align-items: center; } .bsb-mc-body.bsb-align-right { align-items: flex-end; }
+.bsb-mc-main { display: flex; flex-direction: column; gap: var(--mc-gap, 12px); min-width: 0; }
+/* Card look "plain": no border, background or corners, only the content. */
+.bsb-mc-card.bsb-mc-plain { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+/* Icon beside the text: a row (icon first, or last for "right"); the icon never shrinks and the text takes the rest. */
+.bsb-mc-body.bsb-mc-side { flex-direction: row; align-items: flex-start; justify-content: flex-start; }
+.bsb-mc-body.bsb-mc-side.bsb-mc-ic-right { flex-direction: row-reverse; }
+.bsb-mc-body.bsb-mc-side.bsb-mc-ia-center { align-items: center; }
+.bsb-mc-body.bsb-mc-side .bsb-mc-icon { flex: none; }
+.bsb-mc-body.bsb-mc-side .bsb-mc-main { flex: 1; }
 .bsb-mc-icon { display: inline-flex; width: var(--mc-icon, 48px); height: var(--mc-icon, 48px); color: var(--bs-ic, var(--bs-icon-color-light, var(--p))); }
 .bsb-mc-card-img .bsb-mc-icon, .bsb-mc-card-bg .bsb-mc-icon { color: inherit; }
 .bsb-mc-icon img { width: 100%; height: 100%; object-fit: contain; }
@@ -1889,3 +1934,48 @@
   .bsb-bs-nothumb .bsb-blog-media { display: none; }
 }
 .bsb-tone-dark .bsb-mc-icon, .bsb-tone-primary .bsb-mc-icon { color: var(--bs-icon-color-dark, inherit); }
+
+/* ------------------------------------------------------------------ */
+/* Trust strip. The view resolves each setting for desktop (-d), tablet */
+/* (-t) and phone (-m); here the set for the screen is picked.          */
+/* ------------------------------------------------------------------ */
+.bsb-ts {
+  --ts-sp: var(--ts-sp-d); --ts-sbg: var(--ts-sbg-d); --ts-gap: var(--ts-gap-d); --ts-cp: var(--ts-cp-d); --ts-cb: var(--ts-cb-d);
+  --ts-bw: var(--ts-bw-d); --ts-rad: var(--ts-rad-d); --ts-ic: var(--ts-ic-d); --ts-hs: var(--ts-hs-d); --ts-ts: var(--ts-ts-d);
+  --ts-fd: var(--ts-fd-d); --ts-ta: var(--ts-ta-d); --ts-ai: var(--ts-ai-d); --ts-gtc: var(--ts-gtc-d); --ts-gaf: var(--ts-gaf-d);
+  --ts-gac: var(--ts-gac-d); --ts-ox: var(--ts-ox-d); --ts-snap: var(--ts-snap-d);
+  --ts-icc: var(--ts-icc-d); --ts-hc: var(--ts-hc-d); --ts-tc: var(--ts-tc-d); --ts-pb: var(--ts-pb-d);
+  background: var(--ts-sbg);
+  padding-block: var(--ts-sp);
+}
+@media (max-width: 1023px) {
+  .bsb-ts {
+    --ts-sp: var(--ts-sp-t); --ts-sbg: var(--ts-sbg-t); --ts-gap: var(--ts-gap-t); --ts-cp: var(--ts-cp-t); --ts-cb: var(--ts-cb-t);
+    --ts-bw: var(--ts-bw-t); --ts-rad: var(--ts-rad-t); --ts-ic: var(--ts-ic-t); --ts-hs: var(--ts-hs-t); --ts-ts: var(--ts-ts-t);
+    --ts-fd: var(--ts-fd-t); --ts-ta: var(--ts-ta-t); --ts-ai: var(--ts-ai-t); --ts-gtc: var(--ts-gtc-t); --ts-gaf: var(--ts-gaf-t);
+    --ts-gac: var(--ts-gac-t); --ts-ox: var(--ts-ox-t); --ts-snap: var(--ts-snap-t);
+    --ts-icc: var(--ts-icc-t); --ts-hc: var(--ts-hc-t); --ts-tc: var(--ts-tc-t); --ts-pb: var(--ts-pb-t);
+  }
+}
+@media (max-width: 767px) {
+  .bsb-ts {
+    --ts-sp: var(--ts-sp-m); --ts-sbg: var(--ts-sbg-m); --ts-gap: var(--ts-gap-m); --ts-cp: var(--ts-cp-m); --ts-cb: var(--ts-cb-m);
+    --ts-bw: var(--ts-bw-m); --ts-rad: var(--ts-rad-m); --ts-ic: var(--ts-ic-m); --ts-hs: var(--ts-hs-m); --ts-ts: var(--ts-ts-m);
+    --ts-fd: var(--ts-fd-m); --ts-ta: var(--ts-ta-m); --ts-ai: var(--ts-ai-m); --ts-gtc: var(--ts-gtc-m); --ts-gaf: var(--ts-gaf-m);
+    --ts-gac: var(--ts-gac-m); --ts-ox: var(--ts-ox-m); --ts-snap: var(--ts-snap-m);
+    --ts-icc: var(--ts-icc-m); --ts-hc: var(--ts-hc-m); --ts-tc: var(--ts-tc-m); --ts-pb: var(--ts-pb-m);
+  }
+}
+.bsb-ts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ts-gap); grid-template-columns: var(--ts-gtc); grid-auto-flow: var(--ts-gaf); grid-auto-columns: var(--ts-gac); overflow-x: var(--ts-ox); scroll-snap-type: var(--ts-snap); scrollbar-width: thin; scrollbar-color: transparent transparent; padding-bottom: var(--ts-pb); }
+/* Slider position bar: hidden until the pointer is over the strip (or it is focused), then a thin, light bar, like the collection slider's. */
+.bsb-ts-list:hover, .bsb-ts-list:focus-within { scrollbar-color: color-mix(in srgb, currentColor 22%, transparent) transparent; }
+.bsb-ts-list::-webkit-scrollbar { height: 4px; }
+.bsb-ts-list::-webkit-scrollbar-track { background: transparent; }
+.bsb-ts-list::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+.bsb-ts-list:hover::-webkit-scrollbar-thumb, .bsb-ts-list:focus-within::-webkit-scrollbar-thumb { background: color-mix(in srgb, currentColor 22%, transparent); }
+.bsb-ts-item { display: flex; flex-direction: var(--ts-fd); align-items: var(--ts-ai); gap: 0.6em; min-width: 0; scroll-snap-align: start; padding: var(--ts-cp); background: var(--ts-cb); border: var(--ts-bw) solid var(--b, #e5e7eb); border-radius: var(--ts-rad); text-align: var(--ts-ta); }
+.bsb-ts-icon { display: inline-flex; flex: none; width: var(--ts-ic); height: var(--ts-ic); color: var(--ts-icc); }
+.bsb-ts-icon svg { width: 100%; height: 100%; }
+.bsb-ts-text { min-width: 0; }
+.bsb-ts-title { margin: 0; font-size: var(--ts-hs); font-weight: 600; line-height: 1.25; color: var(--ts-hc); }
+.bsb-ts-desc { margin: 0.2em 0 0; font-size: var(--ts-ts); line-height: 1.4; color: var(--ts-tc); }

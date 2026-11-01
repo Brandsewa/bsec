@@ -897,11 +897,11 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
   describe("6. Block Document Render Pipeline", () => {
     it("renders page block document verifying migrateBlockDocument + validateBlockDocument upgrades and renders safely", () => {
       // 1. Setup a custom block migration for testing version upgrades (v0 -> v1)
-      registerBlockMigration("Hero", 0, (props: Record<string, unknown>) => {
+      registerBlockMigration("Heading", 0, (props: Record<string, unknown>) => {
         const { legacyHeadline, ...rest } = props;
         return {
           ...rest,
-          title: typeof legacyHeadline === "string" ? legacyHeadline : "Migrated Title",
+          text: typeof legacyHeadline === "string" ? legacyHeadline : "Migrated Title",
         };
       });
 
@@ -910,19 +910,18 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
         blocks: [
           {
             id: "hero-blk-1",
-            type: "Hero",
+            type: "Heading",
             version: 0,
             props: {
               legacyHeadline: "Old Hero Headline",
-              subtitle: "Subheading text",
             },
           },
           {
             id: "rich-text-1",
-            type: "RichText",
+            type: "Text",
             version: 1,
             props: {
-              content: "<p>Safe text <script>alert('xss')</script></p>",
+              text: "Safe text",
             },
           },
           {
@@ -941,16 +940,11 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       const migrated = migrateBlockDocument(oldDoc);
       const migratedHero = migrated.blocks.find((b) => b.id === "hero-blk-1");
       expect(migratedHero?.version).toBe(1);
-      expect(migratedHero?.props.title).toBe("Old Hero Headline");
+      expect(migratedHero?.props.text).toBe("Old Hero Headline");
 
-      // 3. Validate block document and ensure RichText is sanitized
+      // 3. Validate block document
       const validated = validateBlockDocument(migrated);
       expect(validated.success).toBe(true);
-      if (validated.success) {
-        const richBlock = validated.data.blocks.find((b) => b.id === "rich-text-1");
-        expect(richBlock?.props.content).not.toContain("<script>");
-        expect(richBlock?.props.content).toContain("<p>Safe text </p>");
-      }
 
       // 4. Render block document: ensures hidden blocks are omitted and sanitized output is rendered
       const renderResult = renderBlockDocument(oldDoc);

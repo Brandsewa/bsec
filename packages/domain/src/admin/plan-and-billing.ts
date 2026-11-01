@@ -4,6 +4,7 @@ import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { cancelTenantSubscription, changeTenantPlan, reconcileCashfreeSubscription, resolveBillingProvider } from "../saas/billing.ts";
 import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
+import { listPublicPlans, listPublicPlanCompare } from "../saas/signup.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
 export interface PlanAndBillingUsageItem {
@@ -90,6 +91,9 @@ export interface AvailablePlanSummary {
   priceMonthlyUsdCents?: number | null | undefined;
   priceYearlyUsdCents?: number | null | undefined;
   isCurrent: boolean;
+  tagline?: string | null | undefined;
+  badge?: string | null | undefined;
+  bullets?: string[] | undefined;
 }
 
 export interface RequestPlanChangeInput {
@@ -341,6 +345,8 @@ export async function listAvailablePlans(
     .orderBy(desc(schema.subscriptions.createdAt))
     .limit(1);
 
+  // Customer-facing copy and enforced limits come from the public plan listing, so this screen and signup always agree.
+  const pub = new Map((await listPublicPlans(rt._db.db)).map((p) => [p.code, p]));
   const planRows = await db
     .select()
     .from(schema.plans)
@@ -356,7 +362,16 @@ export async function listAvailablePlans(
     priceMonthlyUsdCents: p.priceMonthlyUsdCents !== null ? Number(p.priceMonthlyUsdCents) : null,
     priceYearlyUsdCents: p.priceYearlyUsdCents !== null ? Number(p.priceYearlyUsdCents) : null,
     isCurrent: p.id === sub?.planId,
+    tagline: p.tagline,
+    badge: p.badge,
+    bullets: pub.get(p.code)?.bullets ?? [],
   }));
+}
+
+/** The long comparison table for the plan screen. Same data as signup. */
+export async function getPlanCompare(rt: Runtime, ctx: TenantContext) {
+  assertPermission(ctx, "settings.read");
+  return listPublicPlanCompare(rt._db.db);
 }
 
 /**

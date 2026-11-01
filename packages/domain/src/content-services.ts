@@ -1793,49 +1793,28 @@ export async function getStorefrontHomePage(
       blocks: [
         {
           id: "default-hero",
-          type: "Hero",
+          type: "HeroSlider",
           version: 1,
           props: {
-            title: "Welcome to Our Store",
-            subtitle: "Discover our handcrafted collection of high-quality products.",
-            ctaText: "Shop All",
-            ctaLink: "/collections",
-            alignment: "center",
-          },
-        },
-        {
-          id: "default-usp",
-          type: "UspStrip",
-          version: 1,
-          props: {
-            items: [
-              { icon: "Truck", title: "Free Shipping", description: "On orders above ₹999 across India" },
-              { icon: "ShieldCheck", title: "100% Authentic", description: "Direct from verified makers" },
-              { icon: "RotateCcw", title: "Easy Returns", description: "7-day seamless exchange guarantee" },
-              { icon: "Headphones", title: "Dedicated Support", description: "Friendly support via WhatsApp" },
+            slides: [
+              {
+                title: "Welcome to Our Store",
+                subtitle: "Discover our handcrafted collection of high-quality products.",
+                primaryLabel: "Shop All",
+                primaryHref: "/collections",
+              },
             ],
           },
         },
+        { id: "default-usp", type: "TrustStrip", version: 1, props: {} },
         {
           id: "default-grid",
-          type: "ProductGrid",
+          type: "ProductShowcase",
           version: 1,
           props: {
             title: "Featured Products",
             subtitle: "Explore our latest arrivals",
             limit: 8,
-            columns: "4",
-          },
-        },
-        {
-          id: "default-newsletter",
-          type: "Newsletter",
-          version: 1,
-          props: {
-            title: "Subscribe to Our Newsletter",
-            subtitle: "Get updates on new releases, special discounts, and seasonal collections.",
-            buttonText: "Subscribe",
-            placeholder: "Enter your email address",
           },
         },
       ],

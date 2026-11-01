@@ -1,6 +1,7 @@
 import { oc } from "@orpc/contract";
 import { marketsContract } from "./markets.ts";
 import { z } from "zod";
+import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
@@ -1743,6 +1744,10 @@ export const AvailablePlanSummary = z.object({
   priceMonthlyUsdCents: z.number().int().nullable().optional(),
   priceYearlyUsdCents: z.number().int().nullable().optional(),
   isCurrent: z.boolean(),
+  tagline: z.string().nullable().optional(),
+  badge: z.string().nullable().optional(),
+  /** Card lines saved in Super Admin, with every limit already filled in. */
+  bullets: z.array(z.string()).optional(),
 });
 export type AvailablePlanSummary = z.infer<typeof AvailablePlanSummary>;
 
@@ -4899,6 +4904,14 @@ export const adminContract = {
     availablePlans: oc
       .route({ method: "GET", path: "/admin/plan-and-billing/plans" })
       .output(z.array(AvailablePlanSummary)),
+    compare: oc
+      .route({ method: "GET", path: "/admin/plan-and-billing/compare" })
+      .output(
+        z.object({
+          plans: z.array(z.object({ code: z.string(), name: z.string() })),
+          groups: z.array(PublicPlanCompareGroup),
+        }),
+      ),
     requestChange: oc
       .route({ method: "POST", path: "/admin/plan-and-billing/request-change" })
       .input(RequestPlanChangeInput)

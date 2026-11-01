@@ -69,10 +69,10 @@ describe("validateBlockDocument", () => {
       blocks: [
         {
           id: "hero-1",
-          type: "Hero",
+          type: "Heading",
           version: 1,
           props: {
-            title: "Summer Collection 2026",
+            text: "Summer Collection 2026",
           },
         },
         {
@@ -89,38 +89,9 @@ describe("validateBlockDocument", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.blocks).toHaveLength(2);
-      expect(result.data.blocks[0]?.props.title).toBe("Summer Collection 2026");
-      expect(result.data.blocks[0]?.props.alignment).toBe("center");
+      expect(result.data.blocks[0]?.props.text).toBe("Summer Collection 2026");
+      expect(result.data.blocks[0]?.props.align).toBe("left");
       expect(result.data.blocks[1]?.props.variant).toBe("promo");
-    }
-  });
-
-  it("sanitizes RichText block props during document validation", () => {
-    const doc = {
-      version: 1,
-      blocks: [
-        {
-          id: "rt-1",
-          type: "RichText",
-          version: 1,
-          props: {
-            content: "<h2>Safe Title</h2><script>alert('xss')</script><p>Safe paragraph</p>",
-            alignment: "left",
-          },
-        },
-      ],
-    };
-    const result = validateBlockDocument(doc);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      const rtBlock = result.data.blocks[0];
-      expect(rtBlock).toBeDefined();
-      if (rtBlock) {
-        expect(rtBlock.props.content).toContain("<h2>Safe Title</h2>");
-        expect(rtBlock.props.content).toContain("<p>Safe paragraph</p>");
-        expect(rtBlock.props.content).not.toContain("<script");
-        expect(rtBlock.props.content).not.toContain("alert('xss')");
-      }
     }
   });
 
@@ -182,11 +153,11 @@ describe("validateBlockDocument", () => {
       blocks: [
         {
           id: "hero-1",
-          type: "Hero",
+          type: "Heading",
           version: 1,
           props: {
-            // missing required 'title'
-            alignment: "invalid-alignment",
+            // missing required text
+            align: "invalid-alignment",
           },
         },
       ],
@@ -206,10 +177,10 @@ describe("migrateBlockDocument", () => {
       blocks: [
         {
           id: "hero-1",
-          type: "Hero",
+          type: "Heading",
           version: 1,
           props: {
-            title: "Original Title",
+            text: "Original Title",
           },
         },
       ],
@@ -220,16 +191,16 @@ describe("migrateBlockDocument", () => {
 
   it("runs registered block migrations sequentially", () => {
     // Register test migration from v0 -> v1
-    registerBlockMigration("Hero", 0, (props: Record<string, unknown>) => {
+    registerBlockMigration("Heading", 0, (props: Record<string, unknown>) => {
       return {
         ...props,
-        title: (props.heading as string) || "Migrated Title",
+        text: (props.heading as string) || "Migrated Title",
       };
     });
 
     const oldBlock: BlockInstance = {
       id: "legacy-hero",
-      type: "Hero",
+      type: "Heading",
       version: 0,
       props: {
         heading: "Legacy Heading",
@@ -243,6 +214,6 @@ describe("migrateBlockDocument", () => {
 
     const migrated = migrateBlockDocument(doc);
     expect(migrated.blocks[0]?.version).toBe(1);
-    expect(migrated.blocks[0]?.props.title).toBe("Legacy Heading");
+    expect(migrated.blocks[0]?.props.text).toBe("Legacy Heading");
   });
 });

@@ -61,7 +61,6 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
   const MP4_VALID = Buffer.from([
     0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
   ]);
-  const PDF_VALID = Buffer.from("%PDF-1.4 test dummy document");
 
   beforeAll(async () => {
     env = await startTestDb();
@@ -200,10 +199,10 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       fileBytes: MP4_VALID,
     });
 
-    const file1 = await uploadMediaDirect(rt, ctx, {
-      filename: "spec.pdf",
-      mime: "application/pdf",
-      fileBytes: PDF_VALID,
+    const img2 = await uploadMediaDirect(rt, ctx, {
+      filename: "page-second.png",
+      mime: "image/png",
+      fileBytes: PNG_1X1,
     });
 
     // 2. Create Page
@@ -218,7 +217,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       blocks: [
         {
           id: "b-hero",
-          type: "Hero",
+          type: "Section",
           props: { title: "Welcome Hero", backgroundMediaId: img1.id },
         },
       ],
@@ -247,7 +246,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       blocks: [
         {
           id: "b-hero",
-          type: "Hero",
+          type: "Section",
           props: { title: "Welcome Hero", backgroundMediaId: img1.id },
         },
         {
@@ -257,8 +256,8 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
         },
         {
           id: "b-file",
-          type: "FileDownload",
-          props: { label: "User Manual", mediaId: file1.id },
+          type: "Image",
+          props: { mediaId: img2.id, alt: "Second picture" },
         },
       ],
     });
@@ -277,7 +276,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
     );
     expect(usagesAfterDraft).toHaveLength(3);
     const draftMediaIds = usagesAfterDraft.map((u) => u.mediaId).sort();
-    expect(draftMediaIds).toEqual([img1.id, vid1.id, file1.id].sort());
+    expect(draftMediaIds).toEqual([img1.id, vid1.id, img2.id].sort());
     expect(usagesAfterDraft.every((u) => u.field === "draft")).toBe(true);
 
     // 5. Publish Page
@@ -299,7 +298,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
     expect(usagesAfterPublish).toHaveLength(6);
     const publishedUsages = usagesAfterPublish.filter((u) => u.field === "published");
     expect(publishedUsages).toHaveLength(3);
-    expect(publishedUsages.map((u) => u.mediaId).sort()).toEqual([img1.id, vid1.id, file1.id].sort());
+    expect(publishedUsages.map((u) => u.mediaId).sort()).toEqual([img1.id, vid1.id, img2.id].sort());
 
     // 6. Save Draft without video (simulate draft edit while published retains video)
     await savePageDraft(rt, ctx, {
@@ -307,7 +306,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       blocks: [
         {
           id: "b-hero",
-          type: "Hero",
+          type: "Section",
           props: { title: "Welcome Hero", backgroundMediaId: img1.id },
         },
       ],
@@ -448,7 +447,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
         blocks: [
           {
             id: "b-1",
-            type: "Hero",
+            type: "Section",
             props: { title: "Title", backgroundMediaId: foreignMedia.id },
           },
         ],
@@ -462,7 +461,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
         blocks: [
           {
             id: "b-2",
-            type: "Hero",
+            type: "Section",
             props: { title: "Title", backgroundMediaId: trashedMedia.id },
           },
         ],
@@ -490,7 +489,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
         blocks: [
           {
             id: "b-4",
-            type: "Hero",
+            type: "Section",
             props: { title: "Title", backgroundMediaId: "not-a-uuid" },
           },
         ],
@@ -515,7 +514,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       blocks: [
         {
           id: "b-1",
-          type: "Hero",
+          type: "Section",
           props: { title: "Initial Title", backgroundMediaId: validImg.id },
         },
       ],
@@ -531,7 +530,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
         blocks: [
           {
             id: "b-1",
-            type: "Hero",
+            type: "Section",
             props: { title: "Updated Title", backgroundMediaId: validImg.id },
           },
         ],
@@ -599,10 +598,10 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
 
     const v1 = await savePageDraft(rt, ctx, {
       id: page.id,
-      blocks: [{ id: "h-1", type: "Hero", props: { title: "One", backgroundMediaId: img.id } }],
+      blocks: [{ id: "h-1", type: "Section", props: { title: "One", backgroundMediaId: img.id } }],
     });
     await publishPage(rt, ctx, { id: page.id, versionId: v1.versionId });
-    await savePageDraft(rt, ctx, { id: page.id, blocks: [{ id: "h-1", type: "Hero", props: { title: "Two" } }] });
+    await savePageDraft(rt, ctx, { id: page.id, blocks: [{ id: "h-1", type: "Section", props: { title: "Two" } }] });
 
     // The file is trashed, then permanently deleted once nothing tracks it any more
     await trashMedia(rt, ctx, { ids: [img.id] });
@@ -628,7 +627,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
           document: {
             version: 1,
             blocks: [
-              { id: "l-1", type: "Hero", props: { title: "Old", backgroundMediaId: "legacy-sample-image" } },
+              { id: "l-1", type: "Section", props: { title: "Old", backgroundMediaId: "legacy-sample-image" } },
               { id: "l-2", type: "Image", props: { mediaId: img.id } },
             ],
           },
@@ -676,7 +675,7 @@ describe("Media Document Usages Integration Test Suite (S4, S5, Real Postgres)",
       blocks: [
         {
           id: "b-1",
-          type: "Hero",
+          type: "Section",
           props: { title: "Fanout Hero", backgroundMediaId: fanoutImg.id },
         },
       ],

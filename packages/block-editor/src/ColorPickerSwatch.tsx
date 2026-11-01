@@ -37,7 +37,7 @@ export function ColorPickerSwatch({
   onTextColorChange,
 }: ColorPickerSwatchProps) {
   const [open, setOpen] = useState(false);
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ bottom: number; left: number; maxHeight: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const contextColors = useThemeGlobalColors();
@@ -87,8 +87,9 @@ export function ColorPickerSwatch({
     if (left + popoverWidth > window.innerWidth - 10) {
       left = window.innerWidth - popoverWidth - 10;
     }
-    const top = rect.bottom + 6;
-    setPopoverPos({ top, left });
+    // Always opens upward from the swatch (the colour fields sit low in the panel, so a popover below was cut off);
+    // a short window scrolls inside the popover instead of running off the top.
+    setPopoverPos({ bottom: window.innerHeight - rect.top + 6, left, maxHeight: Math.max(160, rect.top - 16) });
   };
 
   const handleToggle = () => {
@@ -210,8 +211,10 @@ export function ColorPickerSwatch({
               aria-label="Color Picker"
               style={{
                 position: "fixed",
-                top: popoverPos.top,
+                bottom: popoverPos.bottom,
                 left: popoverPos.left,
+                maxHeight: popoverPos.maxHeight,
+                overflowY: "auto",
                 zIndex: 999999,
                 width: 260,
                 background: "#ffffff",

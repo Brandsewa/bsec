@@ -10,6 +10,11 @@ describe("--bs-primary-fg (text on the brand colour)", () => {
     expect(fg("#0b6b42")).toBe("#ffffff");
   });
 
+  it("keeps white on mid-tone brand colours such as terracotta", () => {
+    expect(fg("#b87c5a")).toBe("#ffffff");
+    expect(fg("#b05a3c")).toBe("#ffffff");
+  });
+
   it("is dark on light colours", () => {
     expect(fg("#ffffff")).toBe("#0f172a");
     expect(fg("#fff")).toBe("#0f172a");

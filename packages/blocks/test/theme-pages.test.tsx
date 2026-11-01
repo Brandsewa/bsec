@@ -334,8 +334,8 @@ describe("collection listing settings", () => {
     for (const bad of [{ columns: "5" }, { columnsTablet: "3" }, { defaultView: "table" }, { pageSize: "50" }, { cardStyle: "round" }]) expect(parse(bad)).toBeNull();
   });
 
-  it("formats ProductGrid prices with market currency and locale when provided in RenderContext", () => {
-    const grid = block("pg", "ProductGrid", { title: "Featured Products" });
+  it("formats Product showcase prices with market currency and locale when provided in RenderContext", () => {
+    const grid = block("pg", "ProductShowcase", { title: "Featured Products" });
     const renderWithContext = (currency?: string, locale?: string) =>
       renderToStaticMarkup(
         <>{renderBlockTree([grid], {
@@ -343,14 +343,18 @@ describe("collection listing settings", () => {
           locale,
           data: {
             pg: {
-              kind: "products",
-              products: [
+              kind: "product-tabs",
+              tabs: [
                 {
-                  id: "p1",
-                  title: "Sample Hat",
-                  slug: "sample-hat",
-                  priceMin: 2400,
-                  compareAtPriceMin: 3000,
+                  products: [
+                    {
+                      id: "p1",
+                      title: "Sample Hat",
+                      slug: "sample-hat",
+                      priceMin: 2400,
+                      compareAtPriceMin: 3000,
+                    },
+                  ],
                 },
               ],
             },

@@ -6,24 +6,11 @@ import {
 } from "../src/registry.ts";
 
 describe("Block Registry v1", () => {
-  const expectedBlockTypes: BlockType[] = [
-    "Hero",
-    "Banner",
-    "ProductGrid",
-    "CollectionGrid",
-    "ProductCarousel",
-    "Testimonials",
-    "Reviews",
-    "RichText",
-    "FAQ",
-    "Gallery",
-    "Newsletter",
-    "UspStrip",
-  ];
+  const expectedBlockTypes: BlockType[] = ["Banner", "CollectionGrid", "Reviews", "Gallery", "TrustStrip"];
 
-  it("registers the 12 original home-page block types plus layout, content, conversion, store-chrome and cart blocks", () => {
+  it("registers the kept widgets plus layout, content, store-chrome and cart blocks", () => {
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedBlockTypes));
-    expect(BLOCK_TYPES.length).toBe(49);
+    expect(BLOCK_TYPES.length).toBe(32);
   });
 
   for (const type of expectedBlockTypes) {
@@ -46,24 +33,14 @@ describe("Block Registry v1", () => {
         const res = def.schema.safeParse("invalid string input");
         expect(res.success).toBe(false);
       });
-
-      if (type === "RichText") {
-        it("sanitizes content in render function as defense-in-depth", () => {
-          const def = getBlockDefinition("RichText");
-          const rendered = def.render({
-            props: {
-              content: "<p>Safe</p><script>alert('xss')</script><img src=x onerror=alert(1)>",
-              alignment: "left",
-            },
-          }) as React.ReactElement<{ dangerouslySetInnerHTML: { __html: string } }>;
-
-          expect(rendered.props.dangerouslySetInnerHTML.__html).toContain("<p>Safe</p>");
-          expect(rendered.props.dangerouslySetInnerHTML.__html).not.toContain("<script");
-          expect(rendered.props.dangerouslySetInnerHTML.__html).not.toContain("onerror");
-        });
-      }
     });
   }
+
+  it("no longer registers the retired widgets (their saved copies are dropped when a page is read)", () => {
+    for (const gone of ["Hero", "ProductGrid", "ProductCarousel", "Testimonials", "RichText", "FAQ", "Newsletter", "UspStrip", "Grid", "FlexRow", "FlexColumn", "Spacer", "Divider", "FileDownload", "Icon", "Link", "CallToAction", "BlogPosts"]) {
+      expect(BLOCK_TYPES as string[]).not.toContain(gone);
+    }
+  });
 
   describe("Block: Video", () => {
     it("accepts mediaId, posterMediaId, autoplayLoop and url", () => {
@@ -75,38 +52,6 @@ describe("Block Registry v1", () => {
         url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       });
       expect(valid.success).toBe(true);
-    });
-  });
-
-  describe("Block: FileDownload", () => {
-    it("has a valid version, schema, defaultProps, and renderer", () => {
-      const def = getBlockDefinition("FileDownload");
-      expect(def).toBeDefined();
-      expect(def.type).toBe("FileDownload");
-      expect(def.version).toBe(1);
-      expect(typeof def.render).toBe("function");
-
-      const parseResult = def.schema.safeParse(def.defaultProps);
-      expect(parseResult.success).toBe(true);
-    });
-
-    it("accepts valid label, description, and mediaId", () => {
-      const def = getBlockDefinition("FileDownload");
-      const res = def.schema.safeParse({
-        label: "Product Specs",
-        description: "Full PDF catalog",
-        mediaId: "11111111-1111-4111-8111-111111111111",
-      });
-      expect(res.success).toBe(true);
-    });
-
-    it("rejects invalid mediaId UUID", () => {
-      const def = getBlockDefinition("FileDownload");
-      const res = def.schema.safeParse({
-        label: "Product Specs",
-        mediaId: "not-a-uuid",
-      });
-      expect(res.success).toBe(false);
     });
   });
 });

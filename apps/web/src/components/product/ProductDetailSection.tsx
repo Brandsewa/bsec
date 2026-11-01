@@ -215,7 +215,7 @@ export function ProductDetailSection({
   flushHead();
 
   return (
-    <div className={`mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8 pb-2 sm:pb-8`}>
+    <div className={`bs-site-w mx-auto px-4 py-4 sm:py-8 pb-2 sm:pb-8`}>
       {options.showBreadcrumb ? (
         <nav aria-label="Breadcrumb" className="mb-6 hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
           <Link href="/" className="hover:text-foreground transition-colors">

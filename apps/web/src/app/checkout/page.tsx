@@ -16,7 +16,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ payment?: string }> }) {
+  const { payment } = await searchParams;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
 
@@ -82,6 +83,14 @@ export default async function CheckoutPage() {
       <h1 className="mb-4 text-center text-xl font-extrabold tracking-tight text-foreground sm:mb-6 sm:text-3xl">
         {copy.heading}
       </h1>
+
+      {payment === "cancelled" || payment === "failed" ? (
+        <p role="alert" className="mb-4 rounded-lg border border-border bg-muted px-4 py-3 text-center text-sm text-foreground">
+          {payment === "failed"
+            ? "Your payment did not go through, and no order was placed. Your cart is saved: please try again or choose another way to pay."
+            : "Payment cancelled, and no order was placed. Your cart is saved: complete the payment when you are ready."}
+        </p>
+      ) : null}
 
       <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} />
 

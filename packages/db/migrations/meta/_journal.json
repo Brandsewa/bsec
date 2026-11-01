@@ -603,6 +603,13 @@
       "when": 1793496100000,
       "tag": "0091_product_import_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793496200000,
+      "tag": "0092_plan_editor",
+      "breakpoints": true
     }
   ]
 }

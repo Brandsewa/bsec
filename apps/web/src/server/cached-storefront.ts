@@ -177,15 +177,16 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   let needsNav = false;
   let needsBlog = false;
   walkBlocks(rendered.blocks as BlockInstance[], (b) => {
-    if (b.type === "BlogPosts" || b.type === "BlogShowcase") needsBlog = true;
+    if (b.type === "BlogShowcase") needsBlog = true;
     // Review changes invalidate the product tags (cache-invalidation.ts review_updated), so the widget follows them.
     if (b.type === "ReviewsMarquee") needsCatalog = true;
-    if (b.type === "ProductGrid" || b.type === "ProductCarousel" || b.type === "CollectionGrid" || b.type === "CollectionShowcase" || b.type === "ProductShowcase") needsCatalog = true;
+    if (b.type === "CollectionGrid" || b.type === "CollectionShowcase" || b.type === "ProductShowcase") needsCatalog = true;
     if (b.type === "SiteHeader" || b.type === "SiteFooter") needsNav = true;
   });
   if (needsCatalog) {
     cacheTag(tenantTag(tenantId, "product"));
     cacheTag(tenantTag(tenantId, "collection"));
+    cacheTag(tenantTag(tenantId, "category"));
   }
   if (needsNav) {
     cacheTag(tenantTag(tenantId, "nav"));
@@ -310,6 +311,29 @@ export async function getCachedCollectionsArchive(tenantId: string) {
   const blocks: BlockInstance[] = page?.blocks ?? [
     { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Collections", subtitle: "Browse everything we sell.", collectionSlugs: [], showAll: true, columns: "3" } },
   ];
+  const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
+  return { blocks, renderData, usesTheme: Boolean(page) };
+}
+
+/**
+ * The Category Archive (/categories) uses the same theme template as the Collection Archive (one page in the theme
+ * editor, "Collection and category archive"): every CollectionGrid in it lists the store's active categories instead.
+ */
+export async function getCachedCategoriesArchive(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES.collections.slug));
+  cacheTag(tenantTag(tenantId, "category"));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const page = await getStorefrontThemePage(rt, tenantCtx, "collections");
+  const blocks: BlockInstance[] = structuredClone(
+    page?.blocks ?? [
+      { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Shop by category", subtitle: "Find exactly what you are looking for.", collectionSlugs: [], showAll: true, columns: "3" } },
+    ],
+  );
+  walkBlocks(blocks, (b) => {
+    if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") b.props = { ...b.props, source: "categories", showAll: true };
+  });
   const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
   return { blocks, renderData, usesTheme: Boolean(page) };
 }

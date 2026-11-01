@@ -11,6 +11,10 @@ import {
   listPlatformFeatureFlags,
   listPlatformInvoices,
   listPlatformPlans,
+  getPlanEditor,
+  listPlatformStoreTransactions,
+  updatePlan,
+  savePlanCompareRows,
   listPlatformQuotaDefinitions,
   listPlatformSignups,
   recordExportDownload,
@@ -48,6 +52,7 @@ import {
   archivePlatformTenant,
   changePlatformTenantPlan,
   extendPlatformTenantTrial,
+  activatePlatformTenantStore,
   transferPlatformTenantOwnership,
   addPlatformTenantNote,
   bulkSuspendPlatformTenants,
@@ -382,6 +387,10 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return extendPlatformTenantTrial(context.rt, staffUserId, input.id, input.additionalDays, context.meta);
     }),
+    activate: os.tenants.activate.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      const staffUserId = actor(context);
+      return activatePlatformTenantStore(context.rt, staffUserId, input.id, { days: input.days, reason: input.reason }, context.meta);
+    }),
     transferOwnership: os.tenants.transferOwnership.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return transferPlatformTenantOwnership(context.rt, staffUserId, input.id, input.newOwnerEmail, context.meta);
@@ -450,8 +459,14 @@ export const platformRouter = os.router({
   domains: {
     list: os.domains.list.use(requirePlatformStaff).handler(({ context, input }) => listPlatformDomains(context.rt, input)),
   },
+  ledger: {
+    storeTransactions: os.ledger.storeTransactions.use(requirePlatformStaff).handler(({ context, input }) => listPlatformStoreTransactions(context.rt, input)),
+  },
   plans: {
     list: os.plans.list.use(requirePlatformStaff).handler(({ context }) => listPlatformPlans(context.rt)),
+    editor: os.plans.editor.use(requirePlatformStaff).handler(({ context }) => getPlanEditor(context.rt)),
+    updatePlan: os.plans.updatePlan.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlan(context.rt, actor(context), input, context.meta)),
+    saveCompare: os.plans.saveCompare.use(requireStaff("platform_admin")).handler(({ context, input }) => savePlanCompareRows(context.rt, actor(context), input.rows, context.meta)),
     invoices: os.plans.invoices.use(requirePlatformStaff).handler(({ context, input }) => listPlatformInvoices(context.rt, input)),
     listRequests: os.plans.listRequests.use(requirePlatformStaff).handler(({ context, input }) => {
       const staffUserId = actor(context);

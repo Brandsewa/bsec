@@ -121,13 +121,17 @@ export default async function HomePage() {
       blocks: [
         {
           id: "fallback-hero",
-          type: "Hero" as const,
+          type: "HeroSlider" as const,
           version: 1,
           props: {
-            title: "Welcome to Our Store",
-            subtitle: "Discover our handcrafted collection of high-quality products.",
-            ctaText: "Shop All",
-            ctaLink: "/collections",
+            slides: [
+              {
+                title: "Welcome to Our Store",
+                subtitle: "Discover our handcrafted collection of high-quality products.",
+                primaryLabel: "Shop All",
+                primaryHref: "/collections",
+              },
+            ],
           },
         },
       ],

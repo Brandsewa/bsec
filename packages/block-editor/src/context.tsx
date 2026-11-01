@@ -32,6 +32,8 @@ export interface BlockEditorHost {
   listMenus?: (() => Promise<Array<{ handle: string; title: string }>>) | undefined;
   /** The store's published collections, for the collection pickers. Hosts without a store leave it out. */
   listCollections?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
+  /** The store's active categories, for the category pickers. Hosts without a store leave it out. */
+  listCategories?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
 }
 
 export interface EditorRenderData {

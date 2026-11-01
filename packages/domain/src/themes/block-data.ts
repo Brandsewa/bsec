@@ -7,6 +7,7 @@ import {
   walkBlocks,
   type BlockCollectionSummary,
   type BlockBlogPost,
+  mediaImage,
   type BlockReview,
   type BlockData,
   type BlockInstance,
@@ -199,7 +200,27 @@ async function enrichShowcaseProducts(tx: Tx, products: BlockProduct[]): Promise
   });
 }
 
+/** Collection showcase set to "categories": active categories, by pick order or all of them. */
+async function loadCategoryCards(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
+  const toCard = (r: typeof schema.categories.$inferSelect): BlockCollectionSummary => ({
+    slug: r.slug,
+    title: r.name,
+    imageMediaId: r.imageMediaId ?? undefined,
+    ...(r.description ? { description: r.description } : {}),
+  });
+  if (props.showAll === true) {
+    const all = await tx.select().from(schema.categories).where(eq(schema.categories.isActive, true)).orderBy(asc(schema.categories.position), asc(schema.categories.name)).limit(48);
+    return all.map(toCard);
+  }
+  const slugs = Array.isArray(props.categorySlugs) ? (props.categorySlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 24) : [];
+  if (slugs.length === 0) return [];
+  const rows = await tx.select().from(schema.categories).where(and(eq(schema.categories.isActive, true), inArray(schema.categories.slug, slugs)));
+  const bySlug = new Map(rows.map((r) => [r.slug.toLowerCase(), r]));
+  return slugs.map((s) => bySlug.get(s.toLowerCase())).filter((r): r is NonNullable<typeof r> => !!r).map(toCard);
+}
+
 async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
+  if (props.source === "categories") return loadCategoryCards(tx, props);
   if (props.showAll === true) {
     // Collection Archive: every published collection, with how many listed products it holds (manual collections; automated ones show no count).
     const all = await tx.select().from(schema.collections).where(eq(schema.collections.published, true)).orderBy(asc(schema.collections.title)).limit(48);
@@ -604,6 +625,18 @@ async function loadMenusData(
  * and the editor preview. Blocks that cannot resolve get no entry and render an empty state.
  */
 /** A blog summary in the shape the blocks draw (ready-to-use image URL, category link path). */
+function blockBlogImage(image: NonNullable<BlogPostSummary["image"]>): Partial<BlockBlogPost> {
+  // Cards are at most about 800px wide: use the worker's resized copies (srcset) so a slow connection loads a small file, not the original.
+  const m = mediaImage({ url: image.url, width: image.width, height: image.height, derivatives: image.derivatives as never }, { sizes: "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw" });
+  return {
+    imageUrl: m.src || image.url,
+    imageAlt: image.alt,
+    imageWidth: image.width,
+    imageHeight: image.height,
+    ...(m.srcSet ? { imageSrcSet: m.srcSet, imageSizes: m.sizes } : {}),
+  };
+}
+
 export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
   return {
     slug: p.slug,
@@ -612,7 +645,7 @@ export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
     publishedAt: p.publishedAt,
     authorName: p.authorName,
     readingMinutes: p.readingMinutes,
-    ...(p.image ? { imageUrl: p.image.url, imageAlt: p.image.alt, imageWidth: p.image.width, imageHeight: p.image.height } : {}),
+    ...(p.image ? blockBlogImage(p.image) : {}),
     ...(p.category ? { categoryName: p.category.name, categoryPath: p.category.path } : {}),
   };
 }
@@ -670,34 +703,28 @@ export async function resolveBlockData(
   ctx: TenantContext,
   blocks: BlockInstance[],
 ): Promise<Record<string, BlockData>> {
-  const productBlocks: BlockInstance[] = [];
   const collectionBlocks: BlockInstance[] = [];
   const showcaseBlocks: BlockInstance[] = [];
   const headerBlocks: BlockInstance[] = [];
   const footerBlocks: BlockInstance[] = [];
-  const fileBlocks: BlockInstance[] = [];
   const blogBlocks: BlockInstance[] = [];
   const reviewBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
     if (b.type === "ProductShowcase") showcaseBlocks.push(b);
-    else if (b.type === "ProductGrid" || b.type === "ProductCarousel") productBlocks.push(b);
     else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") collectionBlocks.push(b);
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
-    else if (b.type === "FileDownload") fileBlocks.push(b);
-    else if (b.type === "BlogPosts" || b.type === "BlogShowcase") blogBlocks.push(b);
+    else if (b.type === "BlogShowcase") blogBlocks.push(b);
     else if (b.type === "ReviewsMarquee") reviewBlocks.push(b);
   });
 
   if (
-    productBlocks.length === 0 &&
     collectionBlocks.length === 0 &&
     showcaseBlocks.length === 0 &&
     headerBlocks.length === 0 &&
     footerBlocks.length === 0 &&
-    fileBlocks.length === 0 &&
     blogBlocks.length === 0 &&
     reviewBlocks.length === 0
   ) {
@@ -711,16 +738,6 @@ export async function resolveBlockData(
     const out: Record<string, BlockData> = {};
 
     if (catalogEnabled) {
-      for (const b of productBlocks) {
-        const rows = await loadProducts(tx, b.props);
-        const summaries = await buildProductSummaries(
-          tx,
-          rows.map((r) => r.id),
-          rows,
-        );
-        out[b.id] = { kind: "products", products: summaries.map(toBlockProduct) };
-      }
-
       for (const b of showcaseBlocks) {
         out[b.id] = await resolveShowcase(tx, b);
       }
@@ -776,38 +793,6 @@ export async function resolveBlockData(
         const cols = footerData[b.id];
         if (cols) {
           out[b.id] = { kind: "footer-menus", columns: cols };
-        }
-      }
-    }
-
-    if (fileBlocks.length > 0) {
-      const fileMediaIds = fileBlocks
-        .map((b) => b.props.mediaId)
-        .filter((id): id is string => typeof id === "string" && Boolean(id));
-      if (fileMediaIds.length > 0) {
-        const rows = await tx
-          .select({
-            id: schema.media.id,
-            filename: schema.media.filename,
-            mime: schema.media.mime,
-            bytes: schema.media.bytes,
-            storageKey: schema.media.storageKey,
-          })
-          .from(schema.media)
-          .where(inArray(schema.media.id, fileMediaIds));
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        for (const b of fileBlocks) {
-          const mediaId = typeof b.props.mediaId === "string" ? b.props.mediaId : "";
-          const row = byId.get(mediaId);
-          if (row) {
-            out[b.id] = {
-              kind: "file",
-              filename: row.filename ?? "download",
-              mime: row.mime,
-              bytes: row.bytes,
-              url: publicMediaUrl(row.storageKey) ?? undefined,
-            };
-          }
         }
       }
     }

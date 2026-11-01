@@ -4,13 +4,10 @@ import {
   alignSchema,
   bgVideoUrlSchema,
   hexColorSchema,
-  gapSchema,
   hrefSchema,
   httpsImageUrlSchema,
   logoSizeSchema,
   iconNameSchema,
-  itemsSchema,
-  justifySchema,
   slotSchema,
   spacingSchema,
   toneSchema,
@@ -26,47 +23,13 @@ import * as VI from "./views-image-banner.tsx";
 import * as VF from "./views-faq.tsx";
 import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
+import * as VT from "./views-trust-strip.tsx";
 import * as VM from "./views-multi-card.tsx";
 
 /* ------------------------------------------------------------------ */
 /* Sections and content blocks (M2). Schemas are additive-only: new    */
 /* optional fields with defaults never require a version bump.         */
 /* ------------------------------------------------------------------ */
-
-// 1. Hero
-export const HeroSchema = z.object({
-  title: z.string().min(1),
-  subtitle: z.string().optional(),
-  ctaText: z.string().optional(),
-  ctaLink: hrefSchema.optional(),
-  secondaryCtaText: z.string().optional(),
-  secondaryCtaLink: hrefSchema.optional(),
-  backgroundMediaId: z.string().optional(),
-  alignment: alignSchema.default("center"),
-  overlayOpacity: z.number().min(0).max(100).default(30),
-  eyebrow: z.string().optional(),
-  tone: toneSchema.default("primary"),
-  // Pre-registry starter templates and provisioning fallbacks used these names for the main button.
-  buttonText: z.string().optional(),
-  buttonUrl: hrefSchema.optional(),
-});
-export type HeroProps = z.infer<typeof HeroSchema>;
-
-export const HeroBlock: BlockDefinition<HeroProps> = {
-  type: "Hero",
-  version: 1,
-  schema: HeroSchema,
-  defaultProps: {
-    title: "Welcome to Our Store",
-    subtitle: "Discover our handcrafted collection of high-quality products.",
-    ctaText: "Shop Now",
-    ctaLink: "/collections/all",
-    alignment: "center",
-    overlayOpacity: 30,
-    tone: "primary",
-  },
-  render: V.HeroView,
-};
 
 // 2. Banner
 export const BannerSchema = z.object({
@@ -111,41 +74,6 @@ export const BannerBlock: BlockDefinition<BannerProps> = {
   render: V.BannerView,
 };
 
-const productSourceSchema = z.enum(["newest", "featured", "collection", "manual"]);
-
-// 3. ProductGrid
-export const ProductGridSchema = z.object({
-  title: z.string().min(1),
-  subtitle: z.string().optional(),
-  source: productSourceSchema.optional(), // absent = "collection" if collectionSlug else "newest"
-  collectionSlug: z.string().optional(),
-  productSlugs: z.array(z.string().max(220)).max(24).default([]),
-  limit: z.number().int().min(1).max(48).default(8),
-  columns: z.enum(["2", "3", "4"]).default("4"),
-  showPrice: z.boolean().default(true),
-  showRating: z.boolean().default(true),
-  tone: toneSchema.default("default"),
-});
-export type ProductGridProps = z.infer<typeof ProductGridSchema>;
-
-export const ProductGridBlock: BlockDefinition<ProductGridProps> = {
-  type: "ProductGrid",
-  version: 1,
-  schema: ProductGridSchema,
-  defaultProps: {
-    title: "Featured Products",
-    subtitle: "Explore our latest arrivals",
-    source: "newest",
-    productSlugs: [],
-    limit: 8,
-    columns: "4",
-    showPrice: true,
-    showRating: true,
-    tone: "default",
-  },
-  render: V.ProductGridView,
-};
-
 // 4. CollectionGrid
 export const CollectionGridSchema = z.object({
   title: z.string().min(1),
@@ -155,6 +83,8 @@ export const CollectionGridSchema = z.object({
   collectionSlugs: z.array(z.string()).default([]),
   /** List every published collection (the Collection Archive page), ignoring collectionSlugs. */
   showAll: z.boolean().default(false),
+  /** Set by the storefront on /categories so the same archive template lists categories; not an editor setting. */
+  source: z.enum(["collections", "categories"]).default("collections"),
   /** Cards per row on desktop (1024px and up). */
   columns: z.enum(["2", "3", "4"]).default("3"),
   /** Cards per row on tablets (640 to 1023px). */
@@ -174,87 +104,12 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
     headerAlign: "center",
     collectionSlugs: [],
     showAll: false,
+    source: "collections",
     columns: "3",
     columnsTablet: "2",
     columnsMobile: "1",
   },
   render: V.CollectionGridView,
-};
-
-// 5. ProductCarousel
-export const ProductCarouselSchema = z.object({
-  title: z.string().min(1),
-  subtitle: z.string().optional(),
-  source: productSourceSchema.optional(),
-  collectionSlug: z.string().optional(),
-  productSlugs: z.array(z.string().max(220)).max(24).default([]),
-  limit: z.number().int().min(1).max(24).default(8),
-  autoPlay: z.boolean().default(false),
-  columns: z.enum(["2", "3", "4", "5"]).default("4"),
-  showPrice: z.boolean().default(true),
-  showRating: z.boolean().default(true),
-  viewAllLabel: z.string().max(60).optional(),
-  viewAllHref: hrefSchema.optional(),
-  tone: toneSchema.default("default"),
-});
-export type ProductCarouselProps = z.infer<typeof ProductCarouselSchema>;
-
-export const ProductCarouselBlock: BlockDefinition<ProductCarouselProps> = {
-  type: "ProductCarousel",
-  version: 1,
-  schema: ProductCarouselSchema,
-  defaultProps: {
-    title: "Trending Items",
-    subtitle: "Best sellers this week",
-    source: "featured",
-    productSlugs: [],
-    limit: 8,
-    autoPlay: false,
-    columns: "4",
-    showPrice: true,
-    showRating: true,
-    tone: "default",
-  },
-  render: V.ProductCarouselView,
-};
-
-// 6. Testimonials
-export const TestimonialsSchema = z.object({
-  title: z.string().default("What Our Customers Say"),
-  items: z
-    .array(
-      z.object({
-        quote: z.string().min(1),
-        author: z.string().min(1),
-        role: z.string().optional(),
-        avatarMediaId: z.string().optional(),
-        rating: z.number().int().min(1).max(5).default(5),
-      }),
-    )
-    .min(1),
-  layout: z.enum(["grid", "carousel", "single"]).default("grid"),
-  tone: toneSchema.default("surface"),
-});
-export type TestimonialsProps = z.infer<typeof TestimonialsSchema>;
-
-export const TestimonialsBlock: BlockDefinition<TestimonialsProps> = {
-  type: "Testimonials",
-  version: 1,
-  schema: TestimonialsSchema,
-  defaultProps: {
-    title: "What Our Customers Say",
-    items: [
-      {
-        quote: "The quality of craftsmanship surpassed my expectations. Will definitely order again!",
-        author: "Aarav Sharma",
-        role: "Verified Buyer",
-        rating: 5,
-      },
-    ],
-    layout: "grid",
-    tone: "surface",
-  },
-  render: V.TestimonialsView,
 };
 
 // 7. Reviews
@@ -271,50 +126,6 @@ export const ReviewsBlock: BlockDefinition<ReviewsProps> = {
   schema: ReviewsSchema,
   defaultProps: { title: "Customer Reviews", showAggregate: true, limit: 6 },
   render: V.ReviewsView,
-};
-
-// 8. RichText (sanitized HTML only per ADR-009)
-export const RichTextSchema = z.object({
-  content: z.string().min(1),
-  alignment: alignSchema.default("left"),
-  ...bricksLayoutSchema.shape,
-});
-export type RichTextProps = z.infer<typeof RichTextSchema>;
-
-export const RichTextBlock: BlockDefinition<RichTextProps> = {
-  type: "RichText",
-  version: 1,
-  schema: RichTextSchema,
-  defaultProps: {
-    content:
-      "<h2>About Our Craft</h2><p>We pride ourselves on attention to detail, sustainably sourced materials, and enduring design.</p>",
-    alignment: "left",
-  },
-  render: V.RichTextView,
-};
-
-// 9. FAQ
-export const FAQSchema = z.object({
-  title: z.string().default("Frequently Asked Questions"),
-  items: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })).min(1),
-});
-export type FAQProps = z.infer<typeof FAQSchema>;
-
-export const FAQBlock: BlockDefinition<FAQProps> = {
-  type: "FAQ",
-  version: 1,
-  schema: FAQSchema,
-  defaultProps: {
-    title: "Frequently Asked Questions",
-    items: [
-      { question: "How long does shipping take?", answer: "Standard shipping takes 3-5 business days across India." },
-      {
-        question: "What is your return policy?",
-        answer: "We offer hassle-free returns within 7 days of delivery for unused items.",
-      },
-    ],
-  },
-  render: V.FaqView,
 };
 
 // 10. Gallery
@@ -355,51 +166,6 @@ export const GalleryBlock: BlockDefinition<GalleryProps> = {
   // No sample heading: a new gallery shows only its pictures until the merchant writes one.
   defaultProps: GallerySchema.parse({}),
   render: V.GalleryView,
-};
-
-// 11. Newsletter
-export const NewsletterSchema = z.object({
-  title: z.string().default("Subscribe to Our Newsletter"),
-  subtitle: z.string().default("Get updates on new releases, special discounts, and seasonal collections."),
-  buttonText: z.string().default("Subscribe"),
-  placeholder: z.string().default("Enter your email address"),
-});
-export type NewsletterProps = z.infer<typeof NewsletterSchema>;
-
-export const NewsletterBlock: BlockDefinition<NewsletterProps> = {
-  type: "Newsletter",
-  version: 1,
-  schema: NewsletterSchema,
-  defaultProps: {
-    title: "Subscribe to Our Newsletter",
-    subtitle: "Get updates on new releases, special discounts, and seasonal collections.",
-    buttonText: "Subscribe",
-    placeholder: "Enter your email address",
-  },
-  render: V.NewsletterView,
-};
-
-// 12. UspStrip
-export const UspStripSchema = z.object({
-  items: z
-    .array(z.object({ icon: z.string().min(1), title: z.string().min(1), description: z.string().min(1) }))
-    .min(1),
-});
-export type UspStripProps = z.infer<typeof UspStripSchema>;
-
-export const UspStripBlock: BlockDefinition<UspStripProps> = {
-  type: "UspStrip",
-  version: 1,
-  schema: UspStripSchema,
-  defaultProps: {
-    items: [
-      { icon: "Truck", title: "Free Shipping", description: "On orders above ₹999 across India" },
-      { icon: "ShieldCheck", title: "100% Authentic", description: "Guaranteed genuine quality direct from makers" },
-      { icon: "RotateCcw", title: "Easy Returns", description: "7-day seamless exchange & return guarantee" },
-      { icon: "Headphones", title: "Dedicated Support", description: "Friendly support via phone and WhatsApp" },
-    ],
-  },
-  render: V.UspStripView,
 };
 
 /* ------------------------------------------------------------------ */
@@ -449,70 +215,6 @@ export const BlockBlock: BlockDefinition<BlockProps> = {
   schema: BlockSchema,
   defaultProps: { content: [] },
   render: V.BlockView,
-};
-
-export const GridSchema = z.object({
-  columns: z.number().int().min(1).max(6).default(3),
-  columnsMobile: z.number().int().min(1).max(2).default(1),
-  gap: gapSchema.default("md"),
-  content: slotSchema,
-});
-export type GridProps = z.infer<typeof GridSchema>;
-export const GridBlock: BlockDefinition<GridProps> = {
-  type: "Grid",
-  version: 1,
-  schema: GridSchema,
-  defaultProps: { columns: 3, columnsMobile: 1, gap: "md", content: [] },
-  render: V.GridView,
-};
-
-export const FlexRowSchema = z.object({
-  gap: gapSchema.default("md"),
-  alignItems: itemsSchema.default("stretch"),
-  justify: justifySchema.default("start"),
-  content: slotSchema,
-});
-export type FlexRowProps = z.infer<typeof FlexRowSchema>;
-export const FlexRowBlock: BlockDefinition<FlexRowProps> = {
-  type: "FlexRow",
-  version: 1,
-  schema: FlexRowSchema,
-  defaultProps: { gap: "md", alignItems: "stretch", justify: "start", content: [] },
-  render: V.FlexRowView,
-};
-
-export const FlexColumnSchema = z.object({
-  gap: gapSchema.default("sm"),
-  alignItems: itemsSchema.default("stretch"),
-  content: slotSchema,
-});
-export type FlexColumnProps = z.infer<typeof FlexColumnSchema>;
-export const FlexColumnBlock: BlockDefinition<FlexColumnProps> = {
-  type: "FlexColumn",
-  version: 1,
-  schema: FlexColumnSchema,
-  defaultProps: { gap: "sm", alignItems: "stretch", content: [] },
-  render: V.FlexColumnView,
-};
-
-export const SpacerSchema = z.object({ size: z.enum(["sm", "md", "lg", "xl"]).default("md") });
-export type SpacerProps = z.infer<typeof SpacerSchema>;
-export const SpacerBlock: BlockDefinition<SpacerProps> = {
-  type: "Spacer",
-  version: 1,
-  schema: SpacerSchema,
-  defaultProps: { size: "md" },
-  render: V.SpacerView,
-};
-
-export const DividerSchema = z.object({ width: widthSchema.default("default") });
-export type DividerProps = z.infer<typeof DividerSchema>;
-export const DividerBlock: BlockDefinition<DividerProps> = {
-  type: "Divider",
-  version: 1,
-  schema: DividerSchema,
-  defaultProps: { width: "default" },
-  render: V.DividerView,
 };
 
 /* ------------------------------------------------------------------ */
@@ -595,20 +297,6 @@ export const VideoBlock: BlockDefinition<VideoProps> = {
   render: V.VideoView,
 };
 
-export const FileDownloadSchema = z.object({
-  label: z.string().min(1).max(100).default("Download file"),
-  description: z.string().max(300).optional().default(""),
-  mediaId: z.string().uuid().optional().or(z.literal("")),
-});
-export type FileDownloadProps = z.infer<typeof FileDownloadSchema>;
-export const FileDownloadBlock: BlockDefinition<FileDownloadProps> = {
-  type: "FileDownload",
-  version: 1,
-  schema: FileDownloadSchema,
-  defaultProps: { label: "Download file", description: "", mediaId: "" },
-  render: V.FileDownloadView,
-};
-
 export const ButtonSchema = z.object({
   // Labels & Links (text/link preferred with fallback to legacy label/href)
   label: z.string().min(1).max(80).default("Button"),
@@ -660,67 +348,9 @@ export const ButtonBlock: BlockDefinition<ButtonProps> = {
   render: V.ButtonView,
 };
 
-export const IconSchema = z.object({
-  name: iconNameSchema.default("star"),
-  /** Unset or "theme": the theme's icon size. A size here wins over the theme. */
-  size: z.enum(["theme", "sm", "md", "lg"]).optional(),
-  align: alignSchema.default("left"),
-});
-export type IconProps = z.infer<typeof IconSchema>;
-export const IconBlock: BlockDefinition<IconProps> = {
-  type: "Icon",
-  version: 1,
-  schema: IconSchema,
-  defaultProps: { name: "star", align: "left" },
-  render: V.IconView,
-};
-
-export const LinkSchema = z.object({
-  label: z.string().min(1).max(120),
-  href: hrefSchema.default("/"),
-  newTab: z.boolean().default(false),
-});
-export type LinkProps = z.infer<typeof LinkSchema>;
-export const LinkBlock: BlockDefinition<LinkProps> = {
-  type: "Link",
-  version: 1,
-  schema: LinkSchema,
-  defaultProps: { label: "Learn more", href: "/", newTab: false },
-  render: V.LinkView,
-};
-
 /* ------------------------------------------------------------------ */
 /* Conversion widgets                                                  */
 /* ------------------------------------------------------------------ */
-
-export const CallToActionSchema = z.object({
-  heading: z.string().min(1).max(200),
-  text: z.string().max(600).optional(),
-  primaryLabel: z.string().max(80).optional(),
-  primaryHref: hrefSchema.optional(),
-  secondaryLabel: z.string().max(80).optional(),
-  secondaryHref: hrefSchema.optional(),
-  backgroundMediaId: z.string().optional(),
-  overlayOpacity: z.number().min(0).max(100).default(45),
-  tone: toneSchema.default("primary"),
-  align: alignSchema.default("center"),
-});
-export type CallToActionProps = z.infer<typeof CallToActionSchema>;
-export const CallToActionBlock: BlockDefinition<CallToActionProps> = {
-  type: "CallToAction",
-  version: 1,
-  schema: CallToActionSchema,
-  defaultProps: {
-    heading: "Ready to order?",
-    text: "Join thousands of happy customers.",
-    primaryLabel: "Shop now",
-    primaryHref: "/collections/all",
-    overlayOpacity: 45,
-    tone: "primary",
-    align: "center",
-  },
-  render: V.CallToActionView,
-};
 
 /* ------------------------------------------------------------------ */
 /* Store chrome and page cores. Header/footer live on the theme's own  */
@@ -813,6 +443,9 @@ export const SiteFooterSchema = z.object({
   newsletterText: z.string().max(200).default("Subscribe for updates and exclusive offers."),
   copyright: z.string().max(200).optional(),
   tone: toneSchema.default("surface"),
+  /** Own colours; empty follows the background choice above. The text colour also drives the muted text, titles and lines. */
+  bgColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
 });
 export type SiteFooterProps = z.infer<typeof SiteFooterSchema>;
 export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
@@ -1209,6 +842,9 @@ export const HeroSliderSchema = z.object({
    * max width when set, else 80rem). Both are always centred; side margins from the Section panel do not apply to them.
    */
   widthMode: z.enum(["full", "contained"]).default("full"),
+  /** Tablet (under 1024px) and phone (under 768px) can differ from the desktop choice; "inherit" follows the larger screen. */
+  widthModeTablet: z.enum(["inherit", "full", "contained"]).default("inherit"),
+  widthModeMobile: z.enum(["inherit", "full", "contained"]).default("inherit"),
   /** Phones: the text and buttons sit on a block below the picture or video ("below"), or over it as on larger screens ("overlay"). */
   mobileLayout: z.enum(["below", "overlay"]).default("below"),
   /** Colours of that block on phones; empty uses the theme's soft background and text colour. */
@@ -1433,41 +1069,6 @@ export const BlogPostContentBlock: BlockDefinition<BlogPostContentProps> = {
   render: VB.BlogPostContentView,
 };
 
-/** The Recent Posts widget: drop it on the home page or any other page. */
-export const BlogPostsSchema = z.object({
-  title: z.string().max(120).default("From the blog"),
-  subtitle: z.string().max(240).optional(),
-  source: z.enum(["latest", "featured", "category"]).default("latest"),
-  /** Only used when source is "category" (a parent category includes its subcategories). */
-  categorySlug: z.string().max(120).optional(),
-  count: z.number().int().min(1).max(12).default(3),
-  layout: z.enum(["grid", "list", "slider"]).default("grid"),
-  columns: z.enum(["2", "3", "4"]).default("3"),
-  columnsTablet: z.enum(["1", "2"]).default("2"),
-  columnsMobile: z.enum(["1", "2"]).default("1"),
-  showImage: z.boolean().default(true),
-  showExcerpt: z.boolean().default(true),
-  excerptLines: z.enum(["2", "3", "4"]).default("2"),
-  showDate: z.boolean().default(true),
-  showAuthor: z.boolean().default(false),
-  showCategory: z.boolean().default(true),
-  imageRatio: blogImageRatio.default("landscape"),
-  showViewAll: z.boolean().default(true),
-  viewAllLabel: z.string().max(60).default("View all posts"),
-  /** Draw nothing (no empty heading) when the store has no posts to show. */
-  hideWhenEmpty: z.boolean().default(true),
-  tone: toneSchema.default("default"),
-});
-export type BlogPostsProps = z.infer<typeof BlogPostsSchema>;
-
-export const BlogPostsBlock: BlockDefinition<BlogPostsProps> = {
-  type: "BlogPosts",
-  version: 1,
-  schema: BlogPostsSchema,
-  defaultProps: BlogPostsSchema.parse({}),
-  render: VB.BlogPostsView,
-};
-
 /**
  * The Floating reviews widget: the store's published product reviews drift upwards in a column beside a heading.
  * Reviews come from the same data as the product pages (`reviews` table), resolved on the server per block.
@@ -1654,6 +1255,12 @@ export const MultiCardSchema = z.object({
   interval: z.number().int().min(2).max(20).default(5),
   loop: z.boolean().default(true),
   // Card
+  /** card: the bordered or filled box. plain: no box at all (no border, background or corners), just the content. */
+  cardLook: z.enum(["card", "plain"]).default("card"),
+  /** Where the icon sits against the text: above it, or beside it on the left or right. */
+  iconPosition: z.enum(["top", "left", "right"]).default("top"),
+  /** Beside the text (left or right): the icon lines up with the top of the text, or its middle. */
+  iconAlign: z.enum(["start", "center"]).default("start"),
   cardPadding: z.number().int().min(0).max(64).default(24),
   cardRadius: z.number().int().min(0).max(48).default(12),
   borderWidth: z.number().int().min(0).max(8).default(1),
@@ -1754,6 +1361,70 @@ export const ContactFormBlock: BlockDefinition<ContactFormProps> = {
   render: VM.ContactFormView,
 };
 
+/**
+ * Trust strip: icon, heading and short text per item, with every look setting chosen separately for desktop, tablet and
+ * phone. Tablet and phone settings that are left empty follow the larger screen (desktop, then tablet).
+ */
+const TrustDeviceSchema = z.object({
+  perRow: z.number().int().min(1).max(6).optional(),
+  /** grid: all items in rows. slider: one row that swipes sideways, `perRow` visible at once. */
+  layout: z.enum(["grid", "slider"]).optional(),
+  /** card: a box (fill and border) around each item. plain: just the content. */
+  look: z.enum(["card", "plain"]).optional(),
+  iconPosition: z.enum(["top", "left"]).optional(),
+  /** Text alignment when the icon sits above the text. */
+  align: z.enum(["left", "center"]).optional(),
+  /** Icon beside the text: whether the icon lines up with the top, middle or bottom of the text block. */
+  valign: z.enum(["start", "center", "end"]).optional(),
+  sectionBg: hexColorSchema.optional(),
+  cardBg: hexColorSchema.optional(),
+  /** Colours of the parts; empty follows the theme (the text colour of the section behind). */
+  iconColor: hexColorSchema.optional(),
+  headingColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
+  /** Space above and below the strip, px. */
+  sectionPad: z.number().int().min(0).max(160).optional(),
+  cardPad: z.number().int().min(0).max(48).optional(),
+  gap: z.number().int().min(0).max(48).optional(),
+  radius: z.number().int().min(0).max(32).optional(),
+  iconSize: z.number().int().min(14).max(72).optional(),
+  headingSize: z.number().int().min(10).max(32).optional(),
+  textSize: z.number().int().min(9).max(24).optional(),
+});
+export type TrustDeviceStyle = z.infer<typeof TrustDeviceSchema>;
+export const TRUST_DESKTOP_DEFAULTS = { perRow: 4, layout: "grid", look: "card", iconPosition: "top", align: "left", valign: "center", sectionPad: 32, cardPad: 20, gap: 16, radius: 12, iconSize: 28, headingSize: 15, textSize: 13 } as const;
+export const TRUST_MOBILE_DEFAULTS = { perRow: 2, cardPad: 12, gap: 10, sectionPad: 20, iconSize: 22, headingSize: 13, textSize: 12 } as const;
+
+export const TrustStripSchema = z.object({
+  items: z
+    .array(z.object({ icon: iconNameSchema.default("check"), title: z.string().max(80).default(""), description: z.string().max(200).default("") }))
+    .min(1)
+    .max(12)
+    .default([
+      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
+      { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
+      { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },
+    ]),
+  width: widthSchema.default("wide"),
+  styles: z
+    .object({
+      desktop: TrustDeviceSchema.default(TRUST_DESKTOP_DEFAULTS),
+      tablet: TrustDeviceSchema.default({}),
+      mobile: TrustDeviceSchema.default(TRUST_MOBILE_DEFAULTS),
+    })
+    .default({ desktop: TRUST_DESKTOP_DEFAULTS, tablet: {}, mobile: TRUST_MOBILE_DEFAULTS }),
+});
+export type TrustStripProps = z.infer<typeof TrustStripSchema>;
+
+export const TrustStripBlock: BlockDefinition<TrustStripProps> = {
+  type: "TrustStrip",
+  version: 1,
+  schema: TrustStripSchema,
+  defaultProps: TrustStripSchema.parse({}),
+  render: VT.TrustStripView,
+};
+
 export const CollectionShowcaseSchema = z.object({
   title: z.string().max(120).default("Shop by collection"),
   subtitle: z.string().max(300).default("Find exactly what you are looking for"),
@@ -1761,8 +1432,11 @@ export const CollectionShowcaseSchema = z.object({
   /** The button shows only when its link is filled in. */
   buttonLabel: z.string().max(40).default("View all"),
   buttonHref: hrefSchema.or(z.literal("")).default("/collections"),
+  /** What the cards list: the store's collections or its categories. */
+  source: z.enum(["collections", "categories"]).default("collections"),
   collectionSlugs: z.array(z.string().max(200)).max(24).default([]),
-  /** List every published collection, ignoring the chosen ones. */
+  categorySlugs: z.array(z.string().max(200)).max(24).default([]),
+  /** List every published collection (or active category), ignoring the chosen ones. */
   showAll: z.boolean().default(false),
   /** Cards per row on desktop (1024px and up); more collections wrap onto further rows. */
   columns: z.enum(["2", "3", "4", "5", "6"]).default("4"),
@@ -1791,35 +1465,19 @@ export type AnyBlockDefinition = BlockDefinition<any>;
 
 // Registry Map
 export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
-  Hero: HeroBlock,
   Banner: BannerBlock,
-  ProductGrid: ProductGridBlock,
   CollectionGrid: CollectionGridBlock,
-  ProductCarousel: ProductCarouselBlock,
-  Testimonials: TestimonialsBlock,
   Reviews: ReviewsBlock,
-  RichText: RichTextBlock,
-  FAQ: FAQBlock,
   Gallery: GalleryBlock,
-  Newsletter: NewsletterBlock,
-  UspStrip: UspStripBlock,
+  TrustStrip: TrustStripBlock,
   Section: SectionBlock,
   Container: ContainerBlock,
   Block: BlockBlock,
-  Grid: GridBlock,
-  FlexRow: FlexRowBlock,
-  FlexColumn: FlexColumnBlock,
-  Spacer: SpacerBlock,
-  Divider: DividerBlock,
   Heading: HeadingBlock,
   Text: TextBlock,
   Image: ImageBlock,
   Video: VideoBlock,
-  FileDownload: FileDownloadBlock,
   Button: ButtonBlock,
-  Icon: IconBlock,
-  Link: LinkBlock,
-  CallToAction: CallToActionBlock,
   SiteHeader: SiteHeaderBlock,
   SiteFooter: SiteFooterBlock,
   ProductDetail: ProductDetailBlock,
@@ -1832,7 +1490,6 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   ProductShowcase: ProductShowcaseBlock,
   BlogListing: BlogListingBlock,
   BlogPostContent: BlogPostContentBlock,
-  BlogPosts: BlogPostsBlock,
   ReviewsMarquee: ReviewsMarqueeBlock,
   ImageBanner: ImageBannerBlock,
   FaqSection: FaqSectionBlock,
@@ -1844,19 +1501,10 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];
 
-export function getBlockDefinition(type: "Hero"): BlockDefinition<HeroProps>;
 export function getBlockDefinition(type: "Banner"): BlockDefinition<BannerProps>;
-export function getBlockDefinition(type: "ProductGrid"): BlockDefinition<ProductGridProps>;
 export function getBlockDefinition(type: "CollectionGrid"): BlockDefinition<CollectionGridProps>;
-export function getBlockDefinition(type: "ProductCarousel"): BlockDefinition<ProductCarouselProps>;
-export function getBlockDefinition(type: "Testimonials"): BlockDefinition<TestimonialsProps>;
 export function getBlockDefinition(type: "Reviews"): BlockDefinition<ReviewsProps>;
-export function getBlockDefinition(type: "FileDownload"): BlockDefinition<FileDownloadProps>;
-export function getBlockDefinition(type: "RichText"): BlockDefinition<RichTextProps>;
-export function getBlockDefinition(type: "FAQ"): BlockDefinition<FAQProps>;
 export function getBlockDefinition(type: "Gallery"): BlockDefinition<GalleryProps>;
-export function getBlockDefinition(type: "Newsletter"): BlockDefinition<NewsletterProps>;
-export function getBlockDefinition(type: "UspStrip"): BlockDefinition<UspStripProps>;
 export function getBlockDefinition(type: BlockType): AnyBlockDefinition;
 export function getBlockDefinition(type: BlockType): AnyBlockDefinition {
   const def = BLOCK_DEFINITIONS[type];

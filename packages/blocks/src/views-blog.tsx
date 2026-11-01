@@ -53,7 +53,9 @@ export function BlogCard({ post, options }: { post: BlockBlogPost; options: Blog
         <a className={cx("bsb-blog-media", `bsb-blog-${options.imageRatio}`)} href={href} tabIndex={-1} aria-hidden="true">
           <img
             src={post.imageUrl ?? PLACEHOLDER_IMAGE_URL}
+            {...(post.imageSrcSet ? { srcSet: post.imageSrcSet, sizes: post.imageSizes } : {})}
             alt=""
+            decoding="async"
             loading={options.priority ? "eager" : "lazy"}
             {...(options.priority ? { fetchPriority: "high" as const } : {})}
             {...(post.imageWidth && post.imageHeight ? { width: post.imageWidth, height: post.imageHeight } : {})}
@@ -86,19 +88,6 @@ const SAMPLE_BLOG_POSTS: BlockBlogPost[] = [
   { slug: "sample-3", title: "How to get the most from your order", excerpt: "A short summary of the post appears here, cut after a few lines.", publishedAt: "2026-01-02T00:00:00Z", authorName: "Your team", readingMinutes: 5, categoryName: "Guides" },
 ];
 
-function SectionHead({ title, subtitle, action }: { title?: string | undefined; subtitle?: string | undefined; action?: ReactNode }) {
-  if (!title && !subtitle && !action) return null;
-  return (
-    <div className="bsb-section-head bsb-align-left">
-      <div>
-        {title ? <h2 className="bsb-heading bsb-h-lg">{title}</h2> : null}
-        {subtitle ? <p className="bsb-muted" style={{ margin: "0.4rem 0 0" }}>{subtitle}</p> : null}
-      </div>
-      {action}
-    </div>
-  );
-}
-
 function Placeholder({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
   return (
     <section className="bsb bs-block-placeholder bsb-py-lg">
@@ -107,67 +96,6 @@ function Placeholder({ label, hint, children }: { label: string; hint: string; c
         <p className="bsb-muted bsb-align-center" style={{ fontSize: "0.75rem", marginTop: "1rem" }}>
           <strong>{label}</strong> · {hint}
         </p>
-      </div>
-    </section>
-  );
-}
-
-export function BlogPostsView({ props, ctx }: A<R.BlogPostsProps>): ReactNode {
-  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
-  // No data at all means a host with no store (the theme editor): show labelled samples. Real data may be empty.
-  const posts = d && d.kind === "blog-posts" ? d.posts : d ? [] : SAMPLE_BLOG_POSTS.slice(0, props.count);
-  const viewAll = d && d.kind === "blog-posts" ? d.viewAllHref : "/blog";
-  if (posts.length === 0 && props.hideWhenEmpty) return null;
-  const card: BlogCardOptions = {
-    showImage: props.showImage,
-    showExcerpt: props.showExcerpt,
-    showDate: props.showDate,
-    showAuthor: props.showAuthor,
-    showCategory: props.showCategory,
-    imageRatio: props.imageRatio,
-    excerptLines: props.excerptLines,
-    layout: props.layout === "list" ? "list" : "grid",
-    // Without a section heading the cards sit directly under the page's h1.
-    headingLevel: props.title ? "h3" : "h2",
-  };
-  const vars = { "--cols": Number(props.columns), "--cols-t": Number(props.columnsTablet), "--cols-m": Number(props.columnsMobile) } as CSSProperties;
-  return (
-    <section className={cx("bsb bs-block-blog-posts bsb-py-lg", `bsb-tone-${props.tone}`)}>
-      <div className="bsb-w bsb-w-wide">
-        <SectionHead
-          title={props.title}
-          subtitle={props.subtitle}
-          action={
-            props.showViewAll && props.viewAllLabel ? (
-              <a className="bsb-link" href={viewAll}>
-                {props.viewAllLabel} →
-              </a>
-            ) : undefined
-          }
-        />
-        {posts.length === 0 ? (
-          <p className="bsb-muted">No posts to show yet.</p>
-        ) : props.layout === "slider" ? (
-          <div className="bsb-carousel bsb-blog-slider" style={vars} tabIndex={0} role="region" aria-label={props.title || "Recent posts"}>
-            {posts.map((p) => (
-              <div key={p.slug}>
-                <BlogCard post={p} options={card} />
-              </div>
-            ))}
-          </div>
-        ) : props.layout === "list" ? (
-          <div className="bsb-blog-list">
-            {posts.map((p) => (
-              <BlogCard key={p.slug} post={p} options={card} />
-            ))}
-          </div>
-        ) : (
-          <div className="bsb-grid bsb-blog-grid" style={vars}>
-            {posts.map((p) => (
-              <BlogCard key={p.slug} post={p} options={card} />
-            ))}
-          </div>
-        )}
       </div>
     </section>
   );

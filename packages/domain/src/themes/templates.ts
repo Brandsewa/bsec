@@ -91,9 +91,9 @@ function starterPages(): TemplatePages {
   ];
   return {
     home: [
-      ...one("hero-1", "Hero"),
-      ...one("usp-1", "UspStrip"),
-      ...one("products-1", "ProductGrid"),
+      ...one("hero-1", "HeroSlider"),
+      ...one("usp-1", "TrustStrip"),
+      ...one("products-1", "ProductShowcase"),
     ],
     collection: one("collection-1", "CollectionProducts"),
     product: one("product-1", "ProductDetail"),

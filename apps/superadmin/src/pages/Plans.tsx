@@ -1,133 +1,103 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { } from "lucide-react";
-import {
-  PageContainer,
-  PageHeader,
-  PageSkeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@bs/ui";
+import { CheckCircle2, Pencil } from "lucide-react";
+import { Button, PageContainer, PageHeader, PageSkeleton } from "@bs/ui";
 import { formatMoney } from "@bs/contracts/money";
+import { renderPlanBullet, type PlanEditorPlan } from "@bs/contracts";
 import { client } from "../lib/orpc.ts";
+import { useHasRole } from "../lib/user-context.tsx";
+import { PlanEditDialog } from "./plans/PlanEditDialog.tsx";
+import { CompareEditor } from "./plans/CompareEditor.tsx";
+
+/** One plan card, laid out the way merchants see it on signup and in Plan and billing. */
+function PlanCard({ plan, canEdit, onEdit }: { plan: PlanEditorPlan; canEdit: boolean; onEdit: () => void }) {
+  const lines = plan.cardBullets.map((b) => renderPlanBullet(b, plan.limits)).filter((t): t is string => Boolean(t));
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-xs">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-foreground">{plan.name}</h3>
+            {plan.badge ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">{plan.badge}</span> : null}
+            {!plan.isPublic ? <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Hidden</span> : null}
+          </div>
+          {plan.tagline ? <p className="mt-0.5 text-xs text-primary/90">{plan.tagline}</p> : null}
+          {plan.audience ? <p className="text-xs text-muted-foreground">{plan.audience}</p> : null}
+        </div>
+        {canEdit ? (
+          <Button variant="outline" size="sm" onClick={onEdit} aria-label={`Edit ${plan.name}`}>
+            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-baseline gap-1">
+          <span className="text-3xl font-bold text-foreground">{formatMoney(plan.priceMonthlyPaise, "INR")}</span>
+          <span className="text-xs text-muted-foreground">/ month</span>
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatMoney(plan.priceYearlyPaise, "INR")} billed yearly
+          {plan.priceMonthlyUsdCents != null ? ` · ${formatMoney(plan.priceMonthlyUsdCents, "USD")} / month outside India` : " · not offered outside India"}
+        </p>
+      </div>
+
+      <ul className="mt-4 flex-1 space-y-2 border-t border-border/60 pt-4 text-sm">
+        {lines.length === 0 ? <li className="text-xs text-muted-foreground">No line items yet. Edit the plan to add some.</li> : null}
+        {lines.map((t, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-4 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <strong className="font-semibold text-foreground">{plan.activeSubscribersCount}</strong> active {plan.activeSubscribersCount === 1 ? "store" : "stores"} · code{" "}
+        <span className="font-mono uppercase">{plan.code}</span> · size tier {plan.tier}
+      </p>
+    </div>
+  );
+}
 
 export function Plans() {
-  const { data: plans, isLoading: plansLoading } = useQuery({
-    queryKey: ["platform", "plans"],
-    queryFn: () => client.plans.list(),
-  });
+  const canEdit = useHasRole("platform_admin");
+  const [editing, setEditing] = useState<PlanEditorPlan | null>(null);
+  const { data, isLoading, refetch, dataUpdatedAt } = useQuery({ queryKey: ["platform", "plan-editor"], queryFn: () => client.plans.editor() });
 
-  const { data: invoices, isLoading: invoicesLoading } = useQuery({
-    queryKey: ["platform", "invoices"],
-    queryFn: () => client.plans.invoices({ limit: 50 }),
-  });
-
-  if (plansLoading || invoicesLoading) return <PageSkeleton />;
+  if (isLoading || !data) return <PageSkeleton />;
 
   return (
     <PageContainer size="full">
       <PageHeader
-        title="Plans & Billing"
-        description="Platform subscription tiers and issued GST tax invoices for store hosting."
+        title="Plans"
+        description="What merchants see when they choose a plan. Edit the cards and the comparison table here; signup and Plan and billing show whatever is saved. Invoices are under Invoices and transactions."
       />
 
-      <div className="space-y-8">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground mb-3">Subscription Plans</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {(plans || []).map((p) => {
-              const maxExtraMarkets =
-                p.features && typeof p.features === "object" && "max_extra_markets" in p.features
-                  ? (p.features as Record<string, unknown>).max_extra_markets
-                  : 1;
-
-              return (
-                <div key={p.id} className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3 hover:border-primary/40 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-base text-foreground">{p.name}</h3>
-                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground uppercase">{p.code}</span>
-                  </div>
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-foreground">{formatMoney(p.priceMonthlyPaise, "INR")}</span>
-                      <span className="text-xs text-muted-foreground"> / month</span>
-                      {p.priceMonthlyUsdCents != null ? (
-                        <span className="text-xs font-semibold text-muted-foreground ml-2">
-                          ({formatMoney(p.priceMonthlyUsdCents, "USD")} USD)
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {formatMoney(p.priceYearlyPaise, "INR")} billed yearly
-                      {p.priceYearlyUsdCents != null ? ` (${formatMoney(p.priceYearlyUsdCents, "USD")} USD)` : ""}
-                    </div>
-                  </div>
-                  <div className="space-y-1 pt-2 border-t border-border/60 text-xs">
-                    <div>
-                      <span className="text-muted-foreground">Extra markets allowed: </span>
-                      <strong className="font-semibold text-foreground">{String(maxExtraMarkets)}</strong>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Active Subscribers: </span>
-                      <strong className="font-semibold text-foreground">{p.activeSubscribersCount} stores</strong>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      <div className="space-y-10">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {data.plans.map((p) => (
+            <PlanCard key={p.id} plan={p} canEdit={canEdit} onEdit={() => setEditing(p)} />
+          ))}
         </div>
 
-        <div>
-          <h2 className="text-sm font-semibold text-foreground mb-3">Issued Platform Invoices</h2>
-          {!invoices || invoices.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-6 text-center text-xs text-muted-foreground">
-              No platform invoices issued yet.
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="px-4">Invoice #</TableHead>
-                    <TableHead>Store / Tenant</TableHead>
-                    <TableHead>Taxable Amount</TableHead>
-                    <TableHead>GST (18%)</TableHead>
-                    <TableHead>Total Paid</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right px-4">Issued Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((inv) => (
-                    <TableRow key={inv.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="font-mono text-xs font-semibold px-4 text-foreground">{inv.number}</TableCell>
-                      <TableCell className="text-xs">{inv.tenantName || inv.tenantId}</TableCell>
-                      <TableCell className="text-xs">{formatMoney(inv.amountPaise, "INR")}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatMoney(inv.taxPaise, "INR")}</TableCell>
-                      <TableCell className="text-xs font-semibold text-foreground">
-                        {formatMoney(inv.amountPaise + inv.taxPaise, "INR")}
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 capitalize">
-                          {inv.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground text-right px-4">
-                        {new Date(inv.issuedAt).toLocaleDateString("en-IN")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
+        {canEdit ? (
+          <CompareEditor key={dataUpdatedAt} view={data} onSaved={() => void refetch()} />
+        ) : (
+          <p className="text-xs text-muted-foreground">Only platform admins can edit the comparison table.</p>
+        )}
       </div>
+
+      {editing ? (
+        <PlanEditDialog
+          plan={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void refetch();
+          }}
+        />
+      ) : null}
     </PageContainer>
   );
 }

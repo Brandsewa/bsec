@@ -24,6 +24,15 @@ export const storeHost: BlockEditorHost = {
       return [];
     }
   },
+
+  async listCategories() {
+    try {
+      const res = await client.admin.categories.list();
+      return res.filter((c) => c.isActive).map((c) => ({ slug: c.slug, title: c.name }));
+    } catch {
+      return [];
+    }
+  },
 };
 
 /** --bs-* CSS variables for the store's current branding, so previews match the storefront. */

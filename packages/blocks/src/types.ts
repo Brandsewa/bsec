@@ -4,38 +4,22 @@ import type { Layout } from "./layout.ts";
 
 export type BlockType =
   // Sections and content (M2)
-  | "Hero"
   | "Banner"
-  | "ProductGrid"
   | "CollectionGrid"
-  | "ProductCarousel"
-  | "Testimonials"
   | "Reviews"
-  | "RichText"
-  | "FAQ"
   | "Gallery"
-  | "Newsletter"
-  | "UspStrip"
+  | "TrustStrip"
   // Layout primitives: hold child blocks in their `content` slot
   | "Section"
   | "Container"
   | "Block"
-  | "Grid"
-  | "FlexRow"
-  | "FlexColumn"
-  | "Spacer"
-  | "Divider"
   // Content primitives
   | "Heading"
   | "Text"
   | "Image"
   | "Video"
-  | "FileDownload"
   | "Button"
-  | "Icon"
-  | "Link"
   // Conversion widgets
-  | "CallToAction"
   // Store chrome and page cores (theme header/footer, product page, collection page)
   | "SiteHeader"
   | "SiteFooter"
@@ -50,7 +34,6 @@ export type BlockType =
   // Blog (ADR-033): the archive and single post cores, and the Recent Posts widget
   | "BlogListing"
   | "BlogPostContent"
-  | "BlogPosts"
   // Floating customer reviews, fed by the store's product reviews
   | "ReviewsMarquee"
   // A picture banner with its own eyebrow, heading, description and buttons placed anywhere on the picture
@@ -113,6 +96,9 @@ export interface BlockBlogPost {
   imageAlt?: string | undefined;
   imageWidth?: number | null | undefined;
   imageHeight?: number | null | undefined;
+  /** Resized copies of the picture, for the img srcset (small files on small screens). */
+  imageSrcSet?: string | undefined;
+  imageSizes?: string | undefined;
   categoryName?: string | undefined;
   /** URL path under /blog/category/, for the category label's link. */
   categoryPath?: string | undefined;
@@ -474,9 +460,6 @@ export const SLOT_BLOCK_TYPES: ReadonlySet<BlockType> = new Set<BlockType>([
   "Section",
   "Container",
   "Block",
-  "Grid",
-  "FlexRow",
-  "FlexColumn",
 ]);
 export const SLOT_PROP = "content";
 

@@ -3,26 +3,20 @@ import type { BlockType, PuckData, PuckItem } from "@bs/blocks";
 /**
  * Store widgets that, when newly dropped on the page itself, arrive inside a Section > Container so the theme's Layout
  * settings (site width, section and container defaults) govern their width and spacing, like any other element.
- * Left out on purpose: full-bleed designs (Hero, Hero slider, Image banner, Call to action), the announcement bar, the
+ * Left out on purpose: full-bleed designs (Hero slider, Image banner), the announcement bar, the
  * site header and footer, and the blocks that only exist on one kind of theme page (product, cart, collection, blog).
  */
 export const WRAP_ON_DROP: ReadonlySet<BlockType> = new Set<BlockType>([
   "MultiCard",
   "ProductShowcase",
-  "ProductCarousel",
-  "ProductGrid",
   "CollectionGrid",
   "CollectionShowcase",
-  "BlogPosts",
   "BlogShowcase",
-  "Testimonials",
   "Reviews",
   "ReviewsMarquee",
-  "FAQ",
   "FaqSection",
   "Gallery",
-  "Newsletter",
-  "UspStrip",
+  "TrustStrip",
 ]);
 
 /** Puck's key for the page's own block list (drops inside a Section, Container or Block are the person's explicit choice). */

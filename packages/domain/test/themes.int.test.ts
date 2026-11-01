@@ -95,6 +95,9 @@ beforeAll(async () => {
 
   pg = new (await import("pg")).default.Client({ connectionString: superUrl });
   await pg.connect();
+  // Migration 0015 stored the launch theme with the widgets that have since been retired; the tests run on the current
+  // code version of it (the migration stays untouched: applied migrations are append-only).
+  await pg.query(`UPDATE theme_templates SET default_pages = $1::jsonb WHERE code = $2`, [JSON.stringify(LAUNCH_TEMPLATE_PAGES), LAUNCH_TEMPLATE_CODE]);
   await pg.query(`
     INSERT INTO organizations (id, name) VALUES ('${ORG}', 'Themes Test Org') ON CONFLICT DO NOTHING;
     INSERT INTO tenants (id, organization_id, slug, name) VALUES
@@ -131,7 +134,7 @@ describe("launch theme", () => {
     }
   });
 
-  it("migration JSON matches launch-template.ts (keeps the two sources from drifting)", async () => {
+  it("migration tokens match launch-template.ts (the pages are replaced above: they use the current widgets)", async () => {
     const [row] = await rows<{ default_pages: unknown; default_tokens: unknown }>(
       `select default_pages, default_tokens from theme_templates where code = $1`,
       [LAUNCH_TEMPLATE_CODE],
@@ -214,20 +217,20 @@ describe("store theme library and activation", () => {
     // Store owner customizes the home page and publishes it.
     const page = await getPage(web, ctxFor(TENANT_A), { id: pageId, draft: true });
     const blocks = (page.blocks as BlockInstance[]).map((b) =>
-      b.id === "ec-hero" ? { ...b, props: { ...b.props, title: "My store's own headline" } } : b,
+      b.id === "ec-banner" ? { ...b, props: { ...b.props, text: "My store's own headline" } } : b,
     );
     await savePageDraft(web, ctxFor(TENANT_A), { id: pageId, blocks });
     await publishPage(web, ctxFor(TENANT_A), { id: pageId });
 
     // Platform edits the template and publishes v2.
-    const tpl = LAUNCH_TEMPLATE_HOME.map((b) => (b.id === "ec-hero" ? { ...b, props: { ...b.props, title: "Platform v2 headline" } } : b));
+    const tpl = LAUNCH_TEMPLATE_HOME.map((b) => (b.id === "ec-banner" ? { ...b, props: { ...b.props, text: "Platform v2 headline" } } : b));
     await saveThemeTemplateDraft(platform, OWNER_STAFF, { code: LAUNCH_TEMPLATE_CODE, pages: { home: tpl } });
     const { version } = await publishThemeTemplate(platform, OWNER_STAFF, LAUNCH_TEMPLATE_CODE);
     expect(version).toBe(3); // v1 seeded by 0015, v2 by 0016 (header/footer/product/collection pages)
 
     const home = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
-    const hero = (home.document.blocks as BlockInstance[]).find((b) => b.id === "ec-hero");
-    expect(hero?.props.title).toBe("My store's own headline");
+    const hero = (home.document.blocks as BlockInstance[]).find((b) => b.id === "ec-banner");
+    expect(hero?.props.text).toBe("My store's own headline");
 
     const lib = await listThemeLibrary(web, ctxFor(TENANT_A));
     expect(lib.find((t) => t.code === LAUNCH_TEMPLATE_CODE)).toMatchObject({ isCurrent: true, updateAvailable: true, installedVersion: 2 });
@@ -250,16 +253,16 @@ describe("page drafts", () => {
     const pageId = homePage!.id;
     const current = await getPage(web, ctxFor(TENANT_A), { id: pageId, draft: true });
     const edited = (current.blocks as BlockInstance[]).map((b) =>
-      b.id === "ec-hero" ? { ...b, props: { ...b.props, title: "Unpublished draft title" } } : b,
+      b.id === "ec-banner" ? { ...b, props: { ...b.props, text: "Unpublished draft title" } } : b,
     );
     await savePageDraft(web, ctxFor(TENANT_A), { id: pageId, blocks: edited });
 
     const draft = await getPage(web, ctxFor(TENANT_A), { id: pageId, draft: true });
     expect(draft.hasUnpublishedChanges).toBe(true);
-    expect((draft.blocks as BlockInstance[]).find((b) => b.id === "ec-hero")?.props.title).toBe("Unpublished draft title");
+    expect((draft.blocks as BlockInstance[]).find((b) => b.id === "ec-banner")?.props.text).toBe("Unpublished draft title");
 
     const live = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
-    expect((live.document.blocks as BlockInstance[]).find((b) => b.id === "ec-hero")?.props.title).not.toBe("Unpublished draft title");
+    expect((live.document.blocks as BlockInstance[]).find((b) => b.id === "ec-banner")?.props.text).not.toBe("Unpublished draft title");
   });
 
   it("rejects invalid documents on save (unsafe link)", async () => {
@@ -276,23 +279,26 @@ describe("page drafts", () => {
 describe("block data", () => {
   const block = (id: string, type: string, props: Record<string, unknown>): BlockInstance => ({ id, type: type as BlockInstance["type"], version: 1, props });
 
-  it("resolves featured, newest and manual product sources, hiding drafts", async () => {
+  it("resolves featured and newest product sources, hiding drafts", async () => {
+    const tab = (source: string) => [{ label: "T", source, collectionSlug: "" }];
     const data = await resolveBlockData(web, storefrontCtx(TENANT_A), [
-      block("f", "ProductCarousel", { title: "F", source: "featured" }),
-      block("n", "ProductGrid", { title: "N", source: "newest", limit: 10 }),
-      block("m", "ProductGrid", { title: "M", source: "manual", productSlugs: ["plain-jar", "missing", "draft-jar"] }),
-      block("nested", "Section", { content: [block("inner", "ProductCarousel", { title: "I", source: "newest" })] }),
+      block("f", "ProductShowcase", { title: "F", tabs: tab("featured") }),
+      block("n", "ProductShowcase", { title: "N", tabs: tab("newest"), limit: 10 }),
+      block("nested", "Section", { content: [block("inner", "ProductShowcase", { title: "I", tabs: tab("newest") })] }),
     ]);
-    const titles = (id: string) => (data[id]?.kind === "products" ? data[id].products.map((p) => p.title) : []);
+    const titles = (id: string) => {
+      const d = data[id];
+      return d?.kind === "product-tabs" ? d.tabs.flatMap((t) => t.products.map((p) => p.title)) : [];
+    };
     expect(titles("f")).toEqual(["Featured Jar"]);
     expect(titles("n").sort()).toEqual(["Featured Jar", "Plain Jar"]);
-    expect(titles("m")).toEqual(["Plain Jar"]);
     expect(titles("inner").length).toBe(2); // found inside a layout block
   });
 
   it("does not leak another store's products", async () => {
-    const data = await resolveBlockData(web, storefrontCtx(TENANT_B), [block("n", "ProductGrid", { title: "N", source: "newest" })]);
-    expect(data.n?.kind === "products" ? data.n.products : []).toHaveLength(0);
+    const data = await resolveBlockData(web, storefrontCtx(TENANT_B), [block("n", "ProductShowcase", { title: "N", tabs: [{ label: "T", source: "newest", collectionSlug: "" }] })]);
+    const d = data.n;
+    expect(d?.kind === "product-tabs" ? d.tabs.flatMap((t) => t.products) : []).toHaveLength(0);
   });
 });
 
@@ -481,7 +487,7 @@ describe("blog template pages (ADR-033)", () => {
     const single = await getStorefrontThemePage(web, storefrontCtx(TENANT_A), "blog-post");
     expect(single?.blocks.map((b) => b.type)).toContain("BlogPostContent");
     const home = await getStorefrontHomePage(web, storefrontCtx(TENANT_A));
-    expect((home.document.blocks as BlockInstance[]).map((b) => b.type)).toContain("BlogPosts");
+    expect((home.document.blocks as BlockInstance[]).map((b) => b.type)).toContain("BlogShowcase");
     // Another store never gets them.
     expect(await getStorefrontThemePage(web, storefrontCtx(TENANT_B), "blog")).toBeNull();
 

@@ -7,6 +7,7 @@ import {
   platformOverviewContract,
   platformDomainsContract,
   platformPlansContract,
+  platformLedgerContract,
   platformSignupsContract,
   platformTemplatesContract,
   platformSupportContract,
@@ -31,6 +32,7 @@ export * from "./blog.ts";
 export * from "./notifications.ts";
 export * from "./friendly-ids.ts";
 export * from "./platform.ts";
+export * from "./plan-content.ts";
 export * from "./storefront.ts";
 
 /**
@@ -68,6 +70,7 @@ export const platformContract = {
   tenants: platformTenantsContract,
   domains: platformDomainsContract,
   plans: platformPlansContract,
+  ledger: platformLedgerContract,
   signups: platformSignupsContract,
   templates: platformTemplatesContract,
   support: platformSupportContract,

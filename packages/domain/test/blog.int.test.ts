@@ -348,8 +348,8 @@ describe("blog widget query and audit", () => {
   });
 });
 
-describe("Recent Posts widget data (block render data)", () => {
-  const widget = (id: string, props: Record<string, unknown>) => ({ id, type: "BlogPosts" as const, version: 1, props });
+describe("Blog slider widget data (block render data)", () => {
+  const widget = (id: string, props: Record<string, unknown>) => ({ id, type: "BlogShowcase" as const, version: 1, props });
 
   it("resolves newest first, bounded by count, by source and category, for one store only", async () => {
     const cat = await createBlogCategory(rt, ownerA, { name: "Widget data cat" });

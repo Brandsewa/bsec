@@ -9,6 +9,7 @@ import {
   ArrowRightLeft,
   Building2,
   Calendar,
+  CheckCircle2,
   Clock,
   CreditCard,
   Download,
@@ -78,6 +79,9 @@ export function TenantDetail() {
 
   const [extendTrialOpen, setExtendTrialOpen] = useState(false);
   const [trialDays, setTrialDays] = useState(14);
+  const [activateOpen, setActivateOpen] = useState(false);
+  const [activateDays, setActivateDays] = useState(30);
+  const [activateReason, setActivateReason] = useState("");
 
   const [supportSessionOpen, setSupportSessionOpen] = useState(false);
   const [supportReason, setSupportReason] = useState("");
@@ -163,6 +167,25 @@ export function TenantDetail() {
       refetch();
     } catch (err) {
       toast.error(messageOf(err, "Failed to extend trial"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    if (activateReason.trim().length < 3) {
+      toast.error("Add a short reason (it goes into the audit log)");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await client.tenants.activate({ id: tenant.id, days: activateDays, reason: activateReason.trim() });
+      toast.success(`Store activated until ${new Date(res.activeUntil).toLocaleDateString("en-IN")}`);
+      setActivateOpen(false);
+      setActivateReason("");
+      refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Failed to activate store"));
     } finally {
       setActionLoading(false);
     }
@@ -384,6 +407,11 @@ export function TenantDetail() {
             {isAdmin && tenant.status === "deleted" && (
               <Button size="sm" variant="outline" onClick={() => setRestoreOpen(true)} disabled={actionLoading} className="shadow-2xs">
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore deleted store
+              </Button>
+            )}
+            {isAdmin && detail.billing.subscription?.paymentRequired && (
+              <Button size="sm" onClick={() => setActivateOpen(true)} className="shadow-2xs">
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Activate store
               </Button>
             )}
             {isAdmin && tenant.status === "trial" && (
@@ -835,6 +863,32 @@ export function TenantDetail() {
           <DialogFooter>
             <Button variant="default" onClick={() => setSuspendOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleSuspend} disabled={actionLoading}>Confirm Suspension</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activate (no payment) Dialog */}
+      <Dialog open={activateOpen} onOpenChange={setActivateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activate store without payment</DialogTitle>
+            <DialogDescription>
+              This store is waiting on "Activate your store". Opening it here lets the owner into the dashboard as a trial for the days below; after that the normal trial rules apply. Logged in the audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Days of access</label>
+              <Input type="number" min={1} max={365} value={activateDays} onChange={(e) => setActivateDays(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Reason</label>
+              <Input value={activateReason} onChange={(e) => setActivateReason(e.target.value)} placeholder="e.g. test store, platform billing not live yet" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="default" onClick={() => setActivateOpen(false)}>Cancel</Button>
+            <Button onClick={handleActivate} disabled={actionLoading || activateDays < 1 || activateDays > 365}>Activate store</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -329,6 +329,7 @@ import {
   updateCodMethod,
   getPlanAndBilling,
   listAvailablePlans,
+  getPlanCompare,
   requestPlanChange,
   subscribeToPlan,
   cancelPlanSubscription,
@@ -1622,6 +1623,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getPlanAndBilling(rt, ctx);
       case "planAndBilling.availablePlans":
         return await listAvailablePlans(rt, ctx);
+      case "planAndBilling.compare":
+        return await getPlanCompare(rt, ctx);
       case "planAndBilling.requestChange": {
         const plans = await listAvailablePlans(rt, ctx);
         const target = plans[0];

@@ -46,9 +46,9 @@ export function BlockRenderer({ blocks, renderData, context }: BlockRendererProp
   return (
     <div className="storefront-blocks flex flex-col w-full">
       {renderBlockTree(blocks, base, {
-        // FAQ blocks also emit Schema.org FAQPage JSON-LD
+        // FAQ accordion blocks also emit Schema.org FAQPage JSON-LD
         wrap: (block, rendered, props): ReactNode => {
-          const items = block.type === "FAQ" ? (props as { items?: Array<{ question: string; answer: string }> }).items : undefined;
+          const items = block.type === "FaqSection" ? (props as { items?: Array<{ question: string; answer: string }> }).items : undefined;
           if (!items || items.length === 0) return rendered;
           return (
             <>

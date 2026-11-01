@@ -491,18 +491,22 @@ export async function provisionTenant(
     const homeBlocks = (defaultPages.home as unknown[]) ?? [
       {
         id: "b-hero-01",
-        type: "Hero",
+        type: "HeroSlider",
         version: 1,
         props: {
-          title: `Welcome to ${storeName}`,
-          subtitle: "Explore our premium handcrafted collections.",
-          buttonText: "Shop Catalog",
-          buttonUrl: "/categories",
+          slides: [
+            {
+              title: `Welcome to ${storeName}`,
+              subtitle: "Explore our premium handcrafted collections.",
+              primaryLabel: "Shop Catalog",
+              primaryHref: "/categories",
+            },
+          ],
         },
       },
       {
         id: "b-grid-01",
-        type: "ProductGrid",
+        type: "ProductShowcase",
         version: 1,
         props: {
           title: "Featured Products",

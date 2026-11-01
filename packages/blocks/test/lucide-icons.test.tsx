@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { validateBlockDocument, type BlockInstance } from "../src/index.ts";
 import { SvgIcon } from "../src/svg-icon.tsx";
 
-const iconDoc = (name: string) => validateBlockDocument({ version: 1, blocks: [{ id: "i", type: "Icon", version: 1, props: { name } } as BlockInstance] });
+const iconDoc = (name: string) => validateBlockDocument({ version: 1, blocks: [{ id: "i", type: "TrustStrip", version: 1, props: { items: [{ icon: name, title: "T", description: "D" }] } } as BlockInstance] });
 
 describe("Lucide icons in blocks (ADR-041)", () => {
   it("accepts any Lucide name, the names saved before Lucide, and rejects everything else", () => {
@@ -17,8 +17,7 @@ describe("Lucide icons in blocks (ADR-041)", () => {
   });
 });
 
-import { computeThemeTokens, getBlockDefinition } from "../src/index.ts";
-import { IconView } from "../src/views.tsx";
+import { computeThemeTokens } from "../src/index.ts";
 
 describe("theme icon defaults", () => {
   it("emits size, weight and tile colours only as the theme sets them", () => {
@@ -40,15 +39,6 @@ describe("theme icon defaults", () => {
     expect(junk["--bs-icon-size"]).toBeUndefined();
     expect(junk["--bs-icon-weight"]).toBeUndefined();
     expect(junk["--bs-icon-color-dark"]).toBeUndefined();
-  });
-
-  it("lets the widget's own size win and otherwise follows the theme", () => {
-    const def = getBlockDefinition("Icon");
-    const render = (p: object) => renderToStaticMarkup(<>{IconView({ props: def.schema.parse({ name: "truck", ...p }), ctx: {} as never, children: [] } as never)}</>);
-    expect(render({})).toContain("var(--bs-icon-size, 32px)");
-    expect(render({ size: "lg" })).toContain("width:48px");
-    expect(render({ size: "theme" })).toContain("var(--bs-icon-size");
-    expect(render({ name: "truck:bold" })).toContain("stroke-width:2.25");
   });
 });
 
