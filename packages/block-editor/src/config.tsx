@@ -1295,7 +1295,6 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "FAQ",
   "Newsletter",
   "UspStrip",
-  "TrustStrip",
   "BlogPosts",
 ];
 
