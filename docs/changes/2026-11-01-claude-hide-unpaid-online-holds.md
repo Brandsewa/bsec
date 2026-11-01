@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `fix/hide-unpaid-online-holds`
+- **Branch:** `fix/hide-unpaid-online-holds` (merged in #173, 714713f)
 - **Area:** domain (orders, abandoned carts)
 - **Type:** fix
 - **Supersedes:** none (follows `2026-10-31-claude-online-order-pending-number.md`)
