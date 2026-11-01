@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `fix/trust-strip-bcom-group` (not merged yet)
+- **Branch:** `fix/trust-strip-bcom-group` (merged in #179, f943fe6)
 - **Area:** block-editor
 - **Type:** fix
 - **Supersedes:** none

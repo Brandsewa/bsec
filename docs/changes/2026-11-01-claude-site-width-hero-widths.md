@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/storefront-width-batch2` (merged in #177, see git log)
+- **Branch:** `feat/storefront-width-batch2` (merged in #177, 0678c6b)
 - **Area:** blocks, block-editor, web
 - **Type:** feature
 - **Supersedes:** none

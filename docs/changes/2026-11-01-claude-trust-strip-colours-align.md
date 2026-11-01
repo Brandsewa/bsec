@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/trust-strip-colours-align` (not merged yet)
+- **Branch:** `feat/trust-strip-colours-align` (merged in #182, 4a3d641)
 - **Area:** blocks, block-editor
 - **Type:** feature
 - **Supersedes:** none
