@@ -28,6 +28,8 @@ const INPUTS: Record<string, () => unknown> = {
   "domains.list": () => ({}),
   "plans.list": () => undefined,
   "plans.invoices": () => ({}),
+  "plans.editor": () => undefined,
+  "ledger.storeTransactions": () => ({}),
   "plans.listRequests": () => undefined,
   "signups.list": () => ({}),
   "templates.list": () => undefined,

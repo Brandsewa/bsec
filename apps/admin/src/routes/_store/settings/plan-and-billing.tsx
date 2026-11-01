@@ -43,6 +43,8 @@ export function PlanAndBillingPage() {
   const [confirmCancelSubOpen, setConfirmCancelSubOpen] = useState(false);
 
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const compareQuery = useQuery({ ...orpc.admin.planAndBilling.compare.queryOptions(), enabled: compareOpen });
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [selectedInterval, setSelectedInterval] = useState<"monthly" | "yearly">("monthly");
   const [requestNote, setRequestNote] = useState("");
@@ -210,18 +212,17 @@ export function PlanAndBillingPage() {
               </div>
 
               <div className="rounded-lg border border-border p-4 bg-muted/20">
-                <h4 className="text-xs font-semibold text-foreground mb-2">Plan features & benefits</h4>
+                <h4 className="text-xs font-semibold text-foreground mb-2">What your plan includes</h4>
                 <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> Multi-theme customizer & drag-and-drop builder
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> Full India commerce suite (COD, PIN codes, GST invoicing)
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> Automatic edge caching & fast storefront delivery
-                  </li>
+                  {(availablePlans.find((p) => p.code === plan?.code)?.bullets ?? []).map((line) => (
+                    <li key={line} className="flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {line}
+                    </li>
+                  ))}
                 </ul>
+                <Button variant="link" size="sm" className="mt-2 h-auto p-0 text-xs" onClick={() => setCompareOpen(true)}>
+                  Compare all features
+                </Button>
               </div>
             </div>
           </SettingsCard>
@@ -527,6 +528,55 @@ export function PlanAndBillingPage() {
         pending={cancelMutation.isPending}
         onConfirm={handleCancelRequest}
       />
-    </SettingsPageFrame>
+    
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Compare all features</DialogTitle>
+            <DialogDescription>What each plan includes.</DialogDescription>
+          </DialogHeader>
+          {compareQuery.data ? (
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr>
+                  <th className="py-1 pr-3" />
+                  {compareQuery.data.plans.map((p) => (
+                    <th key={p.code} className="px-2 py-1 font-semibold">
+                      {p.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              {compareQuery.data.groups.map((g) => (
+                <tbody key={g.groupName}>
+                  <tr>
+                    <td colSpan={compareQuery.data.plans.length + 1} className="pb-1 pt-4 text-sm font-semibold">
+                      {g.groupName}
+                    </td>
+                  </tr>
+                  {g.rows.map((r) => (
+                    <tr key={r.label} className="border-t border-border/60">
+                      <td className="py-1.5 pr-3" title={r.tooltip ?? undefined}>
+                        {r.label}
+                      </td>
+                      {compareQuery.data.plans.map((p) => {
+                        const c = r.cells[p.code];
+                        return (
+                          <td key={p.code} className="px-2 py-1.5">
+                            {!c || c.k === "none" ? "-" : c.k === "tick" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-label="Included" /> : c.k === "soon" ? <span className="text-muted-foreground">Soon</span> : c.t}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
+            </table>
+          ) : (
+            <p className="text-xs text-muted-foreground">{compareQuery.isError ? "The comparison could not be loaded." : "Loading..."}</p>
+          )}
+        </DialogContent>
+      </Dialog>
+</SettingsPageFrame>
   );
 }

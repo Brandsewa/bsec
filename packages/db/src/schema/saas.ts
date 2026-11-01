@@ -33,10 +33,32 @@ export const plans = pgTable("plans", {
   priceYearlyUsdCents: bigint("price_yearly_usd_cents", { mode: "number" }),
   limits: jsonb("limits").notNull().default({}), // { products, staff, storage_mb, orders_month, custom_domain }
   features: jsonb("features").notNull().default({}),
+  /** Customer-facing copy, edited in Super Admin (Plans). Bullets can link to an enforced limit so the number cannot drift. */
+  tagline: text("tagline"),
+  audience: text("audience"),
+  badge: text("badge"),
+  cardBullets: jsonb("card_bullets").notNull().default([]),
   razorpayPlanIdMonthly: text("razorpay_plan_id_monthly"),
   razorpayPlanIdYearly: text("razorpay_plan_id_yearly"),
   isPublic: boolean("is_public").notNull().default(true),
   sort: integer("sort").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * The long plan comparison table shown to merchants (Super Admin edits it; signup and Plan and billing render it).
+ * Platform-wide; no RLS. `cells` maps a plan code to a cell; a row with `limit_key` shows the enforced limit instead.
+ */
+export const planCompareRows = pgTable("plan_compare_rows", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  groupName: text("group_name").notNull(),
+  label: text("label").notNull(),
+  tooltip: text("tooltip"),
+  limitKey: text("limit_key"),
+  cells: jsonb("cells").notNull().default({}),
+  sort: integer("sort").notNull().default(0),
+  isVisible: boolean("is_visible").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

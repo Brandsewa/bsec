@@ -22,6 +22,74 @@ interface PlanOption {
   currency: string;
   limits: Record<string, number>;
   features: Record<string, boolean>;
+  tagline?: string | null;
+  badge?: string | null;
+  /** Card lines saved in Super Admin (Plans), with every limit already filled in. */
+  bullets?: string[];
+}
+
+interface CompareCell {
+  k: "tick" | "none" | "text" | "soon";
+  t?: string;
+}
+interface CompareView {
+  plans: Array<{ code: string; name: string }>;
+  groups: Array<{ groupName: string; rows: Array<{ label: string; tooltip: string | null; cells: Record<string, CompareCell> }> }>;
+}
+
+function compareCellText(c: CompareCell | undefined): string {
+  if (!c || c.k === "none") return "-";
+  if (c.k === "tick") return "✓";
+  if (c.k === "soon") return "Soon";
+  return c.t ?? "";
+}
+
+/** The long plan comparison, loaded only when the visitor opens it. */
+function PlanCompare() {
+  const [view, setView] = useState<CompareView | null>(null);
+  const [failed, setFailed] = useState(false);
+  function load(open: boolean) {
+    if (!open || view) return;
+    fetch("/api/saas/plan-compare")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad status"))))
+      .then((v: CompareView) => setView(v))
+      .catch(() => setFailed(true));
+  }
+  return (
+    <details className="mt-3" onToggle={(e) => load((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="bm-dim cursor-pointer text-sm underline">Compare all features</summary>
+      {failed && <p className="bm-dim mt-2 text-xs">The comparison could not be loaded.</p>}
+      {view && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr>
+                <th className="py-1 pr-3 font-medium" />
+                {view.plans.map((p) => (
+                  <th key={p.code} className="px-2 py-1 font-semibold">{p.name}</th>
+                ))}
+              </tr>
+            </thead>
+            {view.groups.map((g) => (
+              <tbody key={g.groupName}>
+                <tr>
+                  <td colSpan={view.plans.length + 1} className="pt-3 pb-1 text-sm font-semibold">{g.groupName}</td>
+                </tr>
+                {g.rows.map((r) => (
+                  <tr key={r.label} className="border-t border-white/10">
+                    <td className="py-1.5 pr-3" title={r.tooltip ?? undefined}>{r.label}</td>
+                    {view.plans.map((p) => (
+                      <td key={p.code} className="px-2 py-1.5">{compareCellText(r.cells[p.code])}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      )}
+    </details>
+  );
 }
 
 interface CountryOption {
@@ -45,17 +113,13 @@ function formatPlanPrice(plan: PlanOption, country: string): string {
   return `${formatMoney(usdCents, "USD")} / mo`;
 }
 
-/** Feature chips built from the plan's real limits and flags (no copy is hard-coded per plan). */
+/** Card lines saved in Super Admin; plans without saved lines fall back to the enforced limits. */
 function planChips(plan: PlanOption): string[] {
+  if (plan.bullets && plan.bullets.length > 0) return plan.bullets;
   const chips: string[] = [];
-  const { limits, features } = plan;
-  const fmt = (v: number) => v.toLocaleString("en-IN");
-  if (limits.products) chips.push(`Up to ${fmt(limits.products)} products`);
-  if (limits.orders_month) chips.push(`${fmt(limits.orders_month)} orders / month`);
-  if (limits.staff_seats) chips.push(`${fmt(limits.staff_seats)} staff accounts`);
-  if (features.custom_domain && limits.custom_domains) chips.push(`${fmt(limits.custom_domains)} custom domain${limits.custom_domains === 1 ? "" : "s"}`);
-  if (limits.storage_mb) chips.push(`${Math.round(limits.storage_mb / 1024)} GB storage`);
-  if (features.remove_branding) chips.push("Remove platform branding");
+  const fmt = (v: number) => v.toLocaleString("en-US");
+  if (plan.limits.products) chips.push(`Up to ${fmt(plan.limits.products)} products`);
+  if (plan.limits.staff_seats) chips.push(`${fmt(plan.limits.staff_seats)} staff accounts`);
   return chips;
 }
 
@@ -869,7 +933,7 @@ function SignupContent() {
             {!plans && !plansError && <p className="bm-dim text-sm">Loading plans...</p>}
 
             <div className="space-y-3">
-              {(plans ?? []).map((plan, i) => (
+              {(plans ?? []).map((plan) => (
                 <div
                   key={plan.code}
                   onClick={() => {
@@ -882,10 +946,11 @@ function SignupContent() {
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <h4 className="font-semibold text-base">{plan.name}</h4>
-                      {i === Math.min(1, (plans?.length ?? 1) - 1) && <span className="bm-badge">Recommended</span>}
+                      {plan.badge ? <span className="bm-badge">{plan.badge}</span> : null}
                     </div>
                     <span className="font-semibold text-base">{formatPlanPrice(plan, country)}</span>
                   </div>
+                  {plan.tagline ? <p className="bm-dim mb-2 text-xs">{plan.tagline}</p> : null}
                   <div className="bm-dim flex flex-wrap gap-2 text-[11px] font-medium">
                     {planChips(plan).map((f) => (
                       <span key={f} className="bm-chip">
@@ -896,6 +961,7 @@ function SignupContent() {
                 </div>
               ))}
             </div>
+            <PlanCompare />
 
             <div>
               <label className="bm-label">Promo code (optional)</label>

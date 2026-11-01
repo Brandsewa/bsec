@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import { z } from "zod";
+import { PlanCompareRowInput, PlanEditorView, PlanUpdateInput } from "./plan-content.ts";
 
 export const PlatformTenant = z.object({
   id: z.string(),
@@ -420,7 +421,47 @@ export const platformDomainsContract = {
     }))),
 };
 
+export const platformLedgerContract = {
+  storeTransactions: oc
+    .route({ method: "GET", path: "/platform/ledger/store-transactions" })
+    .input(
+      z
+        .object({
+          search: z.string().max(80).optional(),
+          status: z.string().max(40).optional(),
+          provider: z.string().max(40).optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+          offset: z.number().int().min(0).optional(),
+        })
+        .optional(),
+    )
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          tenantId: z.string(),
+          tenantName: z.string(),
+          orderNumber: z.string().nullable(),
+          provider: z.string(),
+          amount: z.number(),
+          currency: z.string(),
+          status: z.string(),
+          createdAt: z.string(),
+        }),
+      ),
+    ),
+};
+
 export const platformPlansContract = {
+  editor: oc.route({ method: "GET", path: "/platform/plans/editor" }).output(PlanEditorView),
+  updatePlan: oc
+    .route({ method: "POST", path: "/platform/plans/update" })
+    .input(PlanUpdateInput)
+    .output(z.object({ ok: z.literal(true), priceChanged: z.boolean() })),
+  saveCompare: oc
+    .route({ method: "PUT", path: "/platform/plans/compare" })
+    .input(z.object({ rows: z.array(PlanCompareRowInput).max(120) }))
+    .output(z.object({ ok: z.literal(true), count: z.number() })),
   list: oc
     .route({ method: "GET", path: "/platform/plans" })
     .output(z.array(z.object({
