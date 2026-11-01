@@ -231,7 +231,7 @@ const templateContext = {
         <>
           <BlockRenderer blocks={beforeReviews} renderData={renderData} context={templateContext} />
           {/* Reviews follow the product's own blocks; recommendations and anything else the theme adds come after them. */}
-          <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+          <div className="bs-site-w mx-auto px-4 pb-10">
             <ProductReviewsSection productId={product.id} productTitle={product.title} />
           </div>
           <BlockRenderer blocks={afterReviews} renderData={renderData} context={templateContext} />
@@ -242,7 +242,7 @@ const templateContext = {
         </>
       )}
       {template ? null : (
-        <div className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+        <div className="bs-site-w mx-auto px-4 pb-10">
           <ProductReviewsSection productId={product.id} productTitle={product.title} />
         </div>
       )}

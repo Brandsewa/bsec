@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/storefront-polish-batch` (not merged yet)
+- **Branch:** `feat/storefront-polish-batch` (merged in #176, 2469798)
 - **Area:** blocks, block-editor, domain, web
 - **Type:** feature
 - **Supersedes:** none

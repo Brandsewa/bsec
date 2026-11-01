@@ -1212,6 +1212,9 @@ export const HeroSliderSchema = z.object({
    * max width when set, else 80rem). Both are always centred; side margins from the Section panel do not apply to them.
    */
   widthMode: z.enum(["full", "contained"]).default("full"),
+  /** Tablet (under 1024px) and phone (under 768px) can differ from the desktop choice; "inherit" follows the larger screen. */
+  widthModeTablet: z.enum(["inherit", "full", "contained"]).default("inherit"),
+  widthModeMobile: z.enum(["inherit", "full", "contained"]).default("inherit"),
   /** Phones: the text and buttons sit on a block below the picture or video ("below"), or over it as on larger screens ("overlay"). */
   mobileLayout: z.enum(["below", "overlay"]).default("below"),
   /** Colours of that block on phones; empty uses the theme's soft background and text colour. */

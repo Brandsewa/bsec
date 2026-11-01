@@ -137,7 +137,7 @@ export function CollectionListingSection({
   return (
     <ListingViewProvider defaultView={o.defaultView} cols={Number(o.columns)} colsTablet={Number(o.columnsTablet ?? "2")} colsMobile={Number(o.columnsMobile ?? "1")}>
       <div
-        className={bare ? `bsb bsb-lay bsb-tone-${o.tone ?? "default"}` : "mx-auto w-full max-w-[80rem] px-4 py-8"}
+        className={bare ? `bsb bsb-lay bsb-tone-${o.tone ?? "default"}` : "bs-site-w mx-auto w-full px-4 py-8"}
         {...(bare ? { style: layoutStyle(o.box) } : null)}
       >
        <div className={bare ? `bsb-w bsb-w-${o.width ?? "wide"}` : undefined}>
