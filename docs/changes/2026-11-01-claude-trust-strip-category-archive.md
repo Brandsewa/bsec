@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/trust-strip-category-archive` (not merged yet)
+- **Branch:** `feat/trust-strip-category-archive` (merged in #178, 6fc8777)
 - **Area:** blocks, block-editor, domain, web, superadmin
 - **Type:** feature
 - **Supersedes:** none

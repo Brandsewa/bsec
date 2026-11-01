@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `fix/trust-strip-picker` (not merged yet)
+- **Branch:** `fix/trust-strip-picker` (merged in #180, be66459)
 - **Area:** block-editor
 - **Type:** fix
 - **Supersedes:** none

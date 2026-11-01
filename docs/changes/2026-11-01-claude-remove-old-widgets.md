@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `chore/remove-old-widgets` (not merged yet)
+- **Branch:** `chore/remove-old-widgets` (merged in #181, 15463f3)
 - **Area:** blocks, block-editor, domain, web
 - **Type:** removal
 - **Supersedes:** none
