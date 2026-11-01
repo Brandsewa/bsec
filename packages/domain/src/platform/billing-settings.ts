@@ -44,7 +44,10 @@ export interface TrialPolicy {
 export const DEFAULT_TRIAL_DAYS = 14;
 
 export interface PlatformBillingSettingsView {
-  provider: BillingProviderId;
+  /** The national (INR) gateway: razorpay or cashfree. */
+  provider: "razorpay" | "cashfree";
+  /** PayPal bills stores outside India in USD while this is true. */
+  paypalEnabled: boolean;
   mode: BillingMode;
   enabled: boolean;
   graceDays: number;
@@ -100,7 +103,8 @@ export interface PayPalKeysInput {
 
 export interface UpdateBillingSettingsInput {
   trial?: { enabled?: boolean | undefined; days?: number | undefined } | undefined;
-  provider?: BillingProviderId | undefined;
+  provider?: "razorpay" | "cashfree" | undefined;
+  paypalEnabled?: boolean | undefined;
   cashfree?: { test?: CashfreeKeysInput | undefined; live?: CashfreeKeysInput | undefined } | undefined;
   paypal?: { test?: PayPalKeysInput | undefined; live?: PayPalKeysInput | undefined } | undefined;
   invoice?: UpdateInvoiceProfileInput | undefined;
@@ -173,8 +177,8 @@ function paypalKeySet(row: BillingRow | undefined, mode: BillingMode): BillingKe
   };
 }
 
-function activeProviderOf(row: BillingRow | undefined): BillingProviderId {
-  if (row?.provider === "paypal") return "paypal";
+/** The national (INR) gateway. PayPal is never it: it is the international gateway, switched on by `paypalEnabled`. */
+function activeProviderOf(row: BillingRow | undefined): "razorpay" | "cashfree" {
   return row?.provider === "cashfree" ? "cashfree" : "razorpay";
 }
 
@@ -193,6 +197,7 @@ export async function loadPlatformBillingCredentials(db: Db, provider?: BillingP
   if (row?.enabled) {
     const mode = row.mode === "live" ? "live" : "test";
     if (which === "paypal") {
+      if (!row.paypalEnabled) return null;
       const clientId = mode === "test" ? row.paypalTestClientId : row.paypalLiveClientId;
       const secret = mode === "test" ? safeDecrypt(row.paypalTestSecretCiphertext, row.paypalTestSecretIv) : safeDecrypt(row.paypalLiveSecretCiphertext, row.paypalLiveSecretIv);
       const webhookId = mode === "test" ? row.paypalTestWebhookId : row.paypalLiveWebhookId;
@@ -262,6 +267,7 @@ export async function getPlatformBillingSettings(rt: Runtime, staffUserId: strin
   const creds = await loadPlatformBillingCredentials(rt._db.db, "razorpay");
   return {
     provider: activeProviderOf(row),
+    paypalEnabled: row?.paypalEnabled ?? false,
     mode: row?.mode === "live" ? "live" : "test",
     enabled: row?.enabled ?? false,
     graceDays: row?.graceDays ?? 7,
@@ -435,38 +441,48 @@ export async function updatePlatformBillingSettings(
       if (inv.gstRateBps !== undefined) { values.gstRateBps = inv.gstRateBps; changed.push("invoice.gstRateBps"); }
     }
 
+    if ((input.provider as string | undefined) === "paypal") {
+      throw new Error("Bad Request: PayPal is the international gateway and is switched on separately; the national gateway is Razorpay or Cashfree");
+    }
     const merged = { ...(existing ?? {}), ...values } as BillingRow;
     const mode = input.mode ?? (existing?.mode === "live" ? "live" : "test");
     const enabled = input.enabled ?? existing?.enabled ?? false;
     const provider = input.provider ?? activeProviderOf(existing);
+    const paypalEnabled = input.paypalEnabled ?? existing?.paypalEnabled ?? false;
     const col = COLUMNS[mode];
     const cf = CASHFREE_COLUMNS[mode];
     const pp = PAYPAL_COLUMNS[mode];
-    const hasKeys =
-      provider === "paypal"
-        ? Boolean(merged[pp.clientId] && merged[pp.secretCt] && merged[pp.secretIv])
-        : provider === "cashfree"
+    const hasNationalKeys =
+      provider === "cashfree"
         ? Boolean(merged[cf.clientId] && merged[cf.secretCt] && merged[cf.secretIv])
         : Boolean(merged[col.keyId] && merged[col.secretCt] && merged[col.secretIv]);
-    const gateway = provider === "paypal" ? "PayPal" : provider === "cashfree" ? "Cashfree" : "Razorpay";
-    if ((enabled || input.mode === "live" || input.provider === "cashfree" || input.provider === "paypal") && !hasKeys) {
-      throw new Error(
-        `Bad Request: save the ${provider === "paypal" ? "PayPal " : provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "paypal" ? "Client ID and Secret" : provider === "cashfree" ? "App ID and secret" : "key id and secret"} before ${input.mode === "live" ? "switching to live mode" : input.provider !== undefined && input.provider !== activeProviderOf(existing) ? `switching to ${gateway}` : "enabling billing"}`,
-      );
+    const hasPayPalKeys = Boolean(merged[pp.clientId] && merged[pp.secretCt] && merged[pp.secretIv]);
+    const gateway = provider === "cashfree" ? "Cashfree" : "Razorpay";
+    const nationalKeysText = `${provider === "cashfree" ? "Cashfree " : ""}${mode} ${provider === "cashfree" ? "App ID and secret" : "key id and secret"}`;
+    if (input.provider !== undefined && input.provider !== activeProviderOf(existing) && !hasNationalKeys) {
+      throw new Error(`Bad Request: save the ${nationalKeysText} before switching to ${gateway}`);
+    }
+    if (input.paypalEnabled === true && !hasPayPalKeys) {
+      throw new Error(`Bad Request: save the PayPal ${mode} Client ID and Secret before switching PayPal on`);
+    }
+    // Billing (or live mode) needs at least one gateway that can actually charge: the national one, or PayPal when it is on.
+    if ((enabled || input.mode === "live") && !hasNationalKeys && !(paypalEnabled && hasPayPalKeys)) {
+      throw new Error(`Bad Request: save the ${nationalKeysText} before ${input.mode === "live" ? "switching to live mode" : "enabling billing"}`);
     }
     if (input.provider !== undefined && input.provider !== activeProviderOf(existing)) changed.push("provider");
+    if (input.paypalEnabled !== undefined && input.paypalEnabled !== (existing?.paypalEnabled ?? false)) changed.push("paypalEnabled");
     if (input.mode !== undefined && input.mode !== (existing?.mode ?? "test")) changed.push("mode");
     if (input.enabled !== undefined && input.enabled !== (existing?.enabled ?? false)) changed.push("enabled");
 
     await tx
       .insert(schema.platformBillingSettings)
-      .values({ id: "default", ...values, provider, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() })
+      .values({ id: "default", ...values, provider, paypalEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: schema.platformBillingSettings.id,
-        set: { ...values, provider, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() },
+        set: { ...values, provider, paypalEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() },
       });
 
-    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, mode, enabled, ...(input.trial ? { trial: { enabled: values.trialEnabled ?? existing?.trialEnabled ?? true, days: values.trialDays ?? existing?.trialDays ?? DEFAULT_TRIAL_DAYS } } : {}) }, meta);
+    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, paypalEnabled, mode, enabled, ...(input.trial ? { trial: { enabled: values.trialEnabled ?? existing?.trialEnabled ?? true, days: values.trialDays ?? existing?.trialDays ?? DEFAULT_TRIAL_DAYS } } : {}) }, meta);
     return { ok: true as const };
   });
 }

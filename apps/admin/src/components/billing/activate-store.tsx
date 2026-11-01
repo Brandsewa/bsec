@@ -35,15 +35,25 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   if (billingQuery.isLoading || plansQuery.isLoading) return <PageSkeleton />;
 
   const isCashfree = billing?.provider === "cashfree";
+  // A store outside India is billed in USD through PayPal (the server decides; this page only follows it).
+  const isPayPal = billing?.provider === "paypal";
+  const currency = billing?.currency ?? "INR";
+  const providerName = isPayPal ? "PayPal" : isCashfree ? "Cashfree" : "Razorpay";
+  const payMethod = isPayPal ? "PayPal" : isCashfree ? "UPI AutoPay or card" : "card or UPI";
   const needsPhone = isCashfree && !billing?.phoneOnFile;
   const confirming = Boolean(billing?.authorized);
   const chosen = plans.find((p) => p.code === chosenPlan);
   const freeEnds = billing?.freePeriodEndsAt ? new Date(billing.freePeriodEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : null;
   const coupon = billing?.firstPaymentCoupon;
-  const price = (p: (typeof plans)[number]) => (billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise);
-  const discounted = !freeEnds && chosen && coupon && (!coupon.planCode || coupon.planCode === chosen.code) ? Math.round((price(chosen) * (100 - coupon.percentOff)) / 100) : 0;
+  // Same fallback as the server (changeTenantPlan): a plan with no USD price is charged at its rupee price / 80.
+  const price = (p: (typeof plans)[number]) => {
+    if (!isPayPal) return billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise;
+    return billed === "yearly" ? (p.priceYearlyUsdCents ?? Math.round(p.priceYearlyPaise / 80)) : (p.priceMonthlyUsdCents ?? Math.round(p.priceMonthlyPaise / 80));
+  };
+  // Percent-off and free-period copy is written for the rupee gateways; PayPal charges the list price.
+  const discounted = !isPayPal && !freeEnds && chosen && coupon && (!coupon.planCode || coupon.planCode === chosen.code) ? Math.round((price(chosen) * (100 - coupon.percentOff)) / 100) : 0;
 
-  const planCurrency = (p: unknown): string => (p && typeof p === "object" && "currency" in p && typeof (p as { currency?: unknown }).currency === "string" ? (p as { currency: string }).currency : "INR");
+  const planCurrency = (_p: unknown): string => currency;
 
   return (
     <PageContainer size="small">
@@ -69,7 +79,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
           <div className="space-y-4 rounded-lg border border-border bg-card p-5">
             {billing.testMode ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                Payments are in test mode: use {isCashfree ? "Cashfree" : "Razorpay"} test payment details. No real money moves.
+                Payments are in test mode: use {providerName} {isPayPal ? "sandbox" : "test"} payment details. No real money moves.
               </p>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
@@ -100,9 +110,9 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="10-digit mobile" aria-label="Mobile number for the payment mandate" />
               </div>
             ) : null}
-            {freeEnds ? (
+            {freeEnds && !isPayPal ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
-                To open your store we set up automatic payment through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; about {formatMoney(100, planCurrency(chosen))} is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged {chosen ? `${formatMoney(price(chosen), planCurrency(chosen))}` : "the plan price"} every {billed === "yearly" ? "year" : "month"} automatically, and you can stop it any time before then.
+                To open your store we set up automatic payment through {payMethod}; about {formatMoney(100, planCurrency(chosen))} is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged {chosen ? `${formatMoney(price(chosen), planCurrency(chosen))}` : "the plan price"} every {billed === "yearly" ? "year" : "month"} automatically, and you can stop it any time before then.
               </p>
             ) : chosen && discounted ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
@@ -110,7 +120,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                You pay the first {billed === "yearly" ? "year" : "month"} now through {isCashfree ? "UPI AutoPay or card" : "card or UPI"}; after that it renews automatically and you can stop it any time.
+                You pay the first {billed === "yearly" ? "year" : "month"} now through {payMethod}; after that it renews automatically and you can stop it any time.
               </p>
             )}
             <Button
@@ -122,7 +132,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                     planCode: chosenPlan,
                     interval: billed,
                     ...(needsPhone ? { phone: phone.trim() } : {}),
-                    ...(isCashfree ? { returnUrl: `${window.location.origin}/` } : {}),
+                    ...(isCashfree || isPayPal ? { returnUrl: `${window.location.origin}/` } : {}),
                   },
                   {
                     onSuccess: (res) => {
@@ -139,7 +149,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                 )
               }
             >
-              {subscribe.isPending ? "Opening payment page..." : freeEnds ? "Verify payment method and open my store" : "Pay and open my store"}
+              {subscribe.isPending ? "Opening payment page..." : freeEnds && !isPayPal ? "Verify payment method and open my store" : "Pay and open my store"}
             </Button>
           </div>
         )}
