@@ -22,6 +22,8 @@ export interface BlogImage {
   alt: string;
   width: number | null;
   height: number | null;
+  /** Resized copies made by the media worker (jsonb as stored); the cards pick a small one for the screen. */
+  derivatives?: unknown;
 }
 
 export interface BlogCategoryRef {
@@ -79,6 +81,7 @@ const postColumns = {
   mediaAlt: schema.media.alt,
   mediaWidth: schema.media.width,
   mediaHeight: schema.media.height,
+  mediaDerivatives: schema.media.derivatives,
 };
 
 type Row = {
@@ -97,6 +100,7 @@ type Row = {
   mediaAlt: string | null;
   mediaWidth: number | null;
   mediaHeight: number | null;
+  mediaDerivatives: unknown;
 };
 
 function selectPosts(tx: Tx) {
@@ -149,7 +153,7 @@ function toSummary(r: Row, ref: (id: string | null) => BlogCategoryRef | null): 
     authorName: r.authorName,
     readingMinutes: r.readingMinutes,
     isFeatured: r.isFeatured,
-    image: url ? { url, alt: r.featuredAlt?.trim() || r.mediaAlt?.trim() || r.title, width: r.mediaWidth, height: r.mediaHeight } : null,
+    image: url ? { url, alt: r.featuredAlt?.trim() || r.mediaAlt?.trim() || r.title, width: r.mediaWidth, height: r.mediaHeight, derivatives: r.mediaDerivatives } : null,
     category: ref(r.categoryId),
   };
 }

@@ -53,7 +53,9 @@ export function BlogCard({ post, options }: { post: BlockBlogPost; options: Blog
         <a className={cx("bsb-blog-media", `bsb-blog-${options.imageRatio}`)} href={href} tabIndex={-1} aria-hidden="true">
           <img
             src={post.imageUrl ?? PLACEHOLDER_IMAGE_URL}
+            {...(post.imageSrcSet ? { srcSet: post.imageSrcSet, sizes: post.imageSizes } : {})}
             alt=""
+            decoding="async"
             loading={options.priority ? "eager" : "lazy"}
             {...(options.priority ? { fetchPriority: "high" as const } : {})}
             {...(post.imageWidth && post.imageHeight ? { width: post.imageWidth, height: post.imageHeight } : {})}

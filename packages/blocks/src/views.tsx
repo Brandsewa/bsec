@@ -1615,8 +1615,11 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
   ) : null;
 
   return (
-    <footer className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`, `bsb-fl-${props.layout}`, props.mobileAccordion && "bsb-fl-accordion")}>
-      <div className="bsb-w bsb-w-wide bsb-py-lg">
+    <footer
+      className={cx("bsb bs-block-site-footer", `bsb-tone-${props.tone}`, `bsb-fl-${props.layout}`, props.mobileAccordion && "bsb-fl-accordion")}
+      style={footerColors(props.bgColor, props.textColor)}
+    >
+      <div className="bsb-w bsb-w-wide bsb-site-footer-w bsb-py-lg">
         {props.layout === "columns" ? (
           <div className="bsb-site-footer-grid">
             {brand}
@@ -1640,6 +1643,23 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
       </div>
     </footer>
   );
+}
+
+/** Footer colours picked in the editor: the text colour also feeds the muted text, titles and divider lines, so a dark background with light text reads everywhere. */
+function footerColors(bg: string | undefined, fg: string | undefined): CSSProperties | undefined {
+  if (!bg && !fg) return undefined;
+  const base = bg ?? "transparent";
+  return {
+    ...(bg ? { background: bg } : null),
+    ...(fg
+      ? {
+          color: fg,
+          "--t": fg,
+          "--m": `color-mix(in srgb, ${fg} 75%, ${base})`,
+          "--b": `color-mix(in srgb, ${fg} 25%, ${base})`,
+        }
+      : null),
+  } as CSSProperties;
 }
 
 function Placeholder({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {

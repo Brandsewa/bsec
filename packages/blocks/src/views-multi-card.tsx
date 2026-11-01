@@ -105,7 +105,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
     const topImg = props.cardStyle === "image" ? mediaSrc(ctx, it.imageMediaId) : null;
     const showIcon = props.cardStyle !== "image" && props.showIcon && (icon || it.icon);
     return (
-      <div key={i} className={cx("bsb-mc-card", props.cardStyle === "image" && "bsb-mc-card-s2", bgImg && "bsb-mc-card-img", props.cardBg && "bsb-mc-card-bg")} {...(slider ? { "data-psc-item": "" } : null)}>
+      <div key={i} className={cx("bsb-mc-card", props.cardLook === "plain" && !bgImg && "bsb-mc-plain", props.cardStyle === "image" && "bsb-mc-card-s2", bgImg && "bsb-mc-card-img", props.cardBg && "bsb-mc-card-bg")} {...(slider ? { "data-psc-item": "" } : null)}>
         {bgImg ? (
           <>
             <img className="bsb-mc-bgimg" src={bgImg} alt="" loading="lazy" />
@@ -113,20 +113,22 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
           </>
         ) : null}
         {props.cardStyle === "image" && topImg ? <img className="bsb-mc-topimg" src={topImg} alt="" loading="lazy" /> : null}
-        <div className={cx("bsb-mc-body", `bsb-mc-v-${props.contentAlign}`, `bsb-align-${props.textAlign}`)}>
+        <div className={cx("bsb-mc-body", `bsb-mc-v-${props.contentAlign}`, `bsb-align-${props.textAlign}`, showIcon && props.iconPosition !== "top" && `bsb-mc-side bsb-mc-ic-${props.iconPosition} bsb-mc-ia-${props.iconAlign}`)}>
           {showIcon ? (
             <span className="bsb-mc-icon" aria-hidden="true">
               {icon ? <img src={icon} alt="" loading="lazy" /> : <SvgIcon name={it.icon as string} px={props.iconSize ?? 48} />}
             </span>
           ) : null}
-          {props.showHeading && it.heading ? <h3 className="bsb-mc-title">{it.heading}</h3> : null}
-          {props.showText && it.text ? <p className="bsb-mc-text">{it.text}</p> : null}
-          {props.showLink && it.linkLabel && it.linkHref ? (
-            <a className={cx("bsb-mc-link", props.linkStyle === "button" && "bsb-btn bsb-btn-primary bsb-btn-sm")} href={it.linkHref}>
-              {it.linkLabel}
-              {props.linkStyle === "link" ? " →" : ""}
-            </a>
-          ) : null}
+          <div className="bsb-mc-main">
+            {props.showHeading && it.heading ? <h3 className="bsb-mc-title">{it.heading}</h3> : null}
+            {props.showText && it.text ? <p className="bsb-mc-text">{it.text}</p> : null}
+            {props.showLink && it.linkLabel && it.linkHref ? (
+              <a className={cx("bsb-mc-link", props.linkStyle === "button" && "bsb-btn bsb-btn-primary bsb-btn-sm")} href={it.linkHref}>
+                {it.linkLabel}
+                {props.linkStyle === "link" ? " →" : ""}
+              </a>
+            ) : null}
+          </div>
         </div>
       </div>
     );

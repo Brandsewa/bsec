@@ -168,7 +168,7 @@
 .bsb-hero { position: relative; overflow: hidden; display: flex; align-items: center; min-height: 26rem; }
 .bsb-hero-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .bsb-hero-scrim { position: absolute; inset: 0; background: #000; }
-.bsb-hero-inner { position: relative; z-index: 1; max-width: 72rem; margin-inline: auto; padding: 3rem 1rem; width: 100%; color: #fff; }
+.bsb-hero-inner { position: relative; z-index: 1; max-width: var(--bs-site-w-d, 72rem); margin-inline: auto; padding: 3rem 1rem; width: 100%; color: #fff; }
 .bsb-hero-inner.bsb-no-media { color: var(--pf); }
 .bsb-eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.75rem; font-weight: 700; margin: 0 0 0.75rem; opacity: 0.85; }
 .bsb-hero-copy { max-width: 40rem; }
@@ -196,7 +196,7 @@
 @media (min-width: 1024px) { .bsb-grid.bsb-ccards { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } }
 @media (max-width: 639px) { .bsb-ccards { column-gap: 1rem; row-gap: 2rem; } .bsb-ccard-title { font-size: 1rem; } }
 .bsb-ccard { display: block; text-decoration: none; color: inherit; }
-.bsb-ccard-media { aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; background: transparent; }
+.bsb-ccard-media { aspect-ratio: 4 / 5; border-radius: var(--r); overflow: hidden; }
 .bsb-ccard-media img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
 .bsb-ccard:hover .bsb-ccard-media img, .bsb-ccard:focus-visible .bsb-ccard-media img { transform: scale(1.03); }
 .bsb-ccard:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: var(--r); }
@@ -231,6 +231,10 @@
 .bsb-site-header { border-bottom: 1px solid var(--b); }
 /* The header and footer always paint their tone, even the default one, which is transparent for ordinary blocks. */
 .bsb-site-header.bsb-tone-default, .bs-block-site-footer.bsb-tone-default { background: var(--bg); }
+/* The header follows the theme's site width (Layout settings); the row's 1rem side padding sits outside it so the logo and menu line up with the sections below. */
+.bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-d, 80rem) + 2rem); }
+@media (max-width: 1023px) { .bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-t, var(--bs-site-w-d, 80rem)) + 2rem); } }
+@media (max-width: 767px) { .bsb-site-header-row.bsb-w-wide { max-width: calc(var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))) + 2rem); } }
 .bsb-site-header-row { display: flex; align-items: center; gap: 1.5rem; padding-block: 0.75rem; }
 .bsb-site-logo { font-family: var(--fh); font-weight: 700; font-size: 1.25rem; color: inherit; text-decoration: none; display: inline-flex; align-items: center; }
 .bsb-site-nav { display: none; gap: 1.5rem; font-size: 0.9rem; font-weight: 500; flex: 1; align-items: center; }
@@ -270,7 +274,7 @@
 .bsb-dropdown-sublink:hover { color: var(--p); }
 
 .bsb-mobile-menu { display: block; position: relative; }
-@media (min-width: 768px) { .bsb-mobile-menu { display: none; } }
+@media (min-width: 1024px) { .bsb-mobile-menu { display: none; } }
 .bsb-mobile-toggle { cursor: pointer; list-style: none; border: 0; background: transparent; padding: 0; }
 /* Side drawer under the header: most of the screen wide, with a dimmed backdrop; the bottom bar (when there is one) stays visible. */
 .bsb-mobile-scrim {
@@ -316,12 +320,12 @@
 .bsb-mobile-subsublist { padding: 0.25rem 0 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 
 /* Phones have Search in the bottom bar. */
-@media (max-width: 767px) { .bsb-site-actions .bsb-site-search { display: none; } }
+@media (max-width: 1023px) { .bsb-site-actions .bsb-site-search { display: none; } }
 /* On phones the header is logo + account only; Explore (menu), Search and Cart live in the bottom bar. The drawer and cart still mount so the bar can open them. */
-@media (max-width: 767px) { .bsb-mobile-menu .bsb-mobile-toggle, .bsb-site-actions a[href="/cart"] { display: none; } }
+@media (max-width: 1023px) { .bsb-mobile-menu .bsb-mobile-toggle, .bsb-site-actions a[href="/cart"] { display: none; } }
 /* The hidden menu toggle still sat in the row as a flex item with a gap, pushing the logo off the left edge. */
-@media (max-width: 767px) { .bsb-site-header-row { gap: 0; } .bsb-site-header-row > .bsb-mobile-menu { width: 0; flex: 0 0 0; } }
-@media (min-width: 768px) { .bsb-phone-only { display: none; } }
+@media (max-width: 1023px) { .bsb-site-header-row { gap: 0; } .bsb-site-header-row > .bsb-mobile-menu { width: 0; flex: 0 0 0; } }
+@media (min-width: 1024px) { .bsb-phone-only { display: none; } }
 .bsb-site-account { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.25rem; padding: 0 0.75rem; border-radius: 9999px; background: var(--s); color: inherit; text-decoration: none; font-size: 0.875rem; font-weight: 500; max-width: 9rem; }
 .bsb-site-account > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bsb-site-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
@@ -330,7 +334,7 @@
 .bsb-site-header-center .bsb-site-header-row { justify-content: center; flex-wrap: wrap; position: relative; }
 .bsb-site-header-center .bsb-site-nav { flex: 0 1 auto; order: 3; width: 100%; justify-content: center; }
 .bsb-site-header-center .bsb-site-actions { margin-left: 0; position: absolute; right: 1rem; top: 0.75rem; }
-@media (min-width: 768px) { .bsb-site-nav { display: flex; } }
+@media (min-width: 1024px) { .bsb-site-nav { display: flex; } }
 
 /* Logo size per device (SiteHeader.logoSize, SiteFooter.logoSize): desktop first, a smaller screen inherits what it does not set */
 .bsb-logo-img { display: block; object-fit: contain; max-width: 100%; --lg-w: var(--lg-d-w); --lg-h: var(--lg-d-h); width: var(--lg-w, auto); height: var(--lg-h, auto); max-height: var(--lg-h, 40px); }
@@ -393,6 +397,10 @@
 .bsb-coupon-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
 .bsb-coupon { display: grid; gap: 0.25rem; padding: 0.75rem 1rem; border: 1.5px dashed var(--b); border-radius: 0.75rem; min-width: 12rem; }
 .bsb-coupon code { font-weight: 700; letter-spacing: 0.04em; }
+/* The footer follows the theme's site width, like the header (Layout settings); the 1rem side padding sits outside it. */
+.bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-d, 80rem) + 2rem); }
+@media (max-width: 1023px) { .bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-t, var(--bs-site-w-d, 80rem)) + 2rem); } }
+@media (max-width: 767px) { .bsb-site-footer-w.bsb-w-wide { max-width: calc(var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))) + 2rem); } }
 .bsb-site-footer-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1.5rem; margin-top: 2.5rem; font-size: 0.75rem; }
 .bsb-site-footer-bottom p { margin: 0; }
 .bsb-powered { color: inherit; text-decoration: none; opacity: 0.85; }
@@ -1374,7 +1382,16 @@
 @media (min-width: 1024px) { .bsb-grid.bsb-blog-grid { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); } }
 .bsb-blog-list { display: flex; flex-direction: column; gap: 2rem; }
 .bsb-blog-card { display: flex; flex-direction: column; gap: 0.875rem; min-width: 0; }
-.bsb-blog-media { display: block; border-radius: var(--r); overflow: hidden; background: var(--s); }
+/* Picture placeholders: while an image is still downloading its box shows a soft moving shimmer (a skeleton) instead of an empty hole. The loaded image simply covers it. */
+.bsb-blog-media, .bsb-ccard-media {
+  background-color: var(--s, #eee);
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--bg, #fff) 55%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: bsb-skel 1.4s linear infinite;
+}
+@keyframes bsb-skel { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .bsb-blog-media, .bsb-ccard-media { animation: none; } }
+.bsb-blog-media { display: block; border-radius: var(--r); overflow: hidden; }
 .bsb-blog-landscape { aspect-ratio: 16 / 10; }
 .bsb-blog-square { aspect-ratio: 1 / 1; }
 .bsb-blog-portrait { aspect-ratio: 4 / 5; }
@@ -1815,7 +1832,9 @@
 /* Hero slider width (HeroSlider.widthMode): always centred, whatever side margins or width the Section panel holds */
 .bsb-lay.bsb-hs-wm-full, .bsb-lay.bsb-hs-wm-contained { margin-left: auto; margin-right: auto; width: 100%; }
 .bsb-lay.bsb-hs-wm-full { max-width: none; }
-.bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, 80rem), calc(100% - 2rem)); }
+.bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-d, 80rem)), calc(100% - 2rem)); }
+@media (max-width: 1023px) { .bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-t, var(--bs-site-w-d, 80rem))), calc(100% - 2rem)); } }
+@media (max-width: 767px) { .bsb-lay.bsb-hs-wm-contained { max-width: min(var(--mxw, var(--bs-site-w-m, var(--bs-site-w-t, var(--bs-site-w-d, 80rem)))), calc(100% - 2rem)); } }
 
 /* Hero slider rounded corners (HeroSlider.slideRadius.enabled): the carousel container and every slide get the same shape, 16px when no size is set */
 .bsb-lay.bsb-hs-rounded { border-radius: var(--sr-tl, 16px) var(--sr-tr, 16px) var(--sr-br, 16px) var(--sr-bl, 16px); overflow: hidden; }
@@ -1856,6 +1875,15 @@
 .bsb-mc-body { position: relative; flex: 1; display: flex; flex-direction: column; gap: var(--mc-gap, 12px); padding: var(--mc-pad, 24px); }
 .bsb-mc-v-start { justify-content: flex-start; } .bsb-mc-v-center { justify-content: center; } .bsb-mc-v-end { justify-content: flex-end; }
 .bsb-mc-body.bsb-align-center { align-items: center; } .bsb-mc-body.bsb-align-right { align-items: flex-end; }
+.bsb-mc-main { display: flex; flex-direction: column; gap: var(--mc-gap, 12px); min-width: 0; }
+/* Card look "plain": no border, background or corners, only the content. */
+.bsb-mc-card.bsb-mc-plain { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+/* Icon beside the text: a row (icon first, or last for "right"); the icon never shrinks and the text takes the rest. */
+.bsb-mc-body.bsb-mc-side { flex-direction: row; align-items: flex-start; justify-content: flex-start; }
+.bsb-mc-body.bsb-mc-side.bsb-mc-ic-right { flex-direction: row-reverse; }
+.bsb-mc-body.bsb-mc-side.bsb-mc-ia-center { align-items: center; }
+.bsb-mc-body.bsb-mc-side .bsb-mc-icon { flex: none; }
+.bsb-mc-body.bsb-mc-side .bsb-mc-main { flex: 1; }
 .bsb-mc-icon { display: inline-flex; width: var(--mc-icon, 48px); height: var(--mc-icon, 48px); color: var(--bs-ic, var(--bs-icon-color-light, var(--p))); }
 .bsb-mc-card-img .bsb-mc-icon, .bsb-mc-card-bg .bsb-mc-icon { color: inherit; }
 .bsb-mc-icon img { width: 100%; height: 100%; object-fit: contain; }

@@ -537,7 +537,7 @@ export function CheckoutForm({
       {/* 3. Shipping Method: the store's own options and prices */}
       <section className={CARD}>
         <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Method</h2>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2">
           {shippingRates.map((rate) => (
             <label
               key={rate.method}
