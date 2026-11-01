@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `feat/product-bulk-import-export` (not merged yet)
+- **Branch:** `feat/product-bulk-import-export` (merged in #165, 8bc4258)
 - **Area:** db, contracts, domain, web (API), admin, worker queue
 - **Type:** feature
 - **Supersedes:** none
