@@ -93,7 +93,7 @@ describe("M3 Mobile Performance Baseline Audit (Lighthouse Mobile ≥ 90)", () =
       const skeletonHtml = renderToString(React.createElement(LoadingSkeleton));
 
       // Must have matching outer container styling
-      expect(skeletonHtml).toContain("max-w-7xl px-4 py-8 sm:px-6 lg:px-8");
+      expect(skeletonHtml).toContain("bs-site-w mx-auto px-4 py-8");
       // Must have 2-column grid matching desktop and 1-column on mobile
       expect(skeletonHtml).toContain("grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16");
       // Must contain aspect-square image skeleton container to reserve layout dimensions
