@@ -560,7 +560,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       {
         id: "section",
         title: "Section",
-        fields: { widthMode: select("Width on the page", { full: "Full width (edge to edge)", contained: "Contained (content width, centred)" }), box: layoutField("Section", { radius: false }) as Field },
+        fields: { widthMode: select("Width on desktop", { full: "Full width (edge to edge)", contained: "Contained (content width, centred)" }), widthModeTablet: select("Width on tablet", { inherit: "Same as desktop", full: "Full width (edge to edge)", contained: "Contained (content width, centred)" }), widthModeMobile: select("Width on phone", { inherit: "Same as tablet", full: "Full width (edge to edge)", contained: "Contained (content width, centred)" }), box: layoutField("Section", { radius: false }) as Field },
       },
       {
         id: "shade",

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/collection-showcase-categories` (not merged yet)
+- **Branch:** `feat/collection-showcase-categories` (merged in #175, 2439f8e)
 - **Area:** blocks, block-editor, domain, web, admin
 - **Type:** feature
 - **Supersedes:** none

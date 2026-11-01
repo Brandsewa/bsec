@@ -55,7 +55,7 @@ export function CouponCards({
   const shown = coupons.slice(0, showCount);
 
   return (
-    <section className={inline ? "bs-skin w-full" : "bs-skin mx-auto w-full max-w-[80rem] px-4 py-3"} aria-label={title || "Coupons"}>
+    <section className={inline ? "bs-skin w-full" : "bs-skin bs-site-w mx-auto w-full px-4 py-3"} aria-label={title || "Coupons"}>
       <div className="mb-2 flex items-center justify-between gap-3">
         {title ? <h3 className="text-base font-semibold text-foreground">{title}</h3> : <span />}
         {showViewAll ? (

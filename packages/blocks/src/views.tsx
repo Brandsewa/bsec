@@ -1808,7 +1808,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
   const customS = Boolean(props.secondaryBg || props.secondaryText);
 
   const markup = (
-    <div className={cx("bsb-lay", `bsb-hs-wm-${props.widthMode}`, props.slideRadius.enabled && "bsb-hs-rounded", layoutHasAspectRatio(props.box) && "bsb-hs-ar")} style={{ ...layoutStyle(props.box), ...slideRadiusStyle(props.slideRadius) }}>
+    <div className={cx("bsb-lay", `bsb-hs-wm-${props.widthMode}`, props.widthModeTablet !== "inherit" && `bsb-hs-wmt-${props.widthModeTablet}`, props.widthModeMobile !== "inherit" && `bsb-hs-wmm-${props.widthModeMobile}`, props.slideRadius.enabled && "bsb-hs-rounded", layoutHasAspectRatio(props.box) && "bsb-hs-ar")} style={{ ...layoutStyle(props.box), ...slideRadiusStyle(props.slideRadius) }}>
     <section
       className={cx(
         "bsb bsb-hs",
