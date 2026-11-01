@@ -104,6 +104,12 @@ describe("block picker by page kind", () => {
     }
   });
 
+  it("offers the Trust strip in the BCOM widgets group on a custom page", () => {
+    const config = buildPuckConfig({ themeVars: {}, pageKind: "custom" }) as unknown as { categories: Record<string, { components?: string[] }> };
+    expect(config.categories.bcom?.components).toContain("TrustStrip");
+    expect(RETIRED_FROM_PICKER).not.toContain("TrustStrip");
+  });
+
   it("offers Button in the picker and hides retired RichText in favor of Text with markdown", () => {
     const config = buildPuckConfig({ themeVars: {}, pageKind: "custom" }) as unknown as {
       categories: Record<string, { components?: string[] }>;
