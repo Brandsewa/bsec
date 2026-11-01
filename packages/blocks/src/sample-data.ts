@@ -23,9 +23,7 @@ export function sampleProducts(limit: number): BlockProduct[] {
 export function buildSampleRenderData(blocks: BlockInstance[]): { data: Record<string, BlockData>; media: Record<string, string> } {
   const data: Record<string, BlockData> = {};
   walkBlocks(blocks, (b) => {
-    if (b.type === "ProductGrid" || b.type === "ProductCarousel") {
-      data[b.id] = { kind: "products", products: sampleProducts(Number(b.props["limit"]) || 8) };
-    } else if (b.type === "ProductShowcase") {
+    if (b.type === "ProductShowcase") {
       const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as unknown[]) : [{}];
       data[b.id] = { kind: "product-tabs", tabs: tabs.slice(0, 6).map(() => ({ products: sampleProducts(Number(b.props["limit"]) || 8) })) };
     } else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") {

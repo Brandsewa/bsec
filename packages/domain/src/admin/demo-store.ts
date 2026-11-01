@@ -179,9 +179,9 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
     blocks: [
       {
         id: "demo-about-1",
-        type: "RichText",
+        type: "Text",
         version: 1,
-        props: { content: "<h2>About Demo Store</h2><p>This page is sample content created by the demo tool.</p>", alignment: "left" },
+        props: { text: "## About Demo Store\n\nThis page is sample content created by the demo tool.", align: "left" },
       },
     ],
   });
@@ -192,9 +192,9 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
     blocks: [
       {
         id: "demo-lookbook-1",
-        type: "RichText",
+        type: "Text",
         version: 1,
-        props: { content: "<h2>Festive collection</h2><p>Coming soon.</p>", alignment: "center" },
+        props: { text: "## Festive collection\n\nComing soon.", align: "center" },
       },
     ],
   });

@@ -21,7 +21,7 @@ describe("wrapDroppedWidget", () => {
   });
 
   it("does nothing for widgets that are full-bleed, page chrome, layout, or not found", () => {
-    for (const type of ["Hero", "HeroSlider", "ImageBanner", "CallToAction", "Banner", "SiteHeader", "SiteFooter", "Section", "Heading", "ProductDetail"]) {
+    for (const type of ["HeroSlider", "ImageBanner", "Banner", "SiteHeader", "SiteFooter", "Section", "Heading", "ProductDetail"]) {
       expect(WRAP_ON_DROP.has(type as never)).toBe(false);
       expect(wrapDroppedWidget(page(item(type, "x")), "x", makeId)).toBeNull();
     }

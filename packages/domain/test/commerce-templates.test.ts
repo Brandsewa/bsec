@@ -10,7 +10,7 @@ describe("Modern Commerce theme", () => {
     expect(pages["cart"]?.some((b) => b.type === "CartContents")).toBe(true);
     expect(pages["blog"]?.some((b) => b.type === "BlogListing")).toBe(true);
     expect(pages["blog-post"]?.some((b) => b.type === "BlogPostContent")).toBe(true);
-    expect(pages["home"]?.some((b) => b.type === "BlogPosts")).toBe(true);
+    expect(pages["home"]?.some((b) => b.type === "BlogShowcase")).toBe(true);
   });
 });
 
