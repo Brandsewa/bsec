@@ -5,6 +5,7 @@ import { schema, withTenant, type Db, QUEUE_NAMES } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { commitReservation } from "../catalog/inventory-reservations.ts";
+import { deleteHeldOrder } from "./held-orders.ts";
 import { transitionOrder, type OrderStatus } from "./state-machine.ts";
 import { transitionFulfillment, type FulfillmentTransitionEvent } from "./fulfillment-state-machine.ts";
 import { createAdminFulfillment } from "../admin/orders.ts";
@@ -984,28 +985,9 @@ export async function abandonUnpaidOnlineOrder(
   });
   if (!target) return { restored: false };
 
-  await withTenant(db, tenantId, async (tx) => {
-    // The order was only a hold for the payment and was never announced (no email, no store alert), so it is removed, not
-    // left behind as a cancelled order. Its stock reservation and discount use go with it.
-    const id = target.orderId;
-    const intents = await tx.select({ id: schema.paymentIntents.id }).from(schema.paymentIntents).where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, id)));
-    if (intents.length > 0) {
-      await tx.delete(schema.paymentAttempts).where(and(eq(schema.paymentAttempts.tenantId, tenantId), inArray(schema.paymentAttempts.intentId, intents.map((i) => i.id))));
-      await tx.delete(schema.paymentIntents).where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.orderId, id)));
-    }
-    await tx.delete(schema.discountRedemptions).where(and(eq(schema.discountRedemptions.tenantId, tenantId), eq(schema.discountRedemptions.orderId, id)));
-    await tx.delete(schema.inventoryReservations).where(and(eq(schema.inventoryReservations.tenantId, tenantId), eq(schema.inventoryReservations.orderId, id)));
-    await tx.delete(schema.orderNotes).where(and(eq(schema.orderNotes.tenantId, tenantId), eq(schema.orderNotes.orderId, id)));
-    await tx.delete(schema.orderEvents).where(and(eq(schema.orderEvents.tenantId, tenantId), eq(schema.orderEvents.orderId, id)));
-    await tx.delete(schema.actionTokens).where(and(eq(schema.actionTokens.tenantId, tenantId), eq(schema.actionTokens.targetId, id)));
-    await tx.update(schema.quoteRequests).set({ orderId: null }).where(and(eq(schema.quoteRequests.tenantId, tenantId), eq(schema.quoteRequests.orderId, id)));
-  });
-  const itemsBeforeDelete = await withTenant(db, tenantId, async (tx) => {
-    const rows = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
-    await tx.delete(schema.orderItems).where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, target.orderId)));
-    await tx.delete(schema.orders).where(and(eq(schema.orders.tenantId, tenantId), eq(schema.orders.id, target.orderId)));
-    return rows;
-  });
+  // The order was only a hold for the payment and was never announced (no email, no store alert), so it is removed, not
+  // left behind as a cancelled order.
+  const itemsBeforeDelete = await withTenant(db, tenantId, (tx) => deleteHeldOrder(tx, tenantId, target.orderId));
 
   await withTenant(db, tenantId, async (tx) => {
     const [cart] = await tx.select().from(schema.carts).where(and(eq(schema.carts.tenantId, tenantId), eq(schema.carts.token, cartToken))).limit(1);

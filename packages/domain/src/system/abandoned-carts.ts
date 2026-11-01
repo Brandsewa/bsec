@@ -1,6 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { type Db, withTenant, schema, QUEUE_NAMES } from "@bs/db";
 import { sendTransactionalEmail } from "./email.ts";
+import { deleteHeldOrder } from "../orders/held-orders.ts";
 
 export interface SweepAbandonedCartsResult {
   abandonedCount: number;
@@ -91,6 +92,14 @@ export async function sweepAbandonedCarts(
         }
       }
     }
+
+    // Online orders that were never paid (closed tab, no callback) are only holds with a temporary number: after a day, when
+    // the gateway can no longer take the payment, they are removed. Their cart is already swept to abandoned above.
+    const staleHolds = await tx
+      .select({ id: schema.orders.id })
+      .from(schema.orders)
+      .where(and(sql`${schema.orders.number} LIKE 'PEND-%'`, lt(schema.orders.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))));
+    for (const h of staleHolds) await deleteHeldOrder(tx, tenantId, h.id);
 
     return {
       abandonedCount: abandonedCarts.length,
