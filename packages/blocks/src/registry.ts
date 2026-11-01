@@ -1761,8 +1761,11 @@ export const CollectionShowcaseSchema = z.object({
   /** The button shows only when its link is filled in. */
   buttonLabel: z.string().max(40).default("View all"),
   buttonHref: hrefSchema.or(z.literal("")).default("/collections"),
+  /** What the cards list: the store's collections or its categories. */
+  source: z.enum(["collections", "categories"]).default("collections"),
   collectionSlugs: z.array(z.string().max(200)).max(24).default([]),
-  /** List every published collection, ignoring the chosen ones. */
+  categorySlugs: z.array(z.string().max(200)).max(24).default([]),
+  /** List every published collection (or active category), ignoring the chosen ones. */
   showAll: z.boolean().default(false),
   /** Cards per row on desktop (1024px and up); more collections wrap onto further rows. */
   columns: z.enum(["2", "3", "4", "5", "6"]).default("4"),
