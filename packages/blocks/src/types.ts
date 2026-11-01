@@ -16,6 +16,7 @@ export type BlockType =
   | "Gallery"
   | "Newsletter"
   | "UspStrip"
+  | "TrustStrip"
   // Layout primitives: hold child blocks in their `content` slot
   | "Section"
   | "Container"

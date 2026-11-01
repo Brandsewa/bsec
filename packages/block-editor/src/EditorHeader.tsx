@@ -49,7 +49,7 @@ const CSS = `
 .bse-icon:hover:not(:disabled) { background: #f4f4f5; }
 .bse-icon:disabled { opacity: .35; cursor: not-allowed; }
 .bse-back { gap: 4px; padding: 0 10px 0 6px; border-color: transparent; background: #f4f4f5; }
-.bse-pages { width: 170px; min-width: 120px; flex: 0 1 170px; }
+.bse-pages { width: 280px; min-width: 140px; flex: 0 1 280px; }
 .bse-status { font-size: 11px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bse-focus:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 @media (max-width: 1100px) { .bse-status { display: none; } }
@@ -68,9 +68,9 @@ const CSS = `
   [class*="PuckCanvas-controls"] select { font-size: 12px; }
 }
 @media (max-width: 900px) { .bse-btn .bse-label { display: none; } .bse-btn { padding: 0 9px; } .bse-back { padding: 0 8px 0 4px; } }
-@media (max-width: 720px) { .bse-history { display: none; } .bse-pages { width: 140px; flex-basis: 140px; } .bse-header { padding: 0 8px; } }
+@media (max-width: 720px) { .bse-history { display: none; } .bse-pages { width: 190px; flex-basis: 190px; } .bse-header { padding: 0 8px; } }
 /* The sidebar toggles stay: on a phone they are how the sidebars are opened. */
-@media (max-width: 560px) { .bse-sep { display: none; } .bse-pages { width: 120px; flex-basis: 120px; } }
+@media (max-width: 560px) { .bse-sep { display: none; } .bse-pages { width: 150px; flex-basis: 150px; } }
 `;
 
 const icon = { width: 15, height: 15, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;

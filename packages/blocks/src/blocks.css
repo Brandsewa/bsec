@@ -1934,3 +1934,40 @@
   .bsb-bs-nothumb .bsb-blog-media { display: none; }
 }
 .bsb-tone-dark .bsb-mc-icon, .bsb-tone-primary .bsb-mc-icon { color: var(--bs-icon-color-dark, inherit); }
+
+/* ------------------------------------------------------------------ */
+/* Trust strip. The view resolves each setting for desktop (-d), tablet */
+/* (-t) and phone (-m); here the set for the screen is picked.          */
+/* ------------------------------------------------------------------ */
+.bsb-ts {
+  --ts-sp: var(--ts-sp-d); --ts-sbg: var(--ts-sbg-d); --ts-gap: var(--ts-gap-d); --ts-cp: var(--ts-cp-d); --ts-cb: var(--ts-cb-d);
+  --ts-bw: var(--ts-bw-d); --ts-rad: var(--ts-rad-d); --ts-ic: var(--ts-ic-d); --ts-hs: var(--ts-hs-d); --ts-ts: var(--ts-ts-d);
+  --ts-fd: var(--ts-fd-d); --ts-ta: var(--ts-ta-d); --ts-ai: var(--ts-ai-d); --ts-gtc: var(--ts-gtc-d); --ts-gaf: var(--ts-gaf-d);
+  --ts-gac: var(--ts-gac-d); --ts-ox: var(--ts-ox-d); --ts-snap: var(--ts-snap-d);
+  background: var(--ts-sbg);
+  padding-block: var(--ts-sp);
+}
+@media (max-width: 1023px) {
+  .bsb-ts {
+    --ts-sp: var(--ts-sp-t); --ts-sbg: var(--ts-sbg-t); --ts-gap: var(--ts-gap-t); --ts-cp: var(--ts-cp-t); --ts-cb: var(--ts-cb-t);
+    --ts-bw: var(--ts-bw-t); --ts-rad: var(--ts-rad-t); --ts-ic: var(--ts-ic-t); --ts-hs: var(--ts-hs-t); --ts-ts: var(--ts-ts-t);
+    --ts-fd: var(--ts-fd-t); --ts-ta: var(--ts-ta-t); --ts-ai: var(--ts-ai-t); --ts-gtc: var(--ts-gtc-t); --ts-gaf: var(--ts-gaf-t);
+    --ts-gac: var(--ts-gac-t); --ts-ox: var(--ts-ox-t); --ts-snap: var(--ts-snap-t);
+  }
+}
+@media (max-width: 767px) {
+  .bsb-ts {
+    --ts-sp: var(--ts-sp-m); --ts-sbg: var(--ts-sbg-m); --ts-gap: var(--ts-gap-m); --ts-cp: var(--ts-cp-m); --ts-cb: var(--ts-cb-m);
+    --ts-bw: var(--ts-bw-m); --ts-rad: var(--ts-rad-m); --ts-ic: var(--ts-ic-m); --ts-hs: var(--ts-hs-m); --ts-ts: var(--ts-ts-m);
+    --ts-fd: var(--ts-fd-m); --ts-ta: var(--ts-ta-m); --ts-ai: var(--ts-ai-m); --ts-gtc: var(--ts-gtc-m); --ts-gaf: var(--ts-gaf-m);
+    --ts-gac: var(--ts-gac-m); --ts-ox: var(--ts-ox-m); --ts-snap: var(--ts-snap-m);
+  }
+}
+.bsb-ts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ts-gap); grid-template-columns: var(--ts-gtc); grid-auto-flow: var(--ts-gaf); grid-auto-columns: var(--ts-gac); overflow-x: var(--ts-ox); scroll-snap-type: var(--ts-snap); scrollbar-width: none; }
+.bsb-ts-list::-webkit-scrollbar { display: none; }
+.bsb-ts-item { display: flex; flex-direction: var(--ts-fd); align-items: var(--ts-ai); gap: 0.6em; min-width: 0; scroll-snap-align: start; padding: var(--ts-cp); background: var(--ts-cb); border: var(--ts-bw) solid var(--b, #e5e7eb); border-radius: var(--ts-rad); text-align: var(--ts-ta); }
+.bsb-ts-icon { display: inline-flex; flex: none; width: var(--ts-ic); height: var(--ts-ic); color: var(--bs-ic, var(--bs-icon-color-light, var(--p))); }
+.bsb-ts-icon svg { width: 100%; height: 100%; }
+.bsb-ts-text { min-width: 0; }
+.bsb-ts-title { margin: 0; font-size: var(--ts-hs); font-weight: 600; line-height: 1.25; }
+.bsb-ts-desc { margin: 0.2em 0 0; font-size: var(--ts-ts); line-height: 1.4; color: var(--m); }

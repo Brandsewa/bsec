@@ -29,8 +29,8 @@ export function isThemeSystemPageKey(key: string): key is ThemeSystemPageKey {
 /** Display names for the theme's pages, in the order editors list them. */
 export const THEME_PAGE_LABELS: Record<"home" | ThemeSystemPageKey, string> = {
   home: "Home page",
-  collections: "Collection archive",
-  collection: "Collection page",
+  collections: "Collection and category archive",
+  collection: "Collection and category page",
   product: "Product page",
   cart: "Cart page",
   blog: "Blog archive",
