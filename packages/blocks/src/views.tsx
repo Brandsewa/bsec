@@ -295,7 +295,7 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
             {collections.map((c) => {
               const img = mediaSrc(ctx, c.imageMediaId);
               return (
-                <a key={c.slug} className="bsb-ccard" href={`/collections/${c.slug}`}>
+                <a key={c.slug} className="bsb-ccard" href={`/${props.source === "categories" ? "categories" : "collections"}/${c.slug}`}>
                   <div className="bsb-ccard-media">
                     <img src={img ?? PLACEHOLDER_IMAGE_URL} alt="" loading="lazy" />
                   </div>

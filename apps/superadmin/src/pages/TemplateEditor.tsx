@@ -20,8 +20,8 @@ const host: BlockEditorHost = {
 
 const TABS = [
   { key: "home", label: "Home page", kind: "home" },
-  { key: "collections", label: "Collection archive", kind: "collections" },
-  { key: "collection", label: "Collection page", kind: "collection" },
+  { key: "collections", label: "Collection and category archive", kind: "collections" },
+  { key: "collection", label: "Collection and category page", kind: "collection" },
   { key: "product", label: "Product page", kind: "product" },
   { key: "cart", label: "Cart page", kind: "cart" },
   { key: "blog", label: "Blog archive", kind: "blogArchive" },

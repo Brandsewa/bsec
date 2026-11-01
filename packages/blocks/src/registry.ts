@@ -26,6 +26,7 @@ import * as VI from "./views-image-banner.tsx";
 import * as VF from "./views-faq.tsx";
 import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
+import * as VT from "./views-trust-strip.tsx";
 import * as VM from "./views-multi-card.tsx";
 
 /* ------------------------------------------------------------------ */
@@ -155,6 +156,8 @@ export const CollectionGridSchema = z.object({
   collectionSlugs: z.array(z.string()).default([]),
   /** List every published collection (the Collection Archive page), ignoring collectionSlugs. */
   showAll: z.boolean().default(false),
+  /** Set by the storefront on /categories so the same archive template lists categories; not an editor setting. */
+  source: z.enum(["collections", "categories"]).default("collections"),
   /** Cards per row on desktop (1024px and up). */
   columns: z.enum(["2", "3", "4"]).default("3"),
   /** Cards per row on tablets (640 to 1023px). */
@@ -174,6 +177,7 @@ export const CollectionGridBlock: BlockDefinition<CollectionGridProps> = {
     headerAlign: "center",
     collectionSlugs: [],
     showAll: false,
+    source: "collections",
     columns: "3",
     columnsTablet: "2",
     columnsMobile: "1",
@@ -1766,6 +1770,64 @@ export const ContactFormBlock: BlockDefinition<ContactFormProps> = {
   render: VM.ContactFormView,
 };
 
+/**
+ * Trust strip: icon, heading and short text per item, with every look setting chosen separately for desktop, tablet and
+ * phone. Tablet and phone settings that are left empty follow the larger screen (desktop, then tablet).
+ */
+const TrustDeviceSchema = z.object({
+  perRow: z.number().int().min(1).max(6).optional(),
+  /** grid: all items in rows. slider: one row that swipes sideways, `perRow` visible at once. */
+  layout: z.enum(["grid", "slider"]).optional(),
+  /** card: a box (fill and border) around each item. plain: just the content. */
+  look: z.enum(["card", "plain"]).optional(),
+  iconPosition: z.enum(["top", "left"]).optional(),
+  /** Text alignment when the icon sits above the text. */
+  align: z.enum(["left", "center"]).optional(),
+  sectionBg: hexColorSchema.optional(),
+  cardBg: hexColorSchema.optional(),
+  /** Space above and below the strip, px. */
+  sectionPad: z.number().int().min(0).max(160).optional(),
+  cardPad: z.number().int().min(0).max(48).optional(),
+  gap: z.number().int().min(0).max(48).optional(),
+  radius: z.number().int().min(0).max(32).optional(),
+  iconSize: z.number().int().min(14).max(72).optional(),
+  headingSize: z.number().int().min(10).max(32).optional(),
+  textSize: z.number().int().min(9).max(24).optional(),
+});
+export type TrustDeviceStyle = z.infer<typeof TrustDeviceSchema>;
+export const TRUST_DESKTOP_DEFAULTS = { perRow: 4, layout: "grid", look: "card", iconPosition: "top", align: "left", sectionPad: 32, cardPad: 20, gap: 16, radius: 12, iconSize: 28, headingSize: 15, textSize: 13 } as const;
+export const TRUST_MOBILE_DEFAULTS = { perRow: 2, cardPad: 12, gap: 10, sectionPad: 20, iconSize: 22, headingSize: 13, textSize: 12 } as const;
+
+export const TrustStripSchema = z.object({
+  items: z
+    .array(z.object({ icon: iconNameSchema.default("check"), title: z.string().max(80).default(""), description: z.string().max(200).default("") }))
+    .min(1)
+    .max(12)
+    .default([
+      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
+      { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
+      { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },
+    ]),
+  width: widthSchema.default("wide"),
+  styles: z
+    .object({
+      desktop: TrustDeviceSchema.default(TRUST_DESKTOP_DEFAULTS),
+      tablet: TrustDeviceSchema.default({}),
+      mobile: TrustDeviceSchema.default(TRUST_MOBILE_DEFAULTS),
+    })
+    .default({ desktop: TRUST_DESKTOP_DEFAULTS, tablet: {}, mobile: TRUST_MOBILE_DEFAULTS }),
+});
+export type TrustStripProps = z.infer<typeof TrustStripSchema>;
+
+export const TrustStripBlock: BlockDefinition<TrustStripProps> = {
+  type: "TrustStrip",
+  version: 1,
+  schema: TrustStripSchema,
+  defaultProps: TrustStripSchema.parse({}),
+  render: VT.TrustStripView,
+};
+
 export const CollectionShowcaseSchema = z.object({
   title: z.string().max(120).default("Shop by collection"),
   subtitle: z.string().max(300).default("Find exactly what you are looking for"),
@@ -1818,6 +1880,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   Gallery: GalleryBlock,
   Newsletter: NewsletterBlock,
   UspStrip: UspStripBlock,
+  TrustStrip: TrustStripBlock,
   Section: SectionBlock,
   Container: ContainerBlock,
   Block: BlockBlock,

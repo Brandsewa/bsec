@@ -315,6 +315,29 @@ export async function getCachedCollectionsArchive(tenantId: string) {
   return { blocks, renderData, usesTheme: Boolean(page) };
 }
 
+/**
+ * The Category Archive (/categories) uses the same theme template as the Collection Archive (one page in the theme
+ * editor, "Collection and category archive"): every CollectionGrid in it lists the store's active categories instead.
+ */
+export async function getCachedCategoriesArchive(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "page", THEME_SYSTEM_PAGES.collections.slug));
+  cacheTag(tenantTag(tenantId, "category"));
+  const { rt } = server();
+  const tenantCtx = createStorefrontTenantContext(tenantId);
+  const page = await getStorefrontThemePage(rt, tenantCtx, "collections");
+  const blocks: BlockInstance[] = structuredClone(
+    page?.blocks ?? [
+      { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Shop by category", subtitle: "Find exactly what you are looking for.", collectionSlugs: [], showAll: true, columns: "3" } },
+    ],
+  );
+  walkBlocks(blocks, (b) => {
+    if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") b.props = { ...b.props, source: "categories", showAll: true };
+  });
+  const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
+  return { blocks, renderData, usesTheme: Boolean(page) };
+}
+
 /** Copy and switches for the default pages (checkout, order success, payment failed, search, 404); built-in text when the store's theme sets none. */
 export async function getCachedDefaultPages(tenantId: string) {
   const tokens = await getCachedThemeTokens(tenantId).catch(() => null);

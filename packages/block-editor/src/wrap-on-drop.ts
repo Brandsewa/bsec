@@ -23,6 +23,7 @@ export const WRAP_ON_DROP: ReadonlySet<BlockType> = new Set<BlockType>([
   "Gallery",
   "Newsletter",
   "UspStrip",
+  "TrustStrip",
 ]);
 
 /** Puck's key for the page's own block list (drops inside a Section, Container or Block are the person's explicit choice). */
