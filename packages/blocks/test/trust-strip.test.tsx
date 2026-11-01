@@ -47,4 +47,30 @@ describe("Trust strip", () => {
     expect(html).toContain("--ts-cb-m:transparent");
     expect(html).toContain("--ts-fd-m:row");
   });
+
+  it("lets each screen colour the icon, heading and description, and align the icon beside the text", () => {
+    const html = render({ styles: { desktop: { iconColor: "#112233", headingColor: "#ffffff", textColor: "#cccccc", iconPosition: "left", valign: "start" }, mobile: { valign: "end" } } });
+    expect(html).toContain("--ts-icc-d:#112233");
+    expect(html).toContain("--ts-hc-d:#ffffff");
+    expect(html).toContain("--ts-tc-d:#cccccc");
+    // The phone sets no colours of its own, so it follows the larger screens.
+    expect(html).toContain("--ts-icc-m:#112233");
+    expect(html).toContain("--ts-ai-d:flex-start");
+    expect(html).toContain("--ts-ai-t:flex-start");
+    expect(html).toContain("--ts-ai-m:flex-end");
+  });
+
+  it("falls back to the theme colours and a middle alignment when nothing is set", () => {
+    const html = render();
+    expect(html).toContain("--ts-hc-d:inherit");
+    expect(html).toContain("--ts-tc-d:var(--m)");
+    expect(TrustStripSchema.safeParse({ styles: { desktop: { iconColor: "red" } } }).success).toBe(false);
+    expect(TrustStripSchema.safeParse({ styles: { desktop: { valign: "baseline" } } }).success).toBe(false);
+  });
+
+  it("reserves room for the slider bar only when a screen is a slider", () => {
+    const html = render({ styles: { tablet: { layout: "slider" } } });
+    expect(html).toContain("--ts-pb-d:0px");
+    expect(html).toContain("--ts-pb-t:6px");
+  });
 });

@@ -1374,8 +1374,14 @@ const TrustDeviceSchema = z.object({
   iconPosition: z.enum(["top", "left"]).optional(),
   /** Text alignment when the icon sits above the text. */
   align: z.enum(["left", "center"]).optional(),
+  /** Icon beside the text: whether the icon lines up with the top, middle or bottom of the text block. */
+  valign: z.enum(["start", "center", "end"]).optional(),
   sectionBg: hexColorSchema.optional(),
   cardBg: hexColorSchema.optional(),
+  /** Colours of the parts; empty follows the theme (the text colour of the section behind). */
+  iconColor: hexColorSchema.optional(),
+  headingColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
   /** Space above and below the strip, px. */
   sectionPad: z.number().int().min(0).max(160).optional(),
   cardPad: z.number().int().min(0).max(48).optional(),
@@ -1386,7 +1392,7 @@ const TrustDeviceSchema = z.object({
   textSize: z.number().int().min(9).max(24).optional(),
 });
 export type TrustDeviceStyle = z.infer<typeof TrustDeviceSchema>;
-export const TRUST_DESKTOP_DEFAULTS = { perRow: 4, layout: "grid", look: "card", iconPosition: "top", align: "left", sectionPad: 32, cardPad: 20, gap: 16, radius: 12, iconSize: 28, headingSize: 15, textSize: 13 } as const;
+export const TRUST_DESKTOP_DEFAULTS = { perRow: 4, layout: "grid", look: "card", iconPosition: "top", align: "left", valign: "center", sectionPad: 32, cardPad: 20, gap: 16, radius: 12, iconSize: 28, headingSize: 15, textSize: 13 } as const;
 export const TRUST_MOBILE_DEFAULTS = { perRow: 2, cardPad: 12, gap: 10, sectionPad: 20, iconSize: 22, headingSize: 13, textSize: 12 } as const;
 
 export const TrustStripSchema = z.object({

@@ -28,6 +28,11 @@ const ICON_POSITIONS: DropdownOption[] = [
   { value: "top", label: "Above the text" },
   { value: "left", label: "Left of the text" },
 ];
+const VALIGNS: DropdownOption[] = [
+  { value: "start", label: "Top of the text" },
+  { value: "center", label: "Middle of the text" },
+  { value: "end", label: "Bottom of the text" },
+];
 const ALIGNS: DropdownOption[] = [
   { value: "left", label: "Left" },
   { value: "center", label: "Centre" },
@@ -91,6 +96,20 @@ function Color({ label, value, onChange }: { label: string; value: string | unde
   );
 }
 
+/** A closed-by-default section, so the long list of colours stays out of the way until it is wanted. */
+function Accordion({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderTop: "1px solid #e4e4e7", paddingTop: 8, display: "grid", gap: 10 }}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", background: "none", border: 0, padding: 0, cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#111", textAlign: "left" }}>
+        {title}
+        <span aria-hidden="true" style={{ fontSize: 11, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+      </button>
+      {open ? <div style={{ display: "grid", gap: 10 }}>{children}</div> : null}
+    </div>
+  );
+}
+
 /**
  * One panel for the Trust strip's look: Desktop, Tablet and Mobile tabs with the same settings in each. Tablet and
  * Mobile start empty and follow the larger screen until a value is typed or chosen.
@@ -137,6 +156,7 @@ function TrustStylesEditor({ value, onChange }: { value: Styles | undefined; onC
         <Pick label="Look" value={cur.look} inherited={inh("look") as string} options={LOOKS} device={tab} onChange={(v) => set("look", v as never)} />
         <Pick label="Icon position" value={cur.iconPosition} inherited={inh("iconPosition") as string} options={ICON_POSITIONS} device={tab} onChange={(v) => set("iconPosition", v as never)} />
         <Pick label="Text alignment (icon above)" value={cur.align} inherited={inh("align") as string} options={ALIGNS} device={tab} onChange={(v) => set("align", v as never)} />
+        <Pick label="Icon height (icon beside the text)" value={cur.valign} inherited={inh("valign") as string} options={VALIGNS} device={tab} onChange={(v) => set("valign", v as never)} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
           {num("sectionPad", "Space above and below (px)", 0, 160)}
           {num("gap", "Space between items (px)", 0, 48)}
@@ -146,8 +166,13 @@ function TrustStylesEditor({ value, onChange }: { value: Styles | undefined; onC
           {num("headingSize", "Heading size (px)", 10, 32)}
           {num("textSize", "Description size (px)", 9, 24)}
         </div>
-        <Color label="Strip background colour" value={cur.sectionBg} onChange={(v) => set("sectionBg", v)} />
-        <Color label="Card background colour (card look)" value={cur.cardBg} onChange={(v) => set("cardBg", v)} />
+        <Accordion title="Colours">
+          <Color label="Strip background colour" value={cur.sectionBg} onChange={(v) => set("sectionBg", v)} />
+          <Color label="Card background colour (card look)" value={cur.cardBg} onChange={(v) => set("cardBg", v)} />
+          <Color label="Icon colour" value={cur.iconColor} onChange={(v) => set("iconColor", v)} />
+          <Color label="Heading colour" value={cur.headingColor} onChange={(v) => set("headingColor", v)} />
+          <Color label="Description colour" value={cur.textColor} onChange={(v) => set("textColor", v)} />
+        </Accordion>
       </div>
     </div>
   );

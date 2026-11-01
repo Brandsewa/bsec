@@ -13,8 +13,9 @@ import { TRUST_DESKTOP_DEFAULTS, type TrustDeviceStyle, type TrustStripProps } f
 
 const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
 
-type Filled = Omit<TrustDeviceStyle, "sectionBg" | "cardBg">;
-type Resolved = { [K in keyof Filled]-?: NonNullable<Filled[K]> } & { sectionBg?: string | undefined; cardBg?: string | undefined };
+type Colours = "sectionBg" | "cardBg" | "iconColor" | "headingColor" | "textColor";
+type Filled = Omit<TrustDeviceStyle, Colours>;
+type Resolved = { [K in keyof Filled]-?: NonNullable<Filled[K]> } & { [K in Colours]?: string | undefined };
 
 /** Drops unset keys so they never overwrite the value inherited from the larger screen. */
 function strip<T extends object>(o: T): Partial<T> {
@@ -46,12 +47,16 @@ function deviceVars(r: Resolved, k: "d" | "t" | "m"): Record<string, string> {
     [`--ts-ts-${k}`]: `${r.textSize}px`,
     [`--ts-fd-${k}`]: r.iconPosition === "left" ? "row" : "column",
     [`--ts-ta-${k}`]: centered ? "center" : "left",
-    [`--ts-ai-${k}`]: centered ? "center" : "flex-start",
+    [`--ts-ai-${k}`]: r.iconPosition === "left" ? { start: "flex-start", center: "center", end: "flex-end" }[r.valign] : centered ? "center" : "flex-start",
+    [`--ts-icc-${k}`]: r.iconColor ?? "var(--bs-ic, var(--bs-icon-color-light, var(--p)))",
+    [`--ts-hc-${k}`]: r.headingColor ?? "inherit",
+    [`--ts-tc-${k}`]: r.textColor ?? "var(--m)",
     // grid: n equal columns. slider: one row of n visible items, scrolling sideways.
     [`--ts-gtc-${k}`]: slider ? "none" : `repeat(${r.perRow}, minmax(0, 1fr))`,
     [`--ts-gaf-${k}`]: slider ? "column" : "row",
     [`--ts-gac-${k}`]: slider ? `calc((100% - ${r.perRow - 1} * ${gap}) / ${r.perRow})` : "auto",
     [`--ts-ox-${k}`]: slider ? "auto" : "visible",
+    [`--ts-pb-${k}`]: slider ? "6px" : "0px",
     [`--ts-snap-${k}`]: slider ? "x mandatory" : "none",
   };
 }
