@@ -103,3 +103,13 @@ INSERT INTO "plan_compare_rows" ("group_name","label","limit_key","cells","sort"
 INSERT INTO "plan_compare_rows" ("group_name","label","limit_key","cells","sort") VALUES ('Coming soon','WhatsApp order confirmation and COD-to-prepaid nudges',NULL,'{"starter": {"k": "none"}, "growth": {"k": "soon"}, "pro": {"k": "soon"}}'::jsonb,380);
 --> statement-breakpoint
 INSERT INTO "plan_compare_rows" ("group_name","label","limit_key","cells","sort") VALUES ('Coming soon','COD OTP verification and risk flags',NULL,'{"starter": {"k": "none"}, "growth": {"k": "soon"}, "pro": {"k": "soon"}}'::jsonb,390);
+
+--> statement-breakpoint
+-- New tables give app_rw full DML by default privileges; the compare table is platform-owned, so the store runtime may only read it.
+REVOKE ALL ON TABLE "plan_compare_rows" FROM PUBLIC;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "plan_compare_rows" FROM "app_rw";
+--> statement-breakpoint
+GRANT SELECT ON TABLE "plan_compare_rows" TO "app_rw";
+--> statement-breakpoint
+GRANT ALL ON TABLE "plan_compare_rows" TO "app_platform";
