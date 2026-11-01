@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { schema, withTenant } from "@bs/db";
+import { schema, type withTenant } from "@bs/db";
 
 type Tx = Parameters<Parameters<typeof withTenant>[2]>[0];
 
