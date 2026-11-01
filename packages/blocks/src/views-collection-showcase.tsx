@@ -44,13 +44,13 @@ export function CollectionShowcaseView({ props, ctx }: A<R.CollectionShowcasePro
           </div>
         ) : null}
         {collections.length === 0 ? (
-          <p className="bsb-muted">No collections selected yet.</p>
+          <p className="bsb-muted">{props.source === "categories" ? "No categories selected yet." : "No collections selected yet."}</p>
         ) : (
           <div className={cx("bsb-cs", `bsb-cs-t-${props.tabletLayout}`, `bsb-cs-m-${props.mobileLayout}`)} style={vars} role="list">
             {collections.map((c) => {
               const img = mediaSrc(ctx, c.imageMediaId);
               return (
-                <a key={c.slug} className="bsb-ccard bsb-cs-card" href={`/collections/${c.slug}`} role="listitem">
+                <a key={c.slug} className="bsb-ccard bsb-cs-card" href={`/${props.source === "categories" ? "categories" : "collections"}/${c.slug}`} role="listitem">
                   <div className="bsb-ccard-media">
                     <img src={img ?? PLACEHOLDER_IMAGE_URL} alt="" loading="lazy" />
                   </div>

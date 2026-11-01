@@ -842,8 +842,10 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         id: "collections",
         title: "Collections",
         fields: {
-          showAll: radio("Show every published collection"),
-          collectionSlugs: collectionsField("Pick collections (ignored when showing every collection)") as Field,
+          source: select("Show", { collections: "Collections", categories: "Categories" }),
+          showAll: radio("Show everything of the chosen kind (ignores the picks below)"),
+          collectionSlugs: collectionsField("Pick collections (used when Show is Collections)") as Field,
+          categorySlugs: collectionsField("Pick categories (used when Show is Categories)", 24, "category") as Field,
         },
       },
       {

@@ -199,7 +199,27 @@ async function enrichShowcaseProducts(tx: Tx, products: BlockProduct[]): Promise
   });
 }
 
+/** Collection showcase set to "categories": active categories, by pick order or all of them. */
+async function loadCategoryCards(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
+  const toCard = (r: typeof schema.categories.$inferSelect): BlockCollectionSummary => ({
+    slug: r.slug,
+    title: r.name,
+    imageMediaId: r.imageMediaId ?? undefined,
+    ...(r.description ? { description: r.description } : {}),
+  });
+  if (props.showAll === true) {
+    const all = await tx.select().from(schema.categories).where(eq(schema.categories.isActive, true)).orderBy(asc(schema.categories.position), asc(schema.categories.name)).limit(48);
+    return all.map(toCard);
+  }
+  const slugs = Array.isArray(props.categorySlugs) ? (props.categorySlugs as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 24) : [];
+  if (slugs.length === 0) return [];
+  const rows = await tx.select().from(schema.categories).where(and(eq(schema.categories.isActive, true), inArray(schema.categories.slug, slugs)));
+  const bySlug = new Map(rows.map((r) => [r.slug.toLowerCase(), r]));
+  return slugs.map((s) => bySlug.get(s.toLowerCase())).filter((r): r is NonNullable<typeof r> => !!r).map(toCard);
+}
+
 async function loadCollections(tx: Tx, props: Record<string, unknown>): Promise<BlockCollectionSummary[]> {
+  if (props.source === "categories") return loadCategoryCards(tx, props);
   if (props.showAll === true) {
     // Collection Archive: every published collection, with how many listed products it holds (manual collections; automated ones show no count).
     const all = await tx.select().from(schema.collections).where(eq(schema.collections.published, true)).orderBy(asc(schema.collections.title)).limit(48);

@@ -186,6 +186,7 @@ async function loadRenderData(tenantId: string, tenantCtx: TenantContext, docume
   if (needsCatalog) {
     cacheTag(tenantTag(tenantId, "product"));
     cacheTag(tenantTag(tenantId, "collection"));
+    cacheTag(tenantTag(tenantId, "category"));
   }
   if (needsNav) {
     cacheTag(tenantTag(tenantId, "nav"));

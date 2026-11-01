@@ -13,8 +13,12 @@ interface CollectionOption {
  * Multi-select of the store's own collections, in the order they were picked (that is the order on the page).
  * Hosts without a collections list (the Super Admin theme editor has no store) fall back to typing slugs.
  */
-function CollectionsSelect({ value, onChange, name, label, max }: { value: string[] | undefined; onChange: (v: string[]) => void; name: string; label: string; max: number }) {
-  const host = useHost();
+function CollectionsSelect({ value, onChange, name, label, max, kind }: { value: string[] | undefined; onChange: (v: string[]) => void; name: string; label: string; max: number; kind: "collection" | "category" }) {
+  const hostCtx = useHost();
+  // The category picker reuses this component: same UI, its own list and wording.
+  const host = hostCtx ? { listCollections: kind === "category" ? hostCtx.listCategories : hostCtx.listCollections } : hostCtx;
+  const nounPl = kind === "category" ? "categories" : "collections";
+  const nounSg = kind === "category" ? "category" : "collection";
   const [options, setOptions] = useState<CollectionOption[] | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -58,7 +62,7 @@ function CollectionsSelect({ value, onChange, name, label, max }: { value: strin
           style={{ ...box, padding: 8 }}
         />
         <span style={{ fontSize: 11, color: "#666" }}>
-          {host?.listCollections && options !== null ? "This store has no collections yet. " : ""}One collection slug per line
+          {host?.listCollections && options !== null ? `This store has no ${nounPl} yet. ` : ""}One {nounSg} slug per line
         </span>
       </div>
     );
@@ -80,11 +84,11 @@ function CollectionsSelect({ value, onChange, name, label, max }: { value: strin
         </div>
       ) : null}
       <button type="button" id={name} aria-expanded={open} onClick={() => setOpen((v) => !v)} style={{ ...box, textAlign: "left", background: "#fff", cursor: "pointer" }}>
-        {selected.length === 0 ? "Choose collections…" : `${selected.length} selected, add or remove…`}
+        {selected.length === 0 ? `Choose ${nounPl}…` : `${selected.length} selected, add or remove…`}
       </button>
       {open ? (
         <div style={{ border: "1px solid #ddd", borderRadius: 6, marginTop: 4, background: "#fff", maxHeight: 240, overflowY: "auto" }}>
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search collections" aria-label="Search collections" style={{ ...box, border: 0, borderBottom: "1px solid #eee", borderRadius: 0 }} />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${nounPl}`} aria-label={`Search ${nounPl}`} style={{ ...box, border: 0, borderBottom: "1px solid #eee", borderRadius: 0 }} />
           {visible.length === 0 ? <p style={{ margin: 0, padding: 10, fontSize: 12, color: "#666" }}>No match.</p> : null}
           {visible.map((o) => {
             const on = selected.includes(o.slug);
@@ -102,10 +106,10 @@ function CollectionsSelect({ value, onChange, name, label, max }: { value: strin
   );
 }
 
-export function collectionsField(label: string, max = 24): CustomField<string[]> {
+export function collectionsField(label: string, max = 24, kind: "collection" | "category" = "collection"): CustomField<string[]> {
   return {
     type: "custom",
     label,
-    render: ({ value, onChange, name }) => <CollectionsSelect value={value} onChange={onChange} name={name} label={label} max={max} />,
+    render: ({ value, onChange, name }) => <CollectionsSelect value={value} onChange={onChange} name={name} label={label} max={max} kind={kind} />,
   };
 }
