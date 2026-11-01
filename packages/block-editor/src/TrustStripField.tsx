@@ -103,9 +103,8 @@ function TrustStylesEditor({ value, onChange }: { value: Styles | undefined; onC
   const base: TrustDeviceStyle = { ...TRUST_DESKTOP_DEFAULTS, ...(styles.desktop ?? {}), ...(tab === "mobile" ? (styles.tablet ?? {}) : {}) };
   const inh = (k: keyof TrustDeviceStyle) => (tab === "desktop" ? TRUST_DESKTOP_DEFAULTS[k as keyof typeof TRUST_DESKTOP_DEFAULTS] : base[k]);
   const set = <K extends keyof TrustDeviceStyle>(k: K, v: TrustDeviceStyle[K] | undefined) => {
-    const next: TrustDeviceStyle = { ...cur };
-    if (v === undefined) delete next[k];
-    else next[k] = v;
+    // An unset value is dropped (not stored as undefined) so the screen follows the larger one again.
+    const next = Object.fromEntries(Object.entries({ ...cur, [k]: v }).filter(([, x]) => x !== undefined)) as TrustDeviceStyle;
     onChange({ ...styles, [tab]: next });
   };
   const num = (k: keyof TrustDeviceStyle, title: string, min: number, max: number) => (
@@ -113,7 +112,7 @@ function TrustStylesEditor({ value, onChange }: { value: Styles | undefined; onC
       <NumberBox key={`${tab}-${k}`} value={cur[k] as number | undefined} placeholder={inh(k) as number | undefined} min={min} max={max} label={`${title} (${tab})`} onCommit={(v) => set(k, v as never)} />
     </Row>
   );
-  const device = DEVICES.find((d) => d.key === tab)!;
+  const hint = DEVICES.find((d) => d.key === tab)?.hint ?? "";
   return (
     <div style={{ display: "grid", gap: 10, minWidth: 0 }}>
       <span style={{ ...lbl, fontSize: 12 }}>Look on each screen size</span>
@@ -131,7 +130,7 @@ function TrustStylesEditor({ value, onChange }: { value: Styles | undefined; onC
           </button>
         ))}
       </div>
-      <span style={{ fontSize: 11, color: "#71717a" }}>{device.hint}</span>
+      <span style={{ fontSize: 11, color: "#71717a" }}>{hint}</span>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(0, 1fr)" }}>
         <Pick label="Arrangement" value={cur.layout} inherited={inh("layout") as string} options={LAYOUTS} device={tab} onChange={(v) => set("layout", v as never)} />
         {num("perRow", "Items per row (visible at once in a slider)", 1, 6)}
