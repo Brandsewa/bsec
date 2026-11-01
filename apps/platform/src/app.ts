@@ -11,6 +11,10 @@ import {
   listPlatformFeatureFlags,
   listPlatformInvoices,
   listPlatformPlans,
+  getPlanEditor,
+  listPlatformStoreTransactions,
+  updatePlan,
+  savePlanCompareRows,
   listPlatformQuotaDefinitions,
   listPlatformSignups,
   recordExportDownload,
@@ -455,8 +459,14 @@ export const platformRouter = os.router({
   domains: {
     list: os.domains.list.use(requirePlatformStaff).handler(({ context, input }) => listPlatformDomains(context.rt, input)),
   },
+  ledger: {
+    storeTransactions: os.ledger.storeTransactions.use(requirePlatformStaff).handler(({ context, input }) => listPlatformStoreTransactions(context.rt, input)),
+  },
   plans: {
     list: os.plans.list.use(requirePlatformStaff).handler(({ context }) => listPlatformPlans(context.rt)),
+    editor: os.plans.editor.use(requirePlatformStaff).handler(({ context }) => getPlanEditor(context.rt)),
+    updatePlan: os.plans.updatePlan.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlan(context.rt, actor(context), input, context.meta)),
+    saveCompare: os.plans.saveCompare.use(requireStaff("platform_admin")).handler(({ context, input }) => savePlanCompareRows(context.rt, actor(context), input.rows, context.meta)),
     invoices: os.plans.invoices.use(requirePlatformStaff).handler(({ context, input }) => listPlatformInvoices(context.rt, input)),
     listRequests: os.plans.listRequests.use(requirePlatformStaff).handler(({ context, input }) => {
       const staffUserId = actor(context);

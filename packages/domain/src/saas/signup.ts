@@ -12,6 +12,8 @@ import {
   verifySubdomainReservation,
 } from "./subdomains.ts";
 import { readGoogleSignupTicket } from "./google-signup.ts";
+import { renderCompareCell, renderPlanBullet, type PlanBullet, type PlanCell, type PlanLimitValues, type PublicPlanCompareGroup } from "@bs/contracts";
+import { loadEnforcedPlanLimits } from "../platform/plan-editor.ts";
 import { provisionTenant, type ProvisionBusinessInput, type ProvisionTenantResult } from "./provisioning.ts";
 
 export interface SaveSignupLeadInput {
@@ -215,6 +217,11 @@ export interface PublicPlan {
   limits: Record<string, unknown>;
   features: Record<string, unknown>;
   sort: number;
+  tagline: string | null;
+  audience: string | null;
+  badge: string | null;
+  /** The card lines, with every linked limit already filled in from what is enforced. */
+  bullets: string[];
 }
 
 export interface PublicThemeTemplate {
@@ -249,25 +256,58 @@ export async function listPublicPlans(db: Db): Promise<PublicPlan[]> {
     limits: Record<string, unknown>;
     features: Record<string, unknown>;
     sort: number;
+    tagline: string | null;
+    audience: string | null;
+    badge: string | null;
+    card_bullets: unknown;
   }>(sql`
-    SELECT id, code, name, price_monthly_paise, price_yearly_paise, price_monthly_usd_cents, price_yearly_usd_cents, currency, limits, features, sort
+    SELECT id, code, name, price_monthly_paise, price_yearly_paise, price_monthly_usd_cents, price_yearly_usd_cents, currency, limits, features, sort, tagline, audience, badge, card_bullets
     FROM plans
     WHERE is_public = true
     ORDER BY sort ASC;
   `);
-  return res.rows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: r.name,
-    priceMonthlyPaise: Number(r.price_monthly_paise),
-    priceYearlyPaise: Number(r.price_yearly_paise),
-    priceMonthlyUsdCents: r.price_monthly_usd_cents === null || r.price_monthly_usd_cents === undefined ? null : Number(r.price_monthly_usd_cents),
-    priceYearlyUsdCents: r.price_yearly_usd_cents === null || r.price_yearly_usd_cents === undefined ? null : Number(r.price_yearly_usd_cents),
-    currency: r.currency,
-    limits: r.limits,
-    features: r.features,
-    sort: r.sort,
-  }));
+  // The numbers customers see are the ones enforced (size tier), not the copy in plans.limits.
+  const enforced = await loadEnforcedPlanLimits(db, res.rows);
+  return res.rows.map((r) => {
+    const limits = enforced.get(r.code) ?? {};
+    const bullets = (Array.isArray(r.card_bullets) ? (r.card_bullets as PlanBullet[]) : [])
+      .map((b) => renderPlanBullet(b, limits))
+      .filter((t): t is string => Boolean(t));
+    return {
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      priceMonthlyPaise: Number(r.price_monthly_paise),
+      priceYearlyPaise: Number(r.price_yearly_paise),
+      priceMonthlyUsdCents: r.price_monthly_usd_cents === null || r.price_monthly_usd_cents === undefined ? null : Number(r.price_monthly_usd_cents),
+      priceYearlyUsdCents: r.price_yearly_usd_cents === null || r.price_yearly_usd_cents === undefined ? null : Number(r.price_yearly_usd_cents),
+      currency: r.currency,
+      limits: { ...(r.limits ?? {}), ...limits },
+      features: r.features,
+      sort: r.sort,
+      tagline: r.tagline,
+      audience: r.audience,
+      badge: r.badge,
+      bullets,
+    };
+  });
+}
+
+/** The long comparison table, grouped, with every limit row showing the enforced value for each public plan. */
+export async function listPublicPlanCompare(db: Db): Promise<{ plans: Array<{ code: string; name: string }>; groups: PublicPlanCompareGroup[] }> {
+  const plans = await listPublicPlans(db);
+  const rows = await db.execute<{ group_name: string; label: string; tooltip: string | null; limit_key: string | null; cells: Record<string, PlanCell> }>(sql`
+    SELECT group_name, label, tooltip, limit_key, cells FROM plan_compare_rows WHERE is_visible = true ORDER BY sort ASC, created_at ASC;
+  `);
+  const groups: PublicPlanCompareGroup[] = [];
+  for (const r of rows.rows) {
+    let g = groups.find((x) => x.groupName === r.group_name);
+    if (!g) groups.push((g = { groupName: r.group_name, rows: [] }));
+    const cells: Record<string, PlanCell> = {};
+    for (const p of plans) cells[p.code] = renderCompareCell({ limitKey: r.limit_key, cells: r.cells ?? {} }, p.code, p.limits as PlanLimitValues);
+    g.rows.push({ label: r.label, tooltip: r.tooltip, cells });
+  }
+  return { plans: plans.map((p) => ({ code: p.code, name: p.name })), groups };
 }
 
 export async function listPlatformCountries(db: Db): Promise<PublicPlatformCountry[]> {

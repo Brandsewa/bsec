@@ -446,6 +446,17 @@ const CASES: Record<string, Case> = {
       return { code };
     },
   },
+  "plans.updatePlan": {
+    role: "platform_admin",
+    action: "plan.update",
+    // A display-only edit: it must write the audit row without touching any shared tier limit.
+    input: async () => ({ code: "starter", tagline: "Launch your brand" }),
+  },
+  "plans.saveCompare": {
+    role: "platform_admin",
+    action: "plan.compare_table.update",
+    input: async () => ({ rows: [{ groupName: "Core store", label: "Themes and page builder", cells: { starter: { k: "tick" } }, isVisible: true }] }),
+  },
   "quotas.updateLimits": {
     role: "platform_admin",
     action: "quota_limits.updated",

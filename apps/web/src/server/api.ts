@@ -289,6 +289,7 @@ import {
   previewPromoCode,
   acceptTenantOwnerInvite,
   listPublicPlans,
+  listPublicPlanCompare,
   listPlatformCountries,
   loadTrialPolicy,
   listPublicThemeTemplates,
@@ -318,6 +319,7 @@ import {
   renderPlatformInvoicePdf,
   cancelPlanSubscription,
   listAvailablePlans,
+  getPlanCompare,
   requestPlanChange,
   cancelPlanChangeRequest,
   previewShippingRate,
@@ -3100,6 +3102,13 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAvailablePlans(context.rt, context.tenantCtx);
         }),
+      compare: os.admin.planAndBilling.compare
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(async ({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPlanCompare(context.rt, context.tenantCtx);
+        }),
       subscribe: os.admin.planAndBilling.subscribe
         .use(requireAdmin)
         .use(requirePermission("settings.read"))
@@ -3804,6 +3813,10 @@ api.get("/saas/plans", async (c) => {
   const db = saasDb(server().rt);
   const plans = await listPublicPlans(db);
   return c.json(plans);
+});
+
+api.get("/saas/plan-compare", async (c) => {
+  return c.json(await listPublicPlanCompare(saasDb(server().rt)));
 });
 
 api.get("/saas/countries", async (c) => {
