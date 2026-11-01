@@ -813,6 +813,9 @@ export const SiteFooterSchema = z.object({
   newsletterText: z.string().max(200).default("Subscribe for updates and exclusive offers."),
   copyright: z.string().max(200).optional(),
   tone: toneSchema.default("surface"),
+  /** Own colours; empty follows the background choice above. The text colour also drives the muted text, titles and lines. */
+  bgColor: hexColorSchema.optional(),
+  textColor: hexColorSchema.optional(),
 });
 export type SiteFooterProps = z.infer<typeof SiteFooterSchema>;
 export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
@@ -1654,6 +1657,12 @@ export const MultiCardSchema = z.object({
   interval: z.number().int().min(2).max(20).default(5),
   loop: z.boolean().default(true),
   // Card
+  /** card: the bordered or filled box. plain: no box at all (no border, background or corners), just the content. */
+  cardLook: z.enum(["card", "plain"]).default("card"),
+  /** Where the icon sits against the text: above it, or beside it on the left or right. */
+  iconPosition: z.enum(["top", "left", "right"]).default("top"),
+  /** Beside the text (left or right): the icon lines up with the top of the text, or its middle. */
+  iconAlign: z.enum(["start", "center"]).default("start"),
   cardPadding: z.number().int().min(0).max(64).default(24),
   cardRadius: z.number().int().min(0).max(48).default(12),
   borderWidth: z.number().int().min(0).max(8).default(1),

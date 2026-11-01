@@ -113,6 +113,9 @@ export interface BlockBlogPost {
   imageAlt?: string | undefined;
   imageWidth?: number | null | undefined;
   imageHeight?: number | null | undefined;
+  /** Resized copies of the picture, for the img srcset (small files on small screens). */
+  imageSrcSet?: string | undefined;
+  imageSizes?: string | undefined;
   categoryName?: string | undefined;
   /** URL path under /blog/category/, for the category label's link. */
   categoryPath?: string | undefined;

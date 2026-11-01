@@ -125,7 +125,8 @@ body {
 
 /* The grey panel behind each checkout step and the order summary: the text colour mixed into the page colour, so it stays
    clearly visible on any theme (a plain "surface" grey is nearly white on many). No border or shadow. */
-.bs-panel { border-radius: 0.75rem; background: color-mix(in srgb, var(--color-background, #ffffff) 10%, #f6f6f4); }
+/* Checkout cards: plain white with a faint grey line so they stand out on any theme background. */
+.bs-panel { border-radius: 0.75rem; background: #ffffff; border: 1px solid #e5e7eb; }
 /* Form fields on a panel: the page colour lightened towards white, so they follow whatever colour the merchant picks and still lift off the panel. */
 .bs-field { background: color-mix(in srgb, var(--color-background, #ffffff) 35%, #ffffff); border-color: color-mix(in srgb, var(--color-foreground, #0f172a) 14%, transparent); }
 

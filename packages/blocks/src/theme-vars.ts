@@ -372,8 +372,9 @@ export function readableOn(color: string): string {
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
   const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   const lum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-  // Pick whichever of white or near-black has the higher WCAG contrast ratio (they tie at lum ~0.18).
-  return lum > 0.18 ? "#0f172a" : "#ffffff";
+  // Pure contrast maths flips to dark text at lum 0.18, which put dark text on mid-tone brand colours (terracotta, clay,
+  // teal) that read as "dark" to people. White stays up to 0.3; only clearly light colours (yellow, pastel) get dark text.
+  return lum > 0.3 ? "#0f172a" : "#ffffff";
 }
 
 export const DEFAULT_THEME_COLORS = {

@@ -71,9 +71,9 @@ export function MobileBottomNav() {
 
   return (
     <>
-      <style>{`@media (max-width: 767px) { :root { --bottom-nav-h: calc(3.75rem + env(safe-area-inset-bottom, 0px)); } }`}</style>
-      <div aria-hidden className="md:hidden" style={{ height: "var(--bottom-nav-h, 0px)" }} />
-      <nav aria-label="Quick navigation" className="bs-skin fixed inset-x-0 bottom-0 z-[60] flex border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur md:hidden" style={{ height: "var(--bottom-nav-h)" }}>
+      <style>{`@media (max-width: 1023px) { :root { --bottom-nav-h: calc(3.75rem + env(safe-area-inset-bottom, 0px)); } }`}</style>
+      <div aria-hidden className="lg:hidden" style={{ height: "var(--bottom-nav-h, 0px)" }} />
+      <nav aria-label="Quick navigation" className="bs-skin fixed inset-x-0 bottom-0 z-[60] flex border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur lg:hidden" style={{ height: "var(--bottom-nav-h)" }}>
         <Link href="/" className={`${ITEM} ${tone(active("/"))}`} aria-current={active("/") ? "page" : undefined}>
           {ICONS.home}
           Home

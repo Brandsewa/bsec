@@ -7,6 +7,7 @@ import {
   walkBlocks,
   type BlockCollectionSummary,
   type BlockBlogPost,
+  mediaImage,
   type BlockReview,
   type BlockData,
   type BlockInstance,
@@ -624,6 +625,18 @@ async function loadMenusData(
  * and the editor preview. Blocks that cannot resolve get no entry and render an empty state.
  */
 /** A blog summary in the shape the blocks draw (ready-to-use image URL, category link path). */
+function blockBlogImage(image: NonNullable<BlogPostSummary["image"]>): Partial<BlockBlogPost> {
+  // Cards are at most about 800px wide: use the worker's resized copies (srcset) so a slow connection loads a small file, not the original.
+  const m = mediaImage({ url: image.url, width: image.width, height: image.height, derivatives: image.derivatives as never }, { sizes: "(min-width: 1024px) 400px, (min-width: 640px) 50vw, 100vw" });
+  return {
+    imageUrl: m.src || image.url,
+    imageAlt: image.alt,
+    imageWidth: image.width,
+    imageHeight: image.height,
+    ...(m.srcSet ? { imageSrcSet: m.srcSet, imageSizes: m.sizes } : {}),
+  };
+}
+
 export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
   return {
     slug: p.slug,
@@ -632,7 +645,7 @@ export function toBlockBlogPost(p: BlogPostSummary): BlockBlogPost {
     publishedAt: p.publishedAt,
     authorName: p.authorName,
     readingMinutes: p.readingMinutes,
-    ...(p.image ? { imageUrl: p.image.url, imageAlt: p.image.alt, imageWidth: p.image.width, imageHeight: p.image.height } : {}),
+    ...(p.image ? blockBlogImage(p.image) : {}),
     ...(p.category ? { categoryName: p.category.name, categoryPath: p.category.path } : {}),
   };
 }
