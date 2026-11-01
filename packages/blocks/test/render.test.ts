@@ -14,10 +14,10 @@ describe("renderBlockDocument", () => {
       blocks: [
         {
           id: "hero-visible",
-          type: "Hero",
+          type: "Heading",
           version: 1,
           props: {
-            title: "Summer Collection 2026",
+            text: "Summer Collection 2026",
           },
         },
         {
@@ -36,16 +36,16 @@ describe("renderBlockDocument", () => {
     expect(result.success).toBe(true);
     expect(result.blocks).toHaveLength(1);
     expect(result.blocks[0]?.id).toBe("hero-visible");
-    expect(result.blocks[0]?.props.title).toBe("Summer Collection 2026");
+    expect(result.blocks[0]?.props.text).toBe("Summer Collection 2026");
   });
 
   it("migrates older-version block to current registry version before rendering", () => {
-    // Register migration for Hero from version 0 to 1
-    registerBlockMigration("Hero", 0, (props: Record<string, unknown>) => {
+    // Register migration for Heading from version 0 to 1
+    registerBlockMigration("Heading", 0, (props: Record<string, unknown>) => {
       return {
         ...props,
-        title: (props.heading as string) || "Default Migrated Title",
-        alignment: "center",
+        text: (props.heading as string) || "Default Migrated Title",
+        align: "center",
       };
     });
 
@@ -54,7 +54,7 @@ describe("renderBlockDocument", () => {
       blocks: [
         {
           id: "legacy-hero-1",
-          type: "Hero",
+          type: "Heading",
           version: 0,
           props: {
             heading: "Legacy Hero Heading",
@@ -67,8 +67,8 @@ describe("renderBlockDocument", () => {
     expect(result.success).toBe(true);
     expect(result.blocks).toHaveLength(1);
     expect(result.blocks[0]?.version).toBe(1);
-    expect(result.blocks[0]?.props.title).toBe("Legacy Hero Heading");
-    expect(result.blocks[0]?.props.alignment).toBe("center");
+    expect(result.blocks[0]?.props.text).toBe("Legacy Hero Heading");
+    expect(result.blocks[0]?.props.align).toBe("center");
   });
 
   it("handles frozen block document inputs without throwing", () => {
@@ -77,19 +77,11 @@ describe("renderBlockDocument", () => {
       blocks: Object.freeze([
         Object.freeze({
           id: "frozen-hero",
-          type: "Hero",
+          type: "Heading",
           version: 1,
           props: Object.freeze({
-            title: "Frozen Hero",
-            alignment: "center",
-          }),
-        }),
-        Object.freeze({
-          id: "frozen-rich-text",
-          type: "RichText",
-          version: 1,
-          props: Object.freeze({
-            content: "<p>Frozen text<script>alert(1)</script></p>",
+            text: "Frozen Hero",
+            align: "center",
           }),
         }),
       ]),
@@ -97,14 +89,12 @@ describe("renderBlockDocument", () => {
 
     const result = renderBlockDocument(doc);
     expect(result.success).toBe(true);
-    expect(result.blocks).toHaveLength(2);
-    expect(result.blocks[0]?.props.title).toBe("Frozen Hero");
-    expect(result.blocks[1]?.props.content).toContain("<p>Frozen text</p>");
-    expect(result.blocks[1]?.props.content).not.toContain("<script");
+    expect(result.blocks).toHaveLength(1);
+    expect(result.blocks[0]?.props.text).toBe("Frozen Hero");
   });
 
   it("catches migrator exceptions and returns structured validation errors", () => {
-    registerBlockMigration("Hero", 0, () => {
+    registerBlockMigration("Heading", 0, () => {
       throw new Error("Migrator failure: database timeout");
     });
 
@@ -113,7 +103,7 @@ describe("renderBlockDocument", () => {
       blocks: [
         {
           id: "failing-hero",
-          type: "Hero",
+          type: "Heading",
           version: 0,
           props: { heading: "Old Heading" },
         },
@@ -186,30 +176,4 @@ describe("renderBlockDocument", () => {
     ]);
   });
 
-  it("sanitizes rich text blocks during render", () => {
-    const doc = {
-      version: 1,
-      blocks: [
-        {
-          id: "rich-1",
-          type: "RichText",
-          version: 1,
-          props: {
-            content: '<h2>Header</h2><script>alert("xss")</script><p onclick="steal()">Body text</p>',
-          },
-        },
-      ],
-    };
-
-    const result = renderBlockDocument(doc);
-    expect(result.success).toBe(true);
-    expect(result.blocks).toHaveLength(1);
-    const content = result.blocks[0]?.props.content as string;
-    expect(content).toContain("<h2>Header</h2>");
-    expect(content).toContain("<p>Body text</p>");
-    expect(content).not.toContain("<script");
-    expect(content).not.toContain("alert");
-    expect(content).not.toContain("onclick");
-    expect(content).not.toContain("steal");
-  });
 });

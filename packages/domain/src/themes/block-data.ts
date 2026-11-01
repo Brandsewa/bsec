@@ -703,34 +703,28 @@ export async function resolveBlockData(
   ctx: TenantContext,
   blocks: BlockInstance[],
 ): Promise<Record<string, BlockData>> {
-  const productBlocks: BlockInstance[] = [];
   const collectionBlocks: BlockInstance[] = [];
   const showcaseBlocks: BlockInstance[] = [];
   const headerBlocks: BlockInstance[] = [];
   const footerBlocks: BlockInstance[] = [];
-  const fileBlocks: BlockInstance[] = [];
   const blogBlocks: BlockInstance[] = [];
   const reviewBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
     if (b.type === "ProductShowcase") showcaseBlocks.push(b);
-    else if (b.type === "ProductGrid" || b.type === "ProductCarousel") productBlocks.push(b);
     else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") collectionBlocks.push(b);
     else if (b.type === "SiteHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
-    else if (b.type === "FileDownload") fileBlocks.push(b);
-    else if (b.type === "BlogPosts" || b.type === "BlogShowcase") blogBlocks.push(b);
+    else if (b.type === "BlogShowcase") blogBlocks.push(b);
     else if (b.type === "ReviewsMarquee") reviewBlocks.push(b);
   });
 
   if (
-    productBlocks.length === 0 &&
     collectionBlocks.length === 0 &&
     showcaseBlocks.length === 0 &&
     headerBlocks.length === 0 &&
     footerBlocks.length === 0 &&
-    fileBlocks.length === 0 &&
     blogBlocks.length === 0 &&
     reviewBlocks.length === 0
   ) {
@@ -744,16 +738,6 @@ export async function resolveBlockData(
     const out: Record<string, BlockData> = {};
 
     if (catalogEnabled) {
-      for (const b of productBlocks) {
-        const rows = await loadProducts(tx, b.props);
-        const summaries = await buildProductSummaries(
-          tx,
-          rows.map((r) => r.id),
-          rows,
-        );
-        out[b.id] = { kind: "products", products: summaries.map(toBlockProduct) };
-      }
-
       for (const b of showcaseBlocks) {
         out[b.id] = await resolveShowcase(tx, b);
       }
@@ -809,38 +793,6 @@ export async function resolveBlockData(
         const cols = footerData[b.id];
         if (cols) {
           out[b.id] = { kind: "footer-menus", columns: cols };
-        }
-      }
-    }
-
-    if (fileBlocks.length > 0) {
-      const fileMediaIds = fileBlocks
-        .map((b) => b.props.mediaId)
-        .filter((id): id is string => typeof id === "string" && Boolean(id));
-      if (fileMediaIds.length > 0) {
-        const rows = await tx
-          .select({
-            id: schema.media.id,
-            filename: schema.media.filename,
-            mime: schema.media.mime,
-            bytes: schema.media.bytes,
-            storageKey: schema.media.storageKey,
-          })
-          .from(schema.media)
-          .where(inArray(schema.media.id, fileMediaIds));
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        for (const b of fileBlocks) {
-          const mediaId = typeof b.props.mediaId === "string" ? b.props.mediaId : "";
-          const row = byId.get(mediaId);
-          if (row) {
-            out[b.id] = {
-              kind: "file",
-              filename: row.filename ?? "download",
-              mime: row.mime,
-              bytes: row.bytes,
-              url: publicMediaUrl(row.storageKey) ?? undefined,
-            };
-          }
         }
       }
     }

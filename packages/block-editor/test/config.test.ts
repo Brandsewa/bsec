@@ -53,15 +53,15 @@ describe("dataSignature", () => {
   const block = (id: string, type: BlockInstance["type"], props: Record<string, unknown>): BlockInstance => ({ id, type, version: 1, props });
 
   it("ignores text edits but changes when products or images change", () => {
-    const base = [block("a", "ProductCarousel", { title: "One", source: "newest", limit: 8 }), block("h", "Heading", { text: "Hi" })];
-    const textEdit = [block("a", "ProductCarousel", { title: "Renamed", source: "newest", limit: 8 }), block("h", "Heading", { text: "Changed" })];
+    const base = [block("a", "ProductShowcase", { title: "One", tabs: [{ label: "A", source: "newest" }], limit: 8 }), block("h", "Heading", { text: "Hi" })];
+    const textEdit = [block("a", "ProductShowcase", { title: "Renamed", tabs: [{ label: "A", source: "newest" }], limit: 8 }), block("h", "Heading", { text: "Changed" })];
     expect(dataSignature(textEdit)).toBe(dataSignature(base));
-    expect(dataSignature([block("a", "ProductCarousel", { title: "One", source: "featured", limit: 8 })])).not.toBe(dataSignature(base));
+    expect(dataSignature([block("a", "ProductShowcase", { title: "One", tabs: [{ label: "A", source: "featured" }], limit: 8 })])).not.toBe(dataSignature(base));
     expect(dataSignature([...base, block("i", "Image", { mediaId: "m1" })])).not.toBe(dataSignature(base));
   });
 
   it("sees blocks nested inside layout blocks", () => {
-    const nested = [block("s", "Section", { content: [block("a", "ProductGrid", { title: "x", source: "manual", productSlugs: ["a"] })] })];
+    const nested = [block("s", "Section", { content: [block("a", "ProductShowcase", { title: "x", tabs: [{ label: "A", source: "collection", collectionSlug: "a" }] })] })];
     expect(dataSignature(nested)).toContain('"a"');
   });
 });
@@ -73,7 +73,7 @@ describe("block picker by page kind", () => {
   it("header and footer pages only offer chrome-appropriate blocks", () => {
     expect([...offered("header")].sort()).toEqual(["Banner", "SiteHeader"]);
     expect(offered("footer")).toContain("SiteFooter");
-    expect(offered("footer")).not.toContain("ProductGrid");
+    expect(offered("footer")).not.toContain("ProductShowcase");
   });
 
   it("the product core is only offered on the product page, the collection core on the collection page", () => {
@@ -87,14 +87,14 @@ describe("block picker by page kind", () => {
     }
   });
 
-  it("the blog cores are offered only on their own page, the widget everywhere but header and footer", () => {
+  it("the blog cores are offered only on their own page, the Blog slider everywhere but header and footer", () => {
     expect(blockAllowed("BlogListing", "blogArchive")).toBe(true);
     expect(blockAllowed("BlogListing", "blogPost")).toBe(false);
     expect(blockAllowed("BlogPostContent", "blogPost")).toBe(true);
     expect(blockAllowed("BlogPostContent", "home")).toBe(false);
-    expect(blockAllowed("BlogPosts", "home")).toBe(true);
-    expect(blockAllowed("BlogPosts", "product")).toBe(true);
-    expect(blockAllowed("BlogPosts", "header")).toBe(false);
+    expect(blockAllowed("BlogShowcase", "home")).toBe(true);
+    expect(blockAllowed("BlogShowcase", "product")).toBe(true);
+    expect(blockAllowed("BlogShowcase", "header")).toBe(false);
   });
 
   it("every block is offered somewhere", () => {

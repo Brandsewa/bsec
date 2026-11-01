@@ -161,29 +161,12 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const media = template?.renderData?.media ?? {};
   // "Related" product carousels are resolved for this product and laid over the theme page's data.
   // "You may also like" always looks like the home page's product carousel and lists products related to this one: the home
-  // carousel's card, arrows and dots settings are copied onto it, and an older plain Product carousel on this page is
-  // replaced by that related carousel. The product page keeps its own heading, subtitle and count. The theme's "Reviews"
+  // carousel's card, arrows and dots settings are copied onto it. The product page keeps its own heading, subtitle and count. The theme's "Reviews"
   // block is only a heading placeholder (the real reviews are drawn below the product's own blocks), so it is left out.
   const homeDesign = template ? await getCachedStorefrontHomePage(tenantId, marketId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
   const adaptedBlocks = (template?.blocks ?? [])
     .filter((b) => b.type !== "Reviews")
     .map((b) => {
-      if (b.type === "ProductCarousel") {
-        const title = typeof b.props["title"] === "string" && b.props["title"] ? (b.props["title"] as string) : "You may also like";
-        const limit = typeof b.props["limit"] === "number" ? (b.props["limit"] as number) : 10;
-        return {
-          ...b,
-          type: "ProductShowcase" as const,
-          version: 1,
-          props: ProductShowcaseSchema.parse({
-            ...(homeDesign ?? {}),
-            title,
-            subtitle: typeof b.props["subtitle"] === "string" ? b.props["subtitle"] : "",
-            tabs: [{ label: "Related", source: "related", collectionSlug: "" }],
-            limit: Math.max(2, Math.min(24, limit)),
-          }) as Record<string, unknown>,
-        };
-      }
       const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<{ source?: string }>) : [];
       if (b.type !== "ProductShowcase" || !homeDesign || !tabs.some((t) => t.source === "related")) return b;
       const keep = { title: b.props["title"], subtitle: b.props["subtitle"], tabs: b.props["tabs"], limit: b.props["limit"] };

@@ -1,7 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import type { CSSProperties, ReactNode, ElementType } from "react";
-import { sanitizeRichText } from "./sanitize.ts";
 import { parseMarkdownToHtml } from "./markdown.ts";
 import type {
   BlockProduct,
@@ -40,10 +39,6 @@ const mediaSrc = (ctx: RenderContext | undefined, id: string | undefined): strin
 const isExternal = (href: string) => /^https?:\/\//i.test(href);
 const rel = (href: string, newTab?: boolean) =>
   newTab || isExternal(href) ? "noopener noreferrer" : undefined;
-
-function Actions({ children }: { children: ReactNode }) {
-  return <div className="bsb-actions">{children}</div>;
-}
 
 /** Storefront prices are minor units of the shopper's market currency (ADR-040); INR with en-IN when the host gives no market. */
 const money = (minor: number, ctx?: RenderContext) => {
@@ -89,73 +84,6 @@ function SectionHead({
       </div>
       {action}
     </div>
-  );
-}
-
-export function HeroView({ props, ctx }: A<R.HeroProps>): ReactNode {
-  const detail = props.backgroundMediaId ? ctx?.mediaDetails?.(props.backgroundMediaId) : null;
-  const bg = detail?.url ?? mediaSrc(ctx, props.backgroundMediaId);
-  const bgImg = bg
-    ? mediaImage(
-        detail
-          ? {
-              url: bg,
-              width: detail.width,
-              height: detail.height,
-              focalX: detail.focalX,
-              focalY: detail.focalY,
-              dominantColor: detail.dominantColor,
-              derivatives: detail.derivatives,
-            }
-          : { url: bg },
-        { sizes: "100vw" },
-      )
-    : null;
-  const ctaText = props.ctaText ?? props.buttonText;
-  const ctaLink = props.ctaLink ?? props.buttonUrl;
-  return (
-    <section
-      className={cx("bsb bs-block-hero bsb-hero", !bg && `bsb-tone-${props.tone}`)}
-      style={{ backgroundColor: bgImg?.dominantColor ?? undefined }}
-    >
-      {bgImg ? (
-        <>
-          <img
-            className="bsb-hero-bg"
-            src={bgImg.src}
-            srcSet={bgImg.srcSet}
-            sizes={bgImg.sizes}
-            alt=""
-            style={{ objectPosition: bgImg.objectPosition }}
-          />
-          <div className="bsb-hero-scrim" style={{ opacity: props.overlayOpacity / 100 }} />
-        </>
-      ) : null}
-      <div className={cx("bsb-hero-inner", !bg && "bsb-no-media")}>
-        <div className={cx("bsb-hero-copy", `bsb-align-${props.alignment}`)}>
-          {props.eyebrow ? <p className="bsb-eyebrow">{props.eyebrow}</p> : null}
-          <h1 className="bsb-heading bsb-h-xl">{props.title}</h1>
-          {props.subtitle ? (
-            <p style={{ fontSize: "1.125rem", lineHeight: 1.55, margin: "1rem 0 0", opacity: 0.92 }}>{props.subtitle}</p>
-          ) : null}
-          {ctaText ? (
-            <div
-              className="bsb-actions"
-              style={{ marginTop: "1.75rem", justifyContent: props.alignment === "center" ? "center" : props.alignment === "right" ? "flex-end" : "flex-start" }}
-            >
-              <a href={ctaLink || "#"} className="bsb-btn bsb-btn-lg" style={{ background: "#fff", color: "#0f172a", borderColor: "#fff" }}>
-                {ctaText}
-              </a>
-              {props.secondaryCtaText ? (
-                <a href={props.secondaryCtaLink || "#"} className="bsb-btn bsb-btn-lg" style={{ background: "transparent", color: "inherit", borderColor: "currentColor" }}>
-                  {props.secondaryCtaText}
-                </a>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -209,78 +137,6 @@ export function BannerView({ props, ctx }: A<R.BannerProps>): ReactNode {
   return rotating && ctx?.renderBanner ? <>{ctx.renderBanner({ children: bar })}</> : bar;
 }
 
-function defaultCard(p: BlockProduct, o: { showPrice: boolean; showRating: boolean }, ctx?: RenderContext): ReactNode {
-  const img = p.imageUrl ?? mediaSrc(ctx, p.imageMediaId);
-  return (
-    <a className="bsb-card" href={`/products/${p.slug}`}>
-      <div className="bsb-card-media">
-        <img src={img ?? PLACEHOLDER_IMAGE_URL} alt={img ? (p.imageAlt ?? p.title) : ""} loading="lazy" />
-      </div>
-      <div className="bsb-card-body">
-        <h3 className="bsb-card-title">{p.title}</h3>
-        {o.showRating && p.ratingCount ? (
-          <div style={{ fontSize: "0.8125rem" }}>
-            <Stars value={Number(p.ratingAvg ?? 0)} /> <strong>{Number(p.ratingAvg ?? 0).toFixed(1)}</strong> <span className="bsb-muted">({p.ratingCount})</span>
-          </div>
-        ) : null}
-        {o.showPrice ? (
-          <div className="bsb-price">
-            {p.priceOnRequest ? (
-              <span className="bsb-muted">Price on request</span>
-            ) : (
-              <>
-                {money(p.priceMin, ctx)}
-                {p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? <s>{money(p.compareAtPriceMin, ctx)}</s> : null}
-              </>
-            )}
-          </div>
-        ) : null}
-      </div>
-    </a>
-  );
-}
-
-function productsFor(ctx: RenderContext | undefined, blockId?: string): BlockProduct[] {
-  const d = blockId ? ctx?.data?.[blockId] : undefined;
-  return d && d.kind === "products" ? d.products : [];
-}
-
-function ProductList({
-  products,
-  ctx,
-  showPrice,
-  showRating,
-}: {
-  products: BlockProduct[];
-  ctx: RenderContext | undefined;
-  showPrice: boolean;
-  showRating: boolean;
-}) {
-  return products.map((p) => (
-    <div key={p.id}>
-      {ctx?.renderProductCard ? ctx.renderProductCard(p, { showPrice, showRating }) : defaultCard(p, { showPrice, showRating }, ctx)}
-    </div>
-  ));
-}
-
-export function ProductGridView({ props, ctx }: A<R.ProductGridProps>): ReactNode {
-  const products = productsFor(ctx, ctx?.blockId);
-  return (
-    <section className={cx("bsb bs-block-product-grid bsb-py-lg", `bsb-tone-${props.tone}`)}>
-      <div className="bsb-w bsb-w-wide">
-        <SectionHead title={props.title} subtitle={props.subtitle} align="center" />
-        {products.length === 0 ? (
-          <p className="bsb-muted bsb-align-center" data-testid="product-grid-empty">No products to show yet.</p>
-        ) : (
-          <div className="bsb-grid bsb-gap-md" data-testid="product-grid" style={{ "--cols": Number(props.columns), "--cols-m": 2 } as CSSProperties}>
-            <ProductList products={products} ctx={ctx} showPrice={props.showPrice} showRating={props.showRating} />
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): ReactNode {
   const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
   const collections = d && d.kind === "collections" ? d.collections : [];
@@ -313,115 +169,11 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
   );
 }
 
-export function ProductCarouselView({ props, ctx }: A<R.ProductCarouselProps>): ReactNode {
-  const products = productsFor(ctx, ctx?.blockId);
-  return (
-    <section className={cx("bsb bs-block-product-carousel bsb-py-lg", `bsb-tone-${props.tone}`)}>
-      <div className="bsb-w bsb-w-wide">
-        <SectionHead
-          title={props.title}
-          subtitle={props.subtitle}
-          action={
-            props.viewAllLabel ? (
-              <a className="bsb-link" href={props.viewAllHref || "/collections/all"}>
-                {props.viewAllLabel} →
-              </a>
-            ) : undefined
-          }
-        />
-        {products.length === 0 ? (
-          <p className="bsb-muted">No products to show yet.</p>
-        ) : (
-          <div className="bsb-carousel" style={{ "--cols": Number(props.columns) } as CSSProperties}>
-            <ProductList products={products} ctx={ctx} showPrice={props.showPrice} showRating={props.showRating} />
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function QuoteCard({ item, ctx }: { item: R.TestimonialsProps["items"][number]; ctx: RenderContext | undefined }) {
-  const avatar = mediaSrc(ctx, item.avatarMediaId);
-  return (
-    <figure className="bsb-quote">
-      <Stars value={item.rating} />
-      <blockquote style={{ margin: 0, lineHeight: 1.6 }}>“{item.quote}”</blockquote>
-      <figcaption className="bsb-person">
-        {avatar ? (
-          <img className="bsb-avatar" src={avatar} alt="" loading="lazy" width={36} height={36} />
-        ) : (
-          <span className="bsb-avatar" aria-hidden>{item.author.slice(0, 1).toUpperCase()}</span>
-        )}
-        <span>
-          {item.author}
-          {item.role ? <span className="bsb-muted" style={{ display: "block", fontWeight: 400, fontSize: "0.75rem" }}>{item.role}</span> : null}
-        </span>
-      </figcaption>
-    </figure>
-  );
-}
-
-export function TestimonialsView({ props, ctx }: A<R.TestimonialsProps>): ReactNode {
-  const items = props.items;
-  return (
-    <section className={cx("bsb bs-block-testimonials bsb-py-lg", `bsb-tone-${props.tone}`)}>
-      <div className="bsb-w bsb-w-wide">
-        <SectionHead title={props.title} align="center" />
-        {props.layout === "single" ? (
-          <div style={{ maxWidth: "44rem", margin: "0 auto" }}>
-            {items[0] ? <QuoteCard item={items[0]} ctx={ctx} /> : null}
-          </div>
-        ) : props.layout === "carousel" ? (
-          <div className="bsb-carousel" style={{ "--cols": 3 } as CSSProperties}>
-            {items.map((it, i) => (
-              <div key={i}><QuoteCard item={it} ctx={ctx} /></div>
-            ))}
-          </div>
-        ) : (
-          <div className="bsb-grid bsb-gap-md" style={{ "--cols": 3, "--cols-m": 1 } as CSSProperties}>
-            {items.map((it, i) => (
-              <QuoteCard key={i} item={it} ctx={ctx} />
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export function ReviewsView({ props }: A<R.ReviewsProps>): ReactNode {
   return (
     <section className="bsb bs-block-reviews bsb-py-lg">
       <div className="bsb-w bsb-w-default">
         <SectionHead title={props.title} />
-      </div>
-    </section>
-  );
-}
-
-export function RichTextView({ props }: A<R.RichTextProps>): ReactNode {
-  const customStyle = bricksElementStyle(props);
-  return (
-    <section
-      className={cx("bsb bs-block-richtext brxe-text bsb-py-lg bsb-w bsb-w-default bsb-richtext", `bsb-align-${props.alignment}`)}
-      style={customStyle}
-      dangerouslySetInnerHTML={{ __html: sanitizeRichText(props.content) }}
-    />
-  );
-}
-
-export function FaqView({ props }: A<R.FAQProps>): ReactNode {
-  return (
-    <section className="bsb bs-block-faq bsb-py-lg">
-      <div className="bsb-w bsb-w-narrow bsb-faq">
-        <SectionHead title={props.title} align="center" />
-        {props.items.map((it, i) => (
-          <details key={i}>
-            <summary>{it.question}</summary>
-            <p className="bsb-muted" style={{ margin: "0.6rem 0 0" }}>{it.answer}</p>
-          </details>
-        ))}
       </div>
     </section>
   );
@@ -483,35 +235,6 @@ export function GalleryView({ props, ctx }: A<R.GalleryProps>): ReactNode {
   );
 }
 
-export function NewsletterView({ props }: A<R.NewsletterProps>): ReactNode {
-  return (
-    <section className="bsb bs-block-newsletter bsb-tone-surface bsb-py-lg bsb-align-center">
-      <div className="bsb-w bsb-w-narrow">
-        <h2 className="bsb-heading bsb-h-lg">{props.title}</h2>
-        {props.subtitle ? <p className="bsb-muted">{props.subtitle}</p> : null}
-        <NewsletterForm placeholder={props.placeholder} buttonLabel={props.buttonText} />
-        {/* The shared form also posts to the store newsletter; this block's own button used to go nowhere. */}
-      </div>
-    </section>
-  );
-}
-
-
-export function UspStripView({ props }: A<R.UspStripProps>): ReactNode {
-  return (
-    <section className="bsb bs-block-usp-strip bsb-tone-surface bsb-py-md" style={{ borderBlock: "1px solid var(--b)" }}>
-      <div className="bsb-w bsb-w-wide bsb-grid bsb-gap-md" style={{ "--cols": Math.min(props.items.length, 4), "--cols-m": 2 } as CSSProperties}>
-        {props.items.map((it, i) => (
-          <div key={i} className="bsb-usp">
-            <span className="bsb-icon"><SvgIcon name={it.icon} px={28} themed /></span>
-            <div style={{ fontWeight: 600, fontSize: "0.875rem", marginTop: "0.4rem" }}>{it.title}</div>
-            <div className="bsb-muted" style={{ fontSize: "0.75rem", marginTop: "0.2rem" }}>{it.description}</div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 /* ----------------------------- layout ----------------------------- */
 
@@ -819,41 +542,6 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
   );
 }
 
-export function GridView({ props, children }: A<R.GridProps>): ReactNode {
-  return (
-    <Slot
-      className={cx("bsb bsb-grid", `bsb-gap-${props.gap}`)}
-      style={{ "--cols": props.columns, "--cols-m": props.columnsMobile } as CSSProperties}
-    >
-      {children}
-    </Slot>
-  );
-}
-
-export function FlexRowView({ props, children }: A<R.FlexRowProps>): ReactNode {
-  return (
-    <Slot className={cx("bsb bsb-flex-row", `bsb-gap-${props.gap}`, `bsb-items-${props.alignItems}`, `bsb-justify-${props.justify}`)}>
-      {children}
-    </Slot>
-  );
-}
-
-export function FlexColumnView({ props, children }: A<R.FlexColumnProps>): ReactNode {
-  return <Slot className={cx("bsb bsb-flex-col", `bsb-gap-${props.gap}`, `bsb-items-${props.alignItems}`)}>{children}</Slot>;
-}
-
-export function SpacerView({ props }: A<R.SpacerProps>): ReactNode {
-  return <div className={cx("bsb", `bsb-spacer-${props.size}`)} aria-hidden />;
-}
-
-export function DividerView({ props }: A<R.DividerProps>): ReactNode {
-  return (
-    <div className={cx("bsb bsb-w", `bsb-w-${props.width}`)}>
-      <hr className="bsb-divider" />
-    </div>
-  );
-}
-
 /* ----------------------------- content ---------------------------- */
 
 export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
@@ -1106,71 +794,6 @@ export function VideoView({ props, ctx }: A<R.VideoProps>): ReactNode {
   );
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatMimeLabel(mime: string, filename?: string): string {
-  if (mime === "application/pdf" || filename?.endsWith(".pdf")) return "PDF";
-  if (mime.includes("word") || filename?.endsWith(".docx") || filename?.endsWith(".doc")) return "DOC";
-  if (mime.includes("sheet") || mime.includes("excel") || filename?.endsWith(".xlsx") || filename?.endsWith(".csv")) return "SHEET";
-  if (mime.includes("zip") || mime.includes("tar") || mime.includes("compressed")) return "ZIP";
-  if (mime.startsWith("audio/")) return "AUDIO";
-  if (mime.startsWith("image/")) return "IMAGE";
-  if (mime.startsWith("video/")) return "VIDEO";
-  return "FILE";
-}
-
-export function FileDownloadView({ props, ctx }: A<R.FileDownloadProps>): ReactNode {
-  const fileUrl = props.mediaId ? mediaSrc(ctx, props.mediaId) : null;
-  const blockData = ctx?.blockId && ctx.data ? ctx.data[ctx.blockId] : undefined;
-  const fileData = blockData && blockData.kind === "file" ? blockData : undefined;
-  const mediaDetails = props.mediaId && ctx?.mediaDetails ? ctx.mediaDetails(props.mediaId) : undefined;
-
-  if (!props.mediaId) {
-    return <div className="bsb bsb-placeholder">Select a file to download</div>;
-  }
-
-  const downloadUrl = props.mediaId ? `/media/${props.mediaId}/download` : (fileUrl || fileData?.url || mediaDetails?.url);
-  const filename = fileData?.filename || mediaDetails?.filename || "download";
-  const mime = fileData?.mime || mediaDetails?.mime || "application/octet-stream";
-  const bytes = fileData?.bytes ?? mediaDetails?.bytes;
-  const typeLabel = formatMimeLabel(mime, filename);
-  const sizeLabel = typeof bytes === "number" ? formatFileSize(bytes) : undefined;
-  const metaText = [typeLabel, sizeLabel].filter(Boolean).join(", ");
-  const ariaLabel = `${props.label}${sizeLabel ? ` (${sizeLabel})` : ""}`;
-
-  return (
-    <div className="bsb">
-      <a
-        className="bsb-file-download"
-        href={downloadUrl ?? "#"}
-        download={filename}
-        aria-label={ariaLabel}
-      >
-        <div className="bsb-file-download-content">
-          <div className="bsb-file-download-icon" aria-hidden="true">
-            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>{typeLabel}</span>
-          </div>
-          <div className="bsb-file-download-info">
-            <span className="bsb-file-download-label">{props.label}</span>
-            {props.description ? <span className="bsb-file-download-desc">{props.description}</span> : null}
-            <span className="bsb-file-download-meta">
-              {filename} {metaText ? `• ${metaText}` : ""}
-            </span>
-          </div>
-        </div>
-        <div className="bsb-file-download-action" aria-hidden="true">
-          <span>Download</span>
-          <span style={{ fontSize: "14px" }}>↓</span>
-        </div>
-      </a>
-    </div>
-  );
-}
-
 export function ButtonView({ props }: A<R.ButtonProps>): ReactNode {
   const styleType = props.styleType || "theme";
   const customStyle = bricksElementStyle(props, { defaultDisplay: "inline-flex" });
@@ -1236,61 +859,6 @@ export function ButtonView({ props }: A<R.ButtonProps>): ReactNode {
         {iconPos === "right" && iconEl}
       </a>
     </div>
-  );
-}
-
-const ICON_PX = { sm: 20, md: 32, lg: 48 } as const;
-
-export function IconView({ props }: A<R.IconProps>): ReactNode {
-  return (
-    <div className={cx("bsb", `bsb-align-${props.align}`)}>
-      <span className="bsb-icon">
-        {props.size && props.size !== "theme" ? <SvgIcon name={props.name} px={ICON_PX[props.size]} /> : <SvgIcon name={props.name} px={ICON_PX.md} themed />}
-      </span>
-    </div>
-  );
-}
-
-export function LinkView({ props }: A<R.LinkProps>): ReactNode {
-  return (
-    <a
-      className="bsb bsb-link"
-      href={props.href}
-      target={props.newTab ? "_blank" : undefined}
-      rel={rel(props.href, props.newTab)}
-    >
-      {props.label}
-    </a>
-  );
-}
-
-export function CallToActionView({ props, ctx }: A<R.CallToActionProps>): ReactNode {
-  const bg = mediaSrc(ctx, props.backgroundMediaId);
-  return (
-    <section className={cx("bsb bs-block-call-to-action bsb-py-xl", !bg && `bsb-tone-${props.tone}`, bg && "bsb-on-media", `bsb-align-${props.align}`)} style={{ position: "relative", overflow: "hidden", color: bg ? "#fff" : undefined }}>
-      {bg ? (
-        <>
-          <img className="bsb-hero-bg" src={bg} alt="" loading="lazy" />
-          <div className="bsb-hero-scrim" style={{ opacity: props.overlayOpacity / 100 }} />
-        </>
-      ) : null}
-      <div className="bsb-w bsb-w-default" style={{ position: "relative" }}>
-        <h2 className="bsb-heading bsb-h-lg">{props.heading}</h2>
-        {props.text ? <p style={{ fontSize: "1.0625rem", lineHeight: 1.6, margin: "0.9rem 0 0", opacity: 0.92 }}>{props.text}</p> : null}
-        {props.primaryLabel || props.secondaryLabel ? (
-          <div style={{ marginTop: "1.75rem", display: "flex", justifyContent: props.align === "center" ? "center" : "flex-start" }}>
-            <Actions>
-              {props.primaryLabel ? (
-                <a href={props.primaryHref || "#"} className="bsb-btn bsb-btn-primary bsb-btn-lg">{props.primaryLabel}</a>
-              ) : null}
-              {props.secondaryLabel ? (
-                <a href={props.secondaryHref || "#"} className="bsb-btn bsb-btn-outline bsb-btn-lg">{props.secondaryLabel}</a>
-              ) : null}
-            </Actions>
-          </div>
-        ) : null}
-      </div>
-    </section>
   );
 }
 

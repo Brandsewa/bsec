@@ -54,9 +54,9 @@ const mockPageData = {
       blocks: [
         {
           id: "b1",
-          type: "Hero" as const,
+          type: "Heading" as const,
           version: 1,
-          props: { title: "About Hero Headline" },
+          props: { text: "About Hero Headline" },
         },
       ],
     },

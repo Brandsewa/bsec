@@ -65,22 +65,13 @@ export const MODERN_TEMPLATE_COLLECTION: BlockInstance[] = [
     showCategoryBadge: true,
     hoverSecondImage: true,
   }),
-  b("mc-collection-usp", "UspStrip", { items: TRUST_ITEMS }),
-  b("mc-collection-picks", "ProductCarousel", {
+  b("mc-collection-usp", "TrustStrip", { items: TRUST_ITEMS }),
+  b("mc-collection-picks", "ProductShowcase", {
     title: "Customer favourites",
     subtitle: "Most loved across the store",
-    source: "featured",
+    tabs: [{ label: "Customer favourites", source: "featured", collectionSlug: "" }],
     limit: 8,
-    columns: "4",
-    showPrice: true,
-    showRating: true,
     tone: "surface",
-  }),
-  b("mc-collection-news", "Newsletter", {
-    title: "Get first access to new arrivals",
-    subtitle: "Join the list for launches and subscriber-only offers.",
-    buttonText: "Subscribe",
-    placeholder: "Your email address",
   }),
 ];
 
@@ -131,7 +122,7 @@ export const MODERN_TEMPLATE_PRODUCT: BlockInstance[] = [
 /** Collection archive: a heading and every published collection as a card grid. */
 export const MODERN_TEMPLATE_COLLECTIONS: BlockInstance[] = [
   b("mc-archive", "CollectionGrid", { title: "Shop by collection", subtitle: "Browse everything we sell", collectionSlugs: [], showAll: true, columns: "3" }),
-  b("mc-archive-usp", "UspStrip", { items: TRUST_ITEMS }),
+  b("mc-archive-usp", "TrustStrip", { items: TRUST_ITEMS }),
 ];
 
 /** Cart page: the cart first, reassurance under it, one row of discovery. */
@@ -149,16 +140,12 @@ export const MODERN_TEMPLATE_CART: BlockInstance[] = [
     stickyMobileCheckout: true,
     showContinueShopping: true,
   }),
-  b("mc-cart-usp", "UspStrip", { items: TRUST_ITEMS }),
-  b("mc-cart-more", "ProductCarousel", {
+  b("mc-cart-usp", "TrustStrip", { items: TRUST_ITEMS }),
+  b("mc-cart-more", "ProductShowcase", {
     title: "Complete your order",
     subtitle: "Popular add-ons from our store",
-    source: "featured",
+    tabs: [{ label: "Add-ons", source: "featured", collectionSlug: "" }],
     limit: 8,
-    columns: "4",
-    showPrice: true,
-    showRating: false,
-    tone: "default",
   }),
 ];
 
@@ -184,11 +171,10 @@ export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
  * itself when the store has no posts, so a new store shows no empty heading (ADR-033).
  */
 export const MODERN_TEMPLATE_HOME: BlockInstance[] = (() => {
-  const blog = b("mc-home-blog", "BlogPosts", { title: "From the blog", subtitle: "Guides, stories and news", count: 3, layout: "grid", columns: "3", viewAllLabel: "View all posts", hideWhenEmpty: true });
-  // The launch layout's static testimonials are replaced by Floating reviews (the store's own published reviews; it
-  // hides itself until the store has some). The launch template itself stays as migration 0015 stored it.
-  const reviews = b("mc-home-reviews", "ReviewsMarquee", { eyebrow: "Testimonials", title: "Loved by customers", description: "Real words from people who bought and tried our products.", tone: "surface" });
-  const base = LAUNCH_TEMPLATE_HOME.map((x) => (x.type === "Testimonials" ? reviews : x));
+  const blog = b("mc-home-blog", "BlogShowcase", { title: "From the blog", subtitle: "Guides, stories and news", count: 3, layout: "grid" });
+  // The launch layout already ends with Floating reviews (the store's own published reviews; it hides itself until the
+  // store has some); the blog section goes in front of them.
+  const base = LAUNCH_TEMPLATE_HOME;
   const at = base.findIndex((x) => x.type === "ReviewsMarquee");
   return at < 0 ? [...base, blog] : [...base.slice(0, at), blog, ...base.slice(at)];
 })();
@@ -201,7 +187,7 @@ export const MODERN_TEMPLATE_BLOG_ARCHIVE: BlockInstance[] = [
 /** Blog post: the post (the BlogPostContent core), then the shop again. */
 export const MODERN_TEMPLATE_BLOG_POST: BlockInstance[] = [
   b("mc-blog-post", "BlogPostContent", { showBreadcrumb: true, showCategory: true, showDate: true, showAuthor: true, showReadingTime: true, featuredImage: "above", contentWidth: "narrow", showToc: true, showShare: true, showRelated: true, relatedCount: 3, showPrevNext: true }),
-  b("mc-blog-post-usp", "UspStrip", { items: TRUST_ITEMS }),
+  b("mc-blog-post-usp", "TrustStrip", { items: TRUST_ITEMS }),
 ];
 
 /**

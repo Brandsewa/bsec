@@ -7,11 +7,16 @@ import {
   type BlockInstance,
   type BlockDocument,
 } from "./types.ts";
-import { sanitizeRichText } from "./sanitize.ts";
 import { isUuid } from "./media.ts";
 
 /** Retired block types. ProductInfoTabs (product Description / Shipping & returns tabs) was removed 2026-10-29. */
-const REMOVED_BLOCK_TYPES = new Set<string>(["ProductInfoTabs"]);
+const REMOVED_BLOCK_TYPES = new Set<string>([
+  "ProductInfoTabs",
+  // Old widgets retired for the Bricks layout elements and the brand widgets (2026-11-01). Saved pages that still held
+  // one drop it silently, like any removed type.
+  "Hero", "ProductGrid", "ProductCarousel", "Testimonials", "RichText", "FAQ", "Newsletter", "UspStrip", "Grid", "FlexRow",
+  "FlexColumn", "Spacer", "Divider", "FileDownload", "Icon", "Link", "CallToAction", "BlogPosts",
+]);
 
 export type ValidationError = {
   path: string;
@@ -157,20 +162,12 @@ function validateBlockList(
         ? { ...(rawBlock.props as Record<string, unknown>) }
         : {};
 
-    if (type === "RichText" && typeof props.content === "string") {
-      props.content = sanitizeRichText(props.content);
-    }
-
     if (type === "Video") {
       if (typeof props.mediaId === "string" && !isUuid(props.mediaId)) {
         delete props.mediaId;
       }
       if (typeof props.posterMediaId === "string" && !isUuid(props.posterMediaId)) {
         delete props.posterMediaId;
-      }
-    } else if (type === "FileDownload") {
-      if (typeof props.mediaId === "string" && !isUuid(props.mediaId)) {
-        delete props.mediaId;
       }
     }
 

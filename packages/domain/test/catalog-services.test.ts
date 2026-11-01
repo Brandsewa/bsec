@@ -376,9 +376,9 @@ describe("M2 Domain Services", () => {
         blocks: [
           {
             id: "b1",
-            type: "Hero",
+            type: "Heading",
             version: 1,
-            props: { title: "Welcome Home" },
+            props: { text: "Welcome Home" },
           },
         ],
       });
@@ -397,10 +397,10 @@ describe("M2 Domain Services", () => {
           blocks: [
             {
               id: "b1",
-              type: "Hero",
+              type: "Heading",
               version: 1,
               props: {
-                // missing title
+                // missing text
               },
             },
           ],
