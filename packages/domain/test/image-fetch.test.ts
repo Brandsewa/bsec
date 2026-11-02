@@ -70,3 +70,30 @@ describe("pinnedLookup", () => {
     expect(out).toEqual([[null, [{ address: "93.184.216.34", family: 4 }], undefined], [null, "2606:4700::1111", 6]]);
   });
 });
+
+describe("address fallback", () => {
+  it("tries IPv4 first and moves to the next address when a connection fails", async () => {
+    const tried: string[] = [];
+    const img = await fetchImageSafely("https://cdn.example.com/a.png", {
+      resolve: async () => ["2606:4700::1111", "93.184.216.34", "93.184.216.35"],
+      transport: async (_u, ip) => {
+        tried.push(ip);
+        if (ip !== "93.184.216.35") throw Object.assign(new Error("connect"), { code: "ECONNREFUSED" });
+        return ok();
+      },
+    });
+    expect(tried).toEqual(["93.184.216.34", "93.184.216.35"]);
+    expect(img.mime).toBe("image/png");
+  });
+
+  it("names the network error code when every address fails", async () => {
+    await expect(
+      fetchImageSafely("https://cdn.example.com/a.png", {
+        resolve: publicDns,
+        transport: async () => {
+          throw Object.assign(new Error("boom"), { code: "ENETUNREACH" });
+        },
+      }),
+    ).rejects.toThrow(/the download failed \(ENETUNREACH\)/);
+  });
+});

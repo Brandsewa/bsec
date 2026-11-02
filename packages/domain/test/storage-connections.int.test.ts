@@ -370,3 +370,30 @@ describe("Platform Storage Connections (Real Database Integration)", () => {
     ).rejects.toThrow(/does not match file contents/i);
   });
 });
+
+describe("storage credentials this service cannot decrypt", () => {
+  it("says so instead of claiming storage is not set up", async () => {
+    const previous = process.env.TENANT_SECRETS_KEY;
+    const created = await createPlatformStorageConnection(rt, adminUserId, {
+      name: "R2 unreadable",
+      driver: "s3",
+      purpose: "public_media",
+      bucket: "unreadable-bucket",
+      region: "auto",
+      accessKeyId: "AKIAUNREADABLE000001",
+      secretAccessKey: "secret-that-the-worker-cannot-read",
+    });
+    await activatePlatformStorageConnection(rt, adminUserId, created.id);
+    invalidateStorageConnectionCache();
+    try {
+      // The worker in production without the key the web service used: a different master key cannot decrypt the saved keys.
+      process.env.TENANT_SECRETS_KEY = "f".repeat(64);
+      await expect(getActiveStorageDriver(rt._db.db, "public_media")).rejects.toThrow(/cannot read its saved credentials.*TENANT_SECRETS_KEY/);
+    } finally {
+      if (previous === undefined) delete process.env.TENANT_SECRETS_KEY;
+      else process.env.TENANT_SECRETS_KEY = previous;
+      invalidateStorageConnectionCache();
+      await rt._db.db.delete(schema.platformStorageConnections).where(eq(schema.platformStorageConnections.id, created.id));
+    }
+  });
+});
