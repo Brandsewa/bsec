@@ -273,7 +273,8 @@ afterAll(async () => {
 function everyProcedure(): string[] {
   const out: string[] = [];
   for (const [ns, procs] of Object.entries(platformContract as unknown as Record<string, Record<string, unknown>>)) {
-    for (const name of Object.keys(procs)) out.push(`${ns}.${name}`);
+    // Marketing's nested content procedures have their own suite (marketing.int.test.ts).
+    for (const [name, def] of Object.entries(procs)) if ("~orpc" in (def as object)) out.push(`${ns}.${name}`);
   }
   return out.sort();
 }

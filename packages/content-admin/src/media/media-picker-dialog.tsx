@@ -29,11 +29,11 @@ import {
   type MediaItem,
   type MediaKind,
 } from "@bs/contracts";
-import { orpc } from "../../lib/orpc.ts";
+import { orpc } from "../host.ts";
 import {
   mediaUploadQueue,
   type UploadQueueItem,
-} from "../../lib/media-upload-queue.ts";
+} from "./media-upload-queue.ts";
 import { formatBytes } from "./format.ts";
 import { MediaTile } from "./media-tile.tsx";
 import {

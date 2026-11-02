@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, FieldLabel, Input, MultiSelect, Switch, SimpleSelect, toast } from "@bs/ui";
 import type { ResourceCustomField } from "@bs/contracts";
-import { MediaField } from "../media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 

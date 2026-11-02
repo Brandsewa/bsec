@@ -2,6 +2,7 @@ import {
   evaluateStorefrontAccess,
   generateSitemapXml,
   getStorefrontSitemapUrls,
+  platformSiteBlogSitemap,
 } from "@bs/domain";
 import { MARKETING_PAGES } from "@/components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
       const items = [
         { loc: `${origin}/`, changefreq: "weekly" as const, priority: 1 },
         ...MARKETING_PAGES.map((p) => ({ loc: `${origin}${p.path}`, changefreq: "monthly" as const, priority: 0.6 })),
+        ...(await platformSiteBlogSitemap(server().rt._db.db, origin)),
       ];
       return new Response(generateSitemapXml(items), { status: 200, headers });
     }

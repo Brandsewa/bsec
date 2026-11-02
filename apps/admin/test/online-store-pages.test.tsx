@@ -65,13 +65,14 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
   });
 
   it("menus list page renders seeded menu in the table", async () => {
-    const { MenusPage } = await import("../src/routes/_store/online-store/menus.tsx");
+    await import("../src/lib/content-host.ts");
+    const { MenusScreen } = await import("@bs/content-admin/menus/MenusScreen.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const client = newClient();
     client.setQueryData(orpc.admin.menus.list.queryOptions().queryKey, [
       { id: MENU_ID, name: "Main menu", handle: "main-menu", kind: "navigation", itemCount: 2, createdAt: now, updatedAt: now },
     ]);
-    const html = await renderRouted(client, MenusPage);
+    const html = await renderRouted(client, MenusScreen);
     expect(html).toContain("Main menu");
     expect(html).toContain("main-menu");
     expect(html).toContain("Navigation");
@@ -80,11 +81,12 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
   });
 
   it("menus page shows an empty state when there are no menus", async () => {
-    const { MenusPage } = await import("../src/routes/_store/online-store/menus.tsx");
+    await import("../src/lib/content-host.ts");
+    const { MenusScreen } = await import("@bs/content-admin/menus/MenusScreen.tsx");
     const { orpc } = await import("../src/lib/orpc.ts");
     const client = newClient();
     client.setQueryData(orpc.admin.menus.list.queryOptions().queryKey, []);
-    const html = await renderRouted(client, MenusPage);
+    const html = await renderRouted(client, MenusScreen);
     expect(html).toContain("No menus found");
     expect(html).toContain("Add menu");
     expectNoSample(html);

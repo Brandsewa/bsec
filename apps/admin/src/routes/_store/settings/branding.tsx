@@ -11,7 +11,7 @@ import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from 
 import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { orpc } from "../../../lib/orpc.ts";
-import { MediaField } from "../../../components/media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 

@@ -17,6 +17,8 @@ import {
   KeyRound,
   LayoutDashboard,
   Megaphone,
+  FileText,
+  Menu,
   Layers,
   LogOut,
   Mail,
@@ -80,7 +82,11 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "Marketing",
-    items: [{ label: "Website", href: "/marketing", icon: Megaphone }],
+    items: [
+      { label: "Website", href: "/marketing", icon: Megaphone },
+      { label: "Navigation", href: "/marketing/navigation", icon: Menu },
+      { label: "Blogs", href: "/marketing/blog", icon: FileText },
+    ],
   },
   {
     label: "Operations & Support",
@@ -108,7 +114,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
   const groups = navGroups
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => !((i.href === "/staff" || i.href === "/marketing") && user.role === "platform_support")),
+      items: g.items.filter((i) => !((i.href === "/staff" || i.href.startsWith("/marketing")) && user.role === "platform_support")),
     }))
     .filter((g) => g.items.length > 0);
   const navigate = useNavigate();

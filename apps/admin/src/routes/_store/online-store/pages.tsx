@@ -39,7 +39,7 @@ import { useTableSelection } from "../../../components/data-table/use-table-sele
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { errorMessage } from "../../../lib/errors.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
-import { uploadMedia } from "../../../lib/upload-media.ts";
+import { uploadMedia } from "@bs/content-admin/media/upload-media.ts";
 
 const RESERVED_SLUGS = new Set([
   "api",

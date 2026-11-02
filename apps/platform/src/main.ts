@@ -79,6 +79,6 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     log.info({ signal }, "shutting down");
     clearInterval(sweepTimer);
-    server.close(() => void rt.close().then(() => process.exit(0)));
+    server.close(() => void Promise.all([rt.close(), contentRt?.close()]).then(() => process.exit(0)));
   });
 }

@@ -65,6 +65,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // bcom.si's own blog (ADR-042). `/blog` on a store still goes through the gate below.
+  if (isPlatformMarketingHost(hostname) && (pathname === "/blog" || pathname.startsWith("/blog/"))) {
+    return NextResponse.next();
+  }
+
   let access: {
     allowed: boolean;
     httpStatus: 200 | 404 | 503;

@@ -18,7 +18,7 @@ import {
   cn,
 } from "@bs/ui";
 import type { MediaItem, MediaKind } from "@bs/contracts";
-import { orpc } from "../../lib/orpc.ts";
+import { contentWriteAllowed, orpc } from "../host.ts";
 import { formatBytes, formatDuration } from "./format.ts";
 import { MediaPickerDialog } from "./media-picker-dialog.tsx";
 
@@ -51,6 +51,7 @@ export function MediaField({
     | undefined;
 
   const hasContentWrite =
+    contentWriteAllowed ||
     routeCtx?.store?.role === "store_owner" ||
     (routeCtx?.store?.permissions ?? []).includes("content.write");
 

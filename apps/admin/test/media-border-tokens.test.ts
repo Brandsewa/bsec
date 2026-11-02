@@ -9,12 +9,13 @@ import { describe, expect, it } from "vitest";
  * `border border-border` for cards and controls, `border-border/60` for dividers inside a card.
  */
 const root = path.resolve(__dirname, "..", "src");
+const mediaDir = path.resolve(__dirname, "..", "..", "..", "packages", "content-admin", "src", "media");
 const files = [
   path.join(root, "routes/_store/online-store/media.tsx"),
   ...fs
-    .readdirSync(path.join(root, "components/media"))
+    .readdirSync(mediaDir)
     .filter((f) => f.endsWith(".tsx"))
-    .map((f) => path.join(root, "components/media", f)),
+    .map((f) => path.join(mediaDir, f)),
 ];
 
 const BARE_BORDER = /(?<=[\s"'`])border(-[tblrxy])?(?=[\s"'`])/g;

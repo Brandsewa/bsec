@@ -653,6 +653,7 @@ function contractMutations(): string[] {
   const out: string[] = [];
   for (const [ns, procs] of Object.entries(platformContract as unknown as Record<string, Record<string, { "~orpc": { route: { method?: string } } }>>)) {
     for (const [name, def] of Object.entries(procs)) {
+      if (!("~orpc" in def)) continue; // nested Marketing content: marketing.int.test.ts, audited after commit (ADR-042)
       const method = def["~orpc"].route.method ?? "POST";
       if (method !== "GET" && !NOT_AUDITED.has(`${ns}.${name}`)) out.push(`${ns}.${name}`);
     }

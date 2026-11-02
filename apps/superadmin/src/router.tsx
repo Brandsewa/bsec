@@ -35,6 +35,11 @@ import { Promotions } from "./pages/Promotions.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
 import { Marketing } from "./pages/Marketing.tsx";
+import { BlogCategoriesScreen } from "@bs/content-admin/blog/BlogCategoriesScreen.tsx";
+import { BlogPostsScreen, validateBlogListSearch } from "@bs/content-admin/blog/BlogPostsScreen.tsx";
+import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
+import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
+import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
@@ -270,6 +275,64 @@ const marketingRoute = createRoute({
       <FormSectionSkeleton />
     </PageContainer>
   ),
+});
+
+const marketingPending = () => (
+  <PageContainer>
+    <PageHeaderSkeleton />
+    <DataTableSkeleton columns={4} rows={5} />
+  </PageContainer>
+);
+
+const marketingNavigationRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/navigation",
+  component: MenusScreen,
+  pendingComponent: marketingPending,
+});
+
+const marketingMenuRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/navigation/$handle",
+  component: function MarketingMenu() {
+    return <MenuEditorScreen handle={marketingMenuRoute.useParams().handle} />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog",
+  validateSearch: validateBlogListSearch,
+  component: function MarketingBlog() {
+    return <BlogPostsScreen search={marketingBlogRoute.useSearch()} />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogCategoriesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/categories",
+  component: BlogCategoriesScreen,
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogNewRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/new",
+  component: function MarketingBlogNew() {
+    return <PostForm />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogPostRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/$id",
+  component: function MarketingBlogPost() {
+    return <PostForm postId={marketingBlogPostRoute.useParams().id} />;
+  },
+  pendingComponent: marketingPending,
 });
 
 const templatesRoute = createRoute({
@@ -534,6 +597,12 @@ export const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([
     overviewRoute,
     marketingRoute,
+    marketingNavigationRoute,
+    marketingMenuRoute,
+    marketingBlogRoute,
+    marketingBlogCategoriesRoute,
+    marketingBlogNewRoute,
+    marketingBlogPostRoute,
     tenantsListRoute,
     tenantCreateRoute,
     tenantDetailRoute,

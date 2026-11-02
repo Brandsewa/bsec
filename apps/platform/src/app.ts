@@ -75,8 +75,49 @@ import {
   endSupportSession,
   listPlatformSupportSessions,
   runStoreExport,
+  createBlogCategory,
+  createBlogPost,
+  createBlogPreviewLink,
+  createMediaRecord,
+  createMenu,
+  deleteBlogCategory,
+  deleteBlogPost,
+  deleteMediaPermanent,
+  deleteMediaRecord,
+  deleteMenu,
+  duplicateBlogPost,
   enablePlatformSite,
+  findDuplicates,
+  getBlogPost,
+  getBlogSettings,
+  getMedia,
+  getMediaUsage,
+  getMenu,
   getPlatformSiteId,
+  listBlogCategories,
+  listBlogPosts,
+  listMedia,
+  listMenus,
+  listPages,
+  MAX_MEDIA_BYTES,
+  platformSiteContext,
+  previewBlogHtml,
+  publishBlogPost,
+  reorderBlogCategories,
+  replaceMedia,
+  replaceMediaDirect,
+  requestMediaUpload,
+  restoreMedia,
+  scheduleBlogPost,
+  trashMedia,
+  unpublishBlogPost,
+  updateBlogCategory,
+  updateBlogPost,
+  updateBlogSettings,
+  updateMedia,
+  updateMenu,
+  uploadMediaDirect,
+  writePlatformAudit,
   verifyExportSignature,
   getPlatformSystemData,
   updatePlatformSettings,
@@ -302,8 +343,99 @@ export const requireStaff = (min: PlatformRole = "platform_support") =>
 
 export const requirePlatformStaff = requireStaff();
 
+/**
+ * Marketing: admins only, tenant id fixed here on the server, services run on the `app_rw` runtime so RLS applies (ADR-042).
+ * `.use(siteRead)` for reads, `.use(siteWrite)` for changes. The services write `audit_logs` in their own transaction on
+ * `app_rw`, so the staff trail in `platform_audit_logs` is written right after commit.
+ */
+const siteRead = requireStaff("platform_admin").concat(async ({ context, next }) => {
+  if (!context.contentRt) throw new ORPCError("SERVICE_UNAVAILABLE", { message: "Marketing needs DATABASE_URL_RW on the Platform service" });
+  const siteId = await getPlatformSiteId(context.rt._db.db);
+  if (!siteId) throw new ORPCError("PRECONDITION_FAILED", { message: "Set up website content first" });
+  try {
+    return await next({ context: { content: { rt: context.contentRt, siteId, ctx: platformSiteContext(siteId, actor(context), context.meta?.requestId) } } });
+  } catch (err) {
+    throw mapPlatformError(err);
+  }
+});
+
+const siteWrite = siteRead.concat(async ({ context, next, path }) => {
+  const result = await next();
+  const action = `marketing.${path.slice(1).join(".")}`;
+  await writePlatformAudit(context.rt._db.db, actor(context), action, "platform_site", context.content.siteId, context.content.siteId, {}, context.meta).catch((err: unknown) => {
+    context.log.error({ err, action }, "marketing audit row failed");
+  });
+  return result;
+});
+
 export const platformRouter = os.router({
   marketing: {
+    blog: {
+      categories: {
+        list: os.marketing.blog.categories.list.use(siteRead).handler(({ context }) => listBlogCategories(context.content.rt, context.content.ctx)),
+        create: os.marketing.blog.categories.create.use(siteWrite).handler(({ context, input }) => createBlogCategory(context.content.rt, context.content.ctx, input)),
+        update: os.marketing.blog.categories.update.use(siteWrite).handler(({ context, input: { id, ...rest } }) => updateBlogCategory(context.content.rt, context.content.ctx, id, rest).then(() => ({ ok: true as const }))),
+        reorder: os.marketing.blog.categories.reorder.use(siteWrite).handler(({ context, input }) => reorderBlogCategories(context.content.rt, context.content.ctx, input.orderedIds).then(() => ({ ok: true as const }))),
+        delete: os.marketing.blog.categories.delete.use(siteWrite).handler(({ context, input }) => deleteBlogCategory(context.content.rt, context.content.ctx, input.id, input.moveTo ?? null).then(() => ({ ok: true as const }))),
+      },
+      posts: {
+        list: os.marketing.blog.posts.list.use(siteRead).handler(({ context, input }) => listBlogPosts(context.content.rt, context.content.ctx, input ?? {})),
+        get: os.marketing.blog.posts.get.use(siteRead).handler(async ({ context, input }) => {
+          const post = await getBlogPost(context.content.rt, context.content.ctx, input.id);
+          if (!post) throw new ORPCError("NOT_FOUND", { message: "Post not found" });
+          return post;
+        }),
+        create: os.marketing.blog.posts.create.use(siteWrite).handler(({ context, input }) => createBlogPost(context.content.rt, context.content.ctx, input as Parameters<typeof createBlogPost>[2])),
+        update: os.marketing.blog.posts.update.use(siteWrite).handler(({ context, input: { id, ...rest } }) => updateBlogPost(context.content.rt, context.content.ctx, id, rest as Parameters<typeof updateBlogPost>[3])),
+        publish: os.marketing.blog.posts.publish.use(siteWrite).handler(({ context, input }) => publishBlogPost(context.content.rt, context.content.ctx, input.id)),
+        schedule: os.marketing.blog.posts.schedule.use(siteWrite).handler(({ context, input }) => scheduleBlogPost(context.content.rt, context.content.ctx, input.id, input.publishedAt)),
+        unpublish: os.marketing.blog.posts.unpublish.use(siteWrite).handler(({ context, input }) => unpublishBlogPost(context.content.rt, context.content.ctx, input.id)),
+        duplicate: os.marketing.blog.posts.duplicate.use(siteWrite).handler(({ context, input }) => duplicateBlogPost(context.content.rt, context.content.ctx, input.id)),
+        delete: os.marketing.blog.posts.delete.use(siteWrite).handler(({ context, input }) => deleteBlogPost(context.content.rt, context.content.ctx, input.id).then(() => ({ ok: true as const }))),
+        previewLink: os.marketing.blog.posts.previewLink.use(siteRead).handler(({ context, input }) => createBlogPreviewLink(context.content.rt, context.content.ctx, input.id)),
+        previewHtml: os.marketing.blog.posts.previewHtml.use(siteRead).handler(({ context, input }) => previewBlogHtml(context.content.rt, context.content.ctx, input.contentHtml)),
+      },
+      settings: {
+        get: os.marketing.blog.settings.get.use(siteRead).handler(({ context }) => getBlogSettings(context.content.rt, context.content.ctx)),
+        update: os.marketing.blog.settings.update.use(siteWrite).handler(({ context, input }) => updateBlogSettings(context.content.rt, context.content.ctx, input)),
+      },
+    },
+    menus: {
+      list: os.marketing.menus.list.use(siteRead).handler(({ context }) => listMenus(context.content.rt, context.content.ctx)),
+      get: os.marketing.menus.get.use(siteRead).handler(({ context, input }) => getMenu(context.content.rt, context.content.ctx, input)),
+      create: os.marketing.menus.create.use(siteWrite).handler(({ context, input }) => createMenu(context.content.rt, context.content.ctx, input)),
+      update: os.marketing.menus.update.use(siteWrite).handler(({ context, input }) => updateMenu(context.content.rt, context.content.ctx, input)),
+      delete: os.marketing.menus.delete.use(siteWrite).handler(({ context, input }) => deleteMenu(context.content.rt, context.content.ctx, input)),
+    },
+    media: {
+      list: os.marketing.media.list.use(siteRead).handler(({ context, input }) => listMedia(context.content.rt, context.content.ctx, input)),
+      get: os.marketing.media.get.use(siteRead).handler(({ context, input }) => getMedia(context.content.rt, context.content.ctx, input)),
+      usage: os.marketing.media.usage.use(siteRead).handler(({ context }) => getMediaUsage(context.content.rt, context.content.ctx)),
+      requestUpload: os.marketing.media.requestUpload.use(siteRead).handler(({ context, input }) => requestMediaUpload(context.content.rt, context.content.ctx, input)),
+      create: os.marketing.media.create.use(siteWrite).handler(({ context, input }) => createMediaRecord(context.content.rt, context.content.ctx, input)),
+      findDuplicates: os.marketing.media.findDuplicates.use(siteRead).handler(({ context, input }) => findDuplicates(context.content.rt, context.content.ctx, input)),
+      upload: os.marketing.media.upload.use(siteWrite).handler(({ context, input }) =>
+        uploadMediaDirect(context.content.rt, context.content.ctx, {
+          fileBytes: Buffer.from(input.data, "base64"),
+          filename: input.filename,
+          mime: input.mime,
+          folder: input.folder,
+          alt: input.alt,
+          title: input.title,
+          caption: input.caption,
+          durationMs: input.durationMs,
+        }),
+      ),
+      update: os.marketing.media.update.use(siteWrite).handler(({ context, input }) => updateMedia(context.content.rt, context.content.ctx, input)),
+      replace: os.marketing.media.replace.use(siteWrite).handler(({ context, input }) => replaceMedia(context.content.rt, context.content.ctx, input)),
+      trash: os.marketing.media.trash.use(siteWrite).handler(({ context, input }) => trashMedia(context.content.rt, context.content.ctx, input)),
+      restore: os.marketing.media.restore.use(siteWrite).handler(({ context, input }) => restoreMedia(context.content.rt, context.content.ctx, input)),
+      deletePermanent: os.marketing.media.deletePermanent.use(siteWrite).handler(({ context, input }) => deleteMediaPermanent(context.content.rt, context.content.ctx, input)),
+      delete: os.marketing.media.delete.use(siteWrite).handler(({ context, input }) => deleteMediaRecord(context.content.rt, context.content.ctx, input)),
+    },
+    pages: {
+      list: os.marketing.pages.list.use(siteRead).handler(({ context }) => listPages(context.content.rt, context.content.ctx)),
+    },
     status: os.marketing.status.use(requireStaff("platform_admin")).handler(async ({ context }) => ({
       contentConnected: Boolean(context.contentRt),
       siteId: await getPlatformSiteId(context.rt._db.db),
@@ -1006,6 +1138,40 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
 
     return { rt, contentRt, log: c.get("log"), session, meta };
   };
+
+  // Fallback when the browser cannot PUT straight to storage: same rules as the Marketing procedures.
+  app.post("/api/marketing/media/upload", async (c) => {
+    const context = await buildContext(c);
+    if (!context.session || !context.contentRt) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      const staff = await assertPlatformStaff(rt, context.session.user.id, { createdAt: context.session.createdAt });
+      assertRoleAtLeast(staff.role, "platform_admin", "this action");
+      const siteId = await getPlatformSiteId(rt._db.db);
+      if (!siteId) return c.json({ error: "Set up website content first" }, 412);
+      const contentLength = Number.parseInt(c.req.header("content-length") ?? "", 10);
+      if (!Number.isNaN(contentLength) && contentLength > MAX_MEDIA_BYTES + 512 * 1024) return c.json({ error: "File too large." }, 413);
+      const body = await c.req.parseBody();
+      const file = body["file"];
+      if (!(file instanceof File)) return c.json({ error: "No file uploaded (field 'file' required)" }, 400);
+      const fileBytes = Buffer.from(await file.arrayBuffer());
+      const ctx = platformSiteContext(siteId, context.session.user.id, context.meta?.requestId);
+      const replaceId = typeof body["replaceId"] === "string" ? body["replaceId"] : "";
+      const result = replaceId
+        ? await replaceMediaDirect(context.contentRt, ctx, { id: replaceId, fileBytes, filename: file.name, mime: file.type })
+        : await uploadMediaDirect(context.contentRt, ctx, {
+            fileBytes,
+            filename: file.name || "upload.jpg",
+            mime: file.type || "application/octet-stream",
+            folder: typeof body["folder"] === "string" ? body["folder"] : "marketing",
+            alt: typeof body["alt"] === "string" ? body["alt"] : undefined,
+          });
+      await writePlatformAudit(rt._db.db, context.session.user.id, "marketing.media.upload", "platform_site", siteId, siteId, {}, context.meta);
+      return c.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      return c.json({ error: message.replace(/^(Forbidden|Bad Request|Unauthorized):\s*/, "") }, message.startsWith("Forbidden") ? 403 : 400);
+    }
+  });
 
   app.all("/api/rpc/*", async (c, next) => {
     const context = await buildContext(c);

@@ -20,7 +20,7 @@ import type { ProductDetail, ProductVariant } from "@bs/contracts";
 import { currencySymbol } from "@bs/contracts/money";
 import { useStoreCurrency } from "../../lib/use-store-currency.ts";
 import { gramsToUnit, unitToGrams, type WeightUnit } from "@bs/contracts/units";
-import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
+import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 

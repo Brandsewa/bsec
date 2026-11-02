@@ -6,7 +6,7 @@ import { googleFontsHref, type BlockInstance } from "@bs/blocks";
 import type { MediaKind } from "@bs/contracts";
 import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { client, orpc } from "../../lib/orpc.ts";
-import { MediaPickerDialog } from "../media/media-picker-dialog.tsx";
+import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import { storeHost, themeVarsFor } from "./host.ts";
 
 /** Page-list value of a theme template the store has no page for yet ("new:blog"); picking it creates the page. */

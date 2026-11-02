@@ -20,10 +20,10 @@
 
 /* type */
 .mk .kick{font:500 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
-.mk h1{font-size:clamp(38px,4.3vw,54px);line-height:1.06;letter-spacing:-.04em;font-weight:600;margin-top:24px}
+.mk h1:not(.mk-blog *){font-size:clamp(38px,4.3vw,54px);line-height:1.06;letter-spacing:-.04em;font-weight:600;margin-top:24px}
 .mk h1 .nb{white-space:nowrap}
-.mk h2{font-size:clamp(30px,3.4vw,42px);line-height:1.12;letter-spacing:-.03em;font-weight:500;text-wrap:balance}
-.mk h3{font-size:18px;line-height:1.25;letter-spacing:-.015em;font-weight:600}
+.mk h2:not(.mk-blog *){font-size:clamp(30px,3.4vw,42px);line-height:1.12;letter-spacing:-.03em;font-weight:500;text-wrap:balance}
+.mk h3:not(.mk-blog *){font-size:18px;line-height:1.25;letter-spacing:-.015em;font-weight:600}
 .mk .head{max-width:760px}
 .mk .head h2{margin-top:14px}
 .mk .head>p{margin-top:14px;color:var(--mut);font-size:17px}
@@ -335,6 +335,14 @@
 .mk .su-row{border-top:1px solid var(--line)}
 .mk .su-consent{font-size:12.5px;line-height:1.6;text-align:center;color:var(--dim)}
 .mk .su-consent a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+/* bcom.si's blog: the shared blog blocks, on this site's tokens and width */
+.mk .mk-blog{--bs-bg:var(--bg);--bs-text:var(--ink);--bs-surface:var(--surface);--bs-muted:var(--mut);--bs-border:var(--line);--bs-primary:var(--pri);--bs-primary-fg:var(--pri-ink);--bs-btn-dark-bg:var(--pri);--bs-btn-dark-fg:var(--pri-ink);--bs-btn-dark-border:var(--pri);background:var(--bg);color:var(--ink);min-height:50vh}
+.mk .mk-blog .bsb-w{max-width:1200px;margin-inline:auto;padding-inline:32px}
+.mk .mk-blog .bsb-mag-shade{background:rgb(0 0 0 / .5)}
+.mk .mk-blog .bsb-mag-noimg{background:var(--soft)}
+.mk .mk-blog :is(h1,h2,h3){color:inherit}
+@media(max-width:600px){.mk .mk-blog .bsb-w{padding-inline:16px}}
 
 /* Select menus render in a portal outside .mk, so they name the font themselves. */
 :root [data-slot="select-item"]{font-family:var(--font-sans),system-ui,sans-serif}

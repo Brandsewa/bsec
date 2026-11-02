@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import type { ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
+import { blogContract } from "./blog.ts";
 import {
   platformTenantsContract,
   platformOverviewContract,
@@ -75,7 +76,14 @@ export const platformContract = {
   signups: platformSignupsContract,
   templates: platformTemplatesContract,
   support: platformSupportContract,
-  marketing: platformMarketingContract,
+  marketing: {
+    ...platformMarketingContract,
+    // The same contracts the store admin uses, so the shared screens in @bs/content-admin work on both (ADR-042).
+    blog: blogContract,
+    menus: adminContract.menus,
+    media: adminContract.media,
+    pages: { list: adminContract.pages.list },
+  },
   quotas: platformQuotasContract,
   features: platformFeaturesContract,
   promotions: platformPromotionsContract,

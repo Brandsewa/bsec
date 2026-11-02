@@ -55,8 +55,11 @@ export async function createBlogPreviewLink(rt: Runtime, ctx: TenantContext, pos
     .where(and(eq(schema.domains.tenantId, ctx.tenantId), eq(schema.domains.status, "active")))
     .orderBy(desc(schema.domains.isPrimary), asc(schema.domains.createdAt))
     .limit(1);
-  if (!domain) throw new Error("Bad Request: This store has no active address yet, so a preview link cannot be made.");
+  // The website record has no domain row: it is served on the marketing host (ADR-042).
+  const [tenant] = domain ? [] : await rt._db.db.select({ kind: schema.tenants.kind }).from(schema.tenants).where(eq(schema.tenants.id, ctx.tenantId)).limit(1);
+  const hostname = domain?.hostname ?? (tenant?.kind === "platform_site" ? (process.env.MARKETING_HOST || process.env.PLATFORM_DOMAIN || "bcom.si") : null);
+  if (!hostname) throw new Error("Bad Request: This store has no active address yet, so a preview link cannot be made.");
   const { token, expiresAt } = signBlogPreviewToken(ctx.tenantId, postId);
-  const local = /(^|\.)localhost(:\d+)?$/.test(domain.hostname);
-  return { url: `${local ? "http" : "https"}://${domain.hostname}/blog/${post.slug}?preview=${token}`, expiresAt: expiresAt.toISOString() };
+  const local = /(^|\.)localhost(:\d+)?$/.test(hostname);
+  return { url: `${local ? "http" : "https"}://${hostname}/blog/${post.slug}?preview=${token}`, expiresAt: expiresAt.toISOString() };
 }

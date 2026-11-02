@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { MediaKind } from "@bs/contracts";
-import { client } from "../../lib/orpc.ts";
-import { mediaUploadQueue } from "../../lib/media-upload-queue.ts";
+import { client } from "../host.ts";
+import { mediaUploadQueue } from "./media-upload-queue.ts";
 import type { MediaSort, MediaUsageFilter } from "./media-filters-bar.tsx";
 
 export interface UseMediaListOptions {

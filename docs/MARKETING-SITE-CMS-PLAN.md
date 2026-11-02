@@ -1,6 +1,6 @@
 # Marketing site dashboard, page builder and blog
 
-- Status: **Draft for owner review.** Nothing built. Written 2026-11-02.
+- Status: **Phases 1 to 3 built** on `feat/marketing-site-cms`. Phases 4 and 5 not started. Written 2026-11-02.
 - Planner and verifier: Claude Code. Builder: assigned by the owner.
 - Related: ADR-001 (domain logic), ADR-002 (tenancy and roles), ADR-004 (cache tags), ADR-009 and ADR-010 (blocks, no merchant code), ADR-011 (fallbacks), ADR-033 (blog), `docs/MARKETING-SITE-PLAN.md`, `docs/changes/2026-11-02-claude-marketing-home-redesign.md`.
 - A new ADR is written in Phase 0, before any code.
@@ -98,7 +98,7 @@ Phases 1 and 2 touch the most sensitive code. Phase 4 is the largest; the order 
 5. With no published page, each marketing URL renders the code version. With a failing read, it still renders.
 6. A published page matches the current design in light and dark at 375 px and desktop, with no horizontal overflow and no gradients.
 7. A published post appears on `/blog`, in the sitemap and in the feed, with title, description, canonical and `Article` data.
-8. Publishing shows on the live page without a deploy, and is in `audit_logs` and `platform_audit_logs`.
+8. Publishing shows on the live page without a deploy, and is in `audit_logs` (same transaction) and `platform_audit_logs` (after commit, ADR-042).
 9. Blocks reject anything outside their schema. No custom code, CSS or HTML is possible.
 10. Home stays within agreed page weight, measured before and after.
 11. The gate in `AGENTS.md` section 4 passes, including the heavy suite.

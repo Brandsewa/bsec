@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useTheme } from "@bs/ui";
 import { CloseIcon, MenuIcon, MoonIcon, SunIcon } from "./icons.tsx";
+import { SiteNavContext } from "./site-nav.tsx";
 
-const LINKS: Array<[string, string]> = [
-  ["Features", "/#ready"],
-  ["AI shopping", "/#ai"],
-  ["Pricing", "/#pricing"],
-  ["About", "/about"],
-  ["Contact", "/contact"],
+const LINKS = [
+  { label: "Features", href: "/#ready" },
+  { label: "AI shopping", href: "/#ai" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
 ];
 
 /** Both icons are rendered and home.css shows the right one, so the toggle cannot mismatch on hydration. */
@@ -26,6 +27,7 @@ function ThemeToggle() {
 
 export function HomeNav() {
   const [open, setOpen] = useState(false);
+  const links = useContext(SiteNavContext) ?? LINKS;
   return (
     <header className="top">
       <div className="wrap top-in">
@@ -33,7 +35,7 @@ export function HomeNav() {
           <i>B</i>BCOM
         </Link>
         <nav className="links" aria-label="Main">
-          {LINKS.map(([label, href]) => (
+          {links.map(({ label, href }) => (
             <Link key={href} href={href}>{label}</Link>
           ))}
         </nav>
@@ -48,7 +50,7 @@ export function HomeNav() {
       </div>
       {open && (
         <div id="mk-menu" className="mpanel">
-          {LINKS.map(([label, href]) => (
+          {links.map(({ label, href }) => (
             <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>
           ))}
           <a href="https://admin.bcom.si">Log in</a>

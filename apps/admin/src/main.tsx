@@ -1,3 +1,5 @@
+// Plugs this app's API into the shared content screens before any route renders.
+import "./lib/content-host.ts";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
