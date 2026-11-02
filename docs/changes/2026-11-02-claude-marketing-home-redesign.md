@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `feat/marketing-home-redesign` (not merged yet)
+- **Branch:** `feat/marketing-home-redesign` (merged in #192, 7941515)
 - **Area:** web (marketing)
 - **Type:** feature
 - **Supersedes:** none
