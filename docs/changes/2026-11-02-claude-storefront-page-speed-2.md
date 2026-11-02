@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `perf/storefront-speed-2` (not merged yet)
+- **Branch:** `perf/storefront-speed-2` (merged in #200, 34ff6bc)
 - **Area:** web, blocks
 - **Type:** fix
 - **Supersedes:** none
