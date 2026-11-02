@@ -15,7 +15,8 @@ export interface RenderTreeOptions {
  * previews in the admin. Unknown blocks are skipped rather than crashing the page.
  */
 export function renderBlockTree(blocks: BlockInstance[], base: RenderContext, options: RenderTreeOptions = {}): ReactNode {
-  return blocks.map((block) => renderOne(block, base, options));
+  const ctx: RenderContext = base.lcpClaim ? base : { ...base, lcpClaim: { taken: false } };
+  return blocks.map((block) => renderOne(block, ctx, options));
 }
 
 function renderOne(block: BlockInstance, base: RenderContext, options: RenderTreeOptions): ReactNode {

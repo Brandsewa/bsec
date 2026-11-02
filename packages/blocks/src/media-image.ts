@@ -1,3 +1,4 @@
+import type { RenderContext } from "./types.ts";
 export interface MediaDerivativeItem {
   w: number;
   h?: number | undefined;
@@ -197,4 +198,26 @@ export function mediaImage(
     placeholderColor,
     objectPosition,
   };
+}
+
+/**
+ * img attributes for a media id: a srcSet from the worker's WebP derivatives when the host gave them (so a 1600px upload
+ * is not sent to a 320px slot), otherwise the plain URL. `fallbackUrl` covers hosts that only know the URL.
+ */
+export function responsiveImgAttrs(
+  ctx: RenderContext | undefined,
+  mediaId: string | undefined | null,
+  sizes: string,
+  fallbackUrl?: string | null,
+): { src: string | null; srcSet?: string; sizes?: string } {
+  const detail = mediaId ? ctx?.mediaDetails?.(mediaId) : null;
+  if (detail?.url && detail.derivatives && Object.keys(detail.derivatives).length > 0) {
+    const info = mediaImage(
+      { url: detail.url, width: detail.width, height: detail.height, derivatives: detail.derivatives },
+      { sizes },
+    );
+    if (info.srcSet) return { src: info.src, srcSet: info.srcSet, sizes };
+  }
+  const plain = mediaId ? (ctx?.mediaUrl?.(mediaId) ?? null) : null;
+  return { src: fallbackUrl ?? plain ?? detail?.url ?? null };
 }

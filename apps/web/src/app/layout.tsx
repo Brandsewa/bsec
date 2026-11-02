@@ -22,7 +22,7 @@ import {
   ProvisioningScreen,
 } from "@/components/storefront/StoreStatusScreens.tsx";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
-import { googleFontsHref } from "@bs/blocks/theme-vars";
+import { googleFontsHref, themeFontFallbackCss } from "@bs/blocks/theme-vars";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
@@ -170,6 +170,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // Derive theme tokens
   const themeVars = activeThemeTokens ? computeThemeTokens(null, activeThemeTokens) : computeThemeTokens(brandSettings, null);
   const fontsHref = googleFontsHref(activeThemeTokens);
+  const fontFallbackCss = themeFontFallbackCss(activeThemeTokens);
 
   // Render blocked screens when access is not allowed and not in bypass mode
   if (!access.allowed && !access.isBypass) {
@@ -215,7 +216,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
-        {fontsHref ? <link rel="stylesheet" href={fontsHref} precedence="default" /> : null}
+        {fontsHref ? (
+          <>
+            {/* Open the font connections while the stylesheet is still being fetched (it is render-blocking). */}
+            <link rel="preconnect" href="https://fonts.googleapis.com" />
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+            {fontFallbackCss ? <style dangerouslySetInnerHTML={{ __html: fontFallbackCss }} /> : null}
+            <link rel="stylesheet" href={fontsHref} precedence="default" />
+          </>
+        ) : null}
         {marketCtx && marketCtx.markets.length > 1
           ? [
               ...marketCtx.markets.map((m) => (

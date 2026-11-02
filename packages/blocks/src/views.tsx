@@ -15,12 +15,13 @@ import type {
 } from "./types.ts";
 import { layoutHasAspectRatio, layoutStyle, slideRadiusStyle } from "./layout.ts";
 import { bricksElementStyle, bricksIconToneClass, normalizeLengthValue, slotBasisVars } from "./bricks-layout.ts";
-import { mediaImage } from "./media-image.ts";
+import { mediaImage, responsiveImgAttrs } from "./media-image.ts";
 import { PLACEHOLDER_IMAGE_URL } from "./media.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
 import { MobileMenu, NavDropdownCloser } from "./views-mobile-menu-client.tsx";
+import { BgVideo } from "./views-bg-video-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
 
@@ -35,6 +36,25 @@ type A<P> = BlockRenderArgs<P>;
 
 const mediaSrc = (ctx: RenderContext | undefined, id: string | undefined): string | null =>
   id ? (ctx?.mediaUrl?.(id) ?? null) : null;
+
+/**
+ * The first background picture drawn in a page tree is the likely largest paint, so it loads eagerly with high priority;
+ * every later one stays lazy. The claim lives on the per-tree context, so each render of a tree starts fresh.
+ */
+const claimLcp = (ctx: RenderContext | undefined): boolean => {
+  const claim = ctx?.lcpClaim;
+  if (!claim || claim.taken) return false;
+  claim.taken = true;
+  return true;
+};
+const imgLoading = (eager: boolean) =>
+  eager ? ({ loading: "eager", fetchPriority: "high", decoding: "async" } as const) : ({ loading: "lazy" } as const);
+
+/** Logo picture: the 320 / 640px derivative for a logo uploaded at full size (it is drawn well under 300px wide). */
+const logoAttrs = (ctx: RenderContext | undefined, mediaId: string | undefined, fallback: string) => {
+  const r = responsiveImgAttrs(ctx, mediaId, "240px", fallback);
+  return { src: r.src ?? fallback, ...(r.srcSet ? { srcSet: r.srcSet, sizes: r.sizes } : null) };
+};
 
 const isExternal = (href: string) => /^https?:\/\//i.test(href);
 const rel = (href: string, newTab?: boolean) =>
@@ -149,11 +169,12 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
         ) : (
           <div className="bsb-grid bsb-ccards" style={{ "--cols": Number(props.columns), "--cols-t": Number(props.columnsTablet), "--cols-m": Number(props.columnsMobile) } as CSSProperties}>
             {collections.map((c) => {
-              const img = mediaSrc(ctx, c.imageMediaId);
+              const imgAttrs = responsiveImgAttrs(ctx, c.imageMediaId, `(max-width: 767px) ${Math.round(100 / Number(props.columnsMobile))}vw, (max-width: 1023px) ${Math.round(100 / Number(props.columnsTablet))}vw, ${Math.round(100 / Number(props.columns))}vw`);
+              const img = imgAttrs.src;
               return (
                 <a key={c.slug} className="bsb-ccard" href={`/${props.source === "categories" ? "categories" : "collections"}/${c.slug}`}>
                   <div className="bsb-ccard-media">
-                    <img src={img ?? PLACEHOLDER_IMAGE_URL} alt="" loading="lazy" />
+                    <img src={img ?? PLACEHOLDER_IMAGE_URL} {...(img && imgAttrs.srcSet ? { srcSet: imgAttrs.srcSet, sizes: imgAttrs.sizes } : null)} alt="" loading="lazy" />
                   </div>
                   <div className="bsb-ccard-body">
                     <h3 className="bsb-ccard-title">{c.title}</h3>
@@ -287,7 +308,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
               className="bsb-hero-bg"
               src={desktopBg || tabletBg || mobileBg || ""}
               alt=""
-              loading="lazy"
+              {...imgLoading(claimLcp(ctx))}
               style={{
                 position: "absolute",
                 inset: 0,
@@ -304,11 +325,8 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
         </>
       ) : null}
       {bgVideo ? (
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
+        <BgVideo
+          src={bgVideo}
           poster={videoPoster ?? undefined}
           style={{
             position: "absolute",
@@ -320,9 +338,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
             zIndex: 0,
             borderRadius: "inherit",
           }}
-        >
-          <source src={bgVideo} />
-        </video>
+        />
       ) : null}
       <Slot
         style={{
@@ -382,7 +398,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
             className="bsb-hero-bg"
             src={desktopBg || tabletBg || mobileBg || ""}
             alt=""
-            loading="lazy"
+            {...imgLoading(claimLcp(ctx))}
             style={{
               position: "absolute",
               inset: 0,
@@ -397,11 +413,8 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
         </picture>
       ) : null}
       {bgVideo ? (
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
+        <BgVideo
+          src={bgVideo}
           poster={videoPoster ?? undefined}
           style={{
             position: "absolute",
@@ -413,9 +426,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
             zIndex: 0,
             borderRadius: "inherit",
           }}
-        >
-          <source src={bgVideo} />
-        </video>
+        />
       ) : null}
       <Slot
         style={{
@@ -484,7 +495,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
             className="bsb-hero-bg"
             src={desktopBg || tabletBg || mobileBg || ""}
             alt=""
-            loading="lazy"
+            {...imgLoading(claimLcp(ctx))}
             style={{
               position: "absolute",
               inset: 0,
@@ -499,11 +510,8 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
         </picture>
       ) : null}
       {bgVideo ? (
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
+        <BgVideo
+          src={bgVideo}
           poster={videoPoster ?? undefined}
           style={{
             position: "absolute",
@@ -515,9 +523,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
             zIndex: 0,
             borderRadius: "inherit",
           }}
-        >
-          <source src={bgVideo} />
-        </video>
+        />
       ) : null}
       <Slot
         style={{
@@ -961,7 +967,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
           </MobileMenu>
         ) : null}
         <NavLink ctx={ctx} href="/" className="bsb-site-logo">
-          {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <span>{name}</span>}
+          {logoUrl ? <img className="bsb-logo-img" {...logoAttrs(ctx, props.logoMediaId, logoUrl)} alt={name} style={logoSizeStyle(props.logoSize)} /> : <span>{name}</span>}
         </NavLink>
         <nav className="bsb-site-nav" aria-label="Main">
           {hasResolvedMenu ? <NavDropdownCloser /> : null}
@@ -1148,7 +1154,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
   );
   const brand = (
     <div className="bsb-site-footer-brand">
-      {logoUrl ? <img className="bsb-logo-img" src={logoUrl} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
+      {logoUrl ? <img className="bsb-logo-img" {...logoAttrs(ctx, props.logoMediaId, logoUrl)} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
       {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
       <FooterSocials props={props} />
     </div>
@@ -1501,7 +1507,9 @@ const BAG_ICON = (
 );
 
 function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.ProductShowcaseProps; ctx: RenderContext | undefined; eager: boolean }): ReactNode {
-  const img = p.imageUrl ?? mediaSrc(ctx, p.imageMediaId);
+  const imgSizes = `(max-width: 767px) ${Math.round(100 / Number(props.perViewMobile))}vw, (max-width: 1023px) ${Math.round(100 / Number(props.perViewTablet))}vw, ${Math.round(100 / Number(props.perViewDesktop))}vw`;
+  const imgAttrs = responsiveImgAttrs(ctx, p.imageMediaId, imgSizes, p.imageUrl);
+  const img = imgAttrs.src;
   const href = `/products/${p.slug}`;
   const hasCompare = props.showCompareAt && p.compareAtPriceMin !== undefined && p.compareAtPriceMin > p.priceMin;
   const saving = p.compareAtPriceMin && p.compareAtPriceMin > p.priceMin ? Math.round(((p.compareAtPriceMin - p.priceMin) / p.compareAtPriceMin) * 100) : 0;
@@ -1536,7 +1544,7 @@ function ShowcaseCard({ p, props, ctx, eager }: { p: BlockProduct; props: R.Prod
     <article className={cx("bsb-psc-card", `bsb-psc-card-${props.cardStyle}`)}>
       <div className={cx("bsb-psc-media", `bsb-psc-ratio-${props.imageRatio}`)}>
         {link(
-          <img src={img ?? PLACEHOLDER_IMAGE_URL} alt={img ? (p.imageAlt ?? p.title) : ""} decoding="async" loading={eager ? "eager" : "lazy"} />,
+          <img src={img ?? PLACEHOLDER_IMAGE_URL} {...(img && imgAttrs.srcSet ? { srcSet: imgAttrs.srcSet, sizes: imgAttrs.sizes } : null)} alt={img ? (p.imageAlt ?? p.title) : ""} decoding="async" loading={eager ? "eager" : "lazy"} />,
           "bsb-psc-imglink",
           p.title,
         )}

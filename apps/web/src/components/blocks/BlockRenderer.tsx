@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { renderBlockTree, type BlockData, type BlockInstance, type RenderContext } from "@bs/blocks";
-import { generateFaqJsonLd } from "@bs/domain";
+import { generateFaqJsonLd, type BlockMediaMeta } from "@bs/domain";
 import { HeroSliderClient } from "./HeroSliderClient.tsx";
 import { BannerClient } from "./BannerClient.tsx";
 import { ProductShowcaseClient } from "./ProductShowcaseClient.tsx";
@@ -11,6 +11,17 @@ import "@bs/blocks/blocks.css";
 export interface BlockRenderData {
   data: Record<string, BlockData>;
   media: Record<string, string>;
+  /** Size and WebP derivatives per media id, for responsive images. */
+  mediaMeta?: Record<string, BlockMediaMeta> | undefined;
+}
+
+/** Per-id details for the blocks' responsive images; ids without a known URL are left out. */
+export function mediaDetailsFor(renderData: BlockRenderData | undefined): NonNullable<RenderContext["mediaDetails"]> {
+  const meta = renderData?.mediaMeta ?? {};
+  return (id) => {
+    const m = meta[id];
+    return m?.url ? { url: m.url, width: m.width, height: m.height, focalX: m.focalX, focalY: m.focalY, dominantColor: m.dominantColor, derivatives: m.derivatives } : null;
+  };
 }
 
 export interface BlockRendererProps {
@@ -41,6 +52,7 @@ export function BlockRenderer({ blocks, renderData, context }: BlockRendererProp
     ...context,
     data: renderData?.data,
     mediaUrl: (id) => media[id] ?? null,
+    mediaDetails: mediaDetailsFor(renderData),
   };
 
   return (

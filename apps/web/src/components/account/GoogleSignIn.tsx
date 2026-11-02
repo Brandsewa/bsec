@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadGoogleScript } from "@/lib/google-identity.ts";
+import { initGoogleOnce, loadGoogleScript, whenIdle } from "@/lib/google-identity.ts";
 
 /**
  * "Continue with Google" and One Tap for the store's customers. Rendered only on the sign-in page, and only when the
@@ -29,7 +29,8 @@ export function GoogleSignIn({
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let release: (() => void) | undefined;
+    const run = async () => {
       try {
         const cfg = (await fetch("/api/storefront/customer/google", { cache: "no-store" }).then((r) => r.json())) as {
           enabled?: boolean;
@@ -42,18 +43,15 @@ export function GoogleSignIn({
         await loadGoogleScript();
         if (cancelled || !window.google) return;
         setActive(true);
-        window.google.accounts.id.initialize({
-          client_id: cfg.clientId,
+        release = initGoogleOnce(
+          cfg.clientId,
           nonce,
-          use_fedcm_for_prompt: true,
-          cancel_on_tap_outside: false,
-          callback: async (resp: { credential?: string }) => {
-            if (!resp.credential) return;
+          async (credential, boundNonce) => {
             setError(null);
             const res = await fetch("/api/storefront/customer/google", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ idToken: resp.credential, nonce }),
+              body: JSON.stringify({ idToken: credential, nonce: boundNonce }),
             });
             const data = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) {
@@ -63,7 +61,8 @@ export function GoogleSignIn({
             router.replace(redirectTo);
             router.refresh();
           },
-        });
+          { use_fedcm_for_prompt: true, cancel_on_tap_outside: false },
+        );
         if (button && buttonRef.current) {
           window.google.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", text, width: 320 });
         }
@@ -71,9 +70,14 @@ export function GoogleSignIn({
       } catch {
         /* Email and phone sign-in always remain available. */
       }
-    })();
+    };
+    // The prompt-only use (home and content pages) is not needed for first paint, so it waits for the page to settle.
+    // The sign-in page draws a button, so it starts at once.
+    const cancelWait = button ? (void run(), undefined) : whenIdle(() => void run());
     return () => {
       cancelled = true;
+      cancelWait?.();
+      release?.();
       window.google?.accounts.id.cancel();
     };
   }, [redirectTo, router, oneTap, button, text]);
