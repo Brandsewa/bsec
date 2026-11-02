@@ -1049,10 +1049,9 @@ export async function handlePayPalBillingWebhook(
     // the store. A capture that fails throws, so the delivery shows as failed in Super Admin and PayPal retries it.
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
       const orderId = String(resource.id ?? "");
-      if (orderId && (params.captureFn || creds)) {
-        const capture = params.captureFn
-          ? await params.captureFn(orderId)
-          : await new PayPalProvider({ clientId: creds!.keyId, clientSecret: creds!.keySecret, mode: creds!.mode === "live" ? "live" : "sandbox" }).captureOrder(orderId);
+      const captureOrder = params.captureFn ?? (creds ? (id: string) => new PayPalProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, mode: creds.mode === "live" ? "live" : "sandbox" }).captureOrder(id) : undefined);
+      if (orderId && captureOrder) {
+        const capture = await captureOrder(orderId);
         // An order PayPal has already captured (a redelivered event) is fine; anything else that is not paid is a failure to see.
         if (capture.status === "failed" && !/already.?captured/i.test(capture.errorMessage ?? "")) {
           throw badRequest(`PayPal could not capture the approved order: ${capture.errorMessage ?? "unknown error"}`);
