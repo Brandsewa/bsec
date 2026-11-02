@@ -71,3 +71,23 @@ describe("page speed: font fallbacks", () => {
     expect(themeFontFallbackCss({ fonts: { heading: "Custom Font" } })).toBe("");
   });
 });
+
+describe("page speed: responsive section background", () => {
+  it("gives an uploaded background a srcSet from its derivatives", () => {
+    const html = render([section("a", { background: { mediaId: "m1" } })], {
+      mediaUrl: () => "https://media.example/t/catalog/orig.webp",
+      mediaDetails: () => ({
+        url: "https://media.example/t/catalog/orig.webp",
+        width: 1600,
+        height: 900,
+        derivatives: { w640: { key: "t/_derived/m/f/w640.webp", width: 640, height: 360, bytes: 1 } },
+      }),
+    });
+    expect(html).toMatch(/<img[^>]*bsb-hero-bg[^>]*srcSet="[^"]*640w/);
+  });
+
+  it("keeps a pasted image URL as is", () => {
+    const html = render([section("a", { background: { imageUrl: "https://x.example/a.jpg" } })]);
+    expect(html).not.toMatch(/bsb-hero-bg[^>]*srcSet/);
+  });
+});

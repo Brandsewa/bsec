@@ -66,6 +66,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .store-skeleton { animation: none; }
 }
+/* While a route streams in, the skeleton fills the first screen so the footer starts below the fold; otherwise the page
+   arrives above a footer that was already on screen and pushes it down (layout shift of about 0.5 on block-built pages). */
+main:has(.store-skeleton, [aria-busy="true"]) { min-height: 100dvh; }
 
 /* Wrap a page in .bs-skin to give its semantic colour classes the store's theme colours (set on <html> by layout.tsx). */
 .bs-skin {
