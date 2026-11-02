@@ -52,7 +52,7 @@ function downloadTemplate() {
   const header = PRODUCT_COLUMNS.map((c) => c.header);
   const example: Record<string, string> = {
     handle: "blue-cotton-tee", title: "Blue Cotton Tee", shortDescription: "Soft everyday tee", description: "Line one.\n\nLine two.", status: "draft",
-    primaryCategory: "Tops", tags: "summer|cotton", option1Name: "Size", option1Value: "M", sku: "TEE-BLUE-M", price: "499.00", compareAtPrice: "599.00",
+    primaryCategory: "Tops", categories: "Summer wear", collections: "New arrivals", tags: "summer|cotton", option1Name: "Size", option1Value: "M", sku: "TEE-BLUE-M", price: "499.00", compareAtPrice: "599.00",
     imageUrl: "https://example.com/images/blue-tee.jpg", seoTitle: "Blue Cotton Tee", seoDescription: "A soft blue cotton tee.", trackInventory: "yes",
   };
   downloadCsv("products-import-template.csv", toCsv(header, [PRODUCT_COLUMNS.map((c) => example[c.key] ?? "")]));
@@ -224,7 +224,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
             <ul className="list-disc pl-5 text-xs text-muted-foreground">
               <li>Several rows with the same URL handle become one product with several variants and images.</li>
               <li>Image URLs must be https. They are downloaded in the background and added to the product.</li>
-              <li>Primary collection is optional. If it is blank or does not match an existing category, the product is still imported without one (saved as a draft if it was meant to be published).</li>
+              <li>Primary collection, Other categories and Collections are all optional. Names that match nothing are skipped and listed, and the product is still imported (saved as a draft if it was meant to be published but has no primary collection). Separate several names with | or a comma.</li>
               <li>Blank cells keep the current value when updating. Type [clear] in a cell to empty it.</li>
             </ul>
             <div>

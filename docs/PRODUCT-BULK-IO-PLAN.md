@@ -96,3 +96,4 @@ Progress rows are written after commit by the request and by the `products.impor
 3. **Image-fetch scope:** any public https host (default, needed for Shopify/Woo exports), or an allow-list.
 4. **Description (decided 2026-10-31):** Description and Short description are plain text (HTML from Shopify is converted to text; paragraph breaks and `- ` lists kept). Formatting (headings, lists, bold, italic) is kept only for `rich_text` custom fields, via `toRichTextHtml` and the existing field sanitiser.
 5. **Primary collection (decided, relaxed 2026-11-02):** one column, mapped to the primary category by name or slug. Optional: see item 2.
+6. **Other categories and Collections (added 2026-11-02):** two more optional columns, same rules: unmatched names are skipped with a notice and never block a product.
