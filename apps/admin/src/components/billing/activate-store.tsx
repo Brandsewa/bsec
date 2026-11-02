@@ -37,13 +37,12 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const meQuery = useQuery({ queryKey: ["me", "activation"], queryFn: fetchMe, refetchInterval: 4000 });
   const stillRequired = meQuery.data?.stores.some((s) => s.paymentRequired) ?? true;
   // Once the payment is confirmed, say so for a moment before opening the store.
-  const [opening, setOpening] = useState(false);
+  const opening = Boolean(meQuery.data) && !stillRequired;
   useEffect(() => {
-    if (!meQuery.data || stillRequired) return;
-    setOpening(true);
+    if (!opening) return;
     const t = window.setTimeout(() => window.location.assign("/"), 2500);
     return () => window.clearTimeout(t);
-  }, [meQuery.data, stillRequired]);
+  }, [opening]);
 
   const plans = plansQuery.data ?? [];
   const billing = billingQuery.data?.billing;
