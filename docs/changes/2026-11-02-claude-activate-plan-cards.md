@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `feat/activate-plan-cards` (not merged yet)
+- **Branch:** `feat/activate-plan-cards` (merged in #189, 2f96eab)
 - **Area:** admin, docs
 - **Type:** feature
 - **Supersedes:** none

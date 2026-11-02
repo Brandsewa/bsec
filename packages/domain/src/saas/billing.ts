@@ -726,7 +726,7 @@ async function processBillingWebhook(
   inboxProvider: "razorpay_platform" | "cashfree_platform" | "paypal_platform",
   eventId: string,
   payload: unknown,
-  normalize: () => BillingEvent,
+  normalize: () => BillingEvent | Promise<BillingEvent>,
 ): Promise<PlatformBillingWebhookResult> {
   const claim = await db.execute<{ id: string }>(sql`
     INSERT INTO webhook_inbox (provider, event_id, signature_valid, payload_sanitized, status, attempts)
@@ -742,7 +742,7 @@ async function processBillingWebhook(
   }
 
   try {
-    const actionTaken = await applyBillingEvent(db, normalize());
+    const actionTaken = await applyBillingEvent(db, await normalize());
     await db
       .update(schema.webhookInbox)
       .set({ status: "processed", processedAt: new Date() })
@@ -964,6 +964,8 @@ export async function handlePayPalBillingWebhook(
     headers: Record<string, string | string[] | undefined>;
     provider?: SubscriptionBillingProvider;
     verifySignatureFn?: (headers: Record<string, string | string[] | undefined>, rawBody: string) => Promise<boolean>;
+    /** Captures an approved order; injectable so tests never call PayPal. */
+    captureFn?: (orderId: string) => Promise<{ status: "captured" | "pending" | "failed"; errorMessage?: string | undefined }>;
   },
 ): Promise<PlatformBillingWebhookResult> {
   const db = saasDb(rt);
@@ -1001,7 +1003,7 @@ export async function handlePayPalBillingWebhook(
   const eventType = String(parsed.event_type ?? "");
   const resource = (parsed.resource ?? {}) as Record<string, unknown>;
 
-  return processBillingWebhook(db, "paypal_platform", eventId, parsed, (): BillingEvent => {
+  return processBillingWebhook(db, "paypal_platform", eventId, parsed, async (): Promise<BillingEvent> => {
     // 1. PAYMENT.CAPTURE.COMPLETED: A payment capture completed successfully
     if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       const captureId = String(resource.id ?? "");
@@ -1042,9 +1044,20 @@ export async function handlePayPalBillingWebhook(
       };
     }
 
-    // 2. CHECKOUT.ORDER.APPROVED: Order approved by merchant, capture may follow
+    // 2. CHECKOUT.ORDER.APPROVED: the payer approved the order, but PayPal moves no money until we capture it. Capturing here (not
+    // on the return page) means a payer who closes the tab still pays. PayPal then sends PAYMENT.CAPTURE.COMPLETED, which opens
+    // the store. A capture that fails throws, so the delivery shows as failed in Super Admin and PayPal retries it.
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
       const orderId = String(resource.id ?? "");
+      if (orderId && (params.captureFn || creds)) {
+        const capture = params.captureFn
+          ? await params.captureFn(orderId)
+          : await new PayPalProvider({ clientId: creds!.keyId, clientSecret: creds!.keySecret, mode: creds!.mode === "live" ? "live" : "sandbox" }).captureOrder(orderId);
+        // An order PayPal has already captured (a redelivered event) is fine; anything else that is not paid is a failure to see.
+        if (capture.status === "failed" && !/already.?captured/i.test(capture.errorMessage ?? "")) {
+          throw badRequest(`PayPal could not capture the approved order: ${capture.errorMessage ?? "unknown error"}`);
+        }
+      }
       const purchaseUnit = Array.isArray(resource.purchase_units) ? (resource.purchase_units[0] as Record<string, unknown> | undefined) : undefined;
       let tenantIdNote: string | undefined;
       let planCodeNote: string | undefined;
