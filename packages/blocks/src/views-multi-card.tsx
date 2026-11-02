@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BlockRenderArgs, ContactFormOptions, ProductCouponsOptions, RenderContext } from "./types.ts";
 import { layoutStyle } from "./layout.ts";
+import { responsiveImgAttrs } from "./media-image.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
 
@@ -102,7 +103,8 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
   const cards = props.items.map((it, i) => {
     const icon = mediaSrc(ctx, it.iconMediaId);
     const bgImg = mediaSrc(ctx, it.bgMediaId ?? props.cardBgMediaId);
-    const topImg = props.cardStyle === "image" ? mediaSrc(ctx, it.imageMediaId) : null;
+    const topAttrs = props.cardStyle === "image" ? responsiveImgAttrs(ctx, it.imageMediaId, "(max-width: 767px) 90vw, 480px") : null;
+    const topImg = topAttrs?.src ?? null;
     const showIcon = props.cardStyle !== "image" && props.showIcon && (icon || it.icon);
     return (
       <div key={i} className={cx("bsb-mc-card", props.cardLook === "plain" && !bgImg && "bsb-mc-plain", props.cardStyle === "image" && "bsb-mc-card-s2", bgImg && "bsb-mc-card-img", props.cardBg && "bsb-mc-card-bg")} {...(slider ? { "data-psc-item": "" } : null)}>
@@ -112,7 +114,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
             <span className="bsb-mc-shade" style={{ opacity: props.cardOverlay / 100 }} aria-hidden="true" />
           </>
         ) : null}
-        {props.cardStyle === "image" && topImg ? <img className="bsb-mc-topimg" src={topImg} alt="" loading="lazy" /> : null}
+        {props.cardStyle === "image" && topImg ? <img className="bsb-mc-topimg" src={topImg} {...(topAttrs?.srcSet ? { srcSet: topAttrs.srcSet, sizes: topAttrs.sizes } : null)} alt="" loading="lazy" /> : null}
         <div className={cx("bsb-mc-body", `bsb-mc-v-${props.contentAlign}`, `bsb-align-${props.textAlign}`, showIcon && props.iconPosition !== "top" && `bsb-mc-side bsb-mc-ic-${props.iconPosition} bsb-mc-ia-${props.iconAlign}`)}>
           {showIcon ? (
             <span className="bsb-mc-icon" aria-hidden="true">

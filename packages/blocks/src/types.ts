@@ -177,6 +177,8 @@ export interface RenderContext {
   mediaDetails?: ((mediaId: string) => RenderMediaDetail | null) | undefined;
   data?: Record<string, BlockData | undefined> | undefined;
   renderProductCard?: ((product: BlockProduct, opts: { showPrice: boolean; showRating: boolean }) => ReactNode) | undefined;
+  /** Set by renderBlockTree: the first background picture in the tree takes it and loads eagerly (the likely LCP). */
+  lcpClaim?: { taken: boolean } | undefined;
   /** Stable id of the block being rendered (for data lookup). */
   blockId?: string | undefined;
   /** The shopper's market currency and locale for prices (ADR-040). Prices render as INR when the host gives none. */
