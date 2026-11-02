@@ -32,3 +32,50 @@ export function loadGoogleScript(): Promise<void> {
     }
   });
 }
+
+/** Runs `fn` once the page has loaded and the browser is idle, so Google's ~100 KB script never competes with first paint. */
+export function whenIdle(fn: () => void, timeoutMs = 4000): () => void {
+  let cancelled = false;
+  let handle: number | undefined;
+  const run = () => {
+    if (cancelled) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    handle = w.requestIdleCallback ? w.requestIdleCallback(() => !cancelled && fn(), { timeout: timeoutMs }) : window.setTimeout(() => !cancelled && fn(), 1500);
+  };
+  if (document.readyState === "complete") run();
+  else window.addEventListener("load", run, { once: true });
+  return () => {
+    cancelled = true;
+    window.removeEventListener("load", run);
+    void handle;
+  };
+}
+
+type CredentialHandler = (credential: string, nonce: string) => void;
+let initializedKey: string | null = null;
+let initializedNonce = "";
+let activeHandler: CredentialHandler | null = null;
+
+/**
+ * Google keeps only the LAST initialize() call, and the home page can mount more than one sign-in component. So it is
+ * called once per client id; later components only swap in their own handler. The nonce Google was initialised with is
+ * the one a sign-in is bound to, so it is the one handed back to the handler.
+ */
+export function initGoogleOnce(clientId: string, nonce: string, handler: CredentialHandler, extra: Record<string, unknown>): () => void {
+  activeHandler = handler;
+  if (initializedKey !== clientId) {
+    initializedKey = clientId;
+    initializedNonce = nonce;
+    window.google?.accounts.id.initialize({
+      client_id: clientId,
+      nonce,
+      ...extra,
+      callback: (resp: { credential?: string }) => {
+        if (resp.credential) activeHandler?.(resp.credential, initializedNonce);
+      },
+    });
+  }
+  return () => {
+    if (activeHandler === handler) activeHandler = null;
+  };
+}

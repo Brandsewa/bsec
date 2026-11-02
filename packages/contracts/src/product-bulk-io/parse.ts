@@ -31,6 +31,9 @@ export interface ImportProduct {
   status?: (typeof IMPORT_STATUSES)[number] | undefined;
   primaryCategory?: string | undefined;
   tags?: string[] | undefined;
+  /** Extra categories and manual collections by name or slug. Names that match nothing are skipped with a notice. */
+  categories?: string[] | undefined;
+  collections?: string[] | undefined;
   productType?: string | undefined;
   hsn?: string | undefined;
   seoTitle?: string | undefined;
@@ -74,6 +77,16 @@ export const slugify = (s: string): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
+/** Category and collection names: split on | or a comma; a path such as "Clothing > Hoodies" keeps its last part. */
+export const splitNames = (v: string): string[] => [
+  ...new Set(
+    v
+      .split(/[|,]/)
+      .map((t) => (t.includes(">") ? (t.split(">").pop() ?? "") : t).trim())
+      .filter(Boolean),
+  ),
+];
 
 const splitList = (v: string): string[] => [...new Set(v.split(/[|,]/).map((t) => t.trim()).filter(Boolean))];
 
@@ -146,6 +159,8 @@ export function parseProductRows(
     text("seoDescription", (p, v) => (p.seoDescription ??= v));
     text("imageAlt", (p, v) => (p.imageAlt ??= v));
     text("tags", (p, v) => (p.tags ??= v ? splitList(v) : []));
+    text("categories", (p, v) => (p.categories ??= v ? splitNames(v) : []));
+    text("collections", (p, v) => (p.collections ??= v ? splitNames(v) : []));
 
     const status = get("status").toLowerCase();
     if (status && !product.status) {

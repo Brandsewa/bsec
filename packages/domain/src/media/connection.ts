@@ -37,6 +37,8 @@ export interface ResolvedStorageConfig {
   directBrowserUpload?: boolean | undefined;
   accessKeyId?: string | undefined;
   secretAccessKey?: string | undefined;
+  /** The saved keys exist but this service could not decrypt them (TENANT_SECRETS_KEY missing or different here). */
+  credentialsUnreadable?: boolean | undefined;
 }
 
 export interface MediaStorageDriver {
@@ -445,6 +447,8 @@ export class S3StorageDriver implements MediaStorageDriver {
         Key: params.key,
         Body: params.body,
         ContentType: params.contentType,
+        // Keys carry ids (derivatives and imports are never overwritten in place), so the file is safe to cache for a year.
+        CacheControl: "public, max-age=31536000, immutable",
       }),
     );
   }
@@ -680,12 +684,13 @@ export async function resolveStorageConnection(
       const row = rows[0];
       let accessKeyId: string | undefined;
       let secretAccessKey: string | undefined;
+      let credentialsUnreadable = false;
 
       if (row.accessKeyIdCiphertext && row.iv) {
         try {
           accessKeyId = decryptSecret({ ciphertext: row.accessKeyIdCiphertext, iv: row.iv });
         } catch {
-          // Decryption failed (key missing/mismatch)
+          credentialsUnreadable = true;
         }
       }
 
@@ -693,7 +698,7 @@ export async function resolveStorageConnection(
         try {
           secretAccessKey = decryptSecret({ ciphertext: row.secretAccessKeyCiphertext, iv: row.iv });
         } catch {
-          // Decryption failed
+          credentialsUnreadable = true;
         }
       }
 
@@ -713,6 +718,7 @@ export async function resolveStorageConnection(
         directBrowserUpload: row.directBrowserUpload,
         accessKeyId,
         secretAccessKey,
+        credentialsUnreadable,
       };
 
       storageConfigCache.set(cacheKey, { config, expiresAt: now + 60_000 });
@@ -1026,6 +1032,12 @@ export async function getActiveStorageDriver(
   purpose: StoragePurpose = "public_media",
 ): Promise<{ driver: MediaStorageDriver; config: ResolvedStorageConfig }> {
   const config = await resolveStorageConnection(db, purpose);
+  if (config?.credentialsUnreadable && config.driver !== "local" && (!config.accessKeyId || !config.secretAccessKey)) {
+    // Storage is connected, but this service holds a different (or no) TENANT_SECRETS_KEY than the one that saved the keys.
+    throw new Error(
+      "Precondition: Image storage is connected, but this service cannot read its saved credentials. Set TENANT_SECRETS_KEY on this service to the same value as the web app, then try again.",
+    );
+  }
   if (!config || (config.driver !== "local" && (!config.accessKeyId || !config.secretAccessKey))) {
     throw new Error(
       "Precondition: Image storage is not set up yet. Ask the platform team to connect it, then try again.",

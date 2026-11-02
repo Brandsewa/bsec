@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { renderBlockTree, type BlockInstance } from "@bs/blocks";
 import "@bs/blocks/blocks.css";
-import type { BlockRenderData } from "@/components/blocks/BlockRenderer.tsx";
+import { mediaDetailsFor, type BlockRenderData } from "@/components/blocks/BlockRenderer.tsx";
 import { CartBadge } from "./CartBadge.tsx";
 import { AccountLink } from "./AccountLink.tsx";
 import { BannerClient } from "@/components/blocks/BannerClient.tsx";
@@ -35,6 +35,7 @@ export function ThemeChrome({
         locale,
         data: renderData?.data,
         mediaUrl: (id) => media[id] ?? null,
+        mediaDetails: mediaDetailsFor(renderData),
         storeName,
         logoUrl: logoUrl ?? null,
         renderLink: ({ href, className, children }) => (
