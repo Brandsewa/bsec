@@ -13,12 +13,25 @@ import { openCashfreeCheckout } from "../../lib/cashfree-checkout.ts";
  * plan, pays, and the store opens as soon as the payment is confirmed (the gateway's signed webhook, never this page).
  */
 export function ActivateStore({ storeName, onSignOut }: { storeName: string; onSignOut: () => void }) {
-  const billingQuery = useQuery(orpc.admin.planAndBilling.get.queryOptions());
+  // The page watches the payment: the gateway confirms it by webhook, a few seconds after the payer comes back.
+  const billingQuery = useQuery({ ...orpc.admin.planAndBilling.get.queryOptions(), refetchInterval: 4000 });
   const plansQuery = useQuery(orpc.admin.planAndBilling.availablePlans.queryOptions());
   const subscribe = useMutation(orpc.admin.planAndBilling.subscribe.mutationOptions());
   const [planCode, setPlanCode] = useState("");
   const [billed, setBilled] = useState<"monthly" | "yearly">("monthly");
   const [phone, setPhone] = useState("");
+  // PayPal sends the payer back with ?token=<order>; PayerID is present only when they approved (it is absent when they cancelled).
+  const [paypalReturn] = useState<"approved" | "cancelled" | null>(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.get("token")) return null;
+    return q.get("PayerID") ? "approved" : "cancelled";
+  });
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    if (!paypalReturn) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (paypalReturn === "cancelled") toast.info("Payment cancelled. Nothing was charged.");
+  }, [paypalReturn]);
 
   // The store opens by itself once the payment is confirmed: watch for it.
   const meQuery = useQuery({ queryKey: ["me", "activation"], queryFn: fetchMe, refetchInterval: 4000 });
@@ -42,7 +55,9 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const providerName = isPayPal ? "PayPal" : isCashfree ? "Cashfree" : "Razorpay";
   const payMethod = isPayPal ? "PayPal" : isCashfree ? "UPI AutoPay or card" : "card or UPI";
   const needsPhone = isCashfree && !billing?.phoneOnFile;
-  const confirming = Boolean(billing?.authorized);
+  // The payment failed when PayPal declined it after the payer came back: the subscription turns past due.
+  const failed = paypalReturn === "approved" && !retrying && billingQuery.data?.plan?.status === "past_due";
+  const confirming = !failed && (Boolean(billing?.authorized) || (paypalReturn === "approved" && !retrying));
   const freeEnds = billing?.freePeriodEndsAt ? new Date(billing.freePeriodEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : null;
   const coupon = billing?.firstPaymentCoupon;
   // Same fallback as the server (changeTenantPlan): a plan with no USD price is charged at its rupee price / 80.
@@ -64,6 +79,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
 
   const pay = (code: string) => {
     setPlanCode(code);
+    setRetrying(true);
     subscribe.mutate(
       {
         planCode: code,
@@ -94,7 +110,15 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
           <p className="text-sm text-muted-foreground">Your account is ready. Choose your plan and pay to open your store.</p>
         </div>
 
-        {confirming ? (
+        {failed ? (
+          <div role="alert" className="max-w-lg space-y-3 rounded-lg border border-border bg-card p-5 text-sm">
+            <p className="font-medium text-foreground">Your payment did not go through.</p>
+            <p className="text-muted-foreground">PayPal declined it, so nothing was charged. Try again, or use another PayPal account or card.</p>
+            <Button size="sm" onClick={() => setRetrying(true)}>
+              Choose a plan again
+            </Button>
+          </div>
+        ) : confirming ? (
           <div role="status" className="max-w-lg space-y-2 rounded-lg border border-border bg-card p-5 text-sm">
             <p className="font-medium text-foreground">Confirming your payment…</p>
             <p className="text-muted-foreground">

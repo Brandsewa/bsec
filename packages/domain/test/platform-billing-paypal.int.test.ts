@@ -226,6 +226,50 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
     expect(view.billing.provider).toBe("cashfree");
   });
 
+  describe("CHECKOUT.ORDER.APPROVED captures the order (nothing is charged until it is captured)", () => {
+    const approvedEvent = async (tenantId: string) => ({
+      id: `WH-APPROVED-${++seq}`,
+      event_type: "CHECKOUT.ORDER.APPROVED",
+      resource: { id: await storedOrderId(tenantId), status: "APPROVED", purchase_units: [{ custom_id: JSON.stringify({ tenant_id: tenantId, plan_code: "starter" }) }] },
+    });
+    const deliver = (payload: unknown, captureFn: (id: string) => Promise<{ status: "captured" | "pending" | "failed"; errorMessage?: string }>) =>
+      handlePayPalBillingWebhook(rt, { headers: {}, rawBody: JSON.stringify(payload), verifySignatureFn: async () => true, captureFn });
+
+    it("captures the approved order, once", async () => {
+      fakePayPal();
+      await enablePayPal();
+      const store = await makeStore("US");
+      await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly" });
+      const payload = await approvedEvent(store.tenantId);
+      const captureFn = vi.fn(async () => ({ status: "captured" as const }));
+      const res = await deliver(payload, captureFn);
+      expect(captureFn).toHaveBeenCalledWith(payload.resource.id);
+      expect(res.actionTaken).toBe("subscription_authenticated");
+      // The same event delivered again is a duplicate: no second capture.
+      await deliver(payload, captureFn);
+      expect(captureFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("fails the delivery when PayPal cannot capture, so PayPal retries and Super Admin shows why", async () => {
+      fakePayPal();
+      await enablePayPal();
+      const store = await makeStore("US");
+      await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly" });
+      const payload = await approvedEvent(store.tenantId);
+      await expect(deliver(payload, async () => ({ status: "failed", errorMessage: "Instrument declined" }))).rejects.toThrow(/could not capture/);
+    });
+
+    it("treats an order PayPal already captured as done", async () => {
+      fakePayPal();
+      await enablePayPal();
+      const store = await makeStore("US");
+      await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly" });
+      const payload = await approvedEvent(store.tenantId);
+      const res = await deliver(payload, async () => ({ status: "failed", errorMessage: "Order already captured.If 'intent=CAPTURE' only one capture per order is allowed." }));
+      expect(res.actionTaken).toBe("subscription_authenticated");
+    });
+  });
+
   it("processes PAYMENT.CAPTURE.COMPLETED webhook and activates subscription", async () => {
     fakePayPal();
     await enablePayPal();
