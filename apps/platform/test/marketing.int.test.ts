@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { call, ORPCError } from "@orpc/server";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { platformContract } from "@bs/contracts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { createLogger, createRuntime, getPlatformSitePage, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
+import { createLogger, createRuntime, getPlatformSiteId, getPlatformSitePage, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
 import { platformRouter, type PlatformContext } from "../src/app.ts";
 
 type Staff = { userId: string; freshSessionAt: Date };
@@ -85,7 +85,14 @@ describe("Marketing access", () => {
   });
 
   it("asks for setup before the record exists", async () => {
-    expect(await codeOf(run("marketing.menus.list", undefined, ctx(admin)))).toBe("PRECONDITION_FAILED");
+    // Another file may have created the record already, so hide it for this check rather than rely on file order.
+    const existing = await getPlatformSiteId(rt._db.db);
+    if (existing) await rt._db.db.update(schema.tenants).set({ kind: "store" }).where(eq(schema.tenants.id, existing));
+    try {
+      expect(await codeOf(run("marketing.menus.list", undefined, ctx(admin)))).toBe("PRECONDITION_FAILED");
+    } finally {
+      if (existing) await rt._db.db.update(schema.tenants).set({ kind: "platform_site" }).where(eq(schema.tenants.id, existing));
+    }
   });
 });
 

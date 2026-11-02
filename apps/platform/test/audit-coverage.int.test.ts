@@ -89,7 +89,15 @@ async function mkTemplate(): Promise<string> {
 
 const CASES: Record<string, Case> = {
   "settings.update": { role: "platform_owner", action: "platform_settings.update", input: async () => ({ requireStaffMfa: true }) },
-  "marketing.enable": { role: "platform_admin", action: "platform_site.create", input: async () => undefined },
+  "marketing.enable": {
+    role: "platform_admin",
+    action: "platform_site.create",
+    input: async () => {
+      // Another file may have set the record up already; this case needs the first-time path.
+      await rt._db.db.update(schema.tenants).set({ kind: "store", slug: `old-site-${++seq}` }).where(eq(schema.tenants.kind, "platform_site"));
+      return undefined;
+    },
+  },
   "templates.create": { role: "platform_admin", action: "theme_template.create", input: async () => ({ name: `Created Theme ${++seq}` }) },
   "templates.saveDraft": {
     role: "platform_admin",
