@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
-import { createCategory, createProduct, createRuntime, exportProductRows, provisionTenant, type Runtime, type TenantContext } from "../src/index.ts";
+import { createCategory, createCollection, createProduct, createRuntime, exportProductRows, provisionTenant, type Runtime, type TenantContext } from "../src/index.ts";
 
 let env: TestDb;
 let rt: Runtime;
@@ -33,6 +33,8 @@ beforeAll(async () => {
 
   const tops = await createCategory(rt, ctxA, { name: "Tops" });
   topsId = tops.id;
+  const seasonal = await createCategory(rt, ctxA, { name: "Seasonal" });
+  const spring = await createCollection(rt, ctxA, { title: "Spring edit" });
   await createProduct(rt, ctxA, {
     title: "Tee",
     slug: "tee",
@@ -42,6 +44,8 @@ beforeAll(async () => {
     tags: ["summer", "cotton"],
     seo: { title: "Tee SEO", description: "Tee meta" },
     primaryCategoryId: topsId,
+    extraCategoryIds: [seasonal.id],
+    collectionIds: [spring.id],
     options: [{ name: "Size", values: ["S", "M"] }],
     variants: [
       { sku: "TEE-S", title: "S", price: 49900, compareAtPrice: 59900, optionValues: { Size: "S" } },
@@ -71,6 +75,12 @@ describe("exportProductRows (real Postgres)", () => {
     expect(tee[0]?.[col(res, "Description")]).toBe("Line one\n\nLine two");
     expect(tee[0]?.[col(res, "Option 1 name")]).toBe("Size");
     expect(tee[1]?.[col(res, "Option 1 value")]).toBe("M");
+  });
+
+  it("exports other categories and collections by name", async () => {
+    const res = await exportProductRows(rt, ctxA, { fields: ["categories", "collections"], categoryIds: [topsId] });
+    expect(res.header).toEqual(["URL handle", "Other categories", "Collections"]);
+    expect(res.rows[0]?.slice(1)).toEqual(["Seasonal", "Spring edit"]);
   });
 
   it("never returns another store's products", async () => {

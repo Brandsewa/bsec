@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { autoMapHeaders } from "@bs/contracts/product-bulk-io";
 import { importDescriptionToText, toRichTextHtml } from "@bs/contracts/product-bulk-io";
 import { checkImageUrl, isBlockedAddress, sniffImageMime } from "../src/catalog/bulk-io/image-guard.ts";
-import { parsePriceCell, parseProductRows } from "@bs/contracts/product-bulk-io";
+import { parsePriceCell, parseProductRows, splitNames } from "@bs/contracts/product-bulk-io";
 
 describe("autoMapHeaders", () => {
   it("matches our headers, Shopify headers and custom fields, each field once", () => {
@@ -105,5 +105,22 @@ describe("image guard", () => {
     expect(sniffImageMime(new TextEncoder().encode("<!doctype html><html>"))).toBeNull();
     const webp = new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ");
     expect(sniffImageMime(webp)).toBe("image/webp");
+  });
+});
+
+describe("categories and collections columns", () => {
+  it("splits names on | or a comma, keeps the last part of a path and drops repeats", () => {
+    expect(splitNames("Tops| Summer wear, Clothing > Hoodies ,Tops")).toEqual(["Tops", "Summer wear", "Hoodies"]);
+    expect(splitNames("  ")).toEqual([]);
+  });
+
+  it("maps our headers and common aliases to separate fields", () => {
+    expect(autoMapHeaders(["Primary collection", "Other categories", "Collections"])).toEqual(["primaryCategory", "categories", "collections"]);
+    expect(autoMapHeaders(["Category", "Categories", "Collection"])).toEqual(["primaryCategory", "categories", "collections"]);
+  });
+
+  it("reads both columns onto the product", () => {
+    const { products } = parseProductRows([["a", "A", "Tops", "Summer|Sale", "New arrivals, Offers"]], ["handle", "title", "primaryCategory", "categories", "collections"], "INR");
+    expect(products[0]).toMatchObject({ primaryCategory: "Tops", categories: ["Summer", "Sale"], collections: ["New arrivals", "Offers"] });
   });
 });
