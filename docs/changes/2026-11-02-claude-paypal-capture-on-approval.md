@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `fix/paypal-capture-on-approval` (not merged yet)
+- **Branch:** `fix/paypal-capture-on-approval` (merged in #190, dc9c9f8)
 - **Area:** domain, admin, docs
 - **Type:** fix
 - **Supersedes:** none

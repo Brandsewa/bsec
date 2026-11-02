@@ -485,6 +485,7 @@ export const platformPlansContract = {
       number: z.string(),
       amountPaise: z.number(),
       taxPaise: z.number(),
+      currency: z.string().optional(),
       status: z.string(),
       issuedAt: z.string(),
     }))),

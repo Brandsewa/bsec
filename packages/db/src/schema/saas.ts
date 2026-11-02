@@ -105,6 +105,8 @@ export const platformInvoices = pgTable("platform_invoices", {
   number: text("number").notNull().unique(),
   amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
   taxPaise: bigint("tax_paise", { mode: "number" }).notNull(),
+  // The currency of `amountPaise` (minor units): INR for Indian stores, USD (cents) for stores outside India. No GST on non-INR.
+  currency: char("currency", { length: 3 }).notNull().default("INR"),
   status: text("status").notNull().default("issued"), // issued, paid, void
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().default(sql`now()`),
   paidAt: timestamp("paid_at", { withTimezone: true }),

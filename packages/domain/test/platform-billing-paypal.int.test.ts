@@ -250,6 +250,26 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
       expect(captureFn).toHaveBeenCalledTimes(1);
     });
 
+    it("does not capture an order that is no longer the store's current one, or a store that is already paid", async () => {
+      fakePayPal();
+      await enablePayPal();
+      const store = await makeStore("US");
+      await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly" });
+      const staleOrderId = await storedOrderId(store.tenantId);
+      // The payer starts checkout again: a new order replaces the first one.
+      await subscribeToPlan(rt, store.ctx, { planCode: "starter", interval: "monthly" });
+      const captureFn = vi.fn(async () => ({ status: "captured" as const }));
+      const stale = { id: `WH-STALE-${++seq}`, event_type: "CHECKOUT.ORDER.APPROVED", resource: { id: staleOrderId, purchase_units: [{ custom_id: JSON.stringify({ tenant_id: store.tenantId, plan_code: "starter" }) }] } };
+      await deliver(stale, captureFn);
+      expect(captureFn).not.toHaveBeenCalled();
+
+      // Once the store is active, a (re)delivered approval for its order captures nothing either.
+      await rt._db.db.update(schema.subscriptions).set({ status: "active" }).where(eq(schema.subscriptions.tenantId, store.tenantId));
+      const current = await approvedEvent(store.tenantId);
+      await deliver(current, captureFn);
+      expect(captureFn).not.toHaveBeenCalled();
+    });
+
     it("fails the delivery when PayPal cannot capture, so PayPal retries and Super Admin shows why", async () => {
       fakePayPal();
       await enablePayPal();
@@ -324,6 +344,20 @@ describe("WP-5: PayPal platform billing for global merchants", () => {
       .orderBy(desc(schema.subscriptions.createdAt))
       .limit(1);
     expect(subRow?.status).toBe("active");
+
+    // The invoice is in USD (cents) with no GST: PayPal charges stores outside India, an export of services.
+    const invoices = await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, store.tenantId));
+    expect(invoices).toHaveLength(1);
+    expect(invoices[0]).toMatchObject({ currency: "USD", amountPaise: 2900, taxPaise: 0, status: "paid" });
+
+    // The same capture delivered under a second event id still gives one invoice.
+    await handlePayPalBillingWebhook(rt, {
+      headers: {},
+      rawBody: JSON.stringify({ ...webhookPayload, id: `WH-EVENT-${++seq}` }),
+      verifySignatureFn: async () => true,
+    });
+    const again = await rt._db.db.select().from(schema.platformInvoices).where(eq(schema.platformInvoices.tenantId, store.tenantId));
+    expect(again).toHaveLength(1);
   });
 
   it("handles failed payment / capture decline and dunning limiting suspends store and disables extra markets", async () => {

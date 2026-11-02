@@ -408,7 +408,7 @@ export function PlanAndBillingPage() {
                           {new Date(inv.issuedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                         </td>
                         <td className="p-3 font-medium text-foreground">
-                          {formatMoney(inv.amountPaise, billingCurrency)}
+                          {formatMoney(inv.amountPaise, inv.currency ?? billingCurrency)}
                         </td>
                         <td className="p-3">
                           <Badge variant={inv.status === "paid" ? "outline" : "secondary"}>

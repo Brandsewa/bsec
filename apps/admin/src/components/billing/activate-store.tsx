@@ -36,8 +36,13 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   // The store opens by itself once the payment is confirmed: watch for it.
   const meQuery = useQuery({ queryKey: ["me", "activation"], queryFn: fetchMe, refetchInterval: 4000 });
   const stillRequired = meQuery.data?.stores.some((s) => s.paymentRequired) ?? true;
+  // Once the payment is confirmed, say so for a moment before opening the store.
+  const [opening, setOpening] = useState(false);
   useEffect(() => {
-    if (meQuery.data && !stillRequired) window.location.assign("/");
+    if (!meQuery.data || stillRequired) return;
+    setOpening(true);
+    const t = window.setTimeout(() => window.location.assign("/"), 2500);
+    return () => window.clearTimeout(t);
   }, [meQuery.data, stillRequired]);
 
   const plans = plansQuery.data ?? [];
@@ -110,7 +115,14 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
           <p className="text-sm text-muted-foreground">Your account is ready. Choose your plan and pay to open your store.</p>
         </div>
 
-        {failed ? (
+        {opening ? (
+          <div role="status" className="max-w-lg space-y-2 rounded-lg border border-border bg-card p-5 text-sm">
+            <p className="flex items-center gap-2 font-medium text-foreground">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Payment successful
+            </p>
+            <p className="text-muted-foreground">Thank you. Opening your store now…</p>
+          </div>
+        ) : failed ? (
           <div role="alert" className="max-w-lg space-y-3 rounded-lg border border-border bg-card p-5 text-sm">
             <p className="font-medium text-foreground">Your payment did not go through.</p>
             <p className="text-muted-foreground">PayPal declined it, so nothing was charged. Try again, or use another PayPal account or card.</p>

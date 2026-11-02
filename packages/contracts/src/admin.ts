@@ -1684,6 +1684,8 @@ export const PlanAndBillingInvoiceItem = z.object({
   paidAt: z.string().nullable().optional(),
   amountPaise: z.number().int(),
   taxPaise: z.number().int(),
+  /** Currency of the amounts (minor units): INR, or USD for stores outside India. Absent on old responses means INR. */
+  currency: z.string().optional(),
   status: z.enum(["issued", "paid", "void"]),
   downloadable: z.boolean(),
 });

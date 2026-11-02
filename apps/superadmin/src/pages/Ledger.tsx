@@ -62,9 +62,10 @@ function PlatformInvoices() {
             <TableRow key={inv.id} className="transition-colors hover:bg-muted/30">
               <TableCell className="px-4 font-mono text-xs font-semibold">{inv.number}</TableCell>
               <TableCell className="text-xs">{inv.tenantName || inv.tenantId}</TableCell>
-              <TableCell className="text-xs">{formatMoney(inv.amountPaise, "INR")}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">{formatMoney(inv.taxPaise, "INR")}</TableCell>
-              <TableCell className="text-xs font-semibold">{formatMoney(inv.amountPaise + inv.taxPaise, "INR")}</TableCell>
+              {/* amountPaise is what the store paid, tax included; USD invoices (stores outside India) carry no GST. */}
+              <TableCell className="text-xs">{formatMoney(inv.amountPaise - inv.taxPaise, inv.currency ?? "INR")}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{formatMoney(inv.taxPaise, inv.currency ?? "INR")}</TableCell>
+              <TableCell className="text-xs font-semibold">{formatMoney(inv.amountPaise, inv.currency ?? "INR")}</TableCell>
               <TableCell>
                 <StatusBadge tone={tone(inv.status)} label={inv.status} />
               </TableCell>
