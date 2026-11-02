@@ -29,6 +29,10 @@ The owner signed up a US store (USD) with PayPal sandbox credentials accepted in
 - **Known:** the order is created in USD (`createSubscription`, `currency_code: "USD"`). The error is PayPal's, raised at approval, so the order itself was accepted.
 - **Likely cause (not confirmed):** the sandbox business account that owns the REST app, or the buyer, is India-region, which cannot receive or pay in USD that way. To check: create a US-region sandbox Business account and a US Personal buyer, make a new REST app under that business account, and put its keys in Super Admin.
 
+### 4. Still "seller doesn't accept payments in your currency" with USD shown and the owner's PayPal receiving USD and CAD (open)
+- **Known:** the Activate screen now shows USD and "PayPal sandbox", and the order is created in USD (PayPal accepts it). The error comes from PayPal's own page after the sandbox buyer logs in. The order carries no payee or currency override, so the cause is on the PayPal accounts.
+- **To check (owner):** the live PayPal dashboard is not the sandbox. In developer.paypal.com, Apps & Credentials (Sandbox), open the app Brand Sewa uses and note its sandbox business account; log in to that sandbox business account and check Settings, Payment preferences: "Block payments sent to me in a currency I do not hold" must be off, and the account must hold USD (Wallet, add currency). Also check the account's country and the buyer's country.
+
 ## Decisions and trade-offs
 - The percent-off coupon and free-months copy is not shown to PayPal merchants. The server computes the coupon discount in paise and `PayPalBillingSubscriptionProvider` ignores `firstPaymentPaise`, so showing a discount would promise something the charge would not do. Needs an owner decision (see below).
 

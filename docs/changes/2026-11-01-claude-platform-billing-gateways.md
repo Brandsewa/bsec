@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-01
 - **Agent:** claude
-- **Branch:** `feat/platform-billing-gateways` (not merged yet)
+- **Branch:** `feat/platform-billing-gateways` (merged in #188, 0e1a3ce)
 - **Area:** db, domain, contracts, superadmin, admin
 - **Type:** feature
 - **Supersedes:** none (the sandbox walkthrough issues are in `2026-11-01-claude-intl-billing-sandbox-issues.md`)
