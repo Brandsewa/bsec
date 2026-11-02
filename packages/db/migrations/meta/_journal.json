@@ -617,6 +617,13 @@
       "when": 1793496300000,
       "tag": "0093_platform_billing_paypal_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793496400000,
+      "tag": "0094_platform_invoice_currency",
+      "breakpoints": true
     }
   ]
 }

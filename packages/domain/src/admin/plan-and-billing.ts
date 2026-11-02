@@ -232,6 +232,7 @@ export async function getPlanAndBilling(
       paidAt: inv.paidAt?.toISOString() ?? null,
       amountPaise: inv.amountPaise,
       taxPaise: inv.taxPaise,
+      currency: inv.currency,
       status: inv.status as "issued" | "paid" | "void",
       downloadable: true, // rendered on demand (billing B6)
     }));

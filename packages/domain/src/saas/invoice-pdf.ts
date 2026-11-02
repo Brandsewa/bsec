@@ -16,6 +16,8 @@ export interface InvoicePdfData {
   paidAt: Date | null;
   amountPaise: number;
   taxPaise: number;
+  /** Currency of the amounts (minor units). INR gets a GST tax invoice; anything else a plain invoice with no GST. */
+  currency?: string;
   planName: string;
   interval: string;
   seller: InvoiceProfile;
@@ -28,6 +30,12 @@ const DEFAULT_PROFILE: InvoiceProfile = { legalName: null, address: null, state:
 export function pdfMoney(paise: number): string {
   const rupees = (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `Rs. ${rupees}`;
+}
+
+/** Amounts in a non-rupee currency, written with the ISO code (standard PDF fonts cover "USD 31.24" everywhere). */
+export function pdfAmount(minor: number, currency: string): string {
+  if (currency.toUpperCase() === "INR") return pdfMoney(minor);
+  return `${currency.toUpperCase()} ${(minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Same state on both sides means CGST plus SGST; otherwise (or when a state is unknown) IGST. */
@@ -83,7 +91,7 @@ export async function loadInvoicePdfData(rt: Runtime, tenantId: string, invoiceI
     };
   });
 
-  return { number: inv.number, issuedAt: inv.issuedAt, paidAt: inv.paidAt, amountPaise: inv.amountPaise, taxPaise: inv.taxPaise, planName, interval, seller, buyer };
+  return { number: inv.number, issuedAt: inv.issuedAt, paidAt: inv.paidAt, amountPaise: inv.amountPaise, taxPaise: inv.taxPaise, currency: inv.currency, planName, interval, seller, buyer };
 }
 
 export function renderPlatformInvoicePdf(d: InvoicePdfData): Promise<Buffer> {
@@ -98,7 +106,10 @@ export function renderPlatformInvoicePdf(d: InvoicePdfData): Promise<Buffer> {
     const left = 48;
     const right = 547;
 
-    doc.font("Helvetica-Bold").fontSize(18).text("TAX INVOICE", left, 48);
+    const currency = (d.currency ?? "INR").toUpperCase();
+    const gst = currency === "INR";
+    const money = (minor: number) => pdfAmount(minor, currency);
+    doc.font("Helvetica-Bold").fontSize(18).text(gst ? "TAX INVOICE" : "INVOICE", left, 48);
     doc.font("Helvetica").fontSize(9).fillColor("#555555").text(d.paidAt ? "Paid" : "Issued", right - 100, 52, { width: 100, align: "right" });
     doc.fillColor("#000000");
 
@@ -119,8 +130,8 @@ export function renderPlatformInvoicePdf(d: InvoicePdfData): Promise<Buffer> {
     doc.fillColor("#000000").font("Helvetica-Bold").fontSize(11).text(d.buyer.name, left, 200);
     doc.font("Helvetica").fontSize(9);
     if (d.buyer.address) doc.text(d.buyer.address, { width: 300 });
-    if (d.buyer.state) doc.text(`State (place of supply): ${d.buyer.state}`);
-    if (d.buyer.gstin) doc.text(`GSTIN: ${d.buyer.gstin}`);
+    if (gst && d.buyer.state) doc.text(`State (place of supply): ${d.buyer.state}`);
+    if (gst && d.buyer.gstin) doc.text(`GSTIN: ${d.buyer.gstin}`);
     if (d.buyer.email) doc.text(d.buyer.email);
 
     // Lines
@@ -128,14 +139,14 @@ export function renderPlatformInvoicePdf(d: InvoicePdfData): Promise<Buffer> {
     doc.rect(left, top, right - left, 22).fill("#f2f4f3");
     doc.fillColor("#000000").font("Helvetica-Bold").fontSize(9);
     doc.text("Description", left + 8, top + 7);
-    doc.text("SAC", 330, top + 7, { width: 60 });
+    if (gst) doc.text("SAC", 330, top + 7, { width: 60 });
     doc.text("Amount", 430, top + 7, { width: right - 438, align: "right" });
 
     const taxable = d.amountPaise - d.taxPaise;
     doc.font("Helvetica").fontSize(10);
     doc.text(`${d.planName} plan (${d.interval})`, left + 8, top + 34, { width: 270 });
-    doc.text(d.seller.sac ?? "-", 330, top + 34, { width: 60 });
-    doc.text(pdfMoney(taxable), 430, top + 34, { width: right - 438, align: "right" });
+    if (gst) doc.text(d.seller.sac ?? "-", 330, top + 34, { width: 60 });
+    doc.text(money(taxable), 430, top + 34, { width: right - 438, align: "right" });
 
     // Totals
     let y = top + 80;
@@ -144,18 +155,27 @@ export function renderPlatformInvoicePdf(d: InvoicePdfData): Promise<Buffer> {
       doc.text(value, 430, y, { width: right - 438, align: "right" });
       y += 18;
     };
-    row("Taxable value", pdfMoney(taxable));
-    for (const t of taxSplit(d.taxPaise, d.seller.state, d.buyer.state)) {
-      const rate = d.seller.gstRateBps / (taxSplit(d.taxPaise, d.seller.state, d.buyer.state).length === 2 ? 200 : 100);
-      row(`${t.label} (${rate}%)`, pdfMoney(t.paise));
+    if (gst) {
+      row("Taxable value", money(taxable));
+      for (const t of taxSplit(d.taxPaise, d.seller.state, d.buyer.state)) {
+        const rate = d.seller.gstRateBps / (taxSplit(d.taxPaise, d.seller.state, d.buyer.state).length === 2 ? 200 : 100);
+        row(`${t.label} (${rate}%)`, money(t.paise));
+      }
     }
     doc.moveTo(330, y).lineTo(right, y).strokeColor("#cccccc").stroke();
     y += 6;
-    row("Total", pdfMoney(d.amountPaise), true);
+    row("Total", money(d.amountPaise), true);
 
     doc.font("Helvetica").fontSize(8).fillColor("#666666");
-    doc.text("The plan price includes GST. This is a computer generated invoice and needs no signature.", left, 760, { width: right - left });
-    if (!d.seller.gstin) doc.text("Seller GST details are not configured yet.", left, 774, { width: right - left });
+    doc.text(
+      gst
+        ? "The plan price includes GST. This is a computer generated invoice and needs no signature."
+        : "No GST is charged on this invoice (export of services). This is a computer generated invoice and needs no signature.",
+      left,
+      760,
+      { width: right - left },
+    );
+    if (gst && !d.seller.gstin) doc.text("Seller GST details are not configured yet.", left, 774, { width: right - left });
 
     doc.end();
   });

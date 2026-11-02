@@ -501,6 +501,8 @@ type BillingEvent =
       planCodeNote?: string | undefined;
       amountPaise: number;
       paymentId: string | null;
+      /** ISO currency of `amountPaise` (minor units); omitted means INR. PayPal charges are USD. */
+      currency?: string | undefined;
       currentStart?: Date | undefined;
       /** Omit to use the default of 30 days; "interval" derives it from the subscription's monthly or yearly interval. */
       currentEnd?: Date | "interval" | undefined;
@@ -545,7 +547,9 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
 
     // The plan price is quoted inclusive of GST; the rate is Super Admin, Platform billing, Invoice details (default 18%).
     const gstRateBps = (await loadInvoiceProfile(db)).gstRateBps;
-    const taxPaise = Math.round((ev.amountPaise * gstRateBps) / (10000 + gstRateBps));
+    // GST applies to INR invoices only: a USD invoice to a store outside India is an export of services, with no GST charged here.
+    const currency = (ev.currency ?? "INR").toUpperCase();
+    const taxPaise = currency === "INR" ? Math.round((ev.amountPaise * gstRateBps) / (10000 + gstRateBps)) : 0;
 
     // Do the invoice, subscription and tier writes in ONE transaction
     await db.transaction(async (tx) => {
@@ -585,6 +589,7 @@ async function applyBillingEvent(db: Db, ev: BillingEvent): Promise<string> {
           number: await nextPlatformInvoiceNumber(tx, issuedAt),
           amountPaise: ev.amountPaise,
           taxPaise,
+          currency,
           status: "paid",
           issuedAt,
           paidAt: issuedAt,
@@ -1039,6 +1044,7 @@ export async function handlePayPalBillingWebhook(
         // Convert to minor units (for GST calculation & invoice, uses minor units)
         amountPaise: amountCents, // Stored as minor unit cents
         paymentId: captureId,
+        currency,
         currentStart: new Date(),
         currentEnd: "interval",
       };
@@ -1049,7 +1055,13 @@ export async function handlePayPalBillingWebhook(
     // the store. A capture that fails throws, so the delivery shows as failed in Super Admin and PayPal retries it.
     if (eventType === "CHECKOUT.ORDER.APPROVED") {
       const orderId = String(resource.id ?? "");
-      const captureOrder = params.captureFn ?? (creds ? (id: string) => new PayPalProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, mode: creds.mode === "live" ? "live" : "sandbox" }).captureOrder(id) : undefined);
+      // Only the store's current order is captured, and only while the store is not already paid. An older order (the payer started
+      // checkout again) or a resent approval must never charge a second time.
+      const [current] = orderId
+        ? await db.select({ status: schema.subscriptions.status }).from(schema.subscriptions).where(eq(schema.subscriptions.providerSubscriptionId, orderId)).limit(1)
+        : [];
+      const capturable = Boolean(current) && current?.status !== "active";
+      const captureOrder = !capturable ? undefined : params.captureFn ?? (creds ? (id: string) => new PayPalProvider({ clientId: creds.keyId, clientSecret: creds.keySecret, mode: creds.mode === "live" ? "live" : "sandbox" }).captureOrder(id) : undefined);
       if (orderId && captureOrder) {
         const capture = await captureOrder(orderId);
         // An order PayPal has already captured (a redelivered event) is fine; anything else that is not paid is a failure to see.

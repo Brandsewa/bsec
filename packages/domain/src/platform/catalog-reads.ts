@@ -73,6 +73,7 @@ export async function listPlatformInvoices(rt: Runtime, page?: Page) {
       number: schema.platformInvoices.number,
       amountPaise: schema.platformInvoices.amountPaise,
       taxPaise: schema.platformInvoices.taxPaise,
+      currency: schema.platformInvoices.currency,
       status: schema.platformInvoices.status,
       issuedAt: schema.platformInvoices.issuedAt,
       tenantName: schema.tenants.name,
@@ -90,6 +91,7 @@ export async function listPlatformInvoices(rt: Runtime, page?: Page) {
     number: r.number,
     amountPaise: Number(r.amountPaise),
     taxPaise: Number(r.taxPaise),
+    currency: r.currency,
     status: r.status,
     issuedAt: r.issuedAt.toISOString(),
   }));
