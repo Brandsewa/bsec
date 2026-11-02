@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `fix/import-optional-collection` (not merged yet)
+- **Branch:** `fix/import-optional-collection` (merged in #196)
 - **Area:** domain (catalog bulk-io), admin
 - **Type:** fix
 - **Supersedes:** the "unknown collection rejects the product" rule in `2026-10-31-claude-product-bulk-import-export.md` (owner decision, 2026-11-02); the rest of that record stands
@@ -26,7 +26,7 @@ Importing about 100 products with 200+ images worked, except products whose prim
 - Matching is unchanged (name or slug, case-insensitive). Collections are never created automatically.
 
 ## Verification
-- Ran: unit tests for the new columns (44 in `product-bulk-io`), domain, contracts and admin typecheck, eslint on the touched code, `pnpm docs:check`. See the real-database result below.
+- Ran: unit tests for the new columns (44 in `product-bulk-io`), domain, contracts and admin typecheck, eslint on the touched code, `pnpm docs:check`. Real-database tests ran in CI (see the PR checks), not locally.
 - NOT verified: driven by hand in the admin after this change; production.
 
 ## Docs updated
