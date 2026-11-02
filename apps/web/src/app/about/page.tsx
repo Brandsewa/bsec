@@ -1,14 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { CompanyBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
+import { CheckIcon, GlobeIcon, LockIcon, SparkIcon } from "@/components/marketing/home/icons.tsx";
+import { FinalCta } from "@/components/marketing/home/sections.tsx";
 
 export const metadata: Metadata = {
   title: "About us | BCOM",
   description: "BCOM (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/about" },
 };
+
+const OFFER = [
+  "a storefront with ready-made themes and a visual, no-code theme builder;",
+  "products with variants, categories, collections and stock;",
+  "online payments (UPI, cards and net banking) and cash on delivery, with GST tax invoices;",
+  "orders, returns and exchanges;",
+  "customers and segments, discounts, staff accounts and roles.",
+];
 
 export default function AboutPage() {
   return (
@@ -17,7 +27,7 @@ export default function AboutPage() {
         eyebrow="About us"
         title="An e-commerce platform built for how India sells, and for how people will shop next."
       />
-      <article className="doc">
+      <DocBody>
         <h2>Who we are</h2>
         <p>
           {SITE.product} ({SITE.domain}) is a product of{" "}
@@ -28,12 +38,10 @@ export default function AboutPage() {
         <p>
           You pick a store name and get a complete online store on <strong>yourname.{SITE.domain}</strong> with an admin to run it. Today that includes:
         </p>
-        <ul>
-          <li>a storefront with ready-made themes and a visual, no-code theme builder;</li>
-          <li>products with variants, categories, collections and stock;</li>
-          <li>online payments (UPI, cards and net banking) and cash on delivery, with GST tax invoices;</li>
-          <li>orders, returns and exchanges;</li>
-          <li>customers and segments, discounts, staff accounts and roles.</li>
+        <ul className="checks">
+          {OFFER.map((x) => (
+            <li key={x}><CheckIcon size={15} />{x}</li>
+          ))}
         </ul>
         <p>
           Every plan starts with a 14-day free trial. See <Link href="/pricing">pricing</Link> for plans in rupees.
@@ -47,18 +55,19 @@ export default function AboutPage() {
         </p>
 
         <h2>How we work</h2>
-        <ul>
-          <li>We say what works today and mark what is coming.</li>
-          <li>India first: rupees, GST, cash on delivery and the way Indian shoppers buy.</li>
-          <li>Your store and your customers&rsquo; data stay yours.</li>
-        </ul>
+        <div className="joined trio">
+          <div className="cell"><SparkIcon /><p>We say what works today and mark what is coming.</p></div>
+          <div className="cell"><GlobeIcon /><p>India first: rupees, GST, cash on delivery and the way Indian shoppers buy.</p></div>
+          <div className="cell"><LockIcon /><p>Your store and your customers&rsquo; data stay yours.</p></div>
+        </div>
 
         <h2>The company</h2>
         <CompanyBox />
         <p>
           Questions? <Link href="/contact">Contact us</Link>.
         </p>
-      </article>
+      </DocBody>
+      <FinalCta />
     </PageFrame>
   );
 }

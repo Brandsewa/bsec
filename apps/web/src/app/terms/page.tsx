@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -14,7 +14,7 @@ export default function TermsPage() {
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Terms of service" intro={`The rules for using ${SITE.product}, written to be read.`} />
-      <article className="doc">
+      <DocBody>
         <LegalMeta />
         <Summary>
           <p>
@@ -157,7 +157,7 @@ export default function TermsPage() {
         </p>
 
         <RelatedLinks />
-      </article>
+      </DocBody>
     </PageFrame>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -13,7 +13,7 @@ export default function ShippingPolicyPage() {
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Delivery policy" intro={`${SITE.product} is delivered online. Nothing is shipped.`} />
-      <article className="doc">
+      <DocBody>
         <LegalMeta />
         <Summary>
           <p>
@@ -39,7 +39,7 @@ export default function ShippingPolicyPage() {
         </p>
 
         <RelatedLinks />
-      </article>
+      </DocBody>
     </PageFrame>
   );
 }

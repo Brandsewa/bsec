@@ -1,19 +1,14 @@
 import Link from "next/link";
-import { ADDRESS_LINE, SITE } from "../site-info.ts";
+import { ADDRESS_LINE, SITE } from "../landing/site-info.ts";
 
-export function SiteFooter() {
+export function HomeFooter() {
   return (
-    <footer className="sfoot">
+    <footer className="foot">
       <div className="wrap">
-        <div className="sf-grid">
-          <div className="sf-brand">
-            <Link className="logo" href="/" aria-label={`${SITE.product} home`}>
-              <i>B</i>{SITE.product}
-            </Link>
-            <p>
-              {SITE.product} ({SITE.domain}) is a product of{" "}
-              <a href={SITE.parentUrl} rel="noopener">{SITE.legalName}</a>.
-            </p>
+        <div className="foot-grid">
+          <div className="foot-brand">
+            <Link className="logo" href="/" aria-label={`${SITE.product} home`}><i>B</i>{SITE.product}</Link>
+            <p>{SITE.product} ({SITE.domain}) is a product of <a href={SITE.parentUrl} rel="noopener">{SITE.legalName}</a>.</p>
             <address>
               {ADDRESS_LINE}
               <br />
@@ -22,7 +17,7 @@ export function SiteFooter() {
           </div>
           <nav aria-label="Product">
             <h4>Product</h4>
-            <Link href="/#ready">Ready today</Link>
+            <Link href="/#ready">Features</Link>
             <Link href="/#ai">AI shopping</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/signup">Start free trial</Link>
@@ -42,9 +37,8 @@ export function SiteFooter() {
             <Link href="/shipping-policy">Delivery policy</Link>
           </nav>
         </div>
-        <p className="sf-legal">
-          © {new Date().getFullYear()} {SITE.legalName}. CIN {SITE.cin} · GSTIN {SITE.gstin}. Chats, brands and figures in the previews on this site are
-          illustrations.
+        <p className="foot-legal">
+          © {new Date().getFullYear()} {SITE.legalName}. CIN {SITE.cin} · GSTIN {SITE.gstin}. Chats, brands, orders and figures in the previews on this site are illustrations.
         </p>
       </div>
     </footer>

@@ -9,10 +9,9 @@ import { formatMoney } from "@bs/contracts/money";
 import { postalCodeProblem, regionsFor, POSTAL_LABEL } from "@bs/domain/addresses";
 import { INDIAN_STATES } from "@/lib/india";
 import { loadGoogleScript } from "@/lib/google-identity.ts";
-import { fontSerifDisplay } from "@/lib/fonts.ts";
-import { Nav } from "@/components/marketing/landing/sections/Nav.tsx";
-import { SiteFooter } from "@/components/marketing/landing/sections/Footer.tsx";
-import "@/components/marketing/landing/landing.css";
+import { HomeFooter } from "@/components/marketing/home/HomeFooter.tsx";
+import { HomeNav } from "@/components/marketing/home/HomeNav.tsx";
+import { HomeRoot } from "@/components/marketing/home/HomeRoot.tsx";
 
 interface PlanOption {
   code: string;
@@ -76,7 +75,7 @@ function PlanCompare() {
                   <td colSpan={view.plans.length + 1} className="pt-3 pb-1 text-sm font-semibold">{g.groupName}</td>
                 </tr>
                 {g.rows.map((r) => (
-                  <tr key={r.label} className="border-t border-white/10">
+                  <tr key={r.label} className="su-row">
                     <td className="py-1.5 pr-3" title={r.tooltip ?? undefined}>{r.label}</td>
                     {view.plans.map((p) => (
                       <td key={p.code} className="px-2 py-1.5">{compareCellText(r.cells[p.code])}</td>
@@ -126,7 +125,7 @@ function planChips(plan: PlanOption): string[] {
 function SignupContent() {
   const searchParams = useSearchParams();
 
-  // Wizard state (Steps 1 to 5)
+  // Wizard state (Steps 1 to 4)
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [promoCode, setPromoCode] = useState(searchParams.get("promo") || "");
@@ -522,7 +521,7 @@ function SignupContent() {
         <div className="bm-panel mb-8 space-y-4 p-6 text-left">
           <div>
             <span className="bm-label">Live Storefront URL</span>
-            <div className="bm-code mt-1" style={{ color: "#7ee8c6" }}>
+            <div className="bm-code mt-1" style={{ color: "var(--ok)" }}>
               <a href={provisionSuccess.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:opacity-70 transition-opacity">
                 {provisionSuccess.storeUrl}
               </a>
@@ -563,14 +562,14 @@ function SignupContent() {
       {/* Header */}
       <div className="text-center mb-10">
         <h1 className="su-title">
-          Create your <i>online store</i>
+          Create your online store
         </h1>
         <p className="bm-dim mt-3 text-sm">{trialDays > 0 ? `${trialDays}-day free trial · ` : ""}Setup takes 2 minutes</p>
       </div>
 
       {/* Step Indicator */}
       <div className="flex items-center justify-between mb-8 px-2 max-w-md mx-auto">
-        {[1, 2, 3, 4, 5].map((s) => (
+        {[1, 2, 3, 4].map((s) => (
           <div key={s} className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
@@ -583,7 +582,7 @@ function SignupContent() {
             >
               {step > s ? "✓" : s}
             </div>
-            {s < 5 && (
+            {s < 4 && (
               <div
                 className={`w-6 sm:w-10 h-0.5 mx-1 transition-all ${
                   step > s ? "bm-line-on" : "bm-line-off"
@@ -665,9 +664,9 @@ function SignupContent() {
                 {isCheckingSlug ? (
                   <span className="bm-dim">Checking availability...</span>
                 ) : slugStatus?.available ? (
-                  <span style={{ color: "#7ee8c6" }}>✓ {slug}.bcom.si is available</span>
+                  <span style={{ color: "var(--ok)" }}>✓ {slug}.bcom.si is available</span>
                 ) : slugStatus ? (
-                  <span style={{ color: "#ff9db8" }}>✕ {slugStatus.reason || "Subdomain is unavailable"}</span>
+                  <span style={{ color: "var(--bad)" }}>✕ {slugStatus.reason || "Subdomain is unavailable"}</span>
                 ) : (
                   <span className="bm-dim">At least 3 characters. Lowercase letters, numbers, and hyphens.</span>
                 )}
@@ -929,7 +928,7 @@ function SignupContent() {
               <p className="bm-dim text-sm">{trialDays > 0 ? `Every plan includes a ${trialDays}-day free trial. Upgrade or cancel anytime.` : "Choose your plan. You pay to unlock it; cancel anytime."}</p>
             </div>
 
-            {plansError && <p className="text-sm" style={{ color: "#ff8a8a" }}>Plans could not be loaded. Refresh the page to try again.</p>}
+            {plansError && <p className="text-sm" style={{ color: "var(--bad)" }}>Plans could not be loaded. Refresh the page to try again.</p>}
             {!plans && !plansError && <p className="bm-dim text-sm">Loading plans...</p>}
 
             <div className="space-y-3">
@@ -982,7 +981,7 @@ function SignupContent() {
                 <p
                   className="mt-1 text-xs"
                   role="status"
-                  style={{ color: promoStatus.checking ? undefined : promoStatus.valid ? "#7ee8c6" : "#ff8a8a" }}
+                  style={{ color: promoStatus.checking ? undefined : promoStatus.valid ? "var(--ok)" : "var(--bad)" }}
                 >
                   {promoStatus.checking ? "Checking code..." : promoStatus.message}
                 </p>
@@ -1008,7 +1007,7 @@ function SignupContent() {
               </div>
             )}
             {turnstileFailed && (
-              <p className="text-sm" style={{ color: "#ff8a8a" }}>
+              <p className="text-sm" style={{ color: "var(--bad)" }}>
                 The security check could not load, so the store cannot be created yet. Refresh the page; if it keeps happening, contact support.
               </p>
             )}
@@ -1053,15 +1052,14 @@ function SignupContent() {
 
 export default function SignupPage() {
   return (
-    <div className={`lp lp-su ${fontSerifDisplay.variable}`}>
-      <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-      <Nav />
-      <div className="su-main">
+    <HomeRoot>
+      <HomeNav />
+      <main id="main" className="su-main">
         <Suspense fallback={<div className="bm-dim p-12 text-center font-medium">Loading signup wizard...</div>}>
           <SignupContent />
         </Suspense>
-      </div>
-      <SiteFooter />
-    </div>
+      </main>
+      <HomeFooter />
+    </HomeRoot>
   );
 }

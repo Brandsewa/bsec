@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { CompanyBox, GrievanceBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { organizationJsonLd } from "@/components/marketing/landing/seo.ts";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
+import { ChatDotsIcon, MailIcon } from "@/components/marketing/home/icons.tsx";
 
 export const metadata: Metadata = {
   title: "Contact us | BCOM",
@@ -15,14 +16,16 @@ export default function ContactPage() {
     <PageFrame>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }} />
       <DocHeader eyebrow="Contact us" title="We are here to help." intro="Write to us and we will reply on business days." />
-      <article className="doc">
+      <DocBody>
         <div className="cards">
           <div className="box">
+            <ChatDotsIcon />
             <h3>Support</h3>
             <p>Help with your store, billing or account.</p>
             <p><a href={`mailto:${SITE.emails.support}`}>{SITE.emails.support}</a></p>
           </div>
           <div className="box">
+            <MailIcon />
             <h3>General enquiries</h3>
             <p>Questions about {SITE.product}, partnerships and press.</p>
             <p><a href={`mailto:${SITE.emails.general}`}>{SITE.emails.general}</a></p>
@@ -41,7 +44,7 @@ export default function ContactPage() {
 
         <h2>When you write to us</h2>
         <p>Tell us your store name (yourname.{SITE.domain}) and the email address on your account, so we can find you quickly.</p>
-      </article>
+      </DocBody>
     </PageFrame>
   );
 }

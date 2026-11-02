@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -13,7 +13,7 @@ export default function RefundPolicyPage() {
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Refund and cancellation policy" intro="How to cancel your plan, and when we refund." />
-      <article className="doc">
+      <DocBody>
         <LegalMeta />
         <Summary>
           <p>
@@ -68,7 +68,7 @@ export default function RefundPolicyPage() {
         </p>
 
         <RelatedLinks />
-      </article>
+      </DocBody>
     </PageFrame>
   );
 }

@@ -34,6 +34,8 @@ import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
 const themeBootScript = makeThemeBootScript(THEMED_PATH_SOURCE);
+/** The platform's own site follows the visitor's theme on every path; on a store host only the guarded paths do. */
+const marketingThemeBootScript = makeThemeBootScript();
 
 /**
  * Newsletter forms (footer, newsletter block, status screens) are plain HTML posts; without this the shopper lands on the raw JSON
@@ -91,10 +93,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     return (
       <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`}>
         <head>
-          <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+          <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
         </head>
         <body className="min-h-dvh antialiased">
-          <WebThemeProvider>{children}</WebThemeProvider>
+          <WebThemeProvider always>{children}</WebThemeProvider>
         </body>
       </html>
     );
