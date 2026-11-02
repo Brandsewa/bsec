@@ -23,9 +23,16 @@ export function HeroSliderClient({ options, children }: { options: HeroSliderBeh
     if (!root || !track) return;
     const slides = [...track.querySelectorAll<HTMLElement>("[data-hs-slide]")];
     const n = slides.length;
+    // Phones, Save-Data and reduced-motion keep the poster: the clip is several MB and barely noticed on a small screen.
+    const wide = window.matchMedia("(min-width: 768px)").matches;
     if (n < 2) {
-      // One slide: no controls to drive, but its video still plays.
-      slides[0]?.querySelector("video")?.play().catch(() => undefined);
+      // One slide: no controls to drive, but its video still plays (on screens that can afford it).
+      const only = slides[0]?.querySelector("video");
+      const lean = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (only && wide && !lean) {
+        only.preload = "auto";
+        only.play().catch(() => undefined);
+      }
       return;
     }
     const dots = [...root.querySelectorAll<HTMLElement>("[data-hs-dot]")];
@@ -53,7 +60,7 @@ export function HeroSliderClient({ options, children }: { options: HeroSliderBeh
       slides.forEach((slide, i) => {
         const video = slide.querySelector<HTMLVideoElement>("video");
         if (!video) return;
-        if (saveData || reduced) {
+        if (saveData || reduced || !wide) {
           video.pause();
           return;
         }

@@ -280,6 +280,7 @@ function Slot({
 export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactNode {
   const bgImageId = props.background?.mediaId || props.backgroundMediaId;
   const desktopBg = props.background?.imageUrl || mediaSrc(ctx, bgImageId);
+  const bgResp = props.background?.imageUrl ? null : responsiveImgAttrs(ctx, bgImageId, "100vw");
   const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
   const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
   const bg = desktopBg || tabletBg || mobileBg;
@@ -308,6 +309,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
               className="bsb-hero-bg"
               src={desktopBg || tabletBg || mobileBg || ""}
               alt=""
+              {...(bgResp?.srcSet ? { srcSet: bgResp.srcSet, sizes: bgResp.sizes } : null)}
               {...imgLoading(claimLcp(ctx))}
               style={{
                 position: "absolute",
@@ -363,6 +365,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
 
 export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): ReactNode {
   const desktopBg = props.background?.imageUrl || mediaSrc(ctx, props.background?.mediaId);
+  const bgResp = props.background?.imageUrl ? null : responsiveImgAttrs(ctx, props.background?.mediaId, "100vw");
   const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
   const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
   const bg = desktopBg || tabletBg || mobileBg;
@@ -398,6 +401,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
             className="bsb-hero-bg"
             src={desktopBg || tabletBg || mobileBg || ""}
             alt=""
+            {...(bgResp?.srcSet ? { srcSet: bgResp.srcSet, sizes: bgResp.sizes } : null)}
             {...imgLoading(claimLcp(ctx))}
             style={{
               position: "absolute",
@@ -453,6 +457,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
 
 export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode {
   const desktopBg = props.background?.imageUrl || mediaSrc(ctx, props.background?.mediaId);
+  const bgResp = props.background?.imageUrl ? null : responsiveImgAttrs(ctx, props.background?.mediaId, "100vw");
   const tabletBg = props.responsive?.tablet?.background?.imageUrl || mediaSrc(ctx, props.responsive?.tablet?.background?.mediaId);
   const mobileBg = props.responsive?.mobile?.background?.imageUrl || mediaSrc(ctx, props.responsive?.mobile?.background?.mediaId);
   const bg = desktopBg || tabletBg || mobileBg;
@@ -495,6 +500,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
             className="bsb-hero-bg"
             src={desktopBg || tabletBg || mobileBg || ""}
             alt=""
+            {...(bgResp?.srcSet ? { srcSet: bgResp.srcSet, sizes: bgResp.sizes } : null)}
             {...imgLoading(claimLcp(ctx))}
             style={{
               position: "absolute",
@@ -1416,7 +1422,7 @@ export function HeroSliderView({ props, ctx }: A<R.HeroSliderProps>): ReactNode 
                     muted
                     loop
                     playsInline
-                    preload={i === 0 ? "metadata" : "none"}
+                    preload="none"
                     {...(img ? { poster: img } : null)}
                     {...(editorPreview && i === 0 ? { autoPlay: true } : null)}
                     data-hs-video=""
