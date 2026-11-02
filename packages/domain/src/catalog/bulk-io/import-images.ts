@@ -18,7 +18,12 @@ export interface ImportImageJob {
 /** The worker has a database handle only; the services below need nothing else from a Runtime. */
 const workerRuntime = (db: Db): Runtime => ({ service: "worker", _db: { db, close: async () => {} } as unknown as Runtime["_db"], close: async () => {} });
 
-const message = (e: unknown) => (e instanceof Error ? e.message.replace(/^(Bad Request|Conflict|Not Found|Forbidden): /, "") : "download failed");
+const STORAGE_HINT = " The worker needs the same R2_* storage settings as the web service.";
+const message = (e: unknown) => {
+  if (!(e instanceof Error)) return "download failed";
+  const text = e.message.replace(/^(Bad Request|Conflict|Not Found|Forbidden|Precondition): /, "");
+  return text.includes("Image storage is not set up") ? text + STORAGE_HINT : text;
+};
 
 /**
  * Downloads the images of one imported product and attaches them (docs/PRODUCT-BULK-IO-PLAN.md section 4).
