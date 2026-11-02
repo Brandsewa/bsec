@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `feat/marketing-site-cms` (not merged yet)
+- **Branch:** `feat/marketing-site-cms` (merged in #198, d70fd8d)
 - **Area:** contracts, domain, platform, superadmin, admin, web, new package `content-admin`
 - **Type:** feature
 - **Supersedes:** none
@@ -39,4 +39,4 @@ NOT verified: uploading an image end to end (no storage configured locally), the
 - A "Blog" link: add it under Navigation, once a post is published.
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged and deployed 2026-11-02. Phase 5 is still to do.

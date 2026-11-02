@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `feat/marketing-site-cms` (not merged yet)
+- **Branch:** `feat/marketing-site-cms` (merged in #198, d70fd8d)
 - **Area:** blocks, block-editor, contracts, domain, platform, superadmin, admin, web, `content-admin`
 - **Type:** feature
 - **Supersedes:** none
@@ -41,4 +41,4 @@ NOT verified: Safari, Firefox and real phones; adding or reordering sections in 
 - Footer links from a menu.
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged and deployed 2026-11-02. Phase 5 is still to do.

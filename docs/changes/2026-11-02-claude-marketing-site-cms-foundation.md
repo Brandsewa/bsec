@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `feat/marketing-site-cms` (not merged yet)
+- **Branch:** `feat/marketing-site-cms` (merged in #198, d70fd8d)
 - **Area:** db, domain, contracts, platform, superadmin
 - **Type:** feature
 - **Supersedes:** none
@@ -37,4 +37,4 @@ See ADR-042. The record is created by a button rather than at deploy, so it has 
 - `DATABASE_URL_RW` must be set on `bsec-platform` in Coolify (owner) for Marketing to open.
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged and deployed 2026-11-02. Phase 5 is still to do.
