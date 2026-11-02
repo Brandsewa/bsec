@@ -60,6 +60,9 @@ export const storeContract = {
   storefront: storefrontContract,
 };
 
+// The website has no theme templates to create.
+const { ensureTemplate: _ensureTemplate, ...sitePagesContract } = adminContract.pages;
+
 /** Platform API, served only by apps/platform (BYPASSRLS credentials). */
 export const platformContract = {
   system: {
@@ -82,7 +85,7 @@ export const platformContract = {
     blog: blogContract,
     menus: adminContract.menus,
     media: adminContract.media,
-    pages: { list: adminContract.pages.list },
+    pages: sitePagesContract,
   },
   quotas: platformQuotasContract,
   features: platformFeaturesContract,

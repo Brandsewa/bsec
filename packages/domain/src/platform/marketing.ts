@@ -1,4 +1,6 @@
+import { MARKETING_STARTERS, onlyMarketingBlocks, type BlockInstance } from "@bs/blocks";
 import { schema } from "@bs/db";
+import { createPage, savePageDraft } from "../content-services.ts";
 import type { TenantContext } from "../context.ts";
 import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta, type PlatformRole } from "../platform-services.ts";
 import type { Runtime } from "../runtime.ts";
@@ -25,8 +27,8 @@ export async function enablePlatformSite(rt: Runtime, staffUserId: string, meta?
 }
 
 /**
- * The context Marketing procedures pass to the content services. Built only on the server, for the website record and
- * only `content.write`. Use it solely with the `app_rw` runtime: the services rely on RLS (ADR-042).
+ * The context Marketing procedures pass to the content services. Built only on the server, for the website record, with
+ * what writing and publishing content needs. Use it solely with the `app_rw` runtime: the services rely on RLS (ADR-042).
  */
 export function platformSiteContext(siteId: string, staffUserId: string, requestId?: string): TenantContext {
   return {
@@ -34,7 +36,21 @@ export function platformSiteContext(siteId: string, staffUserId: string, request
     storeStatus: "live",
     actor: { type: "staff", userId: staffUserId },
     roles: ["platform_site_editor"],
-    permissions: ["content.write"],
+    permissions: ["content.write", "theme.publish"],
     requestId: requestId ?? crypto.randomUUID(),
   };
+}
+
+/** A new website page, starting from the built-in version of that page when there is one (About). */
+export async function createPlatformSitePage(rt: Runtime, ctx: TenantContext, input: Parameters<typeof createPage>[2]) {
+  const page = await createPage(rt, ctx, input);
+  const starter = MARKETING_STARTERS[page.slug];
+  if (starter) await savePageDraft(rt, ctx, { id: page.id, blocks: starter });
+  return page;
+}
+
+/** The website is built only from its own sections: store blocks need a store's theme, data and stylesheet. */
+export async function savePlatformSiteDraft(rt: Runtime, ctx: TenantContext, input: { id: string; blocks: unknown[] }) {
+  if (!onlyMarketingBlocks(input.blocks as BlockInstance[])) throw new Error("Bad Request: this block belongs to stores, not the website");
+  return savePageDraft(rt, ctx, input);
 }

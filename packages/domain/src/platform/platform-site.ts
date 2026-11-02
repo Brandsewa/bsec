@@ -1,5 +1,8 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
+import { THEME_PAGE_TYPES } from "@bs/blocks";
+import { getStorefrontPageByPath } from "../content-services.ts";
+import type { Runtime } from "../runtime.ts";
 import { listBlogForSitemap } from "../blog/queries.ts";
 import { loadMenusData } from "../themes/block-data.ts";
 
@@ -48,4 +51,26 @@ export async function platformSiteHeaderLinks(db: Db): Promise<Array<{ label: st
   const { headerData } = await withTenant(db, siteId, (tx) => loadMenusData(tx as never, siteId, [header] as never, []));
   const links = (headerData[header.id] ?? []).flatMap((item) => (item.url ? [{ label: item.label, href: item.url }] : []));
   return links.length > 0 ? links : null;
+}
+
+/**
+ * A published website page by its URL path, or null. Read on each request, not cached: publishing happens in the Platform
+ * service, which cannot clear the web app's cache, and "publish shows at once" matters more here than one query.
+ */
+export async function getPlatformSitePage(rt: Runtime, path: string[]) {
+  const siteId = await getPlatformSiteId(rt._db.db);
+  if (!siteId) return null;
+  return getStorefrontPageByPath(rt, { tenantId: siteId, storeStatus: "live", actor: { type: "system" }, roles: [], permissions: [], requestId: crypto.randomUUID() }, path);
+}
+
+/** The website's published pages for the marketing sitemap. `/about` has its own URL, so it is listed once by the caller. */
+export async function platformSitePagesSitemap(db: Db, origin: string) {
+  const siteId = await getPlatformSiteId(db);
+  if (!siteId) return [];
+  const rows = await withTenant(db, siteId, (tx) =>
+    tx.select({ slug: schema.pages.slug, type: schema.pages.type, parentId: schema.pages.parentId, updatedAt: schema.pages.updatedAt }).from(schema.pages).where(eq(schema.pages.status, "published")),
+  );
+  return rows
+    .filter((r) => !r.parentId && r.slug !== "about" && !THEME_PAGE_TYPES.has(r.type ?? ""))
+    .map((r) => ({ loc: `${origin}/pages/${r.slug}`, lastmod: r.updatedAt.toISOString(), changefreq: "monthly" as const, priority: 0.5 }));
 }

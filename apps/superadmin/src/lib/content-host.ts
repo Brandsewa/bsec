@@ -25,9 +25,11 @@ configureContentHost({
     blogPost: (id) => `/marketing/blog/${id}`,
     menus: "/marketing/navigation",
     menu: (handle) => `/marketing/navigation/${handle}`,
+    pageEditor: (id) => `/marketing/pages/${id}/editor`,
   },
   proxyUploadUrl: () => `${apiBase()}/api/marketing/media/upload`,
   uploadHeaders: () => ({}),
   contentWriteAllowed: true,
+  pagesIntro: "Pages of bcom.si, built from fixed website sections. A published About page replaces the built-in one; unpublish it to go back.",
   hiddenMenuLinkTypes: ["collection", "category", "brand", "product"],
 });

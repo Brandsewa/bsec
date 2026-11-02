@@ -146,7 +146,7 @@ describe("Marketing runs under RLS", () => {
     expect(rows.some((r) => r.slug === "store-only")).toBe(true);
   });
 
-  it("the context holds only content.write", () => {
-    expect(platformSiteContext(siteId, staffId).permissions).toEqual(["content.write"]);
+  it("the context holds only what content needs", () => {
+    expect(platformSiteContext(siteId, staffId).permissions).toEqual(["content.write", "theme.publish"]);
   });
 });

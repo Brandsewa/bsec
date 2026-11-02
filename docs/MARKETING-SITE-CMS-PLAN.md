@@ -1,6 +1,6 @@
 # Marketing site dashboard, page builder and blog
 
-- Status: **Phases 1 to 3 built** on `feat/marketing-site-cms`. Phases 4 and 5 not started. Written 2026-11-02.
+- Status: **Phases 1 to 4 built** on `feat/marketing-site-cms`. Phase 5 not started. Written 2026-11-02.
 - Planner and verifier: Claude Code. Builder: assigned by the owner.
 - Related: ADR-001 (domain logic), ADR-002 (tenancy and roles), ADR-004 (cache tags), ADR-009 and ADR-010 (blocks, no merchant code), ADR-011 (fallbacks), ADR-033 (blog), `docs/MARKETING-SITE-PLAN.md`, `docs/changes/2026-11-02-claude-marketing-home-redesign.md`.
 - A new ADR is written in Phase 0, before any code.
@@ -66,7 +66,7 @@ Rejected:
 - Mockups are chosen from a fixed list.
 - Blocks are offered only on the `platform_site` tenant, and store blocks only on stores.
 
-**Theme.** `home.css` and `<html data-theme>` stay. The Puck preview must load them, so an editor sees both light and dark.
+**Theme.** `<html data-theme>` stays, and `home.css` moved to `@bs/blocks/marketing.css`. The Puck preview must load them, so an editor sees both light and dark.
 
 **Blog.** Middleware allows `/blog*`, `/blog/feed.xml` and category pages on the marketing host. Blog templates render inside the marketing frame (`.mk` nav and footer), with a marketing look for the archive and post. The marketing sitemap adds published pages and posts.
 

@@ -60,6 +60,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Pages built in Super Admin > Marketing (ADR-042).
+  if (isMarketingHost && pathname.startsWith("/pages/")) {
+    // About has its own address on the website.
+    if (pathname === "/pages/about") {
+      const about = request.nextUrl.clone();
+      about.pathname = "/about";
+      return NextResponse.redirect(about, 308);
+    }
+    return NextResponse.next();
+  }
+
   // The marketing site's plain pages (about, contact, pricing, legal). Each page itself 404s on any non-marketing host.
   if (isMarketingHost && MARKETING_PAGES.some((p) => p.path === pathname)) {
     return NextResponse.next();

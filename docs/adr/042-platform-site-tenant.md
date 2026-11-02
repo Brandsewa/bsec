@@ -27,3 +27,6 @@ The owner wants bcom.si's pages, navigation and blog managed from Super Admin, r
 - Separate marketing tables: no `app_rw` or exclusions, but duplicates the blog, pages and menus logic.
 - Adding tenant filters to every service for `app_platform`: one missed query leaks store data, with nothing to catch it in the database.
 - A restricted store admin at its own address: less code, but a second place to sign in.
+
+## Update (2026-11-02, Phase 4)
+The website has its own blocks (`Mk*`). The website uses only those and a store can never use them, enforced in `savePlatformSiteDraft` and `savePageDraft` as well as the picker. `platformSiteContext` also holds `theme.publish`. Website pages are read per request, not cached, because the Platform service cannot clear the web app's cache.

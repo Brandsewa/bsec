@@ -16,6 +16,10 @@ import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
+import { PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { isPlatformMarketingHost } from "@/server/hosts.ts";
+import { marketingPage, marketingPageMeta } from "@/server/marketing-page.ts";
 
 interface CustomPageProps {
   params: Promise<{ path: string[] }>;
@@ -27,6 +31,12 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
   try {
     const h = await headers();
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    if (isPlatformMarketingHost(host)) {
+      const built = await marketingPage(path);
+      if (!built) return { title: "Page Not Found" };
+      const { title, description } = marketingPageMeta(built.page);
+      return { title, ...(description ? { description } : {}), alternates: { canonical: built.canonicalPath } };
+    }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
 
@@ -88,11 +98,25 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
   };
 }
 
+/** A page of the platform's own website, in its own frame. There is no built-in version to fall back to here, so a miss is a 404. */
+async function MarketingCustomPage({ path }: { path: string[] }) {
+  const built = await marketingPage(path);
+  if (!built) notFound();
+  if (!built.isCanonical) permanentRedirect(built.canonicalPath);
+  const content = marketingPageContent(built.page.document);
+  if (!content) notFound();
+  return <PageFrame>{content}</PageFrame>;
+}
+
 export default async function CustomContentPage({ params }: CustomPageProps) {
   const { path } = await params;
 
   if (!Array.isArray(path) || path.length === 0) {
     notFound();
+  }
+
+  if (isPlatformMarketingHost((await headers()).get("x-forwarded-host") ?? (await headers()).get("host"))) {
+    return <MarketingCustomPage path={path} />;
   }
 
   let pageData: Awaited<ReturnType<typeof getCachedStorefrontPageByPath>> = null;

@@ -40,6 +40,7 @@ import { BlogPostsScreen, validateBlogListSearch } from "@bs/content-admin/blog/
 import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
 import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
 import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
+import { PagesScreen } from "@bs/content-admin/pages/PagesScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
@@ -138,6 +139,26 @@ const authLayoutRoute = createRoute({
 // The visual editor (Puck) is large: load it only when a theme is opened. It renders outside the
 // Layout shell so the canvas gets the whole window, with the same authentication guard.
 const TemplateEditor = lazy(() => import("./pages/TemplateEditor.tsx"));
+const MarketingPageEditor = lazy(() => import("./pages/MarketingPageEditor.tsx"));
+const marketingPageEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/marketing/pages/$id/editor",
+  beforeLoad: ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  pendingComponent: () => <PageSkeleton />,
+  component: function MarketingPageEditorRoute() {
+    const { id } = marketingPageEditorRoute.useParams();
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <MarketingPageEditor id={id} />
+      </Suspense>
+    );
+  },
+});
+
 const templateEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/templates/$code/editor",
@@ -283,6 +304,13 @@ const marketingPending = () => (
     <DataTableSkeleton columns={4} rows={5} />
   </PageContainer>
 );
+
+const marketingPagesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/pages",
+  component: PagesScreen,
+  pendingComponent: marketingPending,
+});
 
 const marketingNavigationRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
@@ -588,6 +616,7 @@ const baseRoutes = [
   forgotPasswordRoute,
   resetPasswordRoute,
   templateEditorRoute,
+  marketingPageEditorRoute,
   acceptInvitationRoute,
   ...(import.meta.env.DEV ? [kitRoute] : []),
 ];
@@ -597,6 +626,7 @@ export const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([
     overviewRoute,
     marketingRoute,
+    marketingPagesRoute,
     marketingNavigationRoute,
     marketingMenuRoute,
     marketingBlogRoute,

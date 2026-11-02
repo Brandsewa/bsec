@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   Megaphone,
   FileText,
+  Files,
   Menu,
   Layers,
   LogOut,
@@ -85,6 +86,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Website", href: "/marketing", icon: Megaphone },
       { label: "Navigation", href: "/marketing/navigation", icon: Menu },
+      { label: "Pages", href: "/marketing/pages", icon: Files },
       { label: "Blogs", href: "/marketing/blog", icon: FileText },
     ],
   },

@@ -17,6 +17,7 @@ export interface ContentPaths {
   blogPost: (id: string) => string;
   menus: string;
   menu: (handle: string) => string;
+  pageEditor: (id: string) => string;
 }
 
 export interface ContentHost {
@@ -30,6 +31,8 @@ export interface ContentHost {
   contentWriteAllowed?: boolean;
   /** Link types with nothing to point at on this host (the website has no products). */
   hiddenMenuLinkTypes?: readonly string[];
+  /** Line under the Pages heading. */
+  pagesIntro: string;
 }
 
 export let client: ContentClient;
@@ -39,6 +42,7 @@ export let proxyUploadUrl: ContentHost["proxyUploadUrl"];
 export let uploadHeaders: ContentHost["uploadHeaders"];
 export let hiddenMenuLinkTypes: readonly string[] = [];
 export let contentWriteAllowed = false;
+export let pagesIntro = "";
 
 export function configureContentHost(host: ContentHost): void {
   client = host.client;
@@ -48,4 +52,5 @@ export function configureContentHost(host: ContentHost): void {
   uploadHeaders = host.uploadHeaders;
   hiddenMenuLinkTypes = host.hiddenMenuLinkTypes ?? [];
   contentWriteAllowed = host.contentWriteAllowed ?? false;
+  pagesIntro = host.pagesIntro;
 }

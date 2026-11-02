@@ -418,3 +418,12 @@
   .mk *{transition:none!important;animation:none!important}
   .mk .rv{opacity:1!important;transform:none!important}
 }
+
+/* Website sections built in the page editor (blocks Mk*). Consecutive document parts read as one column. */
+.mk .doc-part{padding:22px 0}
+.mk .doc-part:last-child,.mk .doc-part:has(+.band){padding-bottom:88px}
+.mk .doc-head+.doc-part{padding-top:48px}
+.mk .doc-part .doc>h2:first-child{margin-top:0}
+.mk .hero-in.solo{grid-template-columns:minmax(0,760px)}
+.mk .mk-sample{display:flex;align-items:center;justify-content:space-between;max-width:440px;height:48px;margin-top:24px;padding:0 6px 0 14px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);color:var(--dim);font-size:15px}
+.mk .mk-sample b{padding:8px 12px;border-radius:6px;background:var(--pri);color:var(--pri-ink);font-size:13px;font-weight:600}

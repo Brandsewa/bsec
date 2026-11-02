@@ -14,7 +14,7 @@ const LINKS = [
   { label: "Contact", href: "/contact" },
 ];
 
-/** Both icons are rendered and home.css shows the right one, so the toggle cannot mismatch on hydration. */
+/** Both icons are rendered and marketing.css shows the right one, so the toggle cannot mismatch on hydration. */
 function ThemeToggle() {
   const { resolved, setPreference } = useTheme();
   return (

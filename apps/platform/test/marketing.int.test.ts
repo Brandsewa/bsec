@@ -5,7 +5,7 @@ import { platformContract } from "@bs/contracts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { createLogger, createRuntime, provisionTenant, type Runtime } from "@bs/domain";
+import { createLogger, createRuntime, getPlatformSitePage, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
 import { platformRouter, type PlatformContext } from "../src/app.ts";
 
 type Staff = { userId: string; freshSessionAt: Date };
@@ -36,7 +36,7 @@ const content = () => walk(Object.fromEntries(Object.entries(m).filter(([k]) => 
 const run = (path: string, input: unknown, context: PlatformContext) => {
   const leaf = walk(m, ["marketing"]).find((l) => l.path === path);
   if (!leaf) throw new Error(`no procedure ${path}`);
-  return call(leaf.proc, input as never, { context } as never);
+  return call(leaf.proc, input as never, { context, path: path.split(".") } as never);
 };
 const codeOf = async (p: Promise<unknown>) => p.then(() => "OK", (e: unknown) => (e instanceof ORPCError ? e.code : `THROWN: ${String(e)}`));
 
@@ -122,6 +122,49 @@ describe("Marketing content", () => {
     const created = (await run("marketing.blog.posts.create", { title: "Sneaky", contentHtml: "<p>x</p>", tenantId: storeId }, ctx(admin))) as { id: string };
     const store = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.blogPosts));
     expect(store.some((p) => p.id === created.id)).toBe(false);
+  });
+
+  it("a new About page starts from the built-in version, and goes live and back through publish", async () => {
+    const page = (await run("marketing.pages.create", { title: "About us", slug: "about" }, ctx(admin))) as { id: string };
+    const draft = (await run("marketing.pages.get", { id: page.id, draft: true }, ctx(admin))) as { blocks: Array<{ type: string }> };
+    expect(draft.blocks[0]?.type).toBe("MkDocHeader");
+    expect(await getPlatformSitePage(rtRw, ["about"])).toBeNull();
+
+    await run("marketing.pages.publish", { id: page.id }, ctx(admin));
+    expect((await getPlatformSitePage(rtRw, ["about"]))?.page.title).toBe("About us");
+
+    await run("marketing.pages.unpublish", { id: page.id }, ctx(admin));
+    expect(await getPlatformSitePage(rtRw, ["about"])).toBeNull();
+    const audit = await rt._db.db.execute<{ action: string }>(sql`SELECT action FROM platform_audit_logs WHERE action LIKE 'marketing.pages.%' AND actor_user_id = ${admin.userId}`);
+    expect(audit.rows.map((r) => r.action).sort()).toEqual(["marketing.pages.create", "marketing.pages.publish", "marketing.pages.unpublish"]);
+  });
+
+  it("a published page is in the sitemap, except About, which has its own URL", async () => {
+    const page = (await run("marketing.pages.create", { title: "For brands", slug: "for-brands" }, ctx(admin))) as { id: string };
+    const blocks = [{ id: "h", type: "MkDocHeader", version: 1, props: { title: "For brands" } }];
+    await run("marketing.pages.saveDraft", { id: page.id, blocks }, ctx(admin));
+    await run("marketing.pages.publish", { id: page.id }, ctx(admin));
+    const urls = (await platformSitePagesSitemap(rtRw._db.db, "https://x.test")).map((u) => u.loc);
+    expect(urls).toContain("https://x.test/pages/for-brands");
+    expect(urls.some((u) => u.endsWith("/about"))).toBe(false);
+  });
+
+  it("the website takes only website sections, and a store cannot use them", async () => {
+    const page = (await run("marketing.pages.create", { title: "Mixed", slug: "mixed" }, ctx(admin))) as { id: string };
+    const store = [{ id: "s", type: "Heading", version: 1, props: { text: "Store block" } }];
+    expect(String(await codeOf(run("marketing.pages.saveDraft", { id: page.id, blocks: store }, ctx(admin))))).not.toBe("OK");
+
+    const [storePage] = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.pages));
+    const storeCtx = { tenantId: storeId, storeStatus: "live", actor: { type: "system" as const }, roles: [], permissions: ["content.write"], requestId: "t" };
+    await expect(savePageDraft(rtRw, storeCtx as never, { id: storePage!.id, blocks: [{ id: "m", type: "MkDocHeader", version: 1, props: { title: "Sneaky" } }] })).rejects.toThrow(/platform's website/);
+  });
+
+  it("a request cannot reach a store's page by id", async () => {
+    const [storePage] = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.pages));
+    expect(await codeOf(run("marketing.pages.get", { id: storePage!.id }, ctx(admin)))).not.toBe("OK");
+    expect(await codeOf(run("marketing.pages.delete", { id: storePage!.id }, ctx(admin)))).not.toBe("OK");
+    const still = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.pages));
+    expect(still.some((p) => p.id === storePage!.id)).toBe(true);
   });
 
   it("navigation saves on the website record", async () => {

@@ -40,7 +40,7 @@ describe("marketing site pages (payment gateway review)", () => {
   });
 
   it("keeps gradients off the marketing styles", () => {
-    expect(readFileSync(join(__dirname, "..", "src", "components", "marketing", "home", "home.css"), "utf8")).not.toMatch(/gradient\(/);
+    expect(readFileSync(join(__dirname, "..", "..", "..", "packages", "blocks", "src", "marketing.css"), "utf8")).not.toMatch(/gradient\(/);
   });
 
   it("states the company details completely, with no placeholders", () => {

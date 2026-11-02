@@ -1,6 +1,6 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
-import { SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
+import { MARKETING_BLOCK_TYPES, SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField } from "./MediaField.tsx";
 import { galleryImagesField } from "./GalleryImagesField.tsx";
 import { iconField } from "./IconField.tsx";
@@ -130,7 +130,7 @@ const ALIGN = { left: "Left", center: "Center", right: "Right" };
 const _SPACING = { none: "None", sm: "Small", md: "Medium", lg: "Large", xl: "Extra large" };
 const WIDTH = { narrow: "Narrow", default: "Standard", wide: "Wide", full: "Full width" };
 
-type Spec = { label: string; fields: Record<string, Field>; category: "layout" | "content" | "store" | "bcom" };
+type Spec = { label: string; fields: Record<string, Field>; category: "layout" | "content" | "store" | "bcom" | "website" };
 
 export const BLOCK_SPECS: Record<BlockType, Spec> = {
   Section: {
@@ -1114,9 +1114,21 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       styles: trustStylesField("Look on each screen size") as Field,
     },
   },
+  MkHero: { label: "Hero", category: "website", fields: { stamp: text("Small label"), title: text("Headline"), lead: area("Introduction"), showNameChecker: radio("Store name checker"), fine: text("Small print") } },
+  MkIncluded: { label: "Included strip", category: "website", fields: { label: text("Label"), items: { type: "array", label: "Points", getItemSummary: (i: { label?: string }) => i.label || "Point", arrayFields: { icon: iconField("Icon") as Field, label: text("Text") }, defaultItemProps: { icon: "check", label: "A point" } } as Field } },
+  MkStatement: { label: "Statement", category: "website", fields: { text: area("Statement"), muted: area("Quieter second part") } },
+  MkFeatures: { label: "Feature grid", category: "website", fields: { eyebrow: text("Small label"), title: text("Heading"), intro: area("Introduction"), tone: select("Background", { soft: "Tinted", default: "Plain" }), items: { type: "array", label: "Features", getItemSummary: (i: { title?: string }) => i.title || "Feature", arrayFields: { title: text("Heading"), body: area("Text") }, defaultItemProps: { title: "A feature", body: "What it does for the store." } } as Field } },
+  MkSteps: { label: "Steps", category: "website", fields: { label: text("Name for screen readers"), items: { type: "array", label: "Steps", getItemSummary: (i: { title?: string }) => i.title || "Step", arrayFields: { icon: iconField("Icon") as Field, title: text("Heading"), body: area("Text") }, defaultItemProps: { icon: "check", title: "A step", body: "What happens in this step." } } as Field } },
+  MkBand: { label: "Dark band", category: "website", fields: { title: text("Heading"), items: { type: "array", label: "Items", getItemSummary: (i: { name?: string }) => i.name || "Item", arrayFields: { name: text("Name"), note: text("Note") }, defaultItemProps: { name: "Name", note: "A short note" } } as Field } },
+  MkFaq: { label: "FAQ", category: "website", fields: { eyebrow: text("Small label"), title: text("Heading"), items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question || "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "A question?", answer: "A clear answer." } } as Field } },
+  MkFinalCall: { label: "Final call", category: "website", fields: { title: text("Heading"), text: text("Text"), showPlansLink: radio("Compare plans link") } },
+  MkDocHeader: { label: "Page header", category: "website", fields: { eyebrow: text("Small label"), title: text("Title"), intro: area("Introduction") } },
+  MkDocSection: { label: "Text section", category: "website", fields: { heading: text("Heading"), body: area("Text (**bold**, [link](/path), - lists)"), checks: linesField("Tick list (one per line)", 20) as Field, after: area("Text after the list") } },
+  MkValues: { label: "Three points", category: "website", fields: { heading: text("Heading"), items: { type: "array", label: "Points", getItemSummary: (i: { text?: string }) => i.text || "Point", arrayFields: { icon: iconField("Icon") as Field, text: text("Text") }, defaultItemProps: { icon: "check", text: "A short point." } } as Field } },
+  MkCompany: { label: "Company details", category: "website", fields: { heading: text("Heading"), after: area("Text after the details") } },
 };
 
-const CATEGORY_TITLES = { layout: "Layout", content: "Content", store: "Store widgets", bcom: "BCOM widgets" } as const;
+const CATEGORY_TITLES = { layout: "Layout", content: "Content", store: "Store widgets", bcom: "BCOM widgets", website: "Website sections" } as const;
 
 type AnyProps = Record<string, unknown> & { id: string; puck?: unknown };
 
@@ -1204,7 +1216,7 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
 }
 
 /** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */
-export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom";
+export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom" | "marketing";
 
 const ONLY: Record<"header" | "footer", BlockType[]> = {
   header: ["SiteHeader", "Banner"],
@@ -1221,6 +1233,9 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
 ];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
+  // The website and the stores never share blocks: each is drawn by its own stylesheet (ADR-042).
+  if (MARKETING_BLOCK_TYPES.has(type) !== (kind === "marketing")) return false;
+  if (kind === "marketing") return true;
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
   if (CHROME.includes(type)) return false;
   if (type === "ProductDetail" || type === "ProductCustomField" || type === "ProductCoupons") return kind === "product";
@@ -1234,7 +1249,7 @@ export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
 export function buildPuckConfig(options: { themeVars: Record<string, string>; pageKind?: EditorPageKind }): Config {
   const kind = options.pageKind ?? "custom";
   const components: Record<string, unknown> = {};
-  const byCategory: Record<string, string[]> = { layout: [], content: [], store: [], bcom: [] };
+  const byCategory: Record<string, string[]> = { layout: [], content: [], store: [], bcom: [], website: [] };
 
   for (const [type, spec] of Object.entries(BLOCK_SPECS) as Array<[BlockType, Spec]>) {
     if (!blockAllowed(type, kind)) continue;
@@ -1253,7 +1268,7 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
       ...Object.fromEntries(
         (Object.keys(CATEGORY_TITLES) as Array<keyof typeof CATEGORY_TITLES>).map((k) => [
           k,
-          { title: CATEGORY_TITLES[k], components: byCategory[k] ?? [], defaultExpanded: k !== "layout" },
+          { title: CATEGORY_TITLES[k], components: byCategory[k] ?? [], defaultExpanded: k !== "layout", visible: (byCategory[k] ?? []).length > 0 },
         ]),
       ),
       // Puck lists every component outside the categories under "Other"; retired blocks stay out of the picker.
@@ -1264,7 +1279,10 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
       // Page-level settings (SEO etc.) live on the page record, not in the block document.
       fields: {},
       // The canvas shows the store's own theme: same --bs-* variables the storefront sets.
-      render: ({ children }: { children: ReactNode }) => (
+      render: ({ children }: { children: ReactNode }) => kind === "marketing" ? (
+        // The fonts are the web app's, so name plain ones here; the page's words and spacing still match.
+        <div className="mk" style={{ "--font-sans": "Inter", "--font-mono": "ui-monospace" } as CSSProperties}>{children}</div>
+      ) : (
         <div className="bsb" style={{ ...(options.themeVars as CSSProperties), background: "var(--bs-bg, #fff)", minHeight: "100vh" }}>
           <FrameBlocks part="header" />
           {children}

@@ -5,12 +5,21 @@ import { CompanyBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 import { CheckIcon, GlobeIcon, LockIcon, SparkIcon } from "@/components/marketing/home/icons.tsx";
 import { FinalCta } from "@/components/marketing/home/sections.tsx";
+import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
+import { marketingPage, marketingPageMeta } from "@/server/marketing-page.ts";
 
-export const metadata: Metadata = {
+const META: Metadata = {
   title: "About us | BCOM",
   description: "BCOM (bcom.si) is an agent-first e-commerce platform for Indian brands, a product of Brand Sewa Digital Private Limited.",
   alternates: { canonical: "/about" },
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const built = await marketingPage(["about"]);
+  if (!built) return META;
+  const { title, description } = marketingPageMeta(built.page);
+  return { ...META, title, ...(description ? { description } : {}) };
+}
 
 const OFFER = [
   "a storefront with ready-made themes and a visual, no-code theme builder;",
@@ -20,7 +29,11 @@ const OFFER = [
   "customers and segments, discounts, staff accounts and roles.",
 ];
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  // The page built in Super Admin when one is published; otherwise, or if it cannot be read, this built-in version (ADR-011).
+  const built = await marketingPage(["about"]);
+  const content = built ? marketingPageContent(built.page.document) : null;
+  if (content) return <PageFrame>{content}</PageFrame>;
   return (
     <PageFrame>
       <DocHeader
