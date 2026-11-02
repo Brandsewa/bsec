@@ -42,7 +42,7 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `DATABASE_URL_SAAS`: as for web. Optional; without it the hourly trial-expiry sweep is skipped (a warning is logged).
 - `APP_ENV`: `production` | `staging` | `development`.
 - `PORT`: `4100`.
-- `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant and platform credentials (e.g. Razorpay, ZeptoMail SMTP). (Fallback alias: `ENCRYPTION_KEY`).
+- `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant and platform credentials (e.g. Razorpay, ZeptoMail SMTP). (Fallback alias: `ENCRYPTION_KEY`). **It must be the same value as on the web service**: the worker also decrypts the saved image-storage keys to store images downloaded by the product import, and without it those images fail with "cannot read its saved credentials".
 
 ### Super Admin (`bsec-superadmin`)
 - A static SPA (nginx) served at **`superadmin.bcom.si`** (port `8081` in staging/local). The platform **API stays at `platform.bcom.si`** and the SPA finds it by replacing the `superadmin.` prefix with `platform.` (or set `VITE_PLATFORM_API_URL` at build time).

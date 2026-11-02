@@ -75,6 +75,30 @@ function filenameFor(url: URL, mime: FetchedImage["mime"]): string {
   return `${safe}.${ext}`;
 }
 
+/** A short, safe reason for a network failure (the error code), so a failed import row says why. */
+function networkReason(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : "network error";
+}
+
+/**
+ * Connects to the first address that answers. IPv4 goes first: a server without IPv6 access would otherwise fail on every
+ * host that lists an IPv6 address first. Only connection-level errors move on to the next address; an HTTP answer is final.
+ */
+async function connect(transport: Transport, url: URL, addresses: string[], signal: AbortSignal): Promise<TransportResponse> {
+  const ordered = [...addresses].sort((a, b) => Number(a.includes(":")) - Number(b.includes(":")));
+  let last: unknown;
+  for (const ip of ordered) {
+    try {
+      return await transport(url, ip, signal);
+    } catch (e) {
+      if (signal.aborted) throw e;
+      last = e;
+    }
+  }
+  throw last ?? new ImageFetchError("the host could not be found");
+}
+
 export async function fetchImageSafely(rawUrl: string, deps: { resolve?: Resolver; transport?: Transport } = {}): Promise<FetchedImage> {
   const resolve = deps.resolve ?? defaultResolver;
   const transport = deps.transport ?? defaultTransport;
@@ -98,9 +122,7 @@ export async function fetchImageSafely(rawUrl: string, deps: { resolve?: Resolve
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), IMAGE_FETCH_TIMEOUT_MS);
     try {
-      const pinned = addresses[0];
-      if (!pinned) throw new ImageFetchError("the host could not be found");
-      const res = await transport(url, pinned, ac.signal);
+      const res = await connect(transport, url, addresses, ac.signal);
       if (res.status >= 300 && res.status < 400) {
         res.destroy();
         const loc = res.headers["location"];
@@ -134,7 +156,7 @@ export async function fetchImageSafely(rawUrl: string, deps: { resolve?: Resolve
     } catch (e) {
       if (e instanceof ImageFetchError) throw e;
       if (ac.signal.aborted) throw new ImageFetchError("the download timed out");
-      throw new ImageFetchError("the download failed");
+      throw new ImageFetchError(`the download failed (${networkReason(e)})`);
     } finally {
       clearTimeout(timer);
     }
