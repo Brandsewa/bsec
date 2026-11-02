@@ -297,6 +297,44 @@ export function googleFontsHref(tokens: ThemeTokensLike | null | undefined): str
   return `https://fonts.googleapis.com/css2?${fam}&display=swap`;
 }
 
+/**
+ * Metric-matched local fallbacks for the curated fonts (same values next/font computes: size-adjust and the ascent,
+ * descent and line-gap overrides of Arial or Times New Roman). Text is first drawn in the fallback at the web font's
+ * size and line height, so the swap when the font arrives does not move the page (layout shift).
+ */
+const FONT_FALLBACKS: Record<string, { local: string; sizeAdjust: number; ascent: number; descent: number; lineGap: number }> = {
+  "Inter": { local: "Arial", sizeAdjust: 107.12, ascent: 90.44, descent: 22.52, lineGap: 0 },
+  "Poppins": { local: "Arial", sizeAdjust: 112.16, ascent: 93.62, descent: 31.21, lineGap: 8.92 },
+  "DM Sans": { local: "Arial", sizeAdjust: 104.53, ascent: 94.90, descent: 29.66, lineGap: 0 },
+  "Work Sans": { local: "Arial", sizeAdjust: 111.93, ascent: 83.09, descent: 21.71, lineGap: 0 },
+  "Montserrat": { local: "Arial", sizeAdjust: 112.83, ascent: 85.79, descent: 22.25, lineGap: 0 },
+  "Nunito": { local: "Arial", sizeAdjust: 101.39, ascent: 99.71, descent: 34.82, lineGap: 0 },
+  "Space Grotesk": { local: "Arial", sizeAdjust: 109.69, ascent: 89.71, descent: 26.62, lineGap: 0 },
+  "Playfair Display": { local: "Times New Roman", sizeAdjust: 111.26, ascent: 97.25, descent: 22.56, lineGap: 0 },
+  "Lora": { local: "Times New Roman", sizeAdjust: 115.20, ascent: 87.33, descent: 23.78, lineGap: 0 },
+  "Merriweather": { local: "Times New Roman", sizeAdjust: 122.09, ascent: 80.59, descent: 22.36, lineGap: 0 },
+};
+const fallbackName = (font: string) => `${font} Fallback`;
+
+/** @font-face rules for the fallbacks of the curated fonts a theme uses (empty string when none). */
+export function themeFontFallbackCss(tokens: ThemeTokensLike | null | undefined): string {
+  const names = new Set<string>();
+  for (const f of [tokens?.fonts?.heading ?? tokens?.typography?.headingFont, tokens?.fonts?.body ?? tokens?.typography?.bodyFont]) {
+    if (typeof f === "string" && Object.hasOwn(FONT_FALLBACKS, f)) names.add(f);
+  }
+  return [...names]
+    .map((n) => {
+      const m = FONT_FALLBACKS[n];
+      if (!m) return "";
+      return `@font-face{font-family:"${fallbackName(n)}";src:local("${m.local}");size-adjust:${m.sizeAdjust}%;ascent-override:${m.ascent}%;descent-override:${m.descent}%;line-gap-override:${m.lineGap}%}`;
+    })
+    .join("");
+}
+
+/** Font stack: the font, its metric fallback when it has one, then the system fonts. */
+const fontStack = (font: string) =>
+  `"${font}", ${Object.hasOwn(FONT_FALLBACKS, font) ? `"${fallbackName(font)}", ` : ""}ui-sans-serif, system-ui, sans-serif`;
+
 const RADIUS_MAP: Record<string, string> = {
   none: "0px",
   sm: "0.25rem",
@@ -652,8 +690,8 @@ export function computeThemeTokens(
     "--bs-btn-pad": BUTTON_SIZE_METRICS[resolveButtonSize(themeTokens?.buttons?.size)].pad,
     "--bs-btn-fs": BUTTON_SIZE_METRICS[resolveButtonSize(themeTokens?.buttons?.size)].font,
     "--bs-btn-case": themeTokens?.buttons?.uppercase ? "uppercase" : "none",
-    "--bs-font-heading": `"${fontHeading}", ui-sans-serif, system-ui, sans-serif`,
-    "--bs-font-body": `"${fontBody}", ui-sans-serif, system-ui, sans-serif`,
+    "--bs-font-heading": fontStack(fontHeading),
+    "--bs-font-body": fontStack(fontBody),
     "--color-primary": primary,
     "--color-secondary": secondary,
     "--color-accent": accent,

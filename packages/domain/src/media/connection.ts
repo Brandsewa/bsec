@@ -447,6 +447,8 @@ export class S3StorageDriver implements MediaStorageDriver {
         Key: params.key,
         Body: params.body,
         ContentType: params.contentType,
+        // Keys carry ids (derivatives and imports are never overwritten in place), so the file is safe to cache for a year.
+        CacheControl: "public, max-age=31536000, immutable",
       }),
     );
   }
