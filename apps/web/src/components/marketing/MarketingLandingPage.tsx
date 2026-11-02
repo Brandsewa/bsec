@@ -1,34 +1,38 @@
 /*
  * bcom.si home page: agent-first e-commerce platform (docs/MARKETING-AGENT-FIRST-PLAN.md, docs/MARKETING-SITE-PLAN.md).
  * Honest by design: what a merchant can use today is shown as ready; the AI-agent features are marked Coming soon.
- * Server component composition; only the phone demo, pricing toggle, nav menu and the store-name checker are client components.
- * Styling is scoped under `.lp` (landing/landing.css).
+ * No invented customers, counts or testimonials; previews are labelled sample data.
+ * Server component composition; only the nav, AI tabs, pricing toggle and the store-name checker are client components.
+ * Styling is scoped under `.mk` (home/home.css), shared with the other marketing pages and signup.
  */
 
-import { LandingShell } from "./landing/LandingShell.tsx";
 import { FALLBACK_PLANS, type LandingPlan } from "./landing/content.ts";
-import { Faq, FinalCta } from "./landing/sections/Close.tsx";
-import { SiteFooter } from "./landing/sections/Footer.tsx";
-import { Hero } from "./landing/sections/Hero.tsx";
-import { AiEra } from "./landing/sections/Kit.tsx";
-import { Nav } from "./landing/sections/Nav.tsx";
-import { Pricing } from "./landing/sections/Pricing.tsx";
-import { India } from "./landing/sections/Proof.tsx";
 import { organizationJsonLd } from "./landing/seo.ts";
+import { HomeFooter } from "./home/HomeFooter.tsx";
+import { HomeNav } from "./home/HomeNav.tsx";
+import { HomePricing } from "./home/HomePricing.tsx";
+import { HomeRoot } from "./home/HomeRoot.tsx";
+import { AiSection, Faq, Features, FinalCta, Hero, IncludedStrip, Standards, Statement, Steps } from "./home/sections.tsx";
 
 export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefined }) {
   const planList = plans && plans.length > 0 ? plans : FALLBACK_PLANS;
   return (
-    <LandingShell>
+    <HomeRoot>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }} />
-      <Nav />
-      <Hero />
-      <India />
-      <AiEra />
-      <Pricing plans={planList} />
-      <Faq />
-      <FinalCta />
-      <SiteFooter />
-    </LandingShell>
+      <HomeNav />
+      <main id="main">
+        <Hero />
+        <IncludedStrip />
+        <Statement />
+        <Features />
+        <Steps />
+        <AiSection />
+        <Standards />
+        <HomePricing plans={planList} />
+        <Faq />
+        <FinalCta />
+      </main>
+      <HomeFooter />
+    </HomeRoot>
   );
 }

@@ -1,30 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEMO_SEARCHES, searchAt } from "../src/components/marketing/landing/demo-data.ts";
 import { FAQS, FALLBACK_PLANS, planBullets } from "../src/components/marketing/landing/content.ts";
 import { ADDRESS_LINE, MARKETING_PAGES, SITE } from "../src/components/marketing/landing/site-info.ts";
-
-describe("marketing landing demo data", () => {
-  it("every search offers three products from different brands and a valid pick", () => {
-    expect(DEMO_SEARCHES.length).toBeGreaterThanOrEqual(3);
-    for (const s of DEMO_SEARCHES) {
-      expect(s.products).toHaveLength(3);
-      expect(new Set(s.products.map((p) => p.brand)).size).toBe(3);
-      expect([0, 1, 2]).toContain(s.pick);
-      expect(s.query.length).toBeGreaterThan(3);
-    }
-  });
-
-  it("searchAt wraps instead of reading past the end", () => {
-    expect(searchAt(DEMO_SEARCHES.length)).toBe(DEMO_SEARCHES[0]);
-    expect(searchAt(0)).toBe(DEMO_SEARCHES[0]);
-  });
-
-  it("covers the three assistants shown in the hero tabs", () => {
-    expect(DEMO_SEARCHES.map((s) => s.assistant)).toEqual(["ChatGPT", "Gemini", "Claude"]);
-  });
-});
 
 describe("marketing landing content", () => {
   it("keeps plan bullets driven by the plan limits", () => {
@@ -59,6 +37,10 @@ describe("marketing site pages (payment gateway review)", () => {
       expect(existsSync(join(dir, "page.tsx")), `${path} page.tsx`).toBe(true);
       expect(existsSync(join(dir, "loading.tsx")), `${path} loading.tsx`).toBe(true);
     }
+  });
+
+  it("keeps gradients off the marketing styles", () => {
+    expect(readFileSync(join(__dirname, "..", "src", "components", "marketing", "home", "home.css"), "utf8")).not.toMatch(/gradient\(/);
   });
 
   it("states the company details completely, with no placeholders", () => {

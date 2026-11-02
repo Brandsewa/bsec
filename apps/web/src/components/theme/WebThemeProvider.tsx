@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { ThemeProvider } from "@bs/ui";
 import { isThemedPath } from "@/lib/themed-paths.ts";
 
-/** Theme provider for apps/web: active only on account, auth and token pages (see themed-paths.ts). */
-export function WebThemeProvider({ children }: { children: ReactNode }) {
+/** Theme provider for apps/web: active on the sign-up page (see themed-paths.ts), and with `always` on the whole platform site. */
+export function WebThemeProvider({ children, always = false }: { children: ReactNode; always?: boolean }) {
   const pathname = usePathname();
-  return <ThemeProvider enabled={isThemedPath(pathname)}>{children}</ThemeProvider>;
+  return <ThemeProvider enabled={always || isThemedPath(pathname)}>{children}</ThemeProvider>;
 }

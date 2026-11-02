@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { ADDRESS_LINE, SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Privacy policy" intro="What personal data we collect, why, who sees it, and the choices you have." />
-      <article className="doc">
+      <DocBody>
         <LegalMeta />
         <Summary>
           <p>
@@ -122,7 +122,7 @@ export default function PrivacyPage() {
         <GrievanceBox />
 
         <RelatedLinks />
-      </article>
+      </DocBody>
     </PageFrame>
   );
 }
