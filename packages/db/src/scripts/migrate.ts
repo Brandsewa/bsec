@@ -24,13 +24,35 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultMigrations =
   process.env.MIGRATIONS_DIR ?? path.resolve(here, here.endsWith("scripts") ? "../../migrations" : "../migrations");
 
-export async function runMigrations(ownerUrl: string, migrationsFolder = defaultMigrations) {
-  const pool = new pg.Pool({ connectionString: ownerUrl, max: 1, application_name: "bsec-migrate" });
+/**
+ * A migration waiting for a table lock holds up every later query on that table, so a long wait takes the site down
+ * (outage of 2026-11-02, docs/migrations.md). It gives up quickly and tries again a few times instead. The total stays
+ * under the 45 seconds the deploy job waits.
+ */
+const LOCK_LIMITS = { lockTimeoutMs: 3_000, attempts: 5, retryDelayMs: 3_000 };
+const LOCK_NOT_AVAILABLE = "55P03";
+
+async function migrateWithRetry(pool: pg.Pool, migrationsFolder: string, limits: typeof LOCK_LIMITS) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await migrate(drizzle(pool), { migrationsFolder });
+      return;
+    } catch (err) {
+      const e = err as { code?: string; cause?: { code?: string } };
+      if ((e.code ?? e.cause?.code) !== LOCK_NOT_AVAILABLE || attempt >= limits.attempts) throw err;
+      console.warn(`migration could not get a table lock (attempt ${attempt} of ${limits.attempts}), retrying`);
+      await new Promise((resolve) => setTimeout(resolve, limits.retryDelayMs));
+    }
+  }
+}
+
+export async function runMigrations(ownerUrl: string, migrationsFolder = defaultMigrations, limits = LOCK_LIMITS) {
+  const pool = new pg.Pool({ connectionString: ownerUrl, max: 1, application_name: "bsec-migrate", lock_timeout: limits.lockTimeoutMs });
   try {
     const { rows } = await pool.query<{ role: string }>("select current_user as role");
     if (rows[0]?.role !== "app_owner") throw new Error(`Migrations must run as app_owner, got ${rows[0]?.role}`);
 
-    await migrate(drizzle(pool), { migrationsFolder });
+    await migrateWithRetry(pool, migrationsFolder, limits);
 
     const boss = new PgBoss({ connectionString: ownerUrl, max: 1, supervise: false, schedule: false });
     boss.on("error", (e) => console.error(e));

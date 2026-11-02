@@ -40,3 +40,8 @@ Rules:
 - Never rename or drop in the same release that stops using the thing.
 - Rollback = redeploy the previous image tag; the schema is still compatible because contract steps lag by ≥1 release.
 - Rehearse non-trivial migrations on staging against a restored production snapshot first.
+
+## Locks on busy tables
+A migration that alters a table needs a moment of exclusive access. While it waits, every later query on that table waits behind it, so a long wait takes the site down. This happened on 2026-11-02 (`docs/changes/2026-11-02-claude-migration-lock-outage.md`).
+
+`runMigrations` therefore sets a 3 second `lock_timeout` and tries 5 times. A blocked migration fails the deploy's migrate step rather than the site. If it fails, find the session holding the lock and run `bsec-migrate` again.
