@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `feat/platform-billing-gateways` · Super Admin Platform billing split into a national gateway (Razorpay or Cashfree, one active) and an international gateway (PayPal on or off), one page per gateway; Activate screen follows the store's currency and gateway; change record `docs/changes/2026-11-01-claude-platform-billing-gateways.md` · 2026-11-01
+- claude · `feat/activate-plan-cards` · Activate screen shows the three plan cards with a Monthly/Yearly tab and a pay button per card; change record `docs/changes/2026-11-02-claude-activate-plan-cards.md` · 2026-11-02
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29
 - claude · `fix/header-bg-dropdown-followups` · follow-ups to the 2026-10-29 batch: header background regression, dropdown spacing and close on click, TOC closed by default, image option on Floating reviews; change record `docs/changes/2026-10-29-claude-header-dropdown-followups.md` · 2026-10-29
 - claude · `fix/domain-ownership-before-a-records` · bare custom domains: TXT ownership first, A records only after (Cloudflare refuses TXT/HTTP validation once A records resolve to it), immediate provider re-check; change record `docs/changes/2026-10-28-claude-domain-ownership-before-a-records.md` · 2026-10-28
