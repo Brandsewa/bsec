@@ -267,7 +267,7 @@ function extractBrandSlug(url: string): string {
   return match?.[1] ?? "";
 }
 
-async function loadMenusData(
+export async function loadMenusData(
   tx: Tx,
   tenantId: string,
   headerBlocks: BlockInstance[],

@@ -2,6 +2,7 @@
 @import "@bs/ui/styles.css";
 @source "./";
 @source "../../../packages/ui/src";
+@source "../../../packages/content-admin/src";
 
 /*
  * shadcn preset mapped onto the Bs admin tokens (packages/ui tokens.css).

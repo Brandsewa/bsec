@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import type { ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
+import { blogContract } from "./blog.ts";
 import {
   platformTenantsContract,
   platformOverviewContract,
@@ -11,6 +12,7 @@ import {
   platformSignupsContract,
   platformTemplatesContract,
   platformSupportContract,
+  platformMarketingContract,
   platformSystemContract,
   platformQuotasContract,
   platformFeaturesContract,
@@ -58,6 +60,9 @@ export const storeContract = {
   storefront: storefrontContract,
 };
 
+// The website has no theme templates to create.
+const { ensureTemplate: _ensureTemplate, ...sitePagesContract } = adminContract.pages;
+
 /** Platform API, served only by apps/platform (BYPASSRLS credentials). */
 export const platformContract = {
   system: {
@@ -74,6 +79,14 @@ export const platformContract = {
   signups: platformSignupsContract,
   templates: platformTemplatesContract,
   support: platformSupportContract,
+  marketing: {
+    ...platformMarketingContract,
+    // The same contracts the store admin uses, so the shared screens in @bs/content-admin work on both (ADR-042).
+    blog: blogContract,
+    menus: adminContract.menus,
+    media: adminContract.media,
+    pages: sitePagesContract,
+  },
   quotas: platformQuotasContract,
   features: platformFeaturesContract,
   promotions: platformPromotionsContract,

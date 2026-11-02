@@ -4,6 +4,7 @@
 @import "shadcn/tailwind.css";
 @source "./";
 @source "../../../packages/ui/src";
+@source "../../../packages/content-admin/src";
 
 /*
  * shadcn preset (b1D2d9ge, base-mira) mapped onto the Bs admin tokens (packages/ui tokens.css).

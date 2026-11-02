@@ -25,6 +25,7 @@ import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
 import * as VT from "./views-trust-strip.tsx";
 import * as VM from "./views-multi-card.tsx";
+import { MARKETING_BLOCK_DEFINITIONS } from "./marketing-blocks.ts";
 
 /* ------------------------------------------------------------------ */
 /* Sections and content blocks (M2). Schemas are additive-only: new    */
@@ -1497,6 +1498,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   MultiCard: MultiCardBlock,
   CollectionProducts: CollectionProductsBlock,
   BlogShowcase: BlogShowcaseBlock,
+  ...MARKETING_BLOCK_DEFINITIONS,
 };
 
 export const BLOCK_TYPES = Object.keys(BLOCK_DEFINITIONS) as BlockType[];

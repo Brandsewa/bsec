@@ -20,7 +20,7 @@ import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
 import { CollectionTypeCard, ProductAssignmentsCard, ProductSortingCard, RulesBuilderCard } from "../../components/collection/collection-parts.tsx";
 import type { PickedProduct } from "../../components/product/product-picker-dialog.tsx";
-import { MediaField } from "../../components/media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/collections_/new")({
   pendingComponent: () => <PageSkeleton />,

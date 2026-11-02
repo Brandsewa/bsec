@@ -15,7 +15,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
-import { MediaField } from "../../../components/media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/settings/storefront")({
   pendingComponent: () => <PageSkeleton />,

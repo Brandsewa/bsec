@@ -1,9 +1,6 @@
 import type { MediaItem, MediaKind } from "@bs/contracts";
 import { ALLOWED_MEDIA_TYPES } from "@bs/contracts";
-import { client } from "./orpc.ts";
-import { apiBase } from "./config.ts";
-import { getActiveStoreId } from "./session.ts";
-import { getSupportStoreId, getSupportToken } from "./support.ts";
+import { client, proxyUploadUrl, uploadHeaders } from "../host.ts";
 
 export type UploadQueueStatus = "queued" | "checking" | "duplicate" | "uploading" | "success" | "error" | "canceled";
 
@@ -49,20 +46,6 @@ export async function computeFileSha256(file: File): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function getStoreHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const support = getSupportToken();
-  if (support) {
-    headers["x-support-token"] = support;
-    const storeId = getSupportStoreId();
-    if (storeId) headers["x-store-id"] = storeId;
-  } else {
-    const id = getActiveStoreId();
-    if (id) headers["x-store-id"] = id;
-  }
-  return headers;
 }
 
 /**
@@ -252,8 +235,8 @@ function uploadViaServerProxyXhr(
       reject(new Error("Upload canceled"));
     };
 
-    xhr.open("POST", `${apiBase()}/api/admin/media/upload`);
-    const headers = getStoreHeaders();
+    xhr.open("POST", proxyUploadUrl());
+    const headers = uploadHeaders();
     for (const [k, v] of Object.entries(headers)) {
       xhr.setRequestHeader(k, v);
     }

@@ -34,6 +34,13 @@ import { Ledger } from "./pages/Ledger.tsx";
 import { Promotions } from "./pages/Promotions.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
+import { Marketing } from "./pages/Marketing.tsx";
+import { BlogCategoriesScreen } from "@bs/content-admin/blog/BlogCategoriesScreen.tsx";
+import { BlogPostsScreen, validateBlogListSearch } from "@bs/content-admin/blog/BlogPostsScreen.tsx";
+import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
+import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
+import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
+import { PagesScreen } from "@bs/content-admin/pages/PagesScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
@@ -132,6 +139,26 @@ const authLayoutRoute = createRoute({
 // The visual editor (Puck) is large: load it only when a theme is opened. It renders outside the
 // Layout shell so the canvas gets the whole window, with the same authentication guard.
 const TemplateEditor = lazy(() => import("./pages/TemplateEditor.tsx"));
+const MarketingPageEditor = lazy(() => import("./pages/MarketingPageEditor.tsx"));
+const marketingPageEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/marketing/pages/$id/editor",
+  beforeLoad: ({ context }) => {
+    if (!context.user) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  pendingComponent: () => <PageSkeleton />,
+  component: function MarketingPageEditorRoute() {
+    const { id } = marketingPageEditorRoute.useParams();
+    return (
+      <Suspense fallback={<PageSkeleton />}>
+        <MarketingPageEditor id={id} />
+      </Suspense>
+    );
+  },
+});
+
 const templateEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/templates/$code/editor",
@@ -257,6 +284,83 @@ const signupsRoute = createRoute({
       <DataTableSkeleton columns={5} rows={6} />
     </PageContainer>
   ),
+});
+
+const marketingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing",
+  component: Marketing,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <FormSectionSkeleton />
+    </PageContainer>
+  ),
+});
+
+const marketingPending = () => (
+  <PageContainer>
+    <PageHeaderSkeleton />
+    <DataTableSkeleton columns={4} rows={5} />
+  </PageContainer>
+);
+
+const marketingPagesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/pages",
+  component: PagesScreen,
+  pendingComponent: marketingPending,
+});
+
+const marketingNavigationRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/navigation",
+  component: MenusScreen,
+  pendingComponent: marketingPending,
+});
+
+const marketingMenuRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/navigation/$handle",
+  component: function MarketingMenu() {
+    return <MenuEditorScreen handle={marketingMenuRoute.useParams().handle} />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog",
+  validateSearch: validateBlogListSearch,
+  component: function MarketingBlog() {
+    return <BlogPostsScreen search={marketingBlogRoute.useSearch()} />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogCategoriesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/categories",
+  component: BlogCategoriesScreen,
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogNewRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/new",
+  component: function MarketingBlogNew() {
+    return <PostForm />;
+  },
+  pendingComponent: marketingPending,
+});
+
+const marketingBlogPostRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing/blog/$id",
+  component: function MarketingBlogPost() {
+    return <PostForm postId={marketingBlogPostRoute.useParams().id} />;
+  },
+  pendingComponent: marketingPending,
 });
 
 const templatesRoute = createRoute({
@@ -512,6 +616,7 @@ const baseRoutes = [
   forgotPasswordRoute,
   resetPasswordRoute,
   templateEditorRoute,
+  marketingPageEditorRoute,
   acceptInvitationRoute,
   ...(import.meta.env.DEV ? [kitRoute] : []),
 ];
@@ -520,6 +625,14 @@ export const routeTree = rootRoute.addChildren([
   ...baseRoutes,
   authLayoutRoute.addChildren([
     overviewRoute,
+    marketingRoute,
+    marketingPagesRoute,
+    marketingNavigationRoute,
+    marketingMenuRoute,
+    marketingBlogRoute,
+    marketingBlogCategoriesRoute,
+    marketingBlogNewRoute,
+    marketingBlogPostRoute,
     tenantsListRoute,
     tenantCreateRoute,
     tenantDetailRoute,

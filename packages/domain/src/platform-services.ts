@@ -4,6 +4,7 @@ import { schema, withTenant, type Db } from "@bs/db";
 import { hashPassword, verifyPassword } from "@bs/auth";
 import type { Runtime } from "./runtime.ts";
 import { assertCanTransitionTenant } from "./system/tenant-lifecycle.ts";
+import { assertStoreTenants } from "./platform/platform-site.ts";
 import { tierForPlan } from "./saas/plan-tiers.ts";
 import { purgeAvailableFrom } from "./platform/purge-retention.ts";
 import { enforceExtraMarketsQuota } from "./markets/service.ts";
@@ -276,6 +277,7 @@ export async function listPlatformTenants(
     })
     .from(schema.tenants)
     .leftJoin(schema.users, eq(schema.users.id, schema.tenants.ownerUserId))
+    .where(eq(schema.tenants.kind, "store"))
     .orderBy(desc(schema.tenants.createdAt));
 
   let filtered = rows;
@@ -335,7 +337,7 @@ export async function getPlatformTenant(
     })
     .from(schema.tenants)
     .leftJoin(schema.users, eq(schema.users.id, schema.tenants.ownerUserId))
-    .where(eq(schema.tenants.id, id))
+    .where(and(eq(schema.tenants.id, id), eq(schema.tenants.kind, "store")))
     .limit(1);
 
   const row = rows[0];
@@ -372,7 +374,7 @@ export async function getPlatformTenantDetail(
   const [tenant] = await db
     .select()
     .from(schema.tenants)
-    .where(eq(schema.tenants.id, tenantId))
+    .where(and(eq(schema.tenants.id, tenantId), eq(schema.tenants.kind, "store")))
     .limit(1);
 
   if (!tenant) throw new Error(`Tenant not found: ${tenantId}`);
@@ -597,11 +599,12 @@ export async function getPlatformOverviewMetrics(
   const [activeStoresRes] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.tenants)
-    .where(eq(schema.tenants.status, "active"));
+    .where(and(eq(schema.tenants.status, "active"), eq(schema.tenants.kind, "store")));
 
   const [totalStoresRes] = await db
     .select({ count: sql<number>`count(*)::int` })
-    .from(schema.tenants);
+    .from(schema.tenants)
+    .where(eq(schema.tenants.kind, "store"));
 
   // Signups 7d and 30d
   const [signups7dRes] = await db
@@ -696,6 +699,7 @@ export async function suspendPlatformTenant(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -732,6 +736,7 @@ export async function restorePlatformTenant(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -768,6 +773,7 @@ export async function archivePlatformTenant(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -812,6 +818,7 @@ export async function changePlatformTenantPlan(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -865,6 +872,7 @@ export async function extendPlatformTenantTrial(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -902,6 +910,7 @@ export async function activatePlatformTenantStore(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
 
   return db.transaction(async (tx) => {
@@ -954,6 +963,7 @@ export async function transferPlatformTenantOwnership(
   meta?: AuditMeta,
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [tenantId]);
   const db = rt._db.db;
   const email = newOwnerEmail.trim().toLowerCase();
 
@@ -1051,6 +1061,7 @@ export async function bulkSuspendPlatformTenants(
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
   const ids = [...new Set(tenantIds)];
+  await assertStoreTenants(rt._db.db, ids);
   if (ids.length === 0) throw new Error("Bad Request: select at least one store");
   if (confirmation !== `SUSPEND ${ids.length}`) {
     throw new Error(`Bad Request: type "SUSPEND ${ids.length}" to confirm`);
@@ -1091,6 +1102,7 @@ export async function bulkChangePlatformTenantTier(
 ) {
   await assertPlatformStaff(rt, platformStaffUserId);
   const ids = [...new Set(tenantIds)];
+  await assertStoreTenants(rt._db.db, ids);
   if (ids.length === 0) throw new Error("Bad Request: select at least one store");
   const cleanTier = tier.trim().toUpperCase();
   if (confirmation !== `TIER ${cleanTier} ${ids.length}`) {

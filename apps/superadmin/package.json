@@ -16,6 +16,7 @@
     "@bs/auth": "workspace:*",
     "@bs/block-editor": "workspace:*",
     "@bs/blocks": "workspace:*",
+    "@bs/content-admin": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@bs/ui": "workspace:*",
     "@orpc/client": "1.16.1",

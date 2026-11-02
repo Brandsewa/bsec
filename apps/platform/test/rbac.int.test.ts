@@ -52,6 +52,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "plans.listRequests": "platform_support",
   "plans.decideRequest": "platform_admin",
   "signups.list": "platform_support",
+  "marketing.status": "platform_admin",
+  "marketing.enable": "platform_admin",
   "templates.list": "platform_support",
   "templates.get": "platform_support",
   "templates.create": "platform_admin",
@@ -271,7 +273,8 @@ afterAll(async () => {
 function everyProcedure(): string[] {
   const out: string[] = [];
   for (const [ns, procs] of Object.entries(platformContract as unknown as Record<string, Record<string, unknown>>)) {
-    for (const name of Object.keys(procs)) out.push(`${ns}.${name}`);
+    // Marketing's nested content procedures have their own suite (marketing.int.test.ts).
+    for (const [name, def] of Object.entries(procs)) if ("~orpc" in (def as object)) out.push(`${ns}.${name}`);
   }
   return out.sort();
 }
