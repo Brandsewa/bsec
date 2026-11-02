@@ -112,7 +112,7 @@ export async function exportProductRows(rt: Runtime, ctx: TenantContext, input: 
     if (page.length === 0) return { header, rows: [], nextCursor: null, products: 0 };
     const ids = page.map((p) => p.id);
 
-    const [variants, options, media, cats, cfValues] = await Promise.all([
+    const [variants, options, media, cats, cfValues, colRows] = await Promise.all([
       tx.select().from(schema.variants).where(inArray(schema.variants.productId, ids)).orderBy(asc(schema.variants.position)),
       tx.select().from(schema.productOptions).where(inArray(schema.productOptions.productId, ids)).orderBy(asc(schema.productOptions.position)),
       tx
@@ -129,6 +129,11 @@ export async function exportProductRows(rt: Runtime, ctx: TenantContext, input: 
       defs.length
         ? tx.select().from(schema.customFieldValues).where(and(eq(schema.customFieldValues.tenantId, ctx.tenantId), inArray(schema.customFieldValues.productId, ids)))
         : Promise.resolve([] as Array<typeof schema.customFieldValues.$inferSelect>),
+      tx
+        .select({ productId: schema.collectionProducts.productId, title: schema.collections.title })
+        .from(schema.collectionProducts)
+        .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionProducts.collectionId))
+        .where(and(eq(schema.collectionProducts.tenantId, ctx.tenantId), inArray(schema.collectionProducts.productId, ids))),
     ]);
 
     // Image-typed custom fields store { mediaId }; resolve them to URLs in one query.
@@ -159,6 +164,8 @@ export async function exportProductRows(rt: Runtime, ctx: TenantContext, input: 
         status: p.status,
         primaryCategory: pCats.find((c) => c.isPrimary)?.name ?? "",
         tags: p.tags.join("|"),
+        categories: pCats.filter((c) => !c.isPrimary).map((c) => c.name).join("|"),
+        collections: colRows.filter((c) => c.productId === p.id).map((c) => c.title).join("|"),
         productType: p.productType ?? "",
         hsn: p.hsn ?? "",
         option1Name: pOptions[0]?.name ?? "",

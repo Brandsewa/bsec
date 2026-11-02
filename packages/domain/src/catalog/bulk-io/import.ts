@@ -53,9 +53,24 @@ export interface ProductImportPreview {
 
 interface CategoryIndex {
   byKey: Map<string, string>;
+  /** Manual collections only: a product cannot be added by hand to an automatic collection. */
+  collectionsByKey: Map<string, string>;
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
+
+/** Resolves names to ids; the names that matched nothing come back separately so the run can list them. */
+function resolveNames(names: string[] | undefined, index: Map<string, string>): { ids: string[]; missing: string[] } {
+  const ids: string[] = [];
+  const missing: string[] = [];
+  for (const name of names ?? []) {
+    const id = index.get(norm(name));
+    if (id) {
+      if (!ids.includes(id)) ids.push(id);
+    } else missing.push(name);
+  }
+  return { ids, missing };
+}
 
 async function loadCategoryIndex(rt: Runtime, ctx: TenantContext): Promise<CategoryIndex> {
   const rows = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
@@ -66,7 +81,18 @@ async function loadCategoryIndex(rt: Runtime, ctx: TenantContext): Promise<Categ
     byKey.set(norm(c.name), c.id);
     byKey.set(norm(String(c.slug)), c.id);
   }
-  return { byKey };
+  const cols = await withTenant(rt._db.db, ctx.tenantId, (tx) =>
+    tx
+      .select({ id: schema.collections.id, title: schema.collections.title, slug: schema.collections.slug })
+      .from(schema.collections)
+      .where(and(eq(schema.collections.tenantId, ctx.tenantId), eq(schema.collections.type, "manual"))),
+  );
+  const collectionsByKey = new Map<string, string>();
+  for (const c of cols) {
+    collectionsByKey.set(norm(c.title), c.id);
+    collectionsByKey.set(norm(String(c.slug)), c.id);
+  }
+  return { byKey, collectionsByKey };
 }
 
 function assertImportSize(n: number, max: number) {
@@ -101,10 +127,16 @@ export async function previewProductImport(rt: Runtime, ctx: TenantContext, inpu
     let state: PreviewState = existingId ? "exists" : "new";
     let detail: string | undefined;
     if (p.primaryCategory && !cats.byKey.has(norm(p.primaryCategory))) {
-      state = "unknown_category";
-      detail = `Collection "${p.primaryCategory}" does not exist`;
+      // Owner decision 2026-11-02: the collection is optional. The product is still imported, without one.
       out.unknownCategories++;
-    } else if (p.variants.some((v) => v.sku && skuOwners.has(v.sku.toLowerCase()) && skuOwners.get(v.sku.toLowerCase()) !== existingId)) {
+      const live = p.status === "active" || p.status === "unlisted";
+      out.issues.push({ row: p.row, handle: p.handle, kind: "row", message: `Collection "${p.primaryCategory}" was not found, so the product will be imported without a collection${live ? " and saved as a draft" : ""}` });
+    }
+    for (const [label, names, index] of [["Categories", p.categories, cats.byKey], ["Collections", p.collections, cats.collectionsByKey]] as const) {
+      const { missing } = resolveNames(names, index);
+      if (missing.length) out.issues.push({ row: p.row, handle: p.handle, kind: "row", message: `${label} not found and skipped: ${missing.join(", ")}` });
+    }
+    if (p.variants.some((v) => v.sku && skuOwners.has(v.sku.toLowerCase()) && skuOwners.get(v.sku.toLowerCase()) !== existingId)) {
       state = "sku_conflict";
       detail = "A SKU in this product belongs to a different product";
       out.skuConflicts++;
@@ -113,7 +145,7 @@ export async function previewProductImport(rt: Runtime, ctx: TenantContext, inpu
       detail = "A new product needs a variant price";
     } else if (existingId) out.existing++;
     else out.toCreate++;
-    if (state === "unknown_category" || state === "sku_conflict" || state === "missing_price") {
+    if (state === "sku_conflict" || state === "missing_price") {
       out.issues.push({ row: p.row, handle: p.handle, kind: state === "sku_conflict" ? "conflict" : "row", message: detail ?? state });
     }
     if (state === "new" || state === "exists") out.images += p.imageUrls.length;
@@ -292,7 +324,17 @@ async function applyCustomFields(rt: Runtime, ctx: TenantContext, productId: str
   return warnings;
 }
 
-async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, categoryId: string | undefined): Promise<Outcome> {
+interface Links {
+  extraCategoryIds: string[];
+  collectionIds: string[];
+}
+
+async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, categoryId: string | undefined, links: Links): Promise<Outcome> {
+  const warnings: string[] = [];
+  // A live product needs a primary collection (catalog rule), so one without it is saved as a draft instead of failing.
+  const wantsLive = p.status === "active" || p.status === "unlisted";
+  const status = wantsLive && !categoryId ? "draft" : p.status;
+  if (status !== p.status) warnings.push("Saved as a draft because it has no primary collection. Add a collection, then publish it.");
   if (!p.title) return { kind: "failed", message: "A new product needs a title" };
   if (!p.variants.length || p.variants.some((v) => v.price === undefined)) return { kind: "failed", message: "A new product needs a price on every variant" };
   const optionNames = p.optionNames.filter(Boolean);
@@ -301,7 +343,7 @@ async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, cate
   const created = await createProduct(rt, ctx, {
     title: p.title,
     slug: p.handle,
-    ...(p.status ? { status: p.status } : {}),
+    ...(status ? { status } : {}),
     ...(p.description ? { descriptionJson: { type: "text", text: p.description } } : {}),
     ...(p.shortDescription ? { shortDescription: p.shortDescription } : {}),
     ...(p.productType ? { productType: p.productType } : {}),
@@ -312,6 +354,8 @@ async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, cate
     ...(p.requiresShipping !== undefined ? { requiresShipping: p.requiresShipping } : {}),
     ...(seo ? { seo } : {}),
     ...(categoryId ? { primaryCategoryId: categoryId } : {}),
+    ...(links.extraCategoryIds.length ? { extraCategoryIds: links.extraCategoryIds } : {}),
+    ...(links.collectionIds.length ? { collectionIds: links.collectionIds } : {}),
     ...(options.length ? { options } : {}),
     variants: p.variants.map((v, i) => {
       const ov = optionValuesOf(p, v);
@@ -333,18 +377,29 @@ async function createOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, cate
     const row = created.variants.find((x) => x.sku === variantSku(p, v, i));
     if (row) await updateVariant(rt, ctx, { id: row.id, ...(v.barcode !== undefined ? { barcode: v.barcode } : {}), ...(v.weightGrams !== undefined ? { weightGrams: v.weightGrams } : {}) });
   }
-  const warnings = await applyCustomFields(rt, ctx, created.id, p.customFields);
+  warnings.push(...(await applyCustomFields(rt, ctx, created.id, p.customFields)));
   return { kind: "created", productId: created.id, warnings };
 }
 
-async function updateOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, existingId: string, categoryId: string | undefined, replace: boolean): Promise<Outcome> {
+async function updateOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, existingId: string, categoryId: string | undefined, links: Links, replace: boolean): Promise<Outcome> {
   const current = await getProduct(rt, ctx, { id: existingId });
   const has = (k: string) => replace && p.fields.includes(k);
   const seo = seoFor(p, current.seo);
+  const warnings: string[] = [];
+  const wantsLive = p.status === "active" || p.status === "unlisted";
+  const blockPublish = wantsLive && p.status !== current.status && !categoryId && !current.primaryCategoryId;
+  if (blockPublish) warnings.push(`Status left as ${current.status} because the product has no primary collection. Add a collection, then publish it.`);
+  // Update adds to what the product already has; replace sets exactly what the file lists. Only columns present in the file count.
+  const union = (current: string[], wanted: string[]) => (replace ? wanted : [...new Set([...current, ...wanted])]);
+  const categoryLinks = {
+    ...(categoryId ? { primaryCategoryId: categoryId } : {}),
+    ...(categoryId || p.categories !== undefined ? { extraCategoryIds: p.categories !== undefined ? union(current.extraCategoryIds, links.extraCategoryIds) : current.extraCategoryIds } : {}),
+    ...(p.collections !== undefined ? { collectionIds: union(current.collectionIds, links.collectionIds) } : {}),
+  };
   await updateProduct(rt, ctx, {
     id: existingId,
     ...(p.title ? { title: p.title } : {}),
-    ...(p.status ? { status: p.status } : {}),
+    ...(p.status && !blockPublish ? { status: p.status } : {}),
     ...(p.description !== undefined || has("description") ? { descriptionJson: p.description ? { type: "text", text: p.description } : null } : {}),
     ...(p.shortDescription !== undefined || has("shortDescription") ? { shortDescription: p.shortDescription ?? "" } : {}),
     ...(p.productType !== undefined || has("productType") ? { productType: p.productType ?? "" } : {}),
@@ -354,10 +409,9 @@ async function updateOne(rt: Runtime, ctx: TenantContext, p: ImportProduct, exis
     ...(p.returnable !== undefined ? { returnable: p.returnable } : {}),
     ...(p.requiresShipping !== undefined ? { requiresShipping: p.requiresShipping } : {}),
     ...(seo ? { seo } : {}),
-    ...(categoryId ? { primaryCategoryId: categoryId, extraCategoryIds: current.extraCategoryIds } : {}),
+    ...categoryLinks,
   });
 
-  const warnings: string[] = [];
   const bySku = new Map(current.variants.map((v) => [v.sku.toLowerCase(), v]));
   const seen = new Set<string>();
   for (const [i, v] of p.variants.entries()) {
@@ -429,23 +483,30 @@ export async function commitProductImportBatch(
   for (const p of input.products) {
     const fail = (kind: ImportRunError["kind"], message: string) => errors.push({ row: p.row, handle: p.handle, kind, message });
     let outcome: Outcome;
+    let collectionNote: string | undefined;
+    const linkNotes: string[] = [];
     try {
       const existingId = preview.existing.get(norm(p.handle));
       let categoryId: string | undefined;
       if (p.primaryCategory) {
         categoryId = cats.byKey.get(norm(p.primaryCategory));
-        if (!categoryId) throw new Error(`Collection "${p.primaryCategory}" does not exist, so the product was not imported`);
+        if (!categoryId) collectionNote = `Collection "${p.primaryCategory}" was not found, so the product was imported without a collection`;
       }
+      const extra = resolveNames(p.categories, cats.byKey);
+      const cols = resolveNames(p.collections, cats.collectionsByKey);
+      if (extra.missing.length) linkNotes.push(`Categories not found and skipped: ${extra.missing.join(", ")}`);
+      if (cols.missing.length) linkNotes.push(`Collections not found and skipped: ${cols.missing.join(", ")}`);
+      const links: Links = { extraCategoryIds: extra.ids.filter((id) => id !== categoryId), collectionIds: cols.ids };
       const clash = p.variants.find((v) => v.sku && preview.skuOwner.has(v.sku.toLowerCase()) && preview.skuOwner.get(v.sku.toLowerCase()) !== existingId);
       if (clash) {
         outcome = { kind: "skipped", conflict: true, message: `SKU ${clash.sku} already belongs to a different product` };
       } else if (existingId) {
         if (run.mode === "create_only" || run.conflictPolicy === "skip") outcome = { kind: "skipped", conflict: true, message: "A product with this URL handle already exists" };
-        else outcome = await updateOne(rt, ctx, p, existingId, categoryId, run.conflictPolicy === "replace");
+        else outcome = await updateOne(rt, ctx, p, existingId, categoryId, links, run.conflictPolicy === "replace");
       } else if (run.mode === "update_only") {
         outcome = { kind: "skipped", message: "No product with this URL handle exists (update only)" };
       } else {
-        outcome = await createOne(rt, ctx, p, categoryId);
+        outcome = await createOne(rt, ctx, p, categoryId, links);
       }
     } catch (e) {
       outcome = { kind: "failed", message: errMsg(e) };
@@ -453,6 +514,8 @@ export async function commitProductImportBatch(
 
     counters[outcome.kind]++;
     if (outcome.message) fail(outcome.conflict ? "conflict" : "row", outcome.message);
+    if (collectionNote && (outcome.kind === "created" || outcome.kind === "updated")) fail("row", collectionNote);
+    if (outcome.kind === "created" || outcome.kind === "updated") for (const note of linkNotes) fail("row", note);
     for (const w of outcome.warnings ?? []) fail("row", w);
     if ((outcome.kind === "created" || outcome.kind === "updated") && outcome.productId && p.imageUrls.length) {
       counters.images += p.imageUrls.length;

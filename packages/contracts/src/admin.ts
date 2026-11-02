@@ -2127,6 +2127,8 @@ const ProductImportProductSchema = z.object({
   description: z.string().max(50_000).optional(),
   status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
   primaryCategory: z.string().max(200).optional(),
+  categories: z.array(z.string().max(200)).max(50).optional(),
+  collections: z.array(z.string().max(200)).max(50).optional(),
   tags: z.array(z.string().max(100)).max(100).optional(),
   productType: z.string().max(200).optional(),
   hsn: z.string().max(50).optional(),
