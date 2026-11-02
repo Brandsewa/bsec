@@ -16,6 +16,7 @@ import {
   Headphones,
   KeyRound,
   LayoutDashboard,
+  Megaphone,
   Layers,
   LogOut,
   Mail,
@@ -78,6 +79,10 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Marketing",
+    items: [{ label: "Website", href: "/marketing", icon: Megaphone }],
+  },
+  {
     label: "Operations & Support",
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
@@ -99,11 +104,13 @@ const navGroups: NavGroup[] = [
 
 export function Layout({ user, onLogout }: LayoutProps) {
   const location = useLocation();
-  // The staff list is admin-only on the server; do not show support staff a page that would be refused.
-  const groups = navGroups.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => !(i.href === "/staff" && user.role === "platform_support")),
-  }));
+  // The staff list and Marketing are admin-only on the server; do not show support staff a page that would be refused.
+  const groups = navGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !((i.href === "/staff" || i.href === "/marketing") && user.role === "platform_support")),
+    }))
+    .filter((g) => g.items.length > 0);
   const navigate = useNavigate();
 
   const [passwordOpen, setPasswordOpen] = useState(false);

@@ -34,6 +34,7 @@ import { Ledger } from "./pages/Ledger.tsx";
 import { Promotions } from "./pages/Promotions.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
+import { Marketing } from "./pages/Marketing.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
@@ -255,6 +256,18 @@ const signupsRoute = createRoute({
     <PageContainer>
       <PageHeaderSkeleton />
       <DataTableSkeleton columns={5} rows={6} />
+    </PageContainer>
+  ),
+});
+
+const marketingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing",
+  component: Marketing,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <FormSectionSkeleton />
     </PageContainer>
   ),
 });
@@ -520,6 +533,7 @@ export const routeTree = rootRoute.addChildren([
   ...baseRoutes,
   authLayoutRoute.addChildren([
     overviewRoute,
+    marketingRoute,
     tenantsListRoute,
     tenantCreateRoute,
     tenantDetailRoute,

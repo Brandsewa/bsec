@@ -75,6 +75,8 @@ import {
   endSupportSession,
   listPlatformSupportSessions,
   runStoreExport,
+  enablePlatformSite,
+  getPlatformSiteId,
   verifyExportSignature,
   getPlatformSystemData,
   updatePlatformSettings,
@@ -151,6 +153,8 @@ import {
 
 export interface PlatformContext {
   rt: Runtime;
+  /** `app_rw` runtime, used only by Marketing so RLS applies to content services (ADR-042). Unset: Marketing is closed. */
+  contentRt?: Runtime | undefined;
   log: Logger;
   session?: {
     user: { id: string; email?: string };
@@ -299,6 +303,16 @@ export const requireStaff = (min: PlatformRole = "platform_support") =>
 export const requirePlatformStaff = requireStaff();
 
 export const platformRouter = os.router({
+  marketing: {
+    status: os.marketing.status.use(requireStaff("platform_admin")).handler(async ({ context }) => ({
+      contentConnected: Boolean(context.contentRt),
+      siteId: await getPlatformSiteId(context.rt._db.db),
+    })),
+    enable: os.marketing.enable.use(requireStaff("platform_admin")).handler(async ({ context }) => {
+      if (!context.contentRt) throw new ORPCError("SERVICE_UNAVAILABLE", { message: "Marketing needs DATABASE_URL_RW on the Platform service" });
+      return enablePlatformSite(context.rt, actor(context), context.meta);
+    }),
+  },
   system: {
     health: os.system.health.handler(({ context }) => checkHealth(context.rt)),
     data: os.system.data.use(requirePlatformStaff).handler(async ({ context }) => {
@@ -800,7 +814,7 @@ async function readPlatformSession(rt: Runtime, headers: Headers): Promise<{ use
   }
 }
 
-export function createApp(rt: Runtime, rootLog: Logger) {
+export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
   const logError = (error: unknown) => rootLog.error({ err: error }, "platform api error");
   const rpc = new RPCHandler(platformRouter, { interceptors: [onError(logError)] });
   const openapi = new OpenAPIHandler(platformRouter, { interceptors: [onError(logError)] });
@@ -990,7 +1004,7 @@ export function createApp(rt: Runtime, rootLog: Logger) {
       if (s) session = { user: { id: s.user.id, email: s.user.email }, type: "platform_staff", createdAt: s.createdAt };
     }
 
-    return { rt, log: c.get("log"), session, meta };
+    return { rt, contentRt, log: c.get("log"), session, meta };
   };
 
   app.all("/api/rpc/*", async (c, next) => {

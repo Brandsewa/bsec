@@ -25,6 +25,7 @@ let seq = 0;
 
 const ctxFor = (userId: string, createdAt: Date): PlatformContext => ({
   rt,
+  contentRt: rt,
   log: createLogger("audit-coverage-test"),
   session: { user: { id: userId }, type: "platform_staff", createdAt },
   meta: { ip: "203.0.113.7", userAgent: "vitest", requestId: "req-audit-coverage" },
@@ -88,6 +89,7 @@ async function mkTemplate(): Promise<string> {
 
 const CASES: Record<string, Case> = {
   "settings.update": { role: "platform_owner", action: "platform_settings.update", input: async () => ({ requireStaffMfa: true }) },
+  "marketing.enable": { role: "platform_admin", action: "platform_site.create", input: async () => undefined },
   "templates.create": { role: "platform_admin", action: "theme_template.create", input: async () => ({ name: `Created Theme ${++seq}` }) },
   "templates.saveDraft": {
     role: "platform_admin",
@@ -591,7 +593,7 @@ const CASES: Record<string, Case> = {
     action: "platform.reset",
     input: async () => {
       process.env.PLATFORM_RESET_ENABLED = "true";
-      const r = await rt._db.db.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM tenants`);
+      const r = await rt._db.db.execute<{ n: string }>(sql`SELECT count(*)::text AS n FROM tenants WHERE kind = 'store'`);
       return { confirmation: "RESET ALL STORES", expectedStores: Number(r.rows[0]!.n) };
     },
   },

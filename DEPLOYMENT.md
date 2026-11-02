@@ -25,6 +25,7 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 
 ### Platform (`bsec-platform`)
 - `DATABASE_URL_PLATFORM`: Connection string for PostgreSQL as `app_platform` (BYPASSRLS). This is the only service that holds BYPASSRLS credentials.
+- `DATABASE_URL_RW` (optional): PostgreSQL as `app_rw`, the same value the web app uses. Only the Marketing section uses it, so store services run under RLS (ADR-042). Unset: Marketing stays closed and the rest of Super Admin works. `CONTENT_DB_POOL_MAX` defaults to 2.
 - `BETTER_AUTH_SECRET`: **Required for Super Admin sign-in and export downloads.** 32+ random characters. Use a *different* value from the web app's.
 - `PLATFORM_AUTH_URL`: the public origin of this API, e.g. `https://platform.bcom.si`.
 - `SUPERADMIN_ORIGINS`: the exact origin(s) of the Super Admin app, comma separated, e.g. `https://superadmin.bcom.si`. Only these origins may call the API with credentials (CORS) and only these pass the origin check on state-changing requests. Wildcards are not supported on purpose: tenants own other `*.bcom.si` subdomains.

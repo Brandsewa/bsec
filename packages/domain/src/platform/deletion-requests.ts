@@ -1,3 +1,4 @@
+import { assertStoreTenants } from "./platform-site.ts";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -82,6 +83,7 @@ export async function scheduleTenantDeletion(
   meta?: AuditMeta,
 ): Promise<DeletionRecord> {
   await assertPlatformStaff(rt, platformStaffUserId);
+  await assertStoreTenants(rt._db.db, [input.tenantId]);
   const graceDays = input.graceDays ?? PURGE_RETENTION_DAYS;
   if (!Number.isFinite(graceDays) || graceDays < 0 || graceDays > 90) {
     throw new Error("Bad Request: grace period must be between 0 and 90 days");

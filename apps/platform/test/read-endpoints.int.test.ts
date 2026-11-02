@@ -32,6 +32,7 @@ const INPUTS: Record<string, () => unknown> = {
   "ledger.storeTransactions": () => ({}),
   "plans.listRequests": () => undefined,
   "signups.list": () => ({}),
+  "marketing.status": () => undefined,
   "templates.list": () => undefined,
   "templates.get": () => ({ code: "essential-commerce" }),
   "support.list": () => ({}),

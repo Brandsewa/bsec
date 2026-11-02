@@ -52,6 +52,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "plans.listRequests": "platform_support",
   "plans.decideRequest": "platform_admin",
   "signups.list": "platform_support",
+  "marketing.status": "platform_admin",
+  "marketing.enable": "platform_admin",
   "templates.list": "platform_support",
   "templates.get": "platform_support",
   "templates.create": "platform_admin",

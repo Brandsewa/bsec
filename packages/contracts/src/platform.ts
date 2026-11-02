@@ -631,6 +631,19 @@ export const platformTemplatesContract = {
     .output(ThemeTemplateSummary),
 };
 
+export const platformMarketingContract = {
+  status: oc
+    .route({ method: "GET", path: "/platform/marketing/status" })
+    .output(z.object({
+      /** False until the Platform service has DATABASE_URL_RW; Marketing then stays closed (ADR-042). */
+      contentConnected: z.boolean(),
+      siteId: z.string().nullable(),
+    })),
+  enable: oc
+    .route({ method: "POST", path: "/platform/marketing/enable" })
+    .output(z.object({ siteId: z.string() })),
+};
+
 export const platformSupportContract = {
   list: oc
     .route({ method: "GET", path: "/platform/support/sessions" })
