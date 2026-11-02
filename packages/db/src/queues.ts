@@ -46,6 +46,10 @@ export const QUEUES = [
   // Notification manager (docs/NOTIFICATION-MANAGER-PLAN.md): one dispatch job per event
   { name: "notification.dispatch", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "notification.retention_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Blog scheduling (ADR-033)
+  { name: "blog.publish_due", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Custom domain checks
+  { name: "domains.sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];

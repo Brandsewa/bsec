@@ -31,7 +31,7 @@ export function Marketing() {
           action={<Button onClick={() => enable.mutate()} disabled={enable.isPending}>Set up</Button>}
         />
       ) : (
-        <EmptyState icon={Globe} title="Website content is ready" description="Use Navigation and Blogs in the sidebar. Pages arrive here next." />
+        <EmptyState icon={Globe} title="Website content is ready" description="Use Navigation, Pages and Blogs in the sidebar." />
       )}
     </PageContainer>
   );
