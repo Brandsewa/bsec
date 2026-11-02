@@ -224,7 +224,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
             <ul className="list-disc pl-5 text-xs text-muted-foreground">
               <li>Several rows with the same URL handle become one product with several variants and images.</li>
               <li>Image URLs must be https. They are downloaded in the background and added to the product.</li>
-              <li>Primary collection must match an existing category by name. Products with an unknown name are not imported.</li>
+              <li>Primary collection is optional. If it is blank or does not match an existing category, the product is still imported without one (saved as a draft if it was meant to be published).</li>
               <li>Blank cells keep the current value when updating. Type [clear] in a cell to empty it.</li>
             </ul>
             <div>
@@ -309,7 +309,7 @@ export function ProductImportDialog({ open, onOpenChange, onImported }: { open: 
 
 /** Products the server already knows it cannot import (unknown collection, SKU owned by another product, no price). */
 function blockedHandles(preview: Preview): Set<string> {
-  return new Set(preview.items.filter((i) => i.state === "unknown_category" || i.state === "sku_conflict" || i.state === "missing_price").map((i) => i.handle));
+  return new Set(preview.items.filter((i) => i.state === "sku_conflict" || i.state === "missing_price").map((i) => i.handle));
 }
 
 function ReviewStep({ phase, policy, setPolicy, mode, setMode, busy, onBack, onDownload, onStart }: {
@@ -352,10 +352,10 @@ function ReviewStep({ phase, policy, setPolicy, mode, setMode, busy, onBack, onD
         <SimpleSelect ariaLabel="Import mode" className="w-56" value={mode} onChange={(v) => setMode(v as Mode)} options={[{ value: "create_and_update", label: "Create and update" }, { value: "create_only", label: "Create new only" }, { value: "update_only", label: "Update existing only" }]} />
       </div>
 
-      {blocked.size + parseIssues.length > 0 ? (
+      {problems.length > 0 ? (
         <p className="text-sm text-muted-foreground">
-          {[
-            [preview.unknownCategories, "unknown collection"],
+          Notes: {[
+            [preview.unknownCategories, "collection not found (imported without one)"],
             [preview.skuConflicts, "SKU used by another product"],
             [preview.items.filter((it) => it.state === "missing_price").length, "missing price"],
             [parseIssues.length, "invalid rows"],

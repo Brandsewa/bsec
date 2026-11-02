@@ -92,7 +92,7 @@ Progress rows are written after commit by the request and by the `products.impor
 ## 6. Decisions for the owner
 
 1. **"Primary Collection".** The product model has a *primary category* (required to publish) and separate *collections*. The plan exports and imports both (`Primary category`, `Collections`). Say if you meant collections only.
-2. **Unknown category or collection names in a file:** reject the row (default) or create them automatically.
+2. **Unknown category or collection names in a file (changed 2026-11-02):** the collection is optional. A blank or unknown name no longer rejects the product: it is imported without a collection and a notice is listed. A product meant to be live (active or unlisted) is saved as a draft, because the catalog needs a primary collection to publish.
 3. **Image-fetch scope:** any public https host (default, needed for Shopify/Woo exports), or an allow-list.
 4. **Description (decided 2026-10-31):** Description and Short description are plain text (HTML from Shopify is converted to text; paragraph breaks and `- ` lists kept). Formatting (headings, lists, bold, italic) is kept only for `rich_text` custom fields, via `toRichTextHtml` and the existing field sanitiser.
-5. **Primary collection (decided):** one column, mapped to the primary category. Unknown names reject the product.
+5. **Primary collection (decided, relaxed 2026-11-02):** one column, mapped to the primary category by name or slug. Optional: see item 2.

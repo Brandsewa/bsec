@@ -90,13 +90,38 @@ describe("product import (real Postgres)", () => {
     expect(done.imagesDone).toBe(1);
   });
 
-  it("rejects a product whose primary collection does not exist and imports nothing for it", async () => {
+  it("imports a product whose collection does not exist, without a collection, and says so", async () => {
     const res = await run([["imp-ghost", "Ghost", "", "Nonexistent", "GHOST-1", "10", "", ""]]);
-    expect(res.run).toMatchObject({ created: 0, failed: 1 });
+    expect(res.run).toMatchObject({ created: 1, failed: 0 });
     expect(res.run.errors[0]).toMatchObject({ handle: "imp-ghost", kind: "row" });
-    expect(res.run.errors[0]?.message).toMatch(/Nonexistent/);
-    expect(await find("imp-ghost")).toBeNull();
-    expect(res.run.status).toBe("completed_with_errors");
+    expect(res.run.errors[0]?.message).toMatch(/Nonexistent.*without a collection/);
+    const ghost = await find("imp-ghost");
+    expect(ghost).toMatchObject({ title: "Ghost", status: "draft", primaryCategoryId: null });
+    expect(res.run.status).toBe("completed"); // a notice is not a failure
+  });
+
+  it("imports a product with a blank collection, and saves a live one as a draft instead of failing", async () => {
+    const res = await run([
+      ["imp-nocoll-draft", "No Collection", "", "", "NCD-1", "10", "", ""],
+      ["imp-nocoll-live", "No Collection Live", "", "", "NCL-1", "10", "", "active"],
+      ["imp-badcoll-live", "Bad Collection Live", "", "Nope", "BCL-1", "10", "", "active"],
+    ]);
+    expect(res.run).toMatchObject({ created: 3, failed: 0 });
+    expect((await find("imp-nocoll-draft"))?.status).toBe("draft");
+    expect(await find("imp-nocoll-live")).toMatchObject({ status: "draft", primaryCategoryId: null });
+    expect(await find("imp-badcoll-live")).toMatchObject({ status: "draft", primaryCategoryId: null });
+    const messages = res.run.errors.map((e) => e.message).join(" | ");
+    expect(messages).toMatch(/Saved as a draft because it has no primary collection/);
+  });
+
+  it("updates a product that has no collection without trying to publish it", async () => {
+    await run([["imp-upd-nocoll", "Upd No Coll", "", "", "UNC-1", "10", "", ""]]);
+    const res = await run([["imp-upd-nocoll", "Upd No Coll Renamed", "", "", "UNC-1", "20", "", "active"]], "update");
+    expect(res.run).toMatchObject({ updated: 1, failed: 0 });
+    const after = await find("imp-upd-nocoll");
+    expect(after).toMatchObject({ title: "Upd No Coll Renamed", status: "draft" });
+    expect(after?.variants[0]?.price).toBe(2000);
+    expect(res.run.errors.map((e) => e.message).join(" ")).toMatch(/Status left as draft/);
   });
 
   it("skip policy leaves an existing product untouched and lists a conflict", async () => {
@@ -150,8 +175,10 @@ describe("product import (real Postgres)", () => {
       ["imp-nocat", "No cat", "", "Missing", "NC-1", "1", "", ""],
     ]);
     const pv = await previewProductImport(rt, ctxA, { products });
-    expect(pv).toMatchObject({ total: 4, toCreate: 1, existing: 1, skuConflicts: 1, unknownCategories: 1, images: 1 });
-    expect(pv.items.map((i) => i.state)).toEqual(["exists", "new", "sku_conflict", "unknown_category"]);
+    // The product with an unknown collection is importable (without a collection), so it counts as new.
+    expect(pv).toMatchObject({ total: 4, toCreate: 2, existing: 1, skuConflicts: 1, unknownCategories: 1, images: 1 });
+    expect(pv.items.map((i) => i.state)).toEqual(["exists", "new", "sku_conflict", "new"]);
+    expect(pv.issues.map((i) => i.handle).sort()).toEqual(["imp-clash", "imp-nocat"]);
     expect(await find("imp-fresh")).toBeNull();
   });
 
