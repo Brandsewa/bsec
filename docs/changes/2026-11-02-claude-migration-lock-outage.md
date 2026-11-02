@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `fix/migration-lock-timeout` (not merged yet)
+- **Branch:** `fix/migration-lock-timeout` (merged in #203, f80aa91)
 - **Area:** db, superadmin, docs
 - **Type:** fix
 - **Supersedes:** none
@@ -46,4 +46,4 @@ NOT verified: the fix against production traffic, and that the skipped schedules
 - `DATABASE_URL_SUPERUSER` still appears to be set on `bsec-migrate`: the log prints `roles ok`, and the runbook says to remove it after the first run. Owner's call.
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged and deployed 2026-11-02. Migrate logged `migrations ok`, the worker has no queue errors and logged its recurring jobs as registered.

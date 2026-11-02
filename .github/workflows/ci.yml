@@ -373,12 +373,28 @@ jobs:
       - name: Run migration (bsec-migrate; bootstraps roles once, always migrates)
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_LOGS_TOKEN: ${{ secrets.COOLIFY_LOGS_TOKEN }}
         run: |
           curl -fsS -X POST "$COOLIFY_URL/api/v1/deploy?uuid=$MIGRATE_UUID&force=false" \
             -H "Authorization: Bearer $COOLIFY_TOKEN"
-          # No read-scoped token to poll deployment status; migrate finishes in ~15-20s
-          # (observed). Give it comfortable headroom before the apps redeploy.
-          sleep 45
+          # Coolify reports Success for a migration that is stuck or failed (outage of 2026-11-02), so
+          # only the log proves it ran. Reading logs needs a token with read:sensitive.
+          if [ -z "$COOLIFY_LOGS_TOKEN" ]; then
+            echo "::warning::COOLIFY_LOGS_TOKEN not set: the migration result is not checked"
+            sleep 45
+            exit 0
+          fi
+          # Long enough for the new container to replace the old one, whose log also says "migrations ok".
+          sleep 30
+          for _ in 1 2 3 4 5 6 7 8; do
+            logs=$(curl -fsS "$COOLIFY_URL/api/v1/applications/$MIGRATE_UUID/logs?lines=50" \
+              -H "Authorization: Bearer $COOLIFY_LOGS_TOKEN") || logs=""
+            case "$logs" in *"migrations ok"*) echo "migration finished"; exit 0 ;; esac
+            sleep 10
+          done
+          # The log itself is not printed: this repository is public.
+          echo "::error::bsec-migrate did not log 'migrations ok'. Apps were not deployed. Read its log in Coolify."
+          exit 1
       - name: Deploy web, platform, worker, admin, superadmin
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
