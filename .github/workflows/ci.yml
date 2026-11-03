@@ -384,14 +384,29 @@ jobs:
             sleep 45
             exit 0
           fi
-          # Long enough for the new container to replace the old one, whose log also says "migrations ok".
+          # Long enough for the new container to replace the old one.
           sleep 30
+          # Coolify answered 400 on the first real run (2026-11-03), most likely because bsec-migrate restarts after each
+          # run and has no running container to read. So an unreadable log does not block the deploy (it is as unchecked
+          # as before the token existed); a log that IS readable and lacks "migrations ok" does. Stop the restart loop
+          # in Coolify for the check to be reliable: a looping container keeps printing old "migrations ok" lines.
+          unreadable=0
           for _ in 1 2 3 4 5 6 7 8; do
-            logs=$(curl -fsS "$COOLIFY_URL/api/v1/applications/$MIGRATE_UUID/logs?lines=50" \
-              -H "Authorization: Bearer $COOLIFY_LOGS_TOKEN") || logs=""
-            case "$logs" in *"migrations ok"*) echo "migration finished"; exit 0 ;; esac
+            code=$(curl -sS -o "$RUNNER_TEMP/migrate.log" -w '%{http_code}' "$COOLIFY_URL/api/v1/applications/$MIGRATE_UUID/logs?lines=50"               -H "Authorization: Bearer $COOLIFY_LOGS_TOKEN") || code=000
+            if [ "$code" = "200" ]; then
+              grep -q "migrations ok" "$RUNNER_TEMP/migrate.log" && { echo "migration finished"; exit 0; }
+              unreadable=0
+            else
+              unreadable=$((unreadable + 1))
+              [ "$unreadable" -ge 2 ] && break
+            fi
             sleep 10
           done
+          if [ "$unreadable" -ge 2 ]; then
+            echo "::warning::Could not read the bsec-migrate log (last HTTP status $code): the migration result is not checked. Read its log in Coolify."
+            sleep 15
+            exit 0
+          fi
           # The log itself is not printed: this repository is public.
           echo "::error::bsec-migrate did not log 'migrations ok'. Apps were not deployed. Read its log in Coolify."
           exit 1

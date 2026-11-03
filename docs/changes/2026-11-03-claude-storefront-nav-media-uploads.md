@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/storefront-nav-media` (not merged yet)
+- **Branch:** `feat/storefront-nav-media` (merged in #205, 688cd1c)
 - **Area:** superadmin, content-admin, admin, platform image, domain, docs
 - **Type:** feature and fix
 - **Supersedes:** none
@@ -41,4 +41,4 @@ NOT verified: uploads to real R2 (local used a local folder) and whether the bro
 - Upload folder for the website is `catalog` (the shared screen's default); a `website` folder would be tidier.
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged 2026-11-03. The deploy of #205 was blocked by the migration-log check (see `2026-11-03-claude-deploy-log-check-fix.md`) and was completed afterwards.
