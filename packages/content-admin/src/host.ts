@@ -6,7 +6,7 @@ import type { StoreClient } from "@bs/contracts";
  * app runs one API, so it plugs that in once at startup, and the screens read these bindings instead of taking props.
  */
 export type ContentClient = {
-  admin: Pick<StoreClient["admin"], "blog" | "menus" | "media" | "pages" | "products" | "collections" | "categories" | "brands">;
+  admin: Pick<StoreClient["admin"], "blog" | "menus" | "media" | "pages" | "products" | "collections" | "categories" | "brands" | "storefront" | "policies" | "customerPrivacy">;
 };
 export type ContentOrpc = ReturnType<typeof createORPCReactQueryUtils<ContentClient>>;
 

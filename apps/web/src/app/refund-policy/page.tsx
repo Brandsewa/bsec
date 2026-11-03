@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { publishedPolicy } from "@/components/marketing/landing/PublishedPolicy.tsx";
 import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
   alternates: { canonical: "/refund-policy" },
 };
 
-export default function RefundPolicyPage() {
+export default async function RefundPolicyPage() {
+  const published = await publishedPolicy("refund");
+  if (published) return published;
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Refund and cancellation policy" intro="How to cancel your plan, and when we refund." />

@@ -147,6 +147,6 @@ describe("Marketing runs under RLS", () => {
   });
 
   it("the context holds only what content needs", () => {
-    expect(platformSiteContext(siteId, staffId).permissions).toEqual(["content.write", "theme.publish"]);
+    expect(platformSiteContext(siteId, staffId).permissions).toEqual(["content.write", "theme.publish", "settings.read", "storefront.manage", "policies.manage", "privacy.manage"]);
   });
 });

@@ -2,6 +2,8 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 import { THEME_PAGE_TYPES } from "@bs/blocks";
 import { getStorefrontPageByPath } from "../content-services.ts";
+import { getPublishedPolicy } from "../policies/service.ts";
+import { getPrivacySettings } from "../privacy/service.ts";
 import type { Runtime } from "../runtime.ts";
 import { listBlogForSitemap } from "../blog/queries.ts";
 import { loadMenusData } from "../themes/block-data.ts";
@@ -73,4 +75,61 @@ export async function platformSitePagesSitemap(db: Db, origin: string) {
   return rows
     .filter((r) => !r.parentId && r.slug !== "about" && !THEME_PAGE_TYPES.has(r.type ?? ""))
     .map((r) => ({ loc: `${origin}/pages/${r.slug}`, lastmod: r.updatedAt.toISOString(), changefreq: "monthly" as const, priority: 0.5 }));
+}
+
+export interface PlatformSiteStatus {
+  mode: "live" | "coming_soon" | "maintenance";
+  headline: string | null;
+  showCountdown: boolean;
+  launchAt: string | null;
+  hideFromSearchEngines: boolean;
+}
+
+/**
+ * What the public website should do. No record, no status row, an unknown mode or a read that fails all mean "live":
+ * the website must never go dark because of a settings problem. Password mode is a store feature and is ignored here.
+ */
+export async function getPlatformSiteStatus(db: Db): Promise<PlatformSiteStatus> {
+  const live: PlatformSiteStatus = { mode: "live", headline: null, showCountdown: false, launchAt: null, hideFromSearchEngines: false };
+  try {
+    const siteId = await getPlatformSiteId(db);
+    if (!siteId) return live;
+    return await withTenant(db, siteId, async (tx) => {
+      const [row] = await tx.select().from(schema.storeStatus).where(eq(schema.storeStatus.tenantId, siteId)).limit(1);
+      const [seo] = await tx.select({ indexingEnabled: schema.seoSettings.indexingEnabled }).from(schema.seoSettings).where(eq(schema.seoSettings.tenantId, siteId)).limit(1);
+      const mode = row?.mode === "coming_soon" || row?.mode === "maintenance" ? row.mode : "live";
+      return {
+        mode,
+        headline: row?.headline ?? null,
+        showCountdown: row?.showCountdown ?? false,
+        launchAt: row?.launchAt ? row.launchAt.toISOString() : null,
+        hideFromSearchEngines: seo ? !seo.indexingEnabled : false,
+      };
+    });
+  } catch {
+    return live;
+  }
+}
+
+/** The website's published policy (terms, privacy, refund, shipping, legal notice), or null so the built-in text shows. */
+export async function getPlatformSitePolicy(db: Db, handle: Parameters<typeof getPublishedPolicy>[2]) {
+  try {
+    const siteId = await getPlatformSiteId(db);
+    return siteId ? await getPublishedPolicy(db, siteId, handle) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The privacy contact set in Settings, or null while nothing is set (the built-in details then show). */
+export async function getPlatformSitePrivacy(rt: Runtime): Promise<{ email: string | null; officerName: string | null; slaDays: number } | null> {
+  try {
+    const siteId = await getPlatformSiteId(rt._db.db);
+    if (!siteId) return null;
+    const ctx = { tenantId: siteId, storeStatus: "live", actor: { type: "system" as const }, roles: [], permissions: ["settings.read"], requestId: crypto.randomUUID() };
+    const p = await getPrivacySettings(rt, ctx as never);
+    return p.privacyContactEmail || p.grievanceOfficerName ? { email: p.privacyContactEmail, officerName: p.grievanceOfficerName, slaDays: p.requestSlaDays } : null;
+  } catch {
+    return null;
+  }
 }

@@ -1,9 +1,10 @@
 import { MARKETING_STARTERS, onlyMarketingBlocks, type BlockInstance } from "@bs/blocks";
-import { schema } from "@bs/db";
+import { schema, withTenant } from "@bs/db";
 import { createPage, savePageDraft } from "../content-services.ts";
 import type { TenantContext } from "../context.ts";
 import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta, type PlatformRole } from "../platform-services.ts";
 import type { Runtime } from "../runtime.ts";
+import { updateStoreStatus } from "../storefront/lifecycle.ts";
 import { getPlatformSiteId, PLATFORM_SITE_SLUG } from "./platform-site.ts";
 
 /** Creates the website record on first use, with its audit row. Calling it again changes nothing. */
@@ -35,8 +36,9 @@ export function platformSiteContext(siteId: string, staffUserId: string, request
     tenantId: siteId,
     storeStatus: "live",
     actor: { type: "staff", userId: staffUserId },
-    roles: ["platform_site_editor"],
-    permissions: ["content.write", "theme.publish"],
+    // store_owner: the maintenance window is owner-only in the status service; here the staff member is the owner of the website.
+    roles: ["platform_site_editor", "store_owner"],
+    permissions: ["content.write", "theme.publish", "settings.read", "storefront.manage", "policies.manage", "privacy.manage"],
     requestId: requestId ?? crypto.randomUUID(),
   };
 }
@@ -53,4 +55,14 @@ export async function createPlatformSitePage(rt: Runtime, ctx: TenantContext, in
 export async function savePlatformSiteDraft(rt: Runtime, ctx: TenantContext, input: { id: string; blocks: unknown[] }) {
   if (!onlyMarketingBlocks(input.blocks as BlockInstance[])) throw new Error("Bad Request: this block belongs to stores, not the website");
   return savePageDraft(rt, ctx, input);
+}
+
+/**
+ * A store with no status row reads as "coming soon". The website must read as live, so its row is created on first use
+ * (setup, or the first visit to Settings for a website set up before this existed). Does nothing when a row exists.
+ */
+export async function ensureSiteStatusLive(rt: Runtime, ctx: TenantContext): Promise<void> {
+  const rows = await withTenant(rt._db.db, ctx.tenantId, (tx) => tx.select({ id: schema.storeStatus.tenantId }).from(schema.storeStatus).limit(1));
+  if (rows.length > 0) return;
+  await updateStoreStatus(rt, ctx, { mode: "live", collectEmails: false });
 }

@@ -41,6 +41,9 @@ import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
 import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
 import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
 import { PagesScreen } from "@bs/content-admin/pages/PagesScreen.tsx";
+import { StorefrontSettingsScreen } from "@bs/content-admin/settings/StorefrontSettingsScreen.tsx";
+import { PoliciesScreen } from "@bs/content-admin/settings/PoliciesScreen.tsx";
+import { CustomerPrivacyScreen } from "@bs/content-admin/settings/CustomerPrivacyScreen.tsx";
 import { MediaScreen, validateMediaSearch } from "@bs/content-admin/media/MediaScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
@@ -310,6 +313,42 @@ const marketingPagesRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/storefront/pages",
   component: PagesScreen,
+  pendingComponent: marketingPending,
+});
+
+const settingsVisibilityRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront/settings/visibility",
+  component: function WebsiteVisibility() {
+    return <PageContainer size="small"><StorefrontSettingsScreen view="visibility" website /></PageContainer>;
+  },
+  pendingComponent: marketingPending,
+});
+
+const settingsSearchRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront/settings/search",
+  component: function WebsiteSearch() {
+    return <PageContainer size="small"><StorefrontSettingsScreen view="search" website /></PageContainer>;
+  },
+  pendingComponent: marketingPending,
+});
+
+const settingsPoliciesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront/settings/policies",
+  component: function WebsitePolicies() {
+    return <PageContainer size="small"><PoliciesScreen website /></PageContainer>;
+  },
+  pendingComponent: marketingPending,
+});
+
+const settingsPrivacyRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront/settings/privacy",
+  component: function WebsitePrivacy() {
+    return <PageContainer size="small"><CustomerPrivacyScreen /></PageContainer>;
+  },
   pendingComponent: marketingPending,
 });
 
@@ -656,6 +695,10 @@ export const routeTree = rootRoute.addChildren([
     marketingRoute,
     marketingPagesRoute,
     marketingMediaRoute,
+    settingsVisibilityRoute,
+    settingsSearchRoute,
+    settingsPoliciesRoute,
+    settingsPrivacyRoute,
     marketingOldRoute,
     storefrontIndexRoute,
     marketingNavigationRoute,

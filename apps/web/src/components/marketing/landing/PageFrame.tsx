@@ -5,6 +5,7 @@ import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { HomeFooter } from "../home/HomeFooter.tsx";
 import { HomeNav } from "../home/HomeNav.tsx";
 import { HomeRoot } from "../home/HomeRoot.tsx";
+import { siteHold } from "../home/SiteHold.tsx";
 
 /**
  * Frame for the plain pages of the marketing site (about, contact, pricing, legal): the same header and footer as the
@@ -14,10 +15,11 @@ import { HomeRoot } from "../home/HomeRoot.tsx";
 export async function PageFrame({ children }: { children: ReactNode }) {
   const h = await headers();
   if (!isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"))) notFound();
+  const hold = await siteHold();
   return (
     <HomeRoot>
       <HomeNav />
-      <main id="main">{children}</main>
+      <main id="main">{hold ?? children}</main>
       <HomeFooter />
     </HomeRoot>
   );
