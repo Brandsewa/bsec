@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
@@ -87,7 +87,7 @@ function ProductEditor({ data, states, currency, onSaved }: EditorProps) {
   return (
     <>
       {data.variants.map((v) => (
-        <VariantEditor key={v.variantId} variant={v} productTitle={data.productTitle} states={states} currency={currency} onSaved={onSaved} />
+        <VariantEditor key={`${v.variantId}:${JSON.stringify(v.prices)}`} variant={v} productTitle={data.productTitle} states={states} currency={currency} onSaved={onSaved} />
       ))}
     </>
   );
@@ -107,8 +107,6 @@ function VariantEditor({ variant, productTitle, states, currency, onSaved }: Var
   const [newState, setNewState] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => setDraft(initial), [initial]);
 
   const nameOf = (code: string) => states.find((s) => s.code === code)?.name ?? code;
   const available = states.filter((s) => !(s.code in draft));
