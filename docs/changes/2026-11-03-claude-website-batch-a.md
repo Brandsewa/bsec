@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/updates-batch` (not merged yet)
+- **Branch:** merged in #211, c007b41
 - **Area:** blocks, block-editor, contracts, domain, platform, superadmin, web
 - **Type:** feature
 - **Supersedes:** none

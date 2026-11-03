@@ -1,6 +1,6 @@
 # Marketing site dashboard, page builder and blog
 
-- Status: **Phases 1 to 4 live** (merged in #198). Phase 5 is split into slices S1 to S5 (section 5a). S1 and S2 are live; S3 is built on `feat/storefront-builder`. Marketing opens once `DATABASE_URL_RW` is set on `bsec-platform`. Phase 5 not started. Written 2026-11-02.
+- Status: **Phases 1 to 5 live** (#198, #205 to #211). Home, Pricing, blog layouts, settings, builder and theme are built; an unchecked list of live checks is in the change records. Written 2026-11-02, updated 2026-11-03.
 - Planner and verifier: Claude Code. Builder: assigned by the owner.
 - Related: ADR-001 (domain logic), ADR-002 (tenancy and roles), ADR-004 (cache tags), ADR-009 and ADR-010 (blocks, no merchant code), ADR-011 (fallbacks), ADR-033 (blog), `docs/MARKETING-SITE-PLAN.md`, `docs/changes/2026-11-02-claude-marketing-home-redesign.md`.
 - A new ADR is written in Phase 0, before any code.

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/storefront-settings` (not merged yet)
+- **Branch:** merged in #207, a418ccf
 - **Area:** contracts, domain, platform, superadmin, content-admin, admin, web
 - **Type:** feature
 - **Supersedes:** none
