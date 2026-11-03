@@ -108,17 +108,11 @@ import {
   executePrivacyExport,
   executePrivacyWithdrawConsent,
   getCookieInventory,
-  getPolicy,
-  getPolicyVersions,
   getPrivacySettings,
   getStoreStatus,
   getStoreStatusInternal,
-  listPolicies,
   listPrivacyRequests,
   listStoreStatusTransitions,
-  publishPolicy,
-  restorePolicyDraft,
-  savePolicyDraft,
   scheduleMaintenance,
   updatePrivacyRequestStatus,
   updatePrivacySettings,
@@ -468,7 +462,7 @@ export const platformRouter = os.router({
       deletePermanent: os.marketing.media.deletePermanent.use(siteWrite).handler(({ context, input }) => deleteMediaPermanent(context.content.rt, context.content.ctx, input)),
       delete: os.marketing.media.delete.use(siteWrite).handler(({ context, input }) => deleteMediaRecord(context.content.rt, context.content.ctx, input)),
     },
-    // Visibility, policies and privacy reuse the store services on the website record (ADR-042).
+    // Visibility and privacy reuse the store services on the website record (ADR-042).
     storefront: {
       getStatus: os.marketing.storefront.getStatus.use(siteRead).handler(async ({ context }) => {
         await ensureSiteStatusLive(context.content.rt, context.content.ctx);
@@ -483,14 +477,6 @@ export const platformRouter = os.router({
       cancelScheduledMaintenance: os.marketing.storefront.cancelScheduledMaintenance.use(siteWrite).handler(({ context }) => cancelScheduledMaintenance(context.content.rt, context.content.ctx)),
       endMaintenance: os.marketing.storefront.endMaintenance.use(siteWrite).handler(({ context }) => endMaintenance(context.content.rt, context.content.ctx)),
       listTransitions: os.marketing.storefront.listTransitions.use(siteRead).handler(({ context, input }) => listStoreStatusTransitions(context.content.rt, context.content.ctx, input)),
-    },
-    policies: {
-      list: os.marketing.policies.list.use(siteRead).handler(({ context }) => listPolicies(context.content.rt, context.content.ctx)),
-      get: os.marketing.policies.get.use(siteRead).handler(({ context, input }) => getPolicy(context.content.rt, context.content.ctx, input.handle)),
-      saveDraft: os.marketing.policies.saveDraft.use(siteWrite).handler(({ context, input }) => savePolicyDraft(context.content.rt, context.content.ctx, input)),
-      publish: os.marketing.policies.publish.use(siteWrite).handler(({ context, input }) => publishPolicy(context.content.rt, context.content.ctx, input.handle)),
-      versions: os.marketing.policies.versions.use(siteRead).handler(({ context, input }) => getPolicyVersions(context.content.rt, context.content.ctx, input.handle)),
-      restoreDraft: os.marketing.policies.restoreDraft.use(siteWrite).handler(({ context, input }) => restorePolicyDraft(context.content.rt, context.content.ctx, input)),
     },
     customerPrivacy: {
       getSettings: os.marketing.customerPrivacy.getSettings.use(siteRead).handler(({ context }) => getPrivacySettings(context.content.rt, context.content.ctx)),

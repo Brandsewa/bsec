@@ -1,19 +1,25 @@
+import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { ChevronRight, Eye, Globe, ScrollText, Search, ShieldCheck } from "lucide-react";
-import { Button, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Eye, Globe, Search, ShieldCheck } from "lucide-react";
+import { Button, EmptyState, PageContainer, PageSkeleton, SimpleSelect, toast } from "@bs/ui";
 import { client, orpc } from "../lib/orpc.ts";
 
 const SECTIONS = [
-  { to: "/storefront/settings/visibility", icon: Eye, title: "Website visibility", text: "Live, coming soon or maintenance for the public website. Signup and login are never affected." },
-  { to: "/storefront/settings/search", icon: Search, title: "Search engines", text: "Ask Google and others not to list the site." },
-  { to: "/storefront/settings/policies", icon: ScrollText, title: "Policies", text: "Terms, privacy, refund and delivery pages with drafts and history." },
-  { to: "/storefront/settings/privacy", icon: ShieldCheck, title: "Customer privacy", text: "Privacy contact, grievance officer and request handling." },
+  { to: "/storefront/settings/visibility", icon: Eye, title: "Website visibility" },
+  { to: "/storefront/settings/search", icon: Search, title: "Search engines" },
+  { to: "/storefront/settings/privacy", icon: ShieldCheck, title: "Customer privacy" },
 ] as const;
 
-/** Start of the Marketing section: bcom.si's content lives under one internal record, which is created here (ADR-042). */
-export function Marketing() {
+/**
+ * The website's Settings workspace, laid out like the store admin's: a section list on the left (a chooser on small
+ * screens) and the selected section on the right. bcom.si's content lives under one internal record, which is created
+ * here the first time (ADR-042).
+ */
+export function SettingsShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const status = useQuery(orpc.marketing.status.queryOptions());
   const enable = useMutation({
     mutationFn: () => client.marketing.enable(),
@@ -26,32 +32,57 @@ export function Marketing() {
 
   if (status.isLoading) return <PageSkeleton />;
   const data = status.data;
+  if (!data?.contentConnected || !data.siteId) {
+    return (
+      <PageContainer size="small">
+        {!data?.contentConnected ? (
+          <EmptyState icon={Globe} title="Not connected yet" description="The Platform service needs DATABASE_URL_RW before website content can be managed." />
+        ) : (
+          <EmptyState
+            icon={Globe}
+            title="Set up website content"
+            description="Creates the internal record that holds bcom.si's pages, navigation and blog. It is not a store and never appears in store lists."
+            action={<Button onClick={() => enable.mutate()} disabled={enable.isPending}>Set up</Button>}
+          />
+        )}
+      </PageContainer>
+    );
+  }
+  const active = SECTIONS.find((s) => pathname.startsWith(s.to));
   return (
-    <PageContainer>
-      <PageHeader title="Settings" description="Settings for the bcom.si website." />
-      {!data?.contentConnected ? (
-        <EmptyState icon={Globe} title="Not connected yet" description="The Platform service needs DATABASE_URL_RW before website content can be managed." />
-      ) : !data.siteId ? (
-        <EmptyState
-          icon={Globe}
-          title="Set up website content"
-          description="Creates the internal record that holds bcom.si's pages, navigation and blog. It is not a store and never appears in store lists."
-          action={<Button onClick={() => enable.mutate()} disabled={enable.isPending}>Set up</Button>}
+    <div className="flex min-h-[calc(100vh-3rem)] w-full flex-col lg:flex-row">
+      <div className="border-b border-border bg-background p-4 lg:hidden">
+        <SimpleSelect
+          ariaLabel="Settings section"
+          value={active?.to ?? ""}
+          onChange={(to) => void navigate({ to })}
+          options={SECTIONS.map((s) => ({ value: s.to, label: s.title }))}
         />
-      ) : (
-        <div className="mt-6 grid gap-3 sm:grid-cols-2" aria-label="Website settings">
-          {SECTIONS.map((x) => (
-            <Link key={x.to} to={x.to} className="group flex items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/30">
-              <x.icon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">{x.title}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{x.text}</span>
-              </span>
-              <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground group-hover:text-foreground" aria-hidden />
-            </Link>
-          ))}
+      </div>
+      <aside aria-label="Settings navigation" className="hidden lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-border lg:bg-background">
+        <div className="sticky top-0 flex flex-col px-3 py-5">
+          <h1 className="mb-2 px-2.5 text-xs font-semibold tracking-tight text-foreground">Website settings</h1>
+          <nav aria-label="Website settings" className="flex flex-col gap-0.5">
+            {SECTIONS.map((s) => {
+              const isActive = s.to === active?.to;
+              return (
+                <Link
+                  key={s.to}
+                  to={s.to}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] leading-4 transition-colors ${isActive ? "bg-accent font-medium text-accent-foreground" : "font-normal text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+                >
+                  <s.icon className="size-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{s.title}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
-      )}
-    </PageContainer>
+      </aside>
+      <div className="min-w-0 flex-1 p-4 lg:p-8">
+        <div className="mx-auto max-w-3xl">{children}</div>
+      </div>
+    </div>
   );
 }

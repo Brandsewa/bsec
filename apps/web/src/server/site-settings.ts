@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { connection } from "next/server";
-import { getPlatformSiteChrome, getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, type PlatformSiteChrome, type PlatformSiteStatus } from "@bs/domain";
+import { getPlatformSiteChrome, getPlatformSitePrivacy, getPlatformSiteStatus, type PlatformSiteChrome, type PlatformSiteStatus } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 /**
@@ -16,15 +16,6 @@ export async function siteStatus(): Promise<PlatformSiteStatus> {
     return await getPlatformSiteStatus(server().rt._db.db);
   } catch {
     return LIVE;
-  }
-}
-
-export async function sitePolicy(handle: "terms" | "privacy" | "refund" | "shipping" | "legal_notice") {
-  await connection();
-  try {
-    return await getPlatformSitePolicy(server().rt._db.db, handle);
-  } catch {
-    return null;
   }
 }
 

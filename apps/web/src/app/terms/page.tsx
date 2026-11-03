@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
-import { publishedPolicy } from "@/components/marketing/landing/PublishedPolicy.tsx";
 import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -12,8 +11,6 @@ export const metadata: Metadata = {
 };
 
 export default async function TermsPage() {
-  const published = await publishedPolicy("terms");
-  if (published) return published;
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Terms of service" intro={`The rules for using ${SITE.product}, written to be read.`} />

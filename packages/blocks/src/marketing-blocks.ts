@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockInstance, BlockType } from "./types.ts";
-import { hrefSchema, iconNameSchema } from "./common.ts";
+import { hexColorSchema, hrefSchema, iconNameSchema } from "./common.ts";
 import { resolveThemeTokens } from "./theme-vars.ts";
 import { childrenOf } from "./tree.ts";
 import * as V from "./views-marketing.tsx";
@@ -92,6 +92,40 @@ export const MkPricingSchema = z.object({
 });
 export type MkPricingProps = z.infer<typeof MkPricingSchema>;
 
+/** The website's colours and font. Held on the Header page and applied site-wide; an empty colour keeps the built-in one. */
+const themeHex = z.union([hexColorSchema, z.literal("")]).default("");
+const themeColours = z.object({ primary: themeHex, primaryInk: themeHex, background: themeHex, text: themeHex });
+export const WEBSITE_FONTS = {
+  default: { label: "Default (Geist)", family: null, google: null },
+  inter: { label: "Inter", family: "Inter", google: "Inter:wght@400;500;600;700" },
+  "dm-sans": { label: "DM Sans", family: "DM Sans", google: "DM+Sans:wght@400;500;600;700" },
+  poppins: { label: "Poppins", family: "Poppins", google: "Poppins:wght@400;500;600;700" },
+  lora: { label: "Lora", family: "Lora", google: "Lora:wght@400;500;600;700" },
+  playfair: { label: "Playfair Display", family: "Playfair Display", google: "Playfair+Display:wght@400;500;600;700" },
+} as const;
+export const MkThemeSchema = z.object({
+  light: themeColours.default({ primary: "", primaryInk: "", background: "", text: "" }),
+  dark: themeColours.default({ primary: "", primaryInk: "", background: "", text: "" }),
+  font: z.enum(["default", "inter", "dm-sans", "poppins", "lora", "playfair"]).default("default"),
+});
+export type MkThemeProps = z.infer<typeof MkThemeSchema>;
+
+/** CSS for the website's theme settings, scoped to `.mk`, and the Google Fonts stylesheet it needs. Empty when nothing is set. */
+export function websiteThemeCss(theme: MkThemeProps | null | undefined): { css: string; fontsHref: string | null } {
+  if (!theme) return { css: "", fontsHref: null };
+  const vars = (c: MkThemeProps["light"]) =>
+    [["--pri", c.primary], ["--pri-ink", c.primaryInk], ["--bg", c.background], ["--ink", c.text]].filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(";");
+  const light = vars(theme.light);
+  const dark = vars(theme.dark);
+  const font = WEBSITE_FONTS[theme.font];
+  const css = [
+    light ? `.mk{${light}}` : "",
+    dark ? `[data-theme=dark] .mk{${dark}}` : "",
+    font.family ? `.mk{--sans:"${font.family}",system-ui,sans-serif}` : "",
+  ].join("");
+  return { css, fontsHref: font.google ? `https://fonts.googleapis.com/css2?family=${font.google}&display=swap` : null };
+}
+
 export const MkCompanySchema = z.object({ heading: z.string().max(200).default(""), after: z.string().max(4000).default("") });
 export type MkCompanyProps = z.infer<typeof MkCompanySchema>;
 
@@ -178,7 +212,7 @@ const only = (blocks: BlockInstance[], ok: (type: string) => boolean) => everyBl
 export const isWebsitePageBlockSet = (blocks: BlockInstance[]): boolean =>
   only(blocks, (t) => (MARKETING_BLOCK_TYPES.has(t) && !WEBSITE_CHROME_TYPES.has(t)) || WEBSITE_GENERIC_BLOCK_TYPES.has(t));
 /** The header page holds the header and the announcement bar; the footer page holds the footer. */
-export const isWebsiteHeaderBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkHeader" || t === "Banner");
+export const isWebsiteHeaderBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkHeader" || t === "Banner" || t === "MkTheme");
 export const isWebsiteFooterBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkFooter");
 /** The blog layouts of the website: the listing or the post body, plus the generic widgets. */
 export const isWebsiteBlogArchiveBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "BlogListing" || WEBSITE_GENERIC_BLOCK_TYPES.has(t));
@@ -225,6 +259,7 @@ export const MARKETING_BLOCK_DEFINITIONS = {
   MkValues: block("MkValues", MkValuesSchema, { heading: "", items: [{ icon: "check", text: "A short point." }] }, V.MkValuesView),
   MkHeader: block("MkHeader", MkHeaderSchema, MkHeaderSchema.parse({}), V.MkHeaderView),
   MkFooter: block("MkFooter", MkFooterSchema, MkFooterSchema.parse({}), V.MkFooterView),
+  MkTheme: block("MkTheme", MkThemeSchema, MkThemeSchema.parse({}), V.MkThemeView),
   MkPricing: block("MkPricing", MkPricingSchema, MkPricingSchema.parse({}), V.MkPricingView),
   MkCompany: block("MkCompany", MkCompanySchema, { heading: "The company", after: "" }, V.MkCompanyView),
 } satisfies Partial<Record<BlockType, BlockDefinition<never> | BlockDefinition<any>>>; // eslint-disable-line @typescript-eslint/no-explicit-any

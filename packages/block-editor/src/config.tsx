@@ -1137,6 +1137,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       legal: area("Legal line ({year} becomes the year)"),
     },
   },
+  MkTheme: { label: "Website theme", category: "website", fields: {} },
   MkPricing: { label: "Pricing table", category: "website", fields: { heading: text("Heading"), description: area("Description") } },
   MkCompany: { label: "Company details", category: "website", fields: { heading: text("Heading"), after: area("Text after the details") } },
 };
@@ -1243,13 +1244,15 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "CollectionGrid",
   "Banner",
   "Reviews",
+  // Settings of the website, edited in the Theme tab, never a block to place.
+  "MkTheme",
 ];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   // The website and the stores never share the website sections (ADR-042). A website page also takes the generic
   // layout and basic widgets of the store builder; its header page holds the header and the announcement bar, its
   // footer page the footer.
-  if (kind === "marketingHeader") return type === "MkHeader" || type === "Banner";
+  if (kind === "marketingHeader") return type === "MkHeader" || type === "Banner" || type === "MkTheme";
   if (kind === "marketingFooter") return type === "MkFooter";
   // The website's blog layouts: the listing or the post body, plus the generic widgets.
   if (kind === "marketingBlogArchive") return type === "BlogListing" || WEBSITE_GENERIC_BLOCK_TYPES.has(type);

@@ -25,7 +25,7 @@ import {
 } from "@/components/storefront/StoreStatusScreens.tsx";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { googleFontsHref, themeFontFallbackCss } from "@bs/blocks/theme-vars";
-import { WEBSITE_BLOCK_VARS, renderBlockTree } from "@bs/blocks";
+import { WEBSITE_BLOCK_VARS, renderBlockTree, websiteThemeCss } from "@bs/blocks";
 import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
@@ -99,7 +99,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
   if (isMarketing) {
     // A failed read keeps the built-in links; the marketing site must not depend on this query.
-    const chrome = await siteChrome().catch(() => ({ header: null, announcement: null, footer: null }));
+    const chrome = await siteChrome().catch(() => ({ header: null, announcement: null, footer: null, theme: null }));
+    const design = websiteThemeCss(chrome.theme);
     const navLinks = await platformSiteHeaderLinks(server().rt._db.db, chrome.header?.menuHandle ?? "header").catch(() => null);
     const announcement = chrome.announcement
       ? renderBlockTree([{ id: "site-announcement", type: "Banner", version: 1, props: chrome.announcement }], { renderBanner: ({ children }) => <BannerClient>{children}</BannerClient> })
@@ -109,7 +110,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <head>
           <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
           {/* The store widgets read --bs-*; on the website they follow its own palette (light and dark). */}
-          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss }} />
+          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss + design.css }} />
+          {design.fontsHref ? <link rel="stylesheet" href={design.fontsHref} /> : null}
         </head>
         <body className="min-h-dvh antialiased">
           <WebThemeProvider always>

@@ -1,8 +1,7 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { BannerSchema, type BannerProps, MkFooterSchema, MkHeaderSchema, THEME_PAGE_TYPES, type BlockInstance, type MkFooterProps, type MkHeaderProps } from "@bs/blocks";
+import { BannerSchema, MkThemeSchema, type BannerProps, type MkThemeProps, MkFooterSchema, MkHeaderSchema, THEME_PAGE_TYPES, type BlockInstance, type MkFooterProps, type MkHeaderProps } from "@bs/blocks";
 import { getStorefrontPageByPath } from "../content-services.ts";
-import { getPublishedPolicy } from "../policies/service.ts";
 import { getPrivacySettings } from "../privacy/service.ts";
 import type { Runtime } from "../runtime.ts";
 import { listBlogForSitemap } from "../blog/queries.ts";
@@ -117,16 +116,6 @@ export async function getPlatformSiteStatus(db: Db): Promise<PlatformSiteStatus>
 }
 
 /** The website's published policy (terms, privacy, refund, shipping, legal notice), or null so the built-in text shows. */
-export async function getPlatformSitePolicy(db: Db, handle: Parameters<typeof getPublishedPolicy>[2]) {
-  try {
-    const siteId = await getPlatformSiteId(db);
-    return siteId ? await getPublishedPolicy(db, siteId, handle) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The privacy contact set in Settings, or null while nothing is set (the built-in details then show). */
 export async function getPlatformSitePrivacy(rt: Runtime): Promise<{ email: string | null; officerName: string | null; slaDays: number } | null> {
   try {
     const siteId = await getPlatformSiteId(rt._db.db);
@@ -144,6 +133,8 @@ export interface PlatformSiteChrome {
   /** The announcement bar above the header, when it is switched on. */
   announcement: BannerProps | null;
   footer: MkFooterProps | null;
+  /** Colours and font set in the Theme tab of the builder. */
+  theme: MkThemeProps | null;
 }
 
 /**
@@ -151,7 +142,7 @@ export interface PlatformSiteChrome {
  * built-in ones show. Anything unreadable or invalid reads as "not set".
  */
 export async function getPlatformSiteChrome(db: Db): Promise<PlatformSiteChrome> {
-  const none: PlatformSiteChrome = { header: null, announcement: null, footer: null };
+  const none: PlatformSiteChrome = { header: null, announcement: null, footer: null, theme: null };
   try {
     const siteId = await getPlatformSiteId(db);
     if (!siteId) return none;
@@ -170,6 +161,8 @@ export async function getPlatformSiteChrome(db: Db): Promise<PlatformSiteChrome>
     const header = headerBlocks.find((b) => b.type === "MkHeader" && !b.hidden);
     const banner = headerBlocks.find((b) => b.type === "Banner" && !b.hidden);
     const footer = footerBlocks.find((b) => b.type === "MkFooter" && !b.hidden);
+    const themeBlock = headerBlocks.find((b) => b.type === "MkTheme");
+    const themeProps = themeBlock ? MkThemeSchema.safeParse(themeBlock.props) : null;
     const bannerProps = banner ? BannerSchema.safeParse(banner.props) : null;
     const headerProps = header ? MkHeaderSchema.safeParse(header.props) : null;
     const footerProps = footer ? MkFooterSchema.safeParse(footer.props) : null;
@@ -177,6 +170,7 @@ export async function getPlatformSiteChrome(db: Db): Promise<PlatformSiteChrome>
       header: headerProps?.success ? headerProps.data : null,
       announcement: bannerProps?.success ? bannerProps.data : null,
       footer: footerProps?.success ? footerProps.data : null,
+      theme: themeProps?.success ? themeProps.data : null,
     };
   } catch {
     return none;

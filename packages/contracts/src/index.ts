@@ -94,7 +94,6 @@ export const platformContract = {
     media: adminContract.media,
     pages: sitePagesContract,
     storefront: adminContract.storefront,
-    policies: adminContract.policies,
     customerPrivacy: adminContract.customerPrivacy,
   },
   quotas: platformQuotasContract,

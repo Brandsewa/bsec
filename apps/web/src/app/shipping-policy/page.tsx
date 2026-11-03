@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
-import { publishedPolicy } from "@/components/marketing/landing/PublishedPolicy.tsx";
 import { LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -11,8 +10,6 @@ export const metadata: Metadata = {
 };
 
 export default async function ShippingPolicyPage() {
-  const published = await publishedPolicy("shipping");
-  if (published) return published;
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Delivery policy" intro={`${SITE.product} is delivered online. Nothing is shipped.`} />
