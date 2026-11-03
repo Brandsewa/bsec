@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(__dirname, "..", "src");
 const mediaDir = path.resolve(__dirname, "..", "..", "..", "packages", "content-admin", "src", "media");
 const files = [
-  path.join(root, "routes/_store/online-store/media.tsx"),
   ...fs
     .readdirSync(mediaDir)
     .filter((f) => f.endsWith(".tsx"))

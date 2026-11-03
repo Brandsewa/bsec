@@ -30,3 +30,8 @@ The owner wants bcom.si's pages, navigation and blog managed from Super Admin, r
 
 ## Update (2026-11-02, Phase 4)
 The website has its own blocks (`Mk*`). The website uses only those and a store can never use them, enforced in `savePlatformSiteDraft` and `savePageDraft` as well as the picker. `platformSiteContext` also holds `theme.publish`. Website pages are read per request, not cached, because the Platform service cannot clear the web app's cache.
+
+## Update (2026-11-03, Phase 5)
+The website may also use the generic layout and content widgets of the store builder (Section, Container, Block, Heading, Text, Image, Video, Button and similar), drawn with the marketing look. Widgets that need a store (products, collections, cart, reviews, blog showcase) stay store-only. `savePlatformSiteDraft` checks the allowed set on the server. Website sections (`Mk*`) are still never allowed on a store. The Marketing sidebar group is now **Storefront** (`/storefront/...`); the API namespace stays `marketing`, and so do the audit action names.
+
+The Platform image now carries `sharp` (it is external to the esbuild bundle): without it every Marketing image upload failed with "corrupted or invalid image file" (2026-11-03).

@@ -166,6 +166,21 @@ describe("Marketing content", () => {
     await expect(savePageDraft(rtRw, storeCtx as never, { id: storePage!.id, blocks: [{ id: "m", type: "MkDocHeader", version: 1, props: { title: "Sneaky" } }] })).rejects.toThrow(/platform's website/);
   });
 
+  it("says why a page cannot be created instead of a generic failure", async () => {
+    const reason = async (slug: string) => {
+      try {
+        await run("marketing.pages.create", { title: "Probe", slug }, ctx(admin));
+        return "OK";
+      } catch (e) {
+        return e instanceof ORPCError ? `${e.code}: ${e.message}` : `THROWN: ${String(e)}`;
+      }
+    };
+    expect(await reason("home")).toMatch(/^BAD_REQUEST: .*reserved/);
+    expect(await reason("not a slug")).toMatch(/^BAD_REQUEST: .*lowercase/);
+    await run("marketing.pages.create", { title: "Twice", slug: "twice" }, ctx(admin));
+    expect(await reason("twice")).toMatch(/^BAD_REQUEST: .*already exists/);
+  });
+
   it("a request cannot reach a store's page by id", async () => {
     const [storePage] = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.pages));
     expect(await codeOf(run("marketing.pages.get", { id: storePage!.id }, ctx(admin)))).not.toBe("OK");

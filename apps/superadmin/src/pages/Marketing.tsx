@@ -20,7 +20,7 @@ export function Marketing() {
   const data = status.data;
   return (
     <PageContainer>
-      <PageHeader title="Marketing" description="Manage the bcom.si website." />
+      <PageHeader title="Settings" description="Settings for the bcom.si website." />
       {!data?.contentConnected ? (
         <EmptyState icon={Globe} title="Not connected yet" description="The Platform service needs DATABASE_URL_RW before website content can be managed." />
       ) : !data.siteId ? (
@@ -31,7 +31,7 @@ export function Marketing() {
           action={<Button onClick={() => enable.mutate()} disabled={enable.isPending}>Set up</Button>}
         />
       ) : (
-        <EmptyState icon={Globe} title="Website content is ready" description="Use Navigation, Pages and Blogs in the sidebar." />
+        <EmptyState icon={Globe} title="Website content is ready" description="Use Pages, Blogs, Navigation and Media in the sidebar." />
       )}
     </PageContainer>
   );

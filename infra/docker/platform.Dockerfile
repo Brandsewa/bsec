@@ -23,7 +23,10 @@ ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
 ENV NODE_ENV=production PORT=4000
 WORKDIR /app
-# Single-file bundle (esbuild): no node_modules in the runtime image.
+# Single-file bundle (esbuild). The only node_modules is sharp (native image library): Marketing uploads read each image's
+# size with it (ADR-042). Its version must match packages/domain/package.json (apps/platform/test/image-sharp.test.ts checks).
+# npm picks the musl prebuilt binary for this Alpine image.
+RUN npm install --no-save --no-audit --no-fund --omit=dev --ignore-scripts=false sharp@0.35.5  && npm cache clean --force  && rm -f package.json package-lock.json
 COPY --from=build --chown=node:node /repo/apps/platform/dist ./dist
 USER node
 EXPOSE 4000

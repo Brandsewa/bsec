@@ -320,6 +320,10 @@ async function finalizeUpload(
         tenantId: ctx.tenantId,
         objects: [{ storageKey: params.storageKey, storageConnectionId: activeConfig.id }],
       }).catch(() => {});
+      // A service image without sharp (2026-11-03: the Platform image) fails every upload; say so instead of blaming the file.
+      if ((err as { code?: string }).code === "ERR_MODULE_NOT_FOUND") {
+        throw new Error("Image processing is not available on this server. Ask the platform team to check the service image.", { cause: err });
+      }
       throw new Error("Failed to process image metadata: corrupted or invalid image file", {
         cause: err,
       });

@@ -16,7 +16,8 @@ import {
   Headphones,
   KeyRound,
   LayoutDashboard,
-  Megaphone,
+  Images,
+  Settings,
   FileText,
   Files,
   Menu,
@@ -82,12 +83,13 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Marketing",
+    label: "Storefront",
     items: [
-      { label: "Website", href: "/marketing", icon: Megaphone },
-      { label: "Navigation", href: "/marketing/navigation", icon: Menu },
-      { label: "Pages", href: "/marketing/pages", icon: Files },
-      { label: "Blogs", href: "/marketing/blog", icon: FileText },
+      { label: "Pages", href: "/storefront/pages", icon: Files },
+      { label: "Blogs", href: "/storefront/blog", icon: FileText },
+      { label: "Navigation", href: "/storefront/navigation", icon: Menu },
+      { label: "Media", href: "/storefront/media", icon: Images },
+      { label: "Settings", href: "/storefront/settings", icon: Settings },
     ],
   },
   {
@@ -112,11 +114,11 @@ const navGroups: NavGroup[] = [
 
 export function Layout({ user, onLogout }: LayoutProps) {
   const location = useLocation();
-  // The staff list and Marketing are admin-only on the server; do not show support staff a page that would be refused.
+  // The staff list and Storefront are admin-only on the server; do not show support staff a page that would be refused.
   const groups = navGroups
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => !((i.href === "/staff" || i.href.startsWith("/marketing")) && user.role === "platform_support")),
+      items: g.items.filter((i) => !((i.href === "/staff" || i.href.startsWith("/storefront")) && user.role === "platform_support")),
     }))
     .filter((g) => g.items.length > 0);
   const navigate = useNavigate();
