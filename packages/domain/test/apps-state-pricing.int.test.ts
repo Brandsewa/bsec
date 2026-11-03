@@ -25,6 +25,8 @@ import {
   updatePlatformApp,
   createRuntime,
   loadStatePriceMap,
+  importPincodeDirectory,
+  lookupStateByPincode,
   STATE_PRICING_APP,
   type Runtime,
   type TenantContext,
@@ -193,5 +195,20 @@ describe("cart", () => {
     expect(unset.priceRegion).toBe("TN");
     const back = await getOrCreateCart(rtWeb, { ...mh, priceRegion: null }, cart.token);
     expect(back.priceRegion).toBeNull();
+  });
+});
+
+describe("pincode directory", () => {
+  it("returns null before the directory is loaded, then the state after an import", async () => {
+    expect(await lookupStateByPincode(rtWeb, "400001")).toBeNull();
+    await importPincodeDirectory(rtPlatform, [{ pincode: "400001", stateCode: "MH" }, { pincode: "560001", stateCode: "KA" }]);
+    expect(await lookupStateByPincode(rtWeb, "400001")).toBe("MH");
+    expect(await lookupStateByPincode(rtWeb, "560001")).toBe("KA");
+    expect(await lookupStateByPincode(rtWeb, "999999")).toBeNull();
+    expect(await lookupStateByPincode(rtWeb, "not-a-pin")).toBeNull();
+  });
+
+  it("is read-only for the store runtime", async () => {
+    await expect(rtWeb._db.db.insert(schema.platformInPincodes).values({ pincode: "110001", stateCode: "DL" })).rejects.toThrow();
   });
 });

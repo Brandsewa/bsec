@@ -14,6 +14,12 @@ function fail(kind: "Conflict" | "Bad Request" | "Not Found" | "Forbidden", mess
   throw new Error(`${kind}: ${message}`);
 }
 
+async function storeAppOrFail(tx: Db, tenantId: string, key: string): Promise<StoreAppRecord> {
+  const app = (await readStoreApps(tx, tenantId)).find((a) => a.key === key);
+  if (!app) fail("Not Found", "App not found");
+  return app;
+}
+
 export interface StoreAppRecord {
   key: string;
   name: string;
@@ -114,7 +120,7 @@ export async function installApp(rt: Runtime, ctx: TenantContext, key: string): 
       });
     }
     await audit(tx, ctx, "app.install", key, {});
-    return (await readStoreApps(tx, ctx.tenantId)).find((a) => a.key === key)!;
+    return storeAppOrFail(tx, ctx.tenantId, key);
   });
   await invalidateCache(rt, ctx, { type: "markets_changed" });
   return result;
@@ -132,7 +138,7 @@ export async function setAppStatus(rt: Runtime, ctx: TenantContext, key: string,
     if (status === "installed" && inst.platformSuspended) fail("Forbidden", "This app has been turned off for your store by Brand Sewa");
     await tx.update(schema.tenantApps).set({ status, updatedAt: new Date() }).where(eq(schema.tenantApps.id, inst.id));
     await audit(tx, ctx, status === "installed" ? "app.enable" : "app.disable", key, { from: inst.status, to: status });
-    return (await readStoreApps(tx, ctx.tenantId)).find((a) => a.key === key)!;
+    return storeAppOrFail(tx, ctx.tenantId, key);
   });
   await invalidateCache(rt, ctx, { type: "markets_changed" });
   return result;
@@ -174,7 +180,7 @@ export async function updateAppSettings(rt: Runtime, ctx: TenantContext, key: st
       .set({ settings: parsed.data, settingsVersion: inst.settingsVersion + 1, updatedAt: new Date() })
       .where(eq(schema.tenantApps.id, inst.id));
     await audit(tx, ctx, "app.settings", key, { from: inst.settings, to: parsed.data });
-    return (await readStoreApps(tx, ctx.tenantId)).find((a) => a.key === key)!;
+    return storeAppOrFail(tx, ctx.tenantId, key);
   });
   await invalidateCache(rt, ctx, { type: "markets_changed" });
   return result;

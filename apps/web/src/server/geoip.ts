@@ -1,5 +1,6 @@
 import "server-only";
 import { normalizeIndianState, type InStateCode } from "@bs/domain";
+import type { CityResponse } from "maxmind";
 
 /**
  * MaxMind GeoLite2-City lookup, the fallback behind Cloudflare's region header (ADR-044). The database file is not in
@@ -17,7 +18,6 @@ async function openReader(): Promise<Reader | null> {
   if (!path) return null;
   try {
     const { open } = await import("maxmind");
-    type CityResponse = import("maxmind").CityResponse;
     return (await open<CityResponse>(path)) as unknown as Reader;
   } catch (err) {
     console.error("[geoip] could not open the database", err instanceof Error ? err.message : err);

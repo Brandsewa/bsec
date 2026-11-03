@@ -100,7 +100,9 @@ export async function updatePlatformApp(
     return [...new Set([...installed.map((i) => i.tenantId as string), ...prev.allowedTenantIds, ...(allowed ?? [])])];
   });
   for (const tenantId of affected) await invalidateCache(rt, tenantId, { type: "markets_changed" });
-  return (await listPlatformApps(rt, platformStaffUserId)).find((a) => a.key === key)!;
+  const updated = (await listPlatformApps(rt, platformStaffUserId)).find((a) => a.key === key);
+  if (!updated) fail("Not Found", "App not found");
+  return updated;
 }
 
 /** Turn an app off (or back on) for one store. The store cannot undo a suspension. */

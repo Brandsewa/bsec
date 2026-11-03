@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
@@ -33,7 +33,8 @@ import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
 import { MarketProvider } from "@/components/market/MarketProvider.tsx";
 import { MarketBar } from "@/components/market/MarketBar.tsx";
 import { getMarketContext, type MarketContext } from "@/server/market.ts";
-import { PATH_HEADER } from "@/lib/market-constants.ts";
+import { PATH_HEADER, PIN_ERROR_COOKIE } from "@/lib/market-constants.ts";
+import { PincodeGate } from "@/components/market/pincode-gate.tsx";
 import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
@@ -135,6 +136,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let requestPath = "/";
   let requestHost = "localhost";
   let visitorCountryCode: string | null = null;
+  let pinError: string | null = null;
 
   try {
     const h = await headers();
@@ -149,6 +151,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
     if (access.tenantId) {
       marketCtx = await getMarketContext(access.tenantId).catch(() => null);
+      if (marketCtx?.regionState.needsPincode) pinError = (await cookies()).get(PIN_ERROR_COOKIE)?.value ?? null;
       storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
       // In M3, retrieve published brand settings and theme tokens using tenant context with Cache Components
       try {
@@ -259,6 +262,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "" }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
           {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
+          {marketCtx?.regionState.needsPincode ? <PincodeGate storeName={storeName} error={pinError} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} currency={marketCtx?.currency ?? "INR"} locale={marketCtx?.locale ?? "en-IN"} />

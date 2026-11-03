@@ -37,6 +37,8 @@ export const ProductStatePricing = z.object({
   ),
 });
 
+export type ProductStatePricing = z.infer<typeof ProductStatePricing>;
+
 export const appsContract = {
   list: oc.route({ method: "GET", path: "/admin/apps" }).output(z.array(StoreAppRecord)),
   install: oc.route({ method: "POST", path: "/admin/apps/{key}/install" }).input(KeyInput).output(StoreAppRecord),
@@ -80,6 +82,8 @@ export const PlatformAppRecord = z.object({
   installCount: z.number().int(),
   installs: z.array(z.object({ tenantId: Uuid, tenantSlug: z.string(), status: z.string(), suspended: z.boolean() })),
 });
+
+export type PlatformAppRecord = z.infer<typeof PlatformAppRecord>;
 
 export const platformMarketplaceContract = {
   list: oc.route({ method: "GET", path: "/platform/marketplace/apps" }).output(z.array(PlatformAppRecord)),

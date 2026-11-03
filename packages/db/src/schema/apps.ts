@@ -52,6 +52,12 @@ export const platformInStates = pgTable("platform_in_states", {
   sort: integer("sort").notNull().default(0),
 });
 
+/** India Post pincode directory: pincode -> state, for the State Pricing app's manual mode. Platform data. */
+export const platformInPincodes = pgTable("platform_in_pincodes", {
+  pincode: text("pincode").primaryKey(),
+  stateCode: text("state_code").notNull().references(() => platformInStates.code, { onDelete: "restrict" }),
+});
+
 /** State Pricing app: a variant's price in one state. States without a row follow the variant's own price. */
 export const statePrices = tenantTable(
   "state_prices",

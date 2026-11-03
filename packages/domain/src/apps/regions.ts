@@ -32,3 +32,31 @@ export function normalizeIndianState(raw: string | null | undefined): InStateCod
 export function isIndianStateCode(code: string): code is InStateCode {
   return STATE_SET.has(code);
 }
+
+export const IN_STATE_NAMES: Readonly<Record<InStateCode, string>> = {
+  AN: "Andaman and Nicobar Islands", AP: "Andhra Pradesh", AR: "Arunachal Pradesh", AS: "Assam", BR: "Bihar", CH: "Chandigarh",
+  CG: "Chhattisgarh", DD: "Dadra and Nagar Haveli and Daman and Diu", DL: "Delhi", GA: "Goa", GJ: "Gujarat", HR: "Haryana",
+  HP: "Himachal Pradesh", JK: "Jammu and Kashmir", JH: "Jharkhand", KA: "Karnataka", KL: "Kerala", LA: "Ladakh", LD: "Lakshadweep",
+  MP: "Madhya Pradesh", MH: "Maharashtra", MN: "Manipur", ML: "Meghalaya", MZ: "Mizoram", NL: "Nagaland", OD: "Odisha",
+  PY: "Puducherry", PB: "Punjab", RJ: "Rajasthan", SK: "Sikkim", TN: "Tamil Nadu", TG: "Telangana", TR: "Tripura",
+  UP: "Uttar Pradesh", UT: "Uttarakhand", WB: "West Bengal",
+};
+
+const squash = (name: string) => name.toUpperCase().replace(/&/g, "AND").replace(/[^A-Z]/g, "");
+
+const NAME_TO_CODE = new Map<string, InStateCode>([
+  ...(Object.entries(IN_STATE_NAMES) as [InStateCode, string][]).map(([code, name]) => [squash(name), code] as [string, InStateCode]),
+  // Names India Post and older datasets use.
+  [squash("Orissa"), "OD"],
+  [squash("Pondicherry"), "PY"],
+  [squash("Uttaranchal"), "UT"],
+  [squash("NCT of Delhi"), "DL"],
+  [squash("Dadra and Nagar Haveli"), "DD"],
+  [squash("Daman and Diu"), "DD"],
+]);
+
+/** "TAMIL NADU", "Jammu & Kashmir", "Orissa" -> the ISO code, or null when the name is not recognised. */
+export function stateCodeForName(name: string | null | undefined): InStateCode | null {
+  if (!name) return null;
+  return NAME_TO_CODE.get(squash(name)) ?? null;
+}

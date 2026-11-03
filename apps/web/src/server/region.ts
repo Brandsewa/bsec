@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { normalizeIndianState, type InStateCode } from "@bs/domain";
 import { getCachedStatePricingScope } from "./cached-storefront.ts";
 import { lookupIndianStateByIp } from "./geoip.ts";
-import { STATE_COOKIE } from "../lib/market-constants.ts";
+import { STATE_COOKIE, STATE_SKIP_COOKIE } from "../lib/market-constants.ts";
 
 export interface RegionContext {
   /** The State Pricing app is active for this store. */
@@ -50,7 +50,7 @@ export const getRegionContext = cache(async (tenantId: string): Promise<RegionCo
   if (scope.mode === "manual") {
     const jar = await cookies();
     const chosen = normalizeIndianState(jar.get(STATE_COOKIE)?.value);
-    return { active: true, mode: "manual", region: chosen, needsPincode: chosen === null };
+    return { active: true, mode: "manual", region: chosen, needsPincode: chosen === null && jar.get(STATE_SKIP_COOKIE)?.value !== "1" };
   }
   return { active: true, mode: "auto", region: await detectState(h), needsPincode: false };
 });

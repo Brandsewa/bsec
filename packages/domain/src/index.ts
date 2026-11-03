@@ -219,6 +219,7 @@ export * from "./apps/registry.ts";
 export * from "./apps/service.ts";
 export * from "./apps/state-pricing.ts";
 export * from "./apps/platform.ts";
+export * from "./apps/pincodes.ts";
 export * from "./catalog/bulk-io/export.ts";
 export * from "./catalog/bulk-io/import.ts";
 export * from "./catalog/bulk-io/import-images.ts";

@@ -270,6 +270,16 @@ const CASES: Record<string, Case> = {
       return { ids: [row!.id] };
     },
   },
+  "marketplace.update": {
+    role: "platform_admin",
+    action: "marketplace.app.update",
+    input: async () => ({ key: "state-pricing", enabled: true }),
+  },
+  "marketplace.setSuspended": {
+    role: "platform_admin",
+    action: "marketplace.app.suspend",
+    input: async () => ({ key: "state-pricing", tenantId: (await mkStore()).tenantId, suspended: true }),
+  },
   "promotions.create": {
     role: "platform_owner",
     action: "promotion.created",

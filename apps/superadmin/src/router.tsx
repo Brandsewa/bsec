@@ -32,6 +32,7 @@ import { Domains } from "./pages/Domains.tsx";
 import { Plans } from "./pages/Plans.tsx";
 import { Ledger } from "./pages/Ledger.tsx";
 import { Promotions } from "./pages/Promotions.tsx";
+import { Marketplace } from "./pages/Marketplace.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
 import { SettingsShell } from "./pages/Marketing.tsx";
@@ -257,6 +258,18 @@ const ledgerRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/ledger",
   component: Ledger,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const marketplaceRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketplace",
+  component: Marketplace,
   pendingComponent: () => (
     <PageContainer>
       <PageHeaderSkeleton />
@@ -699,6 +712,7 @@ export const routeTree = rootRoute.addChildren([
     plansRoute,
     ledgerRoute,
     promotionsRoute,
+    marketplaceRoute,
     signupsRoute,
     templatesRoute,
     supportRoute,

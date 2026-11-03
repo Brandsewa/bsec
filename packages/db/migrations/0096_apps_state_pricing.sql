@@ -54,6 +54,23 @@ GRANT SELECT ON TABLE "platform_in_states" TO "app_rw";
 --> statement-breakpoint
 GRANT ALL ON TABLE "platform_in_states" TO "app_platform";
 --> statement-breakpoint
+-- India Post pincode directory (platform data, loaded by apps/platform import:pincodes). Used by the State Pricing manual mode.
+CREATE TABLE "platform_in_pincodes" (
+	"pincode" text PRIMARY KEY NOT NULL,
+	"state_code" text NOT NULL,
+	CONSTRAINT "platform_in_pincodes_pincode_chk" CHECK ("pincode" ~ '^[1-9][0-9]{5}$')
+);
+--> statement-breakpoint
+ALTER TABLE "platform_in_pincodes" ADD CONSTRAINT "platform_in_pincodes_state_code_fk" FOREIGN KEY ("state_code") REFERENCES "platform_in_states"("code") ON DELETE restrict ON UPDATE no action;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "platform_in_pincodes" FROM PUBLIC;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "platform_in_pincodes" FROM "app_rw";
+--> statement-breakpoint
+GRANT SELECT ON TABLE "platform_in_pincodes" TO "app_rw";
+--> statement-breakpoint
+GRANT ALL ON TABLE "platform_in_pincodes" TO "app_platform";
+--> statement-breakpoint
 CREATE TABLE "tenant_apps" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"tenant_id" uuid NOT NULL,
