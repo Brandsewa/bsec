@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-02
 - **Agent:** claude
-- **Branch:** `chore/deploy-migration-check` (not merged yet)
+- **Branch:** `chore/deploy-migration-check` (merged in #204, f61f976)
 - **Area:** CI, dependencies, docs
 - **Type:** chore
 - **Supersedes:** none
@@ -35,4 +35,4 @@ NOT verified: the full domain real-database suite locally (CI runs it). And the 
 - [x] `infra/coolify/RUNBOOK.md`
 
 ## Definition of done
-Not done until merged: see `AGENTS.md` section 7.
+Merged 2026-11-02. The first real run showed the logs endpoint answering 400; see `2026-11-03-claude-deploy-log-check-fix.md`.
