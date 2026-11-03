@@ -12,7 +12,7 @@ const noCatalogue = {
 };
 
 const contentClient = {
-  admin: { blog: client.marketing.blog, menus: client.marketing.menus, media: client.marketing.media, pages: client.marketing.pages, ...noCatalogue },
+  admin: { blog: client.marketing.blog, menus: client.marketing.menus, media: client.marketing.media, pages: client.marketing.pages, storefront: client.marketing.storefront, policies: client.marketing.policies, customerPrivacy: client.marketing.customerPrivacy, ...noCatalogue },
 } as unknown as ContentClient;
 
 configureContentHost({

@@ -5,7 +5,7 @@ import { platformContract } from "@bs/contracts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { createLogger, createRuntime, getPlatformSiteId, getPlatformSitePage, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
+import { createLogger, createRuntime, getPlatformSiteId, getPlatformSitePage, getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, getPublishedPolicy, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
 import { platformRouter, type PlatformContext } from "../src/app.ts";
 
 type Staff = { userId: string; freshSessionAt: Date };
@@ -179,6 +179,38 @@ describe("Marketing content", () => {
     expect(await reason("not a slug")).toMatch(/^BAD_REQUEST: .*lowercase/);
     await run("marketing.pages.create", { title: "Twice", slug: "twice" }, ctx(admin));
     expect(await reason("twice")).toMatch(/^BAD_REQUEST: .*already exists/);
+  });
+
+  it("the website reads as live, and its visibility, search setting, policy and privacy contact save on the record", async () => {
+    // No status row means "coming soon" for a store; the website must read as live (and the public reader says live too).
+    expect(((await getPlatformSiteStatus(rtRw._db.db))).mode).toBe("live");
+    const first = (await run("marketing.storefront.getStatus", undefined, ctx(admin))) as { mode: string; hideFromSearchEngines?: boolean };
+    expect(first.mode).toBe("live");
+
+    await run("marketing.storefront.updateStatus", { mode: "coming_soon", headline: "Back soon", hideFromSearchEngines: true }, ctx(admin));
+    const changed = await getPlatformSiteStatus(rtRw._db.db);
+    expect(changed).toMatchObject({ mode: "coming_soon", headline: "Back soon", hideFromSearchEngines: true });
+
+    // the maintenance window is allowed for the website (owner-only for stores)
+    await run("marketing.storefront.updateStatus", { mode: "maintenance" }, ctx(admin));
+    expect((await getPlatformSiteStatus(rtRw._db.db)).mode).toBe("maintenance");
+
+    await run("marketing.storefront.updateStatus", { mode: "live", hideFromSearchEngines: false }, ctx(admin));
+    expect(await getPlatformSiteStatus(rtRw._db.db)).toMatchObject({ mode: "live", hideFromSearchEngines: false });
+
+    const content = { v: 1, blocks: [{ type: "heading", level: 2, text: "Terms" }, { type: "paragraph", text: "These are the terms." }] };
+    await run("marketing.policies.saveDraft", { handle: "terms", content }, ctx(admin));
+    await run("marketing.policies.publish", { handle: "terms" }, ctx(admin));
+    const published = await getPlatformSitePolicy(rtRw._db.db, "terms");
+    expect(published?.version).toBe(1);
+    expect(await getPlatformSitePolicy(rtRw._db.db, "refund")).toBeNull();
+    const storePolicy = await getPublishedPolicy(rtRw._db.db, storeId, "terms");
+    expect(storePolicy).toBeNull();
+
+    await run("marketing.customerPrivacy.updateSettings", { privacyContactEmail: "privacy@bcom.test", grievanceOfficerName: "A Person" }, ctx(admin));
+    const privacy = (await run("marketing.customerPrivacy.getSettings", undefined, ctx(admin))) as { privacyContactEmail: string | null };
+    expect(privacy.privacyContactEmail).toBe("privacy@bcom.test");
+    expect(await getPlatformSitePrivacy(rtRw)).toMatchObject({ email: "privacy@bcom.test", officerName: "A Person" });
   });
 
   it("a request cannot reach a store's page by id", async () => {

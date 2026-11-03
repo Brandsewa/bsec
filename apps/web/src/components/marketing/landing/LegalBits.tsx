@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { sitePrivacy } from "@/server/site-settings.ts";
 import { ADDRESS_LINE, SITE } from "./site-info.ts";
 
 /** "Last updated" line shown at the top of every legal page. */
@@ -38,8 +39,10 @@ export function CompanyBox() {
 }
 
 /** Grievance officer block (E-Commerce Rules 2020 style: name, title, email, response times). */
-export function GrievanceBox() {
-  const g = SITE.grievance;
+export async function GrievanceBox() {
+  // The name, email and response time set in Settings > Customer privacy replace the built-in details.
+  const own = await sitePrivacy();
+  const g = { ...SITE.grievance, ...(own?.officerName ? { name: own.officerName } : {}), ...(own?.email ? { email: own.email } : {}), ...(own ? { resolveDays: own.slaDays } : {}) };
   return (
     <div className="box">
       <h3>{g.title}</h3>

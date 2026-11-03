@@ -6,6 +6,7 @@ import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getB
 import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
+import { siteStatus } from "@/server/site-settings.ts";
 import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
@@ -53,7 +54,10 @@ export async function generateMetadata(): Promise<Metadata> {
     const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
     // The platform's own public site is meant to be found: the page sets its title and description.
     if (isPlatformMarketingHost(host)) {
-      return { title: "BCOM", description: "Launch your online store in 10 minutes.", robots: { index: true, follow: true } };
+      // Website visibility and "hide from search engines" in Super Admin > Storefront > Settings (ADR-042).
+      const site = await siteStatus();
+      const indexable = site.mode === "live" && !site.hideFromSearchEngines;
+      return { title: "BCOM", description: "Launch your online store in 10 minutes.", robots: { index: indexable, follow: indexable } };
     }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });

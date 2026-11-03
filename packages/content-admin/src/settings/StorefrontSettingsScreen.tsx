@@ -1,0 +1,558 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Calendar, Check, CheckCircle2, Clock, Copy, ShieldAlert } from "lucide-react";
+import { EmptyState, FormSkeleton, toast } from "@bs/ui";
+import type { StorefrontStatus } from "@bs/contracts";
+import { Badge } from "@bs/ui";
+import { Button } from "@bs/ui";
+import { Checkbox } from "@bs/ui";
+import { Switch } from "@bs/ui";
+import { Input } from "@bs/ui";
+import { RadioGroup, RadioGroupItem } from "@bs/ui";
+import { ConfirmDialog } from "@bs/ui";
+import { Field } from "@bs/ui";
+import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../settings-page.tsx";
+import { orpc } from "../host.ts";
+import { errorMessage } from "../errors.ts";
+import { MediaField } from "../media/media-field.tsx";
+
+type Mode = "live" | "coming_soon" | "maintenance" | "password";
+
+const MODES: Array<{ value: Mode; title: string; description: string }> = [
+  { value: "live", title: "Live", description: "Anyone can browse, add to cart, and checkout." },
+  { value: "coming_soon", title: "Coming soon", description: "Visitors see your holding page. They cannot browse products or checkout." },
+  { value: "password", title: "Password protected", description: "Only visitors with the password can enter. Staff with admin sessions always have access." },
+  { value: "maintenance", title: "Maintenance", description: "Returns a 503 Service Unavailable with Retry-After header. Use during planned maintenance." },
+];
+
+const WEBSITE_MODES = [
+  { value: "live", title: "Live", description: "Anyone can open the website and the blog." },
+  { value: "coming_soon", title: "Coming soon", description: "Visitors see your holding page. Signup and login keep working." },
+  { value: "maintenance", title: "Maintenance", description: "Visitors see a maintenance page and search engines are asked not to list it. Signup and login keep working." },
+] satisfies Array<{ value: Mode; title: string; description: string }>;
+
+export type StorefrontSettingsView = "all" | "visibility" | "search";
+
+/**
+ * Visibility and search engines for the store admin and for the website (ADR-042). `website` hides the password mode,
+ * which needs a store host, and `isOwner` says whether maintenance windows may be changed.
+ */
+type ScreenOptions = { view: StorefrontSettingsView; website: boolean; isOwner: boolean };
+
+function labelsFor(view: StorefrontSettingsView, website: boolean) {
+  const TITLE = view === "search" ? "Search engines" : website ? "Website visibility" : "Storefront";
+  const DESCRIPTION =
+    view === "search"
+      ? "Control whether Google and other search engines may list the site."
+      : website
+        ? "Choose whether visitors can see the website. Signup, login and the APIs are never affected."
+        : "Choose whether customers can see and buy from your store. New stores start on the coming-soon page.";
+  return { TITLE, DESCRIPTION };
+}
+
+export function StorefrontSettingsScreen({ view = "all", website = false, isOwner = true }: { view?: StorefrontSettingsView; website?: boolean; isOwner?: boolean }) {
+  const { TITLE, DESCRIPTION } = labelsFor(view, website);
+  const status = useQuery(orpc.admin.storefront.getStatus.queryOptions());
+
+  if (status.isLoading) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsCard>
+          <FormSkeleton />
+        </SettingsCard>
+      </SettingsPageFrame>
+    );
+  }
+  if (status.isError || !status.data) {
+    return (
+      <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+        <SettingsCard>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Could not load storefront settings"
+            description={errorMessage(status.error)}
+            action={<Button onClick={() => void status.refetch()}>Try again</Button>}
+          />
+        </SettingsCard>
+      </SettingsPageFrame>
+    );
+  }
+  return <StorefrontForm current={status.data} view={view} website={website} isOwner={isOwner} />;
+}
+
+function StorefrontForm({ current, view, website, isOwner }: { current: StorefrontStatus } & ScreenOptions) {
+  const queryClient = useQueryClient();
+  const { TITLE, DESCRIPTION } = labelsFor(view, website);
+  const showVisibility = view !== "search";
+  const showSearch = view !== "visibility";
+  const modes = website ? WEBSITE_MODES : MODES;
+
+  const update = useMutation(orpc.admin.storefront.updateStatus.mutationOptions());
+  const scheduleMutation = useMutation(orpc.admin.storefront.scheduleMaintenance.mutationOptions());
+  const cancelScheduleMutation = useMutation(orpc.admin.storefront.cancelScheduledMaintenance.mutationOptions());
+  const endMaintenanceMutation = useMutation(orpc.admin.storefront.endMaintenance.mutationOptions());
+
+  const transitionsQuery = useQuery(
+    orpc.admin.storefront.listTransitions.queryOptions({ input: { limit: 10, offset: 0 } }),
+  );
+
+  const [mode, setMode] = useState<Mode>(current.mode);
+  const [headline, setHeadline] = useState(current.headline ?? "");
+  const [collectEmails, setCollectEmails] = useState(current.collectEmails);
+  const [backgroundMediaId, setBackgroundMediaId] = useState<string | null>(current.backgroundMediaId ?? null);
+  const [password, setPassword] = useState("");
+  const [hideFromSearch, setHideFromSearch] = useState(current.hideFromSearchEngines ?? false);
+  const [confirmOfflineOpen, setConfirmOfflineOpen] = useState(false);
+  const [confirmEndMaintenanceOpen, setConfirmEndMaintenanceOpen] = useState(false);
+  const [confirmCancelScheduleOpen, setConfirmCancelScheduleOpen] = useState(false);
+
+  // Scheduled maintenance form state
+  const [scheduleStartsAt, setScheduleStartsAt] = useState("");
+  const [scheduleEndsAt, setScheduleEndsAt] = useState("");
+  const [allowStaffPreview, setAllowStaffPreview] = useState(current.maintenanceAllowStaffPreview ?? true);
+  const [copiedAnnouncement, setCopiedAnnouncement] = useState(false);
+
+  const needsPassword = mode === "password" && !current.hasPassword && password.length < 6;
+  const unchanged =
+    current.mode === mode &&
+    (current.headline ?? "") === headline &&
+    current.collectEmails === collectEmails &&
+    (current.backgroundMediaId ?? null) === backgroundMediaId &&
+    (current.hideFromSearchEngines ?? false) === hideFromSearch &&
+    password === "";
+  const guard = useUnsavedGuard(!unchanged);
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: orpc.admin.storefront.key() });
+  }
+
+  function doSave() {
+    update.mutate(
+      {
+        mode,
+        headline: headline.trim() === "" ? null : headline.trim(),
+        collectEmails,
+        backgroundMediaId: backgroundMediaId ?? null,
+        hideFromSearchEngines: hideFromSearch,
+        ...(password ? { password } : {}),
+      },
+      {
+        onSuccess: () => {
+          setPassword("");
+          setConfirmOfflineOpen(false);
+          refresh();
+          toast.success("Saved. Live to shoppers within a minute");
+        },
+        onError: (e) => {
+          setConfirmOfflineOpen(false);
+          toast.error(errorMessage(e));
+        },
+      },
+    );
+  }
+
+  function handleSave() {
+    if (current.mode === "live" && mode !== "live") {
+      setConfirmOfflineOpen(true);
+    } else {
+      doSave();
+    }
+  }
+
+  function handleScheduleMaintenance() {
+    if (!scheduleStartsAt || !scheduleEndsAt) {
+      toast.error("Please specify both start and end time.");
+      return;
+    }
+    const starts = new Date(scheduleStartsAt);
+    const ends = new Date(scheduleEndsAt);
+    if (isNaN(starts.getTime()) || isNaN(ends.getTime())) {
+      toast.error("Invalid dates provided.");
+      return;
+    }
+    if (ends.getTime() <= starts.getTime()) {
+      toast.error("End time must be after start time.");
+      return;
+    }
+    const durationHours = (ends.getTime() - starts.getTime()) / (1000 * 60 * 60);
+    if (durationHours > 72) {
+      toast.error("Maintenance window cannot exceed 72 hours.");
+      return;
+    }
+    if (starts.getTime() < Date.now() + 100_000) {
+      toast.error("Scheduled maintenance must start at least 2 minutes in the future.");
+      return;
+    }
+
+    scheduleMutation.mutate(
+      {
+        startsAt: starts.toISOString(),
+        endsAt: ends.toISOString(),
+        allowStaffPreview,
+      },
+      {
+        onSuccess: () => {
+          setScheduleStartsAt("");
+          setScheduleEndsAt("");
+          refresh();
+          toast.success("Maintenance window scheduled.");
+        },
+        onError: (e) => {
+          toast.error(errorMessage(e));
+        },
+      },
+    );
+  }
+
+  function handleEndMaintenance() {
+    endMaintenanceMutation.mutate(
+      {},
+      {
+        onSuccess: () => {
+          setConfirmEndMaintenanceOpen(false);
+          refresh();
+          toast.success("Maintenance ended. Store restored.");
+        },
+        onError: (e) => {
+          setConfirmEndMaintenanceOpen(false);
+          toast.error(errorMessage(e));
+        },
+      },
+    );
+  }
+
+  function handleCancelScheduled() {
+    cancelScheduleMutation.mutate(
+      {},
+      {
+        onSuccess: () => {
+          setConfirmCancelScheduleOpen(false);
+          refresh();
+          toast.success("Scheduled maintenance cancelled.");
+        },
+        onError: (e) => {
+          setConfirmCancelScheduleOpen(false);
+          toast.error(errorMessage(e));
+        },
+      },
+    );
+  }
+
+  function copyAnnouncement() {
+    const text = `Dear customers, our store will undergo scheduled maintenance to improve our services. During this brief window, browsing and checkout will be paused. We appreciate your patience and look forward to welcoming you back shortly!`;
+    navigator.clipboard.writeText(text);
+    setCopiedAnnouncement(true);
+    setTimeout(() => setCopiedAnnouncement(false), 2500);
+    toast.success("Maintenance announcement copied to clipboard.");
+  }
+
+  return (
+    <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
+      {guard}
+      <ConfirmDialog
+        open={confirmOfflineOpen}
+        onOpenChange={setConfirmOfflineOpen}
+        title={website ? "Take the website offline?" : "Take store offline?"}
+        description={website ? "Visitors will see a holding page instead of the website. Signup and login keep working." : "Taking your store offline will prevent customers from browsing and purchasing."}
+        confirmLabel="Take offline"
+        destructive
+        pending={update.isPending}
+        onConfirm={doSave}
+      />
+
+      <ConfirmDialog
+        open={confirmEndMaintenanceOpen}
+        onOpenChange={setConfirmEndMaintenanceOpen}
+        title="End maintenance now?"
+        description={`This will immediately restore your store to ${current.modeBeforeMaintenance ?? "live"} mode and allow customers to browse and checkout.`}
+        confirmLabel="End maintenance"
+        pending={endMaintenanceMutation.isPending}
+        onConfirm={handleEndMaintenance}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelScheduleOpen}
+        onOpenChange={setConfirmCancelScheduleOpen}
+        title="Cancel scheduled maintenance?"
+        description={`This will cancel the scheduled maintenance window. The ${website ? "website" : "store"} will remain in its current mode.`}
+        confirmLabel="Cancel schedule"
+        destructive
+        pending={cancelScheduleMutation.isPending}
+        onConfirm={handleCancelScheduled}
+      />
+
+      <HeaderActions>
+        <Button onClick={handleSave} disabled={update.isPending || unchanged || needsPassword}>
+          {update.isPending ? "Saving…" : mode === "live" && current.mode !== "live" ? "Take my store live" : "Save changes"}
+        </Button>
+      </HeaderActions>
+
+      {showVisibility && (<>
+      {/* Active Maintenance Alert Banner */}
+      {current.mode === "maintenance" && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-300" role="status">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="size-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden />
+              <div>
+                <p className="font-semibold text-sm">Store is currently in Maintenance Mode</p>
+                <p className="text-amber-800/90 dark:text-amber-400/90 mt-0.5">
+                  Public shoppers receive an HTTP 503 Service Unavailable status.
+                  {current.maintenanceEndsAt && (
+                    <span> Auto-restore scheduled for {new Date(current.maintenanceEndsAt).toLocaleString()}.</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmEndMaintenanceOpen(true)}
+                className="border-amber-600/40 text-amber-900 dark:text-amber-200 hover:bg-amber-500/20 shrink-0"
+              >
+                End maintenance now
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {current.mode === "live" && (
+        <SettingsCard>
+          <div className="flex items-center gap-2 text-xs" role="status">
+            <CheckCircle2 className="size-4 text-primary" aria-hidden />
+            {website ? "The website is live." : "Your store is live."}
+          </div>
+        </SettingsCard>
+      )}
+
+      <SettingsCard title={website ? "Website visibility" : "Store visibility"} description="You can change this at any time.">
+        <RadioGroup aria-label={website ? "Website visibility" : "Store visibility"} className="gap-2" value={mode} onValueChange={(v) => setMode(v as Mode)}>
+          {modes.map((m) => (
+            <label key={m.value} className="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2.5 has-data-checked:border-primary/50 has-data-checked:bg-muted">
+              <RadioGroupItem value={m.value} className="shrink-0" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <span className="shrink-0 text-xs font-medium text-foreground">{m.title}</span>
+                <span className="text-[11px] leading-normal text-muted-foreground sm:text-right">{m.description}</span>
+              </span>
+            </label>
+          ))}
+        </RadioGroup>
+      </SettingsCard>
+      </>)}
+
+      {showSearch && (
+      <SettingsCard title="Search engines" description={`Control whether Google and other search engines may list your ${website ? "website" : "store"}.`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="hide-from-search" className="text-xs font-medium text-foreground">Discourage search engines from indexing this {website ? "website" : "store"}</label>
+            <p className="text-[11px] leading-normal text-muted-foreground">
+              Asks search engines not to list any page (robots.txt, a noindex tag and an empty sitemap). It is a request, not a lock: anyone with the link can still open the{" "}
+              {website ? "website." : "store. Use a password if you need to keep visitors out."}
+              {mode === "live"
+                ? ""
+                : website
+                  ? " While the website is in Coming soon or Maintenance it is always hidden from search engines, whatever this is set to."
+                  : " While the store is in Coming soon or Password mode it is always hidden from search engines, whatever this is set to."}
+            </p>
+          </div>
+          <Switch id="hide-from-search" checked={hideFromSearch} onCheckedChange={(v) => setHideFromSearch(Boolean(v))} />
+        </div>
+      </SettingsCard>
+      )}
+
+      {showVisibility && (<>
+      {/* Scheduled Maintenance Section (Slice 8B) */}
+      <SettingsCard
+        title="Scheduled maintenance"
+        description="Plan a future window (up to 72 hours). Automatically restores."
+      >
+        <div className="space-y-4">
+          {current.maintenanceStartsAt && current.maintenanceEndsAt ? (
+            <div className="rounded-md border border-border bg-muted/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Calendar className="size-4 text-primary" aria-hidden />
+                  Scheduled maintenance window
+                </span>
+                <Badge variant="outline">Scheduled</Badge>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground block">Starts at:</span>
+                  <strong className="text-foreground">{new Date(current.maintenanceStartsAt).toLocaleString()}</strong>
+                  <span className="text-[11px] text-muted-foreground block">({new Date(current.maintenanceStartsAt).toUTCString()})</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Ends at:</span>
+                  <strong className="text-foreground">{new Date(current.maintenanceEndsAt).toLocaleString()}</strong>
+                  <span className="text-[11px] text-muted-foreground block">({new Date(current.maintenanceEndsAt).toUTCString()})</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Staff preview: {current.maintenanceAllowStaffPreview ? "Allowed" : "Blocked"}.
+                Store will automatically return to previous mode at end time.
+              </p>
+              {isOwner && (
+                <div className="pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmCancelScheduleOpen(true)}
+                  >
+                    Cancel scheduled maintenance
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field id="schedule-start" label="Starts at (local time)" hint="At least 2 minutes in future">
+                  <Input
+                    id="schedule-start"
+                    type="datetime-local"
+                    value={scheduleStartsAt}
+                    onChange={(e) => setScheduleStartsAt(e.target.value)}
+                    disabled={!isOwner}
+                  />
+                </Field>
+                <Field id="schedule-end" label="Ends at (local time)" hint="Maximum 72 hours window">
+                  <Input
+                    id="schedule-end"
+                    type="datetime-local"
+                    value={scheduleEndsAt}
+                    onChange={(e) => setScheduleEndsAt(e.target.value)}
+                    disabled={!isOwner}
+                  />
+                </Field>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-foreground pt-1">
+                <Checkbox
+                  checked={allowStaffPreview}
+                  onCheckedChange={(c) => setAllowStaffPreview(Boolean(c))}
+                  disabled={!isOwner}
+                />
+                Allow staff with active admin sessions to preview the store during maintenance
+              </label>
+
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleScheduleMaintenance}
+                  disabled={!isOwner || scheduleMutation.isPending || !scheduleStartsAt || !scheduleEndsAt}
+                >
+                  <Clock className="size-3.5 mr-1.5" aria-hidden />
+                  {scheduleMutation.isPending ? "Scheduling…" : "Schedule window"}
+                </Button>
+                {!isOwner && (
+                  <span className="text-xs text-muted-foreground italic">
+                    (Only the Store Owner can schedule or modify maintenance windows)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Announcement Template */}
+          <div className="rounded-md border border-border p-3 space-y-2 bg-card">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-foreground">Customer announcement template</span>
+              <Button variant="ghost" size="sm" onClick={copyAnnouncement} className="h-7 text-xs gap-1">
+                {copiedAnnouncement ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+                {copiedAnnouncement ? "Copied" : "Copy text"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              No automated email or SMS notifications are sent to customers for storefront maintenance.
+              Use this message for your social media or marketing channels before scheduled downtime.
+            </p>
+          </div>
+        </div>
+      </SettingsCard>
+
+      {/* Transition History Table */}
+      <SettingsCard
+        title="Visibility transition log"
+        description="Immutable record of storefront mode changes and scheduled window starts."
+      >
+        {transitionsQuery.isLoading ? (
+          <FormSkeleton />
+        ) : (transitionsQuery.data?.items ?? []).length === 0 ? (
+          <p className="text-xs text-muted-foreground">No mode transitions recorded yet.</p>
+        ) : (
+          <div className="rounded-md border border-border overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="border-b border-border bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th className="p-2.5 font-medium">Transition</th>
+                  <th className="p-2.5 font-medium">Reason</th>
+                  <th className="p-2.5 font-medium">Triggered by</th>
+                  <th className="p-2.5 font-medium">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {transitionsQuery.data?.items.map((t) => (
+                  <tr key={t.id} className="hover:bg-muted/30">
+                    <td className="p-2.5 font-medium text-foreground">
+                      <span className="capitalize">{t.fromMode.replace("_", " ")}</span>
+                      {" → "}
+                      <span className="capitalize">{t.toMode.replace("_", " ")}</span>
+                    </td>
+                    <td className="p-2.5">
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {t.reason.replace("_", " ")}
+                      </Badge>
+                    </td>
+                    <td className="p-2.5 text-muted-foreground capitalize">
+                      {t.actorType}
+                    </td>
+                    <td className="p-2.5 text-muted-foreground">
+                      {new Date(t.at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SettingsCard>
+
+      {mode !== "live" && (
+        <SettingsCard title="Holding page" description="What visitors see while the store is not live.">
+          <Field id="storefront-headline" label="Headline">
+            <Input id="storefront-headline" value={headline} maxLength={120} placeholder="Opening soon" onChange={(e) => setHeadline(e.target.value)} />
+          </Field>
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox checked={collectEmails} onCheckedChange={(c) => setCollectEmails(Boolean(c))} />
+            Let visitors leave their email to be notified
+          </label>
+          <div className="pt-2">
+            <MediaField
+              value={backgroundMediaId}
+              onChange={setBackgroundMediaId}
+              accept={["image"]}
+              label="Background image"
+              description="Custom background image displayed on holding and password screens."
+            />
+          </div>
+        </SettingsCard>
+      )}
+      </>)}
+
+      {showVisibility && !website && mode === "password" && (
+        <SettingsCard
+          title="Store password"
+          description={current.hasPassword ? "Password is set. Enter a new one to change it." : "Set the password visitors must enter."}
+        >
+          <Field id="storefront-password" label={current.hasPassword ? "New password" : "Password"} hint="At least 6 characters.">
+            <Input id="storefront-password" type="password" autoComplete="new-password" value={password} minLength={6} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </SettingsCard>
+      )}
+    </SettingsPageFrame>
+  );
+}

@@ -8,6 +8,7 @@ import {
 import { MARKETING_PAGES } from "@/components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { server } from "@/server/runtime.ts";
+import { siteStatus } from "@/server/site-settings.ts";
 
 export async function GET(req: Request) {
   const headers = {
@@ -25,6 +26,8 @@ export async function GET(req: Request) {
     if (isPlatformMarketingHost(host)) {
       const proto = req.headers.get("x-forwarded-proto") ?? "https";
       const origin = `${proto}://${host.split(",")[0]?.trim()}`;
+      const site = await siteStatus();
+      if (site.mode !== "live" || site.hideFromSearchEngines) return new Response(generateSitemapXml([]), { status: 200, headers: { ...headers, "Cache-Control": "public, max-age=60" } });
       const items = [
         { loc: `${origin}/`, changefreq: "weekly" as const, priority: 1 },
         ...MARKETING_PAGES.map((p) => ({ loc: `${origin}${p.path}`, changefreq: "monthly" as const, priority: 0.6 })),
