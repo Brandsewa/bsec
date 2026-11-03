@@ -86,6 +86,12 @@ export const MkValuesSchema = z.object({
 });
 export type MkValuesProps = z.infer<typeof MkValuesSchema>;
 
+export const MkPricingSchema = z.object({
+  heading: z.string().max(200).default("Plans you can read in one go."),
+  description: z.string().max(400).default("Prices in rupees, plus GST. Every plan starts with a 14-day free trial."),
+});
+export type MkPricingProps = z.infer<typeof MkPricingSchema>;
+
 export const MkCompanySchema = z.object({ heading: z.string().max(200).default(""), after: z.string().max(4000).default("") });
 export type MkCompanyProps = z.infer<typeof MkCompanySchema>;
 
@@ -216,6 +222,7 @@ export const MARKETING_BLOCK_DEFINITIONS = {
   MkValues: block("MkValues", MkValuesSchema, { heading: "", items: [{ icon: "check", text: "A short point." }] }, V.MkValuesView),
   MkHeader: block("MkHeader", MkHeaderSchema, MkHeaderSchema.parse({}), V.MkHeaderView),
   MkFooter: block("MkFooter", MkFooterSchema, MkFooterSchema.parse({}), V.MkFooterView),
+  MkPricing: block("MkPricing", MkPricingSchema, MkPricingSchema.parse({}), V.MkPricingView),
   MkCompany: block("MkCompany", MkCompanySchema, { heading: "The company", after: "" }, V.MkCompanyView),
 } satisfies Partial<Record<BlockType, BlockDefinition<never> | BlockDefinition<any>>>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -231,8 +238,33 @@ export const onlyMarketingBlocks = (blocks: BlockInstance[]): boolean => everyBl
 
 const about = (i: number, type: BlockType, props: Record<string, unknown>): BlockInstance => ({ id: `about-${i}`, type, version: 1, props });
 
+const home = (i: number, type: BlockType, props: Record<string, unknown>): BlockInstance => ({ id: `home-${i}`, type, version: 1, props });
+
 /** What a new page with one of these handles starts from, so the code version does not have to be retyped. */
 export const MARKETING_STARTERS: Record<string, BlockInstance[]> = {
+  // The Home page. "home" is reserved as a page URL, so the website's Home page is stored under this slug and shown at "/".
+  "bcom-home": [
+    home(1, "MkHero", { stamp: "Ready today · AI agents coming soon", title: "The agent-first e-commerce platform for Indian brands.", lead: "A complete online store you can open today: cash on delivery, GST invoices, themes, orders and returns. Built from day one for the AI shopping era, so selling through ChatGPT, Gemini and Claude arrives as each one launches in India.", showNameChecker: true, fine: "14-day free trial · Cash on delivery and GST invoices included" }),
+    home(2, "MkIncluded", { label: "Included on every plan", items: [{ icon: "check", label: "Cash on delivery" }, { icon: "check", label: "GST tax invoices" }, { icon: "check", label: "Visual theme builder" }, { icon: "check", label: "Returns and exchanges" }, { icon: "check", label: "Customers and segments" }] }),
+    home(3, "MkStatement", { text: "Selling online usually means a website, a payment link, a GST spreadsheet and a chat group.", muted: "BCOM puts all of it in one place, then gets your store ready for the way people will shop next." }),
+    home(4, "MkFeatures", { eyebrow: "Ready today", title: "A complete store, built for how India sells.", intro: "Open a store today and start taking orders. No waiting for new features.", tone: "soft", items: [
+      { title: "Complete catalogue management", body: "Products, variants, categories, collections and stock. SEO is built in, with sitemaps and structured data." },
+      { title: "Payments and invoices", body: "Accept UPI, cards and net banking, plus cash on delivery with a fee you set. Issue GST tax invoices." },
+      { title: "Customers and segments", body: "Know who is buying, tag them, build segments and import or export your list." },
+      { title: "Shipping, orders, returns and exchanges", body: "Set your shipping zones and rates, confirm and ship orders and handle returns and exchanges in one place." },
+      { title: "Themes and visual theme builder", body: "Start from a theme made for your niche. Drag, drop and edit blocks. No code." },
+    ] }),
+    home(5, "MkSteps", { label: "How to open a store", items: [
+      { icon: "globe", title: "Claim your name", body: "Pick a name and your store lives on yourname.bcom.si." },
+      { icon: "tag", title: "Add your products", body: "Add products, variants, categories and stock." },
+      { icon: "sparkles", title: "Make it yours", body: "Pick a theme made for your niche and edit blocks without code." },
+      { icon: "check", title: "Take orders", body: "Set shipping rates and your COD fee, then share your store link." },
+    ] }),
+    home(6, "MkBand", { title: "Designed for the open standards behind AI commerce.", items: [{ name: "MCP", note: "Tools for assistants" }, { name: "UCP", note: "Google commerce" }, { name: "ACP", note: "OpenAI commerce" }, { name: "AP2", note: "Safe agent payments" }, { name: "A2A", note: "Agent to agent" }] }),
+    home(7, "MkPricing", {}),
+    home(8, "MkFaq", { eyebrow: "FAQ", title: "Straight answers.", items: [{ question: "Is there a free trial?", answer: "Yes. Every plan starts with a 14-day free trial and no card is needed to start." }] }),
+    home(9, "MkFinalCall", { title: "Open your store today. Be ready for what comes next.", text: "14-day free trial. No card needed to start.", showPlansLink: true }),
+  ],
   about: [
     about(1, "MkDocHeader", { eyebrow: "About us", title: "An e-commerce platform built for how India sells, and for how people will shop next.", intro: "" }),
     about(2, "MkDocSection", {

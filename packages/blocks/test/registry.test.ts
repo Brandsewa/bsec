@@ -10,7 +10,7 @@ describe("Block Registry v1", () => {
 
   it("registers the kept widgets plus layout, content, store-chrome and cart blocks", () => {
     expect(BLOCK_TYPES).toEqual(expect.arrayContaining(expectedBlockTypes));
-    expect(BLOCK_TYPES.length).toBe(46);
+    expect(BLOCK_TYPES.length).toBe(47);
   });
 
   for (const type of expectedBlockTypes) {

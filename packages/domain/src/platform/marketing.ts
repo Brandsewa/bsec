@@ -46,7 +46,9 @@ export function platformSiteContext(siteId: string, staffUserId: string, request
 
 /** A new website page, starting from the built-in version of that page when there is one (About). */
 export async function createPlatformSitePage(rt: Runtime, ctx: TenantContext, input: Parameters<typeof createPage>[2]) {
-  const page = await createPage(rt, ctx, input);
+  // "home" is reserved as a page URL; the website's Home page is stored as "bcom-home" and shown at "/".
+  const isHome = input.slug === "home";
+  const page = await createPage(rt, ctx, isHome ? { ...input, slug: "bcom-home", title: input.title || "Home page" } : input);
   const starter = MARKETING_STARTERS[page.slug];
   if (starter) await savePageDraft(rt, ctx, { id: page.id, blocks: starter });
   return page;

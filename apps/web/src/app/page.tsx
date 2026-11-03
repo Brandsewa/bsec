@@ -21,6 +21,9 @@ import { HomeFooter } from "@/components/marketing/home/HomeFooter.tsx";
 import { HomeNav } from "@/components/marketing/home/HomeNav.tsx";
 import { HomeRoot } from "@/components/marketing/home/HomeRoot.tsx";
 import { siteHold } from "@/components/marketing/home/SiteHold.tsx";
+import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
+import { PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
+import { marketingPage } from "@/server/marketing-page.ts";
 
 export async function generateMetadata(): Promise<Metadata> {
   let title = "Home";
@@ -157,7 +160,12 @@ export default async function HomePage() {
         </HomeRoot>
       );
     }
-    return <MarketingLandingPage plans={await loadLandingPlans()} />;
+    const plans = await loadLandingPlans();
+    // A Home page published in Super Admin replaces the built-in one; any problem reading it keeps the built-in page (ADR-011).
+    const built = await marketingPage(["bcom-home"]);
+    const content = built ? marketingPageContent(built.page.document, built.renderData, plans) : null;
+    if (content) return <PageFrame>{content}</PageFrame>;
+    return <MarketingLandingPage plans={plans} />;
   }
 
   const storeUrl = `https://${host}`;

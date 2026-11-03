@@ -62,6 +62,7 @@ export type BlockType =
   | "MkValues"
   | "MkCompany"
   // The website's header and footer, edited as pages of their own (defaults are today's layout)
+  | "MkPricing"
   | "MkHeader"
   | "MkFooter";
 
@@ -223,6 +224,8 @@ export interface RenderContext {
   renderNameChecker?: (() => ReactNode) | undefined;
   /** The registered company details, kept in one place by the marketing site; the editor draws a sample. */
   renderCompany?: (() => ReactNode) | undefined;
+  /** The plans table, fed live from Super Admin > Plans by the marketing site; the editor draws a sample. */
+  renderPricing?: ((p: { heading: string; description: string }) => ReactNode) | undefined;
 }
 
 /** One picture in the gallery viewer: the full-size source and a small one for the thumbnail strip. */
