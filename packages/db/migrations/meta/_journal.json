@@ -631,6 +631,13 @@
       "when": 1793496500000,
       "tag": "0095_platform_site_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793582900000,
+      "tag": "0096_apps_state_pricing",
+      "breakpoints": true
     }
   ]
 }

@@ -135,7 +135,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
       const marketCtx = await getMarketContext(access.tenantId);
       marketCurrency = marketCtx.currency;
       marketLocale = marketCtx.locale;
-      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, marketCtx.marketId);
+      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, marketCtx.scope);
 
       if (pageData) {
         // Enforce 308 permanent redirect if accessed via non-canonical ancestor path

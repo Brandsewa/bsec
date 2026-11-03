@@ -132,6 +132,14 @@ import {
   clearRazorpayCredentials,
   listStorePaymentProviders,
   listMarkets,
+  listStoreApps,
+  installApp,
+  setAppStatus,
+  uninstallApp,
+  updateAppSettings,
+  listIndianStates,
+  getProductStatePricing,
+  setVariantStatePrices,
   getMarketDetail,
   createMarket,
   updateMarket,
@@ -970,6 +978,13 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   };
 
   /** Gives the context's store a base market and one extra market (the plan limit), and returns the extra market's id. */
+async function isoApp(rt: Runtime, ctx: TenantContext): Promise<void> {
+  await listStoreApps(rt, ctx); // permission check first, so a caller without apps.manage is refused before anything is changed
+  await rtPlatform._db.db.execute(sql`UPDATE platform_apps SET allowed_tenant_ids = array_append(allowed_tenant_ids, ${ctx.tenantId}::uuid)
+    WHERE key = 'state-pricing' AND NOT (${ctx.tenantId}::uuid = ANY(allowed_tenant_ids))`);
+  await installApp(rt, ctx, "state-pricing");
+}
+
 async function isoMarket(rt: Runtime, ctx: TenantContext): Promise<string> {
   await listMarkets(rt, ctx); // permission check first, so a caller without markets.manage is refused before anything is created
   await rtPlatform._db.db.execute(sql`INSERT INTO markets (tenant_id, name, handle, is_base, currency, tax_display)
@@ -2357,6 +2372,38 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getBlogSettings(rt, ctx);
       case "blog.settings.update":
         return await updateBlogSettings(rt, ctx, { postsPerPage: 9 });
+      // --- Apps and State Pricing (ADR-043, ADR-044) ---
+      case "apps.list":
+        return await listStoreApps(rt, ctx);
+      case "apps.install": {
+        await isoApp(rt, ctx);
+        return await installApp(rt, ctx, "state-pricing");
+      }
+      case "apps.setStatus": {
+        await isoApp(rt, ctx);
+        return await setAppStatus(rt, ctx, "state-pricing", "installed");
+      }
+      case "apps.uninstall": {
+        await isoApp(rt, ctx);
+        return await uninstallApp(rt, ctx, "state-pricing");
+      }
+      case "apps.updateSettings": {
+        await isoApp(rt, ctx);
+        return await updateAppSettings(rt, ctx, "state-pricing", { mode: "auto" });
+      }
+      case "apps.states":
+        await listStoreApps(rt, ctx);
+        return await listIndianStates(rt);
+      case "apps.getProductPricing": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await getProductStatePricing(rt, ctx, v.productId);
+      }
+      case "apps.setVariantPricing": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setVariantStatePrices(rt, ctx, { variantId: v.variantId, prices: [{ state: "MH", price: 1234 }] });
+      }
       // --- Markets (ADR-040) ---
       case "markets.list":
         return await listMarkets(rt, ctx);

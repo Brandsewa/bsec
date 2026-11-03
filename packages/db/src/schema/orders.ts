@@ -33,6 +33,8 @@ export const orders = tenantTable(
     currency: text("currency").notNull().default("INR"),
     /** ADR-040: the market, the store base currency, the rate used and the total in base currency. null on older orders. */
     marketId: uuid("market_id"),
+    /** State Pricing app: the state the order was priced for (snapshot, ADR-044). */
+    priceRegion: text("price_region"),
     baseCurrency: text("base_currency"),
     fxRate: numeric("fx_rate", { precision: 18, scale: 8 }),
     baseGrandTotal: bigint("base_grand_total", { mode: "number" }),

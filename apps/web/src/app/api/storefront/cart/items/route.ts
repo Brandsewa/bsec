@@ -74,9 +74,10 @@ export async function POST(req: Request) {
     const cookieToken = await getCookieValue(CART_COOKIE_NAME, req);
     let token = parsed.data.token || cookieToken;
 
-    const marketId = (await getMarketContext(access.tenantId)).marketId;
+    const marketCtx = await getMarketContext(access.tenantId);
+    const marketId = marketCtx.marketId;
     // Creates the cart in the shopper's market, or moves an existing one there, so the price added is the price shown.
-    const initialCart = await getOrCreateCart(rt, tenantCtx, token || undefined, undefined, marketId);
+    const initialCart = await getOrCreateCart(rt, { ...tenantCtx, priceRegion: marketCtx.region }, token || undefined, undefined, marketId);
     token = initialCart.token;
 
     const cart = await addToCart(rt, tenantCtx, {

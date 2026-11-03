@@ -95,7 +95,7 @@ export default async function HomePage() {
       marketLocale = marketCtx.locale;
 
       const [homeData, storeSettingsData] = await Promise.all([
-        getCachedStorefrontHomePage(access.tenantId, marketCtx.marketId).catch(() => null),
+        getCachedStorefrontHomePage(access.tenantId, marketCtx.scope).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
       ]);
 

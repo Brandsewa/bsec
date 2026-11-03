@@ -29,6 +29,8 @@ export const carts = tenantTable(
     currency: text("currency").notNull().default("INR"),
     /** The market this cart is priced in (ADR-040). null on carts created before markets existed. */
     marketId: uuid("market_id"),
+    /** State Pricing app (ADR-044): the Indian state this cart is priced for, stamped by the server. null = default prices. */
+    priceRegion: text("price_region"),
     discountCodes: text("discount_codes").array().notNull().default(sql`ARRAY[]::text[]`),
     shippingAddress: jsonb("shipping_address"),
     shippingRateId: text("shipping_rate_id"),

@@ -45,7 +45,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   };
 
   const marketCtx = await getMarketContext(access.tenantId);
-  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, marketCtx.marketId);
+  const cart = await getOrCreateCart(rt, { ...tenantCtx, priceRegion: marketCtx.region }, token, undefined, marketCtx.marketId);
 
   if (!cart.items || cart.items.length === 0) {
     redirect("/cart");

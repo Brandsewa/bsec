@@ -9,6 +9,7 @@ import { publicMediaUrl } from "../media/storage.ts";
 import { evaluateDiscount } from "../orders/discounts.ts";
 import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
+import { loadStatePriceMap } from "../apps/state-pricing.ts";
 
 export interface StorefrontCartItem {
   id: string;
@@ -59,6 +60,8 @@ export interface StorefrontCart {
   currency: string;
   /** The market the cart is priced in (ADR-040). null on carts created before markets existed (treated as the base market). */
   marketId?: string | null | undefined;
+  /** State Pricing app (ADR-044): the state this cart is priced for. */
+  priceRegion?: string | null | undefined;
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;
@@ -250,6 +253,7 @@ async function loadCartWithItems(
     token: cartRecord.token,
     currency: cartRecord.currency,
     marketId: cartRecord.marketId ?? null,
+    priceRegion: cartRecord.priceRegion ?? null,
     items,
     itemCount,
     subtotal,
@@ -301,6 +305,30 @@ async function repriceCartToMarket(
 }
 
 /**
+ * State Pricing app (ADR-044): stamps the cart with the shopper's state and reprices every line from the variant's
+ * default price or its price in that state. A null region puts the cart back on default prices. Base market only.
+ */
+async function repriceCartToRegion(
+  tx: Db,
+  tenantId: string,
+  cart: typeof schema.carts.$inferSelect,
+  region: string | null,
+): Promise<typeof schema.carts.$inferSelect> {
+  const items = await tx
+    .select({ id: schema.cartItems.id, variantId: schema.cartItems.variantId, basePrice: schema.variants.price })
+    .from(schema.cartItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+    .where(eq(schema.cartItems.cartId, cart.id));
+  const statePrices = region ? await loadStatePriceMap(tx, tenantId, region, items.map((i) => i.variantId)) : new Map<string, { price: number; compareAtPrice: number | null }>();
+  for (const it of items) {
+    const price = statePrices.get(it.variantId)?.price ?? Number(it.basePrice);
+    await tx.update(schema.cartItems).set({ unitPriceSnapshot: price, updatedAt: new Date() }).where(eq(schema.cartItems.id, it.id));
+  }
+  const [updated] = await tx.update(schema.carts).set({ priceRegion: region, lastActivityAt: new Date() }).where(eq(schema.carts.id, cart.id)).returning();
+  return updated ?? cart;
+}
+
+/**
  * Looks up active cart by token and tenantId. If not found, generates a new UUID token and creates a cart row.
  */
 export async function getOrCreateCart(
@@ -333,6 +361,7 @@ export async function getOrCreateCart(
           tenantId: ctx.tenantId,
           currency: market.currency,
           marketId: market.id,
+          priceRegion: ctx.priceRegion && !(await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, market.id)) ? ctx.priceRegion : null,
           status: "active",
         })
         .returning();
@@ -344,6 +373,10 @@ export async function getOrCreateCart(
     } else if (marketId && cartRecord.marketId !== marketId) {
       // The shopper switched market: the cart keeps its items but is repriced in the new market's currency.
       cartRecord = await repriceCartToMarket(tx as unknown as Db, ctx.tenantId, cartRecord, marketId);
+    }
+    // The cart follows the shopper's state (ADR-044). undefined = the caller does not use the app, leave the cart alone.
+    if (ctx.priceRegion !== undefined && (ctx.priceRegion ?? null) !== (cartRecord.priceRegion ?? null) && !(await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartRecord.marketId ?? null))) {
+      cartRecord = await repriceCartToRegion(tx as unknown as Db, ctx.tenantId, cartRecord, ctx.priceRegion ?? null);
     }
 
     return loadCartWithItems(tx, cartRecord);
@@ -452,6 +485,9 @@ export async function addToCart(
       const marketPrice = prices.get(input.variantId);
       if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
       unitPriceSnapshot = marketPrice.price;
+    } else if (cartRecord.priceRegion) {
+      const sp = (await loadStatePriceMap(tx as unknown as Db, ctx.tenantId, cartRecord.priceRegion, [input.variantId])).get(input.variantId);
+      if (sp) unitPriceSnapshot = sp.price;
     }
 
     // 3. Upsert into cartItems: increment quantity if already exists
