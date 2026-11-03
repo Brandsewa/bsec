@@ -109,7 +109,7 @@ function ColourBox({ value, onChange, name }: { value: string | undefined; onCha
   );
 }
 
-const DEFAULT_BANNER: BlockInstance = {
+const STORE_DEFAULT_BANNER: BlockInstance = {
   id: "announcement-bar",
   type: "Banner",
   version: 1,
@@ -122,6 +122,7 @@ const num = (v: unknown, fallback: number) => (typeof v === "number" ? v : fallb
 function AnnouncementSection() {
   const edit = useFrameEdit();
   if (!edit) return null;
+  const DEFAULT_BANNER = edit.announcementDefault ? { ...STORE_DEFAULT_BANNER, props: { ...STORE_DEFAULT_BANNER.props, text: edit.announcementDefault } } : STORE_DEFAULT_BANNER;
   const blocks = edit.frame.header;
   const index = blocks.findIndex((b) => b.type === "Banner");
   const bar = index >= 0 ? blocks[index] : undefined;
@@ -213,6 +214,24 @@ export function GeneralPanel() {
   }
   return (
     <div style={{ ...grid, padding: "4px 12px 20px", boxSizing: "border-box", width: "100%", overflowX: "hidden" }}>
+      <AnnouncementSection />
+    </div>
+  );
+}
+
+/**
+ * The Theme tab of the website's editor: the announcement bar above the header. The website keeps one fixed design with
+ * a light and a dark theme, so colours and fonts are not editable here (ADR-042).
+ */
+export function WebsiteThemePanel() {
+  const edit = useFrameEdit();
+  if (!edit) return <></>;
+  if (edit.editing === "header") {
+    return <p style={{ margin: 0, padding: 12, fontSize: 12, color: "#52525b", lineHeight: 1.5 }}>You are editing the header page, where the announcement bar is a block. Open any other page to manage it from here.</p>;
+  }
+  return (
+    <div style={{ ...grid, padding: "4px 12px 20px", boxSizing: "border-box", width: "100%", overflowX: "hidden" }}>
+      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#71717a", lineHeight: 1.5 }}>Applies to every page of the website. It is saved and live when you publish.</p>
       <AnnouncementSection />
     </div>
   );

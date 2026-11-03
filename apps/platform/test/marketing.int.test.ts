@@ -5,7 +5,7 @@ import { platformContract } from "@bs/contracts";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { seedPlatformStaff } from "@bs/db/test-fixtures";
-import { createLogger, createRuntime, getPlatformSiteId, getPlatformSitePage, getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, getPublishedPolicy, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
+import { createLogger, createRuntime, getPlatformSiteChrome, getPlatformSiteId, getPlatformSitePage, getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, getPublishedPolicy, platformSitePagesSitemap, provisionTenant, savePageDraft, type Runtime } from "@bs/domain";
 import { platformRouter, type PlatformContext } from "../src/app.ts";
 
 type Staff = { userId: string; freshSessionAt: Date };
@@ -158,12 +158,32 @@ describe("Marketing content", () => {
 
   it("the website takes only website sections, and a store cannot use them", async () => {
     const page = (await run("marketing.pages.create", { title: "Mixed", slug: "mixed" }, ctx(admin))) as { id: string };
-    const store = [{ id: "s", type: "Heading", version: 1, props: { text: "Store block" } }];
+    const store = [{ id: "s", type: "ProductShowcase", version: 1, props: {} }];
     expect(String(await codeOf(run("marketing.pages.saveDraft", { id: page.id, blocks: store }, ctx(admin))))).not.toBe("OK");
 
     const [storePage] = await withTenant(rtRw._db.db, storeId, (tx) => tx.select().from(schema.pages));
     const storeCtx = { tenantId: storeId, storeStatus: "live", actor: { type: "system" as const }, roles: [], permissions: ["content.write"], requestId: "t" };
     await expect(savePageDraft(rtRw, storeCtx as never, { id: storePage!.id, blocks: [{ id: "m", type: "MkDocHeader", version: 1, props: { title: "Sneaky" } }] })).rejects.toThrow(/platform's website/);
+  });
+
+  it("takes the generic widgets, and the header and footer pages hold only their own blocks", async () => {
+    const page = (await run("marketing.pages.create", { title: "Widgets", slug: "widgets" }, ctx(admin))) as { id: string };
+    const ok = [{ id: "h", type: "Heading", version: 1, props: { text: "Hello" } }];
+    await run("marketing.pages.saveDraft", { id: page.id, blocks: ok }, ctx(admin));
+
+    const header = (await run("marketing.pages.ensureChrome", { key: "header" }, ctx(admin))) as { id: string; created: boolean };
+    expect(header.created).toBe(true);
+    expect(((await run("marketing.pages.ensureChrome", { key: "header" }, ctx(admin))) as { id: string; created: boolean })).toEqual({ id: header.id, created: false });
+    const draft = (await run("marketing.pages.get", { id: header.id, draft: true }, ctx(admin))) as { blocks: Array<{ type: string }> };
+    expect(draft.blocks.map((b) => b.type)).toEqual(["MkHeader"]);
+    expect(await getPlatformSiteChrome(rtRw._db.db)).toMatchObject({ header: null });
+    await run("marketing.pages.publish", { id: header.id }, ctx(admin));
+    expect((await getPlatformSiteChrome(rtRw._db.db)).header?.brand).toBe("BCOM");
+
+    const footer = (await run("marketing.pages.ensureChrome", { key: "footer" }, ctx(admin))) as { id: string };
+    await run("marketing.pages.publish", { id: footer.id }, ctx(admin));
+    expect((await getPlatformSiteChrome(rtRw._db.db)).footer?.columns.length).toBe(3);
+    expect(String(await codeOf(run("marketing.pages.saveDraft", { id: footer.id, blocks: ok }, ctx(admin))))).not.toBe("OK");
   });
 
   it("says why a page cannot be created instead of a generic failure", async () => {

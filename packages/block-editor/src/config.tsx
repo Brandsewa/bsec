@@ -1,6 +1,6 @@
 import type { ComponentType, CSSProperties, ReactNode } from "react";
 import type { Config, CustomField, Field } from "@puckeditor/core";
-import { MARKETING_BLOCK_TYPES, SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
+import { MARKETING_BLOCK_TYPES, WEBSITE_BLOCK_VARS, WEBSITE_GENERIC_BLOCK_TYPES, SLOT_BLOCK_TYPES, SLOT_PROP, getBlockDefinition, normalizeLengthValue, renderBlockTree, type BlockType, type RenderContext } from "@bs/blocks";
 import { mediaField, videoMediaField } from "./MediaField.tsx";
 import { galleryImagesField } from "./GalleryImagesField.tsx";
 import { iconField } from "./IconField.tsx";
@@ -1125,6 +1125,18 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   MkDocHeader: { label: "Page header", category: "website", fields: { eyebrow: text("Small label"), title: text("Title"), intro: area("Introduction") } },
   MkDocSection: { label: "Text section", category: "website", fields: { heading: text("Heading"), body: area("Text (**bold**, [link](/path), - lists)"), checks: linesField("Tick list (one per line)", 20) as Field, after: area("Text after the list") } },
   MkValues: { label: "Three points", category: "website", fields: { heading: text("Heading"), items: { type: "array", label: "Points", getItemSummary: (i: { text?: string }) => i.text || "Point", arrayFields: { icon: iconField("Icon") as Field, text: text("Text") }, defaultItemProps: { icon: "check", text: "A short point." } } as Field } },
+  MkHeader: { label: "Header", category: "website", fields: { brand: text("Brand name"), menuHandle: menuField("Navigation menu") as Field, loginLabel: text("Log in label"), loginHref: link("Log in link"), ctaLabel: text("Button label"), ctaHref: link("Button link"), showThemeToggle: radio("Light and dark switch") } },
+  MkFooter: {
+    label: "Footer",
+    category: "website",
+    fields: {
+      brand: text("Brand name"),
+      about: area("About text"),
+      contact: area("Address and contacts"),
+      columns: { type: "array", label: "Link columns", getItemSummary: (c: { title?: string }) => c.title || "Column", arrayFields: { title: text("Heading"), links: { type: "array", label: "Links", getItemSummary: (l: { label?: string }) => l.label || "Link", arrayFields: { label: text("Text"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field,
+      legal: area("Legal line ({year} becomes the year)"),
+    },
+  },
   MkCompany: { label: "Company details", category: "website", fields: { heading: text("Heading"), after: area("Text after the details") } },
 };
 
@@ -1216,7 +1228,7 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
 }
 
 /** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */
-export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom" | "marketing";
+export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom" | "marketing" | "marketingHeader" | "marketingFooter";
 
 const ONLY: Record<"header" | "footer", BlockType[]> = {
   header: ["SiteHeader", "Banner"],
@@ -1233,9 +1245,13 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
 ];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
-  // The website and the stores never share blocks: each is drawn by its own stylesheet (ADR-042).
-  if (MARKETING_BLOCK_TYPES.has(type) !== (kind === "marketing")) return false;
-  if (kind === "marketing") return true;
+  // The website and the stores never share the website sections (ADR-042). A website page also takes the generic
+  // layout and basic widgets of the store builder; its header page holds the header and the announcement bar, its
+  // footer page the footer.
+  if (kind === "marketingHeader") return type === "MkHeader" || type === "Banner";
+  if (kind === "marketingFooter") return type === "MkFooter";
+  if (kind === "marketing") return (MARKETING_BLOCK_TYPES.has(type) && type !== "MkHeader" && type !== "MkFooter") || WEBSITE_GENERIC_BLOCK_TYPES.has(type);
+  if (MARKETING_BLOCK_TYPES.has(type)) return false;
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
   if (CHROME.includes(type)) return false;
   if (type === "ProductDetail" || type === "ProductCustomField" || type === "ProductCoupons") return kind === "product";
@@ -1279,9 +1295,14 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
       // Page-level settings (SEO etc.) live on the page record, not in the block document.
       fields: {},
       // The canvas shows the store's own theme: same --bs-* variables the storefront sets.
-      render: ({ children }: { children: ReactNode }) => kind === "marketing" ? (
-        // The fonts are the web app's, so name plain ones here; the page's words and spacing still match.
-        <div className="mk" style={{ "--font-sans": "Inter", "--font-mono": "ui-monospace" } as CSSProperties}>{children}</div>
+      render: ({ children }: { children: ReactNode }) => kind === "marketing" || kind === "marketingHeader" || kind === "marketingFooter" ? (
+        // The fonts are the web app's, so name plain ones here; the page's words and spacing still match. The store
+        // theme variables the generic widgets read point at the website palette (WEBSITE_BLOCK_VARS).
+        <div className="mk" style={{ ...(WEBSITE_BLOCK_VARS as CSSProperties), "--font-sans": "Inter", "--font-mono": "ui-monospace" } as CSSProperties}>
+          <FrameBlocks part="header" />
+          {children}
+          <FrameBlocks part="footer" />
+        </div>
       ) : (
         <div className="bsb" style={{ ...(options.themeVars as CSSProperties), background: "var(--bs-bg, #fff)", minHeight: "100vh" }}>
           <FrameBlocks part="header" />

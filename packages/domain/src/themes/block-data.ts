@@ -714,7 +714,7 @@ export async function resolveBlockData(
     if (b.hidden) return;
     if (b.type === "ProductShowcase") showcaseBlocks.push(b);
     else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") collectionBlocks.push(b);
-    else if (b.type === "SiteHeader") headerBlocks.push(b);
+    else if (b.type === "SiteHeader" || b.type === "MkHeader") headerBlocks.push(b);
     else if (b.type === "SiteFooter") footerBlocks.push(b);
     else if (b.type === "BlogShowcase") blogBlocks.push(b);
     else if (b.type === "ReviewsMarquee") reviewBlocks.push(b);

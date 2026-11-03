@@ -9,7 +9,7 @@ import { formatMoney } from "@bs/contracts/money";
 import { postalCodeProblem, regionsFor, POSTAL_LABEL } from "@bs/domain/addresses";
 import { INDIAN_STATES } from "@/lib/india";
 import { loadGoogleScript } from "@/lib/google-identity.ts";
-import { HomeFooter } from "@/components/marketing/home/HomeFooter.tsx";
+import { BuiltInFooter } from "@/components/marketing/home/BuiltInFooter.tsx";
 import { HomeNav } from "@/components/marketing/home/HomeNav.tsx";
 import { HomeRoot } from "@/components/marketing/home/HomeRoot.tsx";
 
@@ -1059,7 +1059,7 @@ export default function SignupPage() {
           <SignupContent />
         </Suspense>
       </main>
-      <HomeFooter />
+      <BuiltInFooter />
     </HomeRoot>
   );
 }

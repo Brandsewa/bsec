@@ -386,3 +386,94 @@ export const logoSizeField = (label: string): CustomField<LogoSizeValue | undefi
   label,
   render: ({ value, onChange }) => <LogoSizeEditor value={value} onChange={onChange} />,
 });
+
+/* ------------------------------------------------------------------ */
+/* Website (ADR-042): the MkHeader and MkFooter blocks.                */
+/* ------------------------------------------------------------------ */
+
+function useMk(part: "header" | "footer") {
+  const edit = useFrameEdit();
+  if (!edit) return null;
+  const type = part === "header" ? "MkHeader" : "MkFooter";
+  const block = (part === "header" ? edit.frame.header : edit.frame.footer).find((b) => b.type === type);
+  return { block, props: (block?.props ?? {}) as Record<string, unknown>, set: (patch: Record<string, unknown>) => edit.patch(part, patch), self: edit.editing === part };
+}
+
+export function MkHeaderPanel() {
+  const h = useMk("header");
+  if (!h) return <></>;
+  if (h.self) return <Unavailable>You are editing the header itself. Click it on the page to change its settings, or open any other page to manage the header from here.</Unavailable>;
+  if (!h.block) return <Unavailable>The website has no header page yet. Pick Header in the page list at the top to create it.</Unavailable>;
+  const p = h.props;
+  return (
+    <div style={box}>
+      <Group title="Brand and menu" open>
+        <Field title="Brand name" hint="Shown next to the logo mark.">
+          <Text name="mk-header-brand" value={asStr(p["brand"], "BCOM")} max={40} onChange={(v) => h.set({ brand: v || "BCOM" })} />
+        </Field>
+        <Field title="Navigation menu" hint="Choose a menu made in Storefront > Navigation. The built-in links show while it is empty.">
+          <MenuSelect name="mk-header-menu" label="" value={asStr(p["menuHandle"]) || undefined} onChange={(v) => h.set({ menuHandle: v })} bare />
+        </Field>
+      </Group>
+      <Group title="Buttons" open>
+        <Field title="Log in label"><Text name="mk-header-login" value={asStr(p["loginLabel"], "Log in")} max={40} onChange={(v) => h.set({ loginLabel: v || "Log in" })} /></Field>
+        <Field title="Log in link"><Text name="mk-header-login-href" value={asStr(p["loginHref"], "https://admin.bcom.si")} max={300} onChange={(v) => h.set({ loginHref: v || "https://admin.bcom.si" })} /></Field>
+        <Field title="Main button label"><Text name="mk-header-cta" value={asStr(p["ctaLabel"], "Start free")} max={40} onChange={(v) => h.set({ ctaLabel: v || "Start free" })} /></Field>
+        <Field title="Main button link"><Text name="mk-header-cta-href" value={asStr(p["ctaHref"], "/signup")} max={300} onChange={(v) => h.set({ ctaHref: v || "/signup" })} /></Field>
+        <Toggle id="mk-h-theme" text="Light and dark switch" checked={asBool(p["showThemeToggle"], true)} onChange={(v) => h.set({ showThemeToggle: v })} />
+      </Group>
+    </div>
+  );
+}
+
+type MkLink = { label: string; href: string };
+type MkCol = { title: string; links: MkLink[] };
+
+export function MkFooterPanel() {
+  const f = useMk("footer");
+  if (!f) return <></>;
+  if (f.self) return <Unavailable>You are editing the footer itself. Click it on the page to change its settings, or open any other page to manage the footer from here.</Unavailable>;
+  if (!f.block) return <Unavailable>The website has no footer page yet. Pick Footer in the page list at the top to create it.</Unavailable>;
+  const p = f.props;
+  const columns = (Array.isArray(p["columns"]) ? (p["columns"] as MkCol[]) : []).slice(0, 4);
+  const setColumn = (i: number, patch: Partial<MkCol>) => f.set({ columns: columns.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  const setLink = (i: number, k: number, patch: Partial<MkLink>) => setColumn(i, { links: (columns[i]?.links ?? []).map((l, j) => (j === k ? { ...l, ...patch } : l)) });
+  return (
+    <div style={box}>
+      <Group title="Brand" open>
+        <Field title="Brand name"><Text name="mk-footer-brand" value={asStr(p["brand"], "BCOM")} max={40} onChange={(v) => f.set({ brand: v || "BCOM" })} /></Field>
+        <Field title="About text" hint="Bold with **text**, links with [text](https://...).">
+          <Text name="mk-footer-about" area value={asStr(p["about"])} max={400} onChange={(v) => f.set({ about: v })} />
+        </Field>
+        <Field title="Address and contacts">
+          <Text name="mk-footer-contact" area value={asStr(p["contact"])} max={400} onChange={(v) => f.set({ contact: v })} />
+        </Field>
+      </Group>
+      <Group title="Link columns (up to 4)" open>
+        {columns.map((c, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, border: "1px solid #e4e4e7", borderRadius: 8, padding: 10, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>Column {i + 1}</span>
+              <button type="button" onClick={() => f.set({ columns: columns.filter((_, j) => j !== i) })} style={{ border: 0, background: "none", color: "#b91c1c", fontSize: 11, cursor: "pointer" }}>Remove</button>
+            </div>
+            <Field title="Heading"><Text name={`mk-footer-col-${i}`} value={c.title} max={40} onChange={(v) => setColumn(i, { title: v || "Links" })} /></Field>
+            {c.links.map((l, k) => (
+              <div key={k} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 4, borderTop: "1px solid #f4f4f5", paddingTop: 6 }}>
+                <Text name={`mk-footer-link-${i}-${k}`} value={l.label} max={60} onChange={(v) => setLink(i, k, { label: v || "Link" })} />
+                <Text name={`mk-footer-href-${i}-${k}`} value={l.href} max={300} onChange={(v) => setLink(i, k, { href: v || "/" })} />
+                <button type="button" onClick={() => setColumn(i, { links: c.links.filter((_, j) => j !== k) })} style={{ justifySelf: "start", border: 0, background: "none", color: "#b91c1c", fontSize: 11, cursor: "pointer" }}>Remove link</button>
+              </div>
+            ))}
+            {c.links.length < 10 ? <button type="button" onClick={() => setColumn(i, { links: [...c.links, { label: "Link", href: "/" }] })} style={{ justifySelf: "start", border: "1px dashed #d4d4d8", background: "none", borderRadius: 7, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}>Add a link</button> : null}
+          </div>
+        ))}
+        {columns.length < 4 ? <button type="button" onClick={() => f.set({ columns: [...columns, { title: "Links", links: [{ label: "Link", href: "/" }] }] })} style={{ justifySelf: "start", border: "1px dashed #d4d4d8", background: "none", borderRadius: 7, padding: "4px 12px", fontSize: 11, cursor: "pointer" }}>Add a column</button> : null}
+      </Group>
+      <Group title="Legal line">
+        <Field title="Text" hint="{year} becomes the current year.">
+          <Text name="mk-footer-legal" area value={asStr(p["legal"])} max={600} onChange={(v) => f.set({ legal: v })} />
+        </Field>
+      </Group>
+    </div>
+  );
+}

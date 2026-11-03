@@ -103,7 +103,7 @@ async function MarketingCustomPage({ path }: { path: string[] }) {
   const built = await marketingPage(path);
   if (!built) notFound();
   if (!built.isCanonical) permanentRedirect(built.canonicalPath);
-  const content = marketingPageContent(built.page.document);
+  const content = marketingPageContent(built.page.document, built.renderData);
   if (!content) notFound();
   return <PageFrame>{content}</PageFrame>;
 }

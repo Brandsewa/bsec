@@ -1,5 +1,6 @@
+import { cache } from "react";
 import { connection } from "next/server";
-import { getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, type PlatformSiteStatus } from "@bs/domain";
+import { getPlatformSiteChrome, getPlatformSitePolicy, getPlatformSitePrivacy, getPlatformSiteStatus, type PlatformSiteChrome, type PlatformSiteStatus } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 /**
@@ -35,3 +36,9 @@ export async function sitePrivacy() {
     return null;
   }
 }
+
+/** The website's published header, announcement bar and footer; nulls keep the built-in ones. Read once per request. */
+export const siteChrome = cache(async (): Promise<PlatformSiteChrome> => {
+  await connection();
+  return getPlatformSiteChrome(server().rt._db.db);
+});

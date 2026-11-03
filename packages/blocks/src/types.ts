@@ -60,7 +60,10 @@ export type BlockType =
   | "MkDocHeader"
   | "MkDocSection"
   | "MkValues"
-  | "MkCompany";
+  | "MkCompany"
+  // The website's header and footer, edited as pages of their own (defaults are today's layout)
+  | "MkHeader"
+  | "MkFooter";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {

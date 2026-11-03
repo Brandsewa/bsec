@@ -27,12 +27,18 @@ function ThemeToggle() {
 
 export function HomeNav() {
   const [open, setOpen] = useState(false);
-  const links = useContext(SiteNavContext) ?? LINKS;
+  const nav = useContext(SiteNavContext);
+  const links = nav?.links ?? LINKS;
+  const h = nav?.header;
+  const brand = h?.brand ?? "BCOM";
+  const loginHref = h?.loginHref ?? "https://admin.bcom.si";
   return (
+    <>
+    {nav?.announcement}
     <header className="top">
       <div className="wrap top-in">
-        <Link className="logo" href="/" aria-label="BCOM home">
-          <i>B</i>BCOM
+        <Link className="logo" href="/" aria-label={`${brand} home`}>
+          <i>{brand.slice(0, 1)}</i>{brand}
         </Link>
         <nav className="links" aria-label="Main">
           {links.map(({ label, href }) => (
@@ -40,9 +46,9 @@ export function HomeNav() {
           ))}
         </nav>
         <div className="top-acts">
-          <ThemeToggle />
-          <a className="btn login" href="https://admin.bcom.si">Log in</a>
-          <Link className="btn pri" href="/signup">Start free</Link>
+          {h?.showThemeToggle === false ? null : <ThemeToggle />}
+          <a className="btn login" href={loginHref}>{h?.loginLabel ?? "Log in"}</a>
+          <Link className="btn pri" href={h?.ctaHref ?? "/signup"}>{h?.ctaLabel ?? "Start free"}</Link>
           <button type="button" className="iconbtn menu" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} aria-controls="mk-menu" onClick={() => setOpen((o) => !o)}>
             {open ? <CloseIcon /> : <MenuIcon />}
           </button>
@@ -53,9 +59,10 @@ export function HomeNav() {
           {links.map(({ label, href }) => (
             <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>
           ))}
-          <a href="https://admin.bcom.si">Log in</a>
+          <a href={loginHref}>{h?.loginLabel ?? "Log in"}</a>
         </div>
       )}
     </header>
+    </>
   );
 }
