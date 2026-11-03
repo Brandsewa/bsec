@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/storefront-home-pricing` (not merged yet)
+- **Branch:** merged in #209, eb1d9e7
 - **Area:** blocks, block-editor, domain, web
 - **Type:** feature
 - **Supersedes:** none

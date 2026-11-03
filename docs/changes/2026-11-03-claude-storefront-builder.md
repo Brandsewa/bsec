@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/storefront-builder` (not merged yet)
+- **Branch:** merged in #208, 38b1ecf
 - **Area:** blocks, block-editor, contracts, domain, platform, superadmin, web
 - **Type:** feature
 - **Supersedes:** none

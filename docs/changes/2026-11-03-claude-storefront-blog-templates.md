@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/storefront-blog-templates` (not merged yet)
+- **Branch:** merged in #210, 66fad34
 - **Area:** blocks, block-editor, contracts, domain, platform, superadmin
 - **Type:** feature
 - **Supersedes:** none
