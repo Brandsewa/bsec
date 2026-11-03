@@ -61,7 +61,15 @@ export const storeContract = {
 };
 
 // The website has no theme templates to create.
-const { ensureTemplate: _ensureTemplate, ...sitePagesContract } = adminContract.pages;
+const { ensureTemplate: _ensureTemplate, ...sitePagesBase } = adminContract.pages;
+const sitePagesContract = {
+  ...sitePagesBase,
+  // The website's header and footer are pages of their own; this creates the missing one from today's layout.
+  ensureChrome: oc
+    .route({ method: "POST", path: "/marketing/pages/chrome/{key}" })
+    .input(z.object({ key: z.enum(["header", "footer"]) }))
+    .output(z.object({ id: z.string().uuid(), created: z.boolean() })),
+};
 
 /** Platform API, served only by apps/platform (BYPASSRLS credentials). */
 export const platformContract = {

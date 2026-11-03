@@ -32,7 +32,7 @@ const OFFER = [
 export default async function AboutPage() {
   // The page built in Super Admin when one is published; otherwise, or if it cannot be read, this built-in version (ADR-011).
   const built = await marketingPage(["about"]);
-  const content = built ? marketingPageContent(built.page.document) : null;
+  const content = built ? marketingPageContent(built.page.document, built.renderData) : null;
   if (content) return <PageFrame>{content}</PageFrame>;
   return (
     <PageFrame>

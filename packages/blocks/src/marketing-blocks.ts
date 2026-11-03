@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockInstance, BlockType } from "./types.ts";
-import { iconNameSchema } from "./common.ts";
+import { hrefSchema, iconNameSchema } from "./common.ts";
+import { resolveThemeTokens } from "./theme-vars.ts";
 import { childrenOf } from "./tree.ts";
 import * as V from "./views-marketing.tsx";
 
@@ -88,6 +89,111 @@ export type MkValuesProps = z.infer<typeof MkValuesSchema>;
 export const MkCompanySchema = z.object({ heading: z.string().max(200).default(""), after: z.string().max(4000).default("") });
 export type MkCompanyProps = z.infer<typeof MkCompanySchema>;
 
+
+/* ------------------------------------------------------------------ */
+/* Header and footer of the website. Defaults are today's layout.      */
+/* ------------------------------------------------------------------ */
+
+const footerLink = z.object({ label: z.string().min(1).max(60), href: hrefSchema });
+const footerColumn = z.object({ title: z.string().min(1).max(40), links: z.array(footerLink).max(10) });
+
+export const MkHeaderSchema = z.object({
+  brand: z.string().min(1).max(40).default("BCOM"),
+  /** Links come from this menu (Storefront > Navigation); the built-in links show while it has none. */
+  menuHandle: z.string().max(80).default("header"),
+  loginLabel: z.string().max(40).default("Log in"),
+  loginHref: hrefSchema.default("https://admin.bcom.si"),
+  ctaLabel: z.string().max(40).default("Start free"),
+  ctaHref: hrefSchema.default("/signup"),
+  showThemeToggle: z.boolean().default(true),
+});
+export type MkHeaderProps = z.infer<typeof MkHeaderSchema>;
+
+export const MK_HEADER_LINKS: Array<{ label: string; href: string }> = [
+  { label: "Features", href: "/#ready" },
+  { label: "AI shopping", href: "/#ai" },
+  { label: "Pricing", href: "/#pricing" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
+];
+
+export const MK_FOOTER_COLUMNS: Array<{ title: string; links: Array<{ label: string; href: string }> }> = [
+  {
+    title: "Product",
+    links: [
+      { label: "Features", href: "/#ready" },
+      { label: "AI shopping", href: "/#ai" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Start free trial", href: "/signup" },
+      { label: "Log in", href: "https://admin.bcom.si" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About us", href: "/about" },
+      { label: "Contact us", href: "/contact" },
+      { label: "Brand Sewa", href: "https://brandsewa.com" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Terms of service", href: "/terms" },
+      { label: "Privacy policy", href: "/privacy" },
+      { label: "Refund and cancellation", href: "/refund-policy" },
+      { label: "Delivery policy", href: "/shipping-policy" },
+    ],
+  },
+];
+
+export const MkFooterSchema = z.object({
+  brand: z.string().min(1).max(40).default("BCOM"),
+  /** Markdown: bold, italic and links. */
+  about: z.string().max(400).default("BCOM (bcom.si) is a product of [Brand Sewa Digital Private Limited](https://brandsewa.com)."),
+  contact: z.string().max(400).default("Hill Cart Road, Darjeeling, West Bengal 734101, India\n\n[info@bcom.si](mailto:info@bcom.si) · [support@bcom.si](mailto:support@bcom.si)"),
+  columns: z.array(footerColumn).max(4).default(MK_FOOTER_COLUMNS),
+  /** `{year}` becomes the current year. */
+  legal: z
+    .string()
+    .max(600)
+    .default("© {year} Brand Sewa Digital Private Limited. CIN U74999WB2021PTC248925 · GSTIN 19AAKCB2303E1Z2. Chats, brands, orders and figures in the previews on this site are illustrations."),
+});
+export type MkFooterProps = z.infer<typeof MkFooterSchema>;
+
+/** Widgets of the store builder that also work on website pages: layout and basic elements, nothing that needs a store. */
+export const WEBSITE_GENERIC_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  "Section", "Container", "Block", "Heading", "Text", "Image", "Video", "Button", "Gallery", "ImageBanner", "FaqSection", "MultiCard", "TrustStrip",
+]);
+const WEBSITE_CHROME_TYPES: ReadonlySet<string> = new Set(["MkHeader", "MkFooter"]);
+
+const only = (blocks: BlockInstance[], ok: (type: string) => boolean) => everyBlock(blocks).every((b) => ok(b.type));
+/** What a website page may hold: website sections and the generic widgets. */
+export const isWebsitePageBlockSet = (blocks: BlockInstance[]): boolean =>
+  only(blocks, (t) => (MARKETING_BLOCK_TYPES.has(t) && !WEBSITE_CHROME_TYPES.has(t)) || WEBSITE_GENERIC_BLOCK_TYPES.has(t));
+/** The header page holds the header and the announcement bar; the footer page holds the footer. */
+export const isWebsiteHeaderBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkHeader" || t === "Banner");
+export const isWebsiteFooterBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkFooter");
+export const isWebsiteBlockSet = (blocks: BlockInstance[]): boolean =>
+  isWebsitePageBlockSet(blocks) || isWebsiteHeaderBlockSet(blocks) || isWebsiteFooterBlockSet(blocks);
+
+/**
+ * The store theme variables the generic widgets read (`--bs-*`), with the colours pointing at the website's own palette
+ * so the widgets follow light and dark. Set on the `.mk` root, where those palette variables are defined.
+ */
+export const WEBSITE_BLOCK_VARS: Record<string, string> = {
+  ...(resolveThemeTokens(null, null) as Record<string, string>),
+  "--bs-primary": "var(--pri)", "--bs-primary-fg": "var(--pri-ink)", "--bs-accent": "var(--ink)", "--bs-accent1": "var(--ink)",
+  "--bs-surface": "var(--surface)", "--bs-site-bg": "var(--bg)", "--bs-bg": "var(--bg)", "--bs-text": "var(--mut)",
+  "--bs-light-heading": "var(--ink)", "--bs-light-text": "var(--mut)", "--bs-light-bg": "var(--soft)",
+  "--bs-light-btn-bg": "var(--pri)", "--bs-light-btn-fg": "var(--pri-ink)",
+  "--bs-muted": "var(--dim)", "--bs-border": "var(--line)",
+  "--bs-btn-bg": "var(--pri)", "--bs-btn-fg": "var(--pri-ink)", "--bs-btn-bd": "var(--pri)",
+  "--bs-btn-light-bg": "var(--surface)", "--bs-btn-light-fg": "var(--ink)", "--bs-btn-light-bd": "var(--line2)",
+  "--bs-radius": "8px", "--bs-btn-radius": "6px", "--bs-heading-weight": "600",
+  "--bs-font-heading": "var(--sans)", "--bs-font-body": "var(--sans)",
+};
+
 const block = <T,>(type: BlockType, schema: z.ZodType<T>, defaultProps: T, render: BlockDefinition<T>["render"]): BlockDefinition<T> => ({
   type,
   version: 1,
@@ -108,6 +214,8 @@ export const MARKETING_BLOCK_DEFINITIONS = {
   MkDocHeader: block("MkDocHeader", MkDocHeaderSchema, { eyebrow: "", title: "Page title", intro: "" }, V.MkDocHeaderView),
   MkDocSection: block("MkDocSection", MkDocSectionSchema, { heading: "Section heading", body: "Write this section here.", checks: [], after: "" }, V.MkDocSectionView),
   MkValues: block("MkValues", MkValuesSchema, { heading: "", items: [{ icon: "check", text: "A short point." }] }, V.MkValuesView),
+  MkHeader: block("MkHeader", MkHeaderSchema, MkHeaderSchema.parse({}), V.MkHeaderView),
+  MkFooter: block("MkFooter", MkFooterSchema, MkFooterSchema.parse({}), V.MkFooterView),
   MkCompany: block("MkCompany", MkCompanySchema, { heading: "The company", after: "" }, V.MkCompanyView),
 } satisfies Partial<Record<BlockType, BlockDefinition<never> | BlockDefinition<any>>>; // eslint-disable-line @typescript-eslint/no-explicit-any
 

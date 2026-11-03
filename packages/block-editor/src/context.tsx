@@ -57,6 +57,8 @@ export interface FrameEdit {
   patch: (part: "header" | "footer", patch: Record<string, unknown>) => void;
   /** Replaces the whole block list of the header or footer (adding or hiding a block such as the announcement bar). */
   setBlocks: (part: "header" | "footer", blocks: BlockInstance[]) => void;
+  /** Message a new announcement bar starts with (the store default mentions shipping, which suits a store). */
+  announcementDefault?: string | undefined;
   /** The page being edited is itself the header or the footer (its settings are edited on the canvas). */
   editing: "header" | "footer" | null;
 }

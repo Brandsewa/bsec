@@ -12,8 +12,8 @@ import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 import { extractGlobalColors } from "./ColorPickerSwatch.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
-import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
-import { GeneralPanel } from "./GeneralPanel.tsx";
+import { FooterPanel, HeaderPanel, MkFooterPanel, MkHeaderPanel } from "./HeaderFooterPanels.tsx";
+import { GeneralPanel, WebsiteThemePanel } from "./GeneralPanel.tsx";
 import { ROOT_ZONE, wrapDroppedWidget } from "./wrap-on-drop.ts";
 
 export interface BlockEditorProps {
@@ -177,8 +177,8 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const [renderData, setRenderData] = useState<EditorRenderData>({ data: {}, media: {} });
   const frame = useMemo(
     () => ({
-      header: pageKind === "header" ? [] : (frameFromProps?.header ?? []),
-      footer: pageKind === "footer" ? [] : (frameFromProps?.footer ?? []),
+      header: pageKind === "header" || pageKind === "marketingHeader" ? [] : (frameFromProps?.header ?? []),
+      footer: pageKind === "footer" || pageKind === "marketingFooter" ? [] : (frameFromProps?.footer ?? []),
     }),
     [frameFromProps, pageKind],
   );
@@ -194,9 +194,19 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   // The theme tab is a Puck sidebar plugin in the same rail as Blocks and Outline, listed first (on top).
   const themeEnabled = Boolean(themeTokens && onThemeTokensChange);
   const frameEditable = Boolean(onFrameChange);
+  const website = pageKind === "marketing" || pageKind === "marketingHeader" || pageKind === "marketingFooter";
   const plugins = useMemo(
     () =>
-      themeEnabled || frameEditable
+      website && frameEditable
+        ? [
+            // The website has one fixed design: the Theme tab holds the announcement bar, then its header and footer.
+            { name: "theme-settings", label: "Theme", icon: <ThemeIcon />, render: WebsiteThemePanel },
+            { name: "header-settings", label: "Header", icon: <HeaderIcon />, render: MkHeaderPanel },
+            { name: "footer-settings", label: "Footer", icon: <FooterIcon />, render: MkFooterPanel },
+            blocksPlugin(),
+            outlinePlugin(),
+          ]
+        : themeEnabled || frameEditable
         ? [
             ...(themeEnabled ? [{ name: "theme-settings", label: "Theme", icon: <ThemeIcon />, render: ThemePanelFromContext }] : []),
             ...(frameEditable
@@ -210,7 +220,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             outlinePlugin(),
           ]
         : undefined,
-    [themeEnabled, frameEditable],
+    [themeEnabled, frameEditable, website],
   );
   // Header and Footer tabs: a change goes to the host as the whole new block list for that part.
   const frameEdit = useMemo(
@@ -218,9 +228,10 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       onFrameChange && frameFromProps
         ? {
             frame,
-            editing: pageKind === "header" || pageKind === "footer" ? pageKind : null,
+            editing: pageKind === "header" || pageKind === "marketingHeader" ? ("header" as const) : pageKind === "footer" || pageKind === "marketingFooter" ? ("footer" as const) : null,
+            ...(website ? { announcementDefault: "14-day free trial on every plan. No card needed to start." } : {}),
             patch: (part: "header" | "footer", patch: Record<string, unknown>) => {
-              const type = part === "header" ? "SiteHeader" : "SiteFooter";
+              const type = website ? (part === "header" ? "MkHeader" : "MkFooter") : part === "header" ? "SiteHeader" : "SiteFooter";
               const list = frameFromProps[part];
               const next = list.map((b) => (b.type === type ? { ...b, props: { ...b.props, ...patch } } : b));
               onFrameChange(part, next);
@@ -228,7 +239,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             setBlocks: (part: "header" | "footer", blocks: BlockInstance[]) => onFrameChange(part, blocks),
           }
         : null,
-    [onFrameChange, frameFromProps, frame, pageKind],
+    [onFrameChange, frameFromProps, frame, pageKind, website],
   );
   const themePanel = useMemo<ThemePanelState | null>(
     () => (themeTokens && onThemeTokensChange ? { tokens: themeTokens, onChange: onThemeTokensChange, disabled: themeSettingsDisabled, note: themeSettingsNote } : null),

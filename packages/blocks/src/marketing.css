@@ -427,3 +427,12 @@
 .mk .hero-in.solo{grid-template-columns:minmax(0,760px)}
 .mk .mk-sample{display:flex;align-items:center;justify-content:space-between;max-width:440px;height:48px;margin-top:24px;padding:0 6px 0 14px;border:1px solid var(--line2);border-radius:6px;background:var(--surface);color:var(--dim);font-size:15px}
 .mk .mk-sample b{padding:8px 12px;border-radius:6px;background:var(--pri);color:var(--pri-ink);font-size:13px;font-weight:600}
+
+/* Store widgets on a website page: the site-wide link colour above would paint their buttons and links like body text. */
+.mk a.bsb-btn-primary{color:var(--bs-btn-fg,var(--pf))}
+.mk a.bsb-btn-secondary{color:var(--bs-btn-light-fg,var(--t))}
+.mk a.bsb-btn-outline,.mk a.bsb-link{color:var(--p)}
+.mk .bsb-tone-primary a.bsb-btn-primary{color:var(--p)}
+.mk .bsb-tone-primary a.bsb-btn-outline{color:var(--pf)}
+.mk .bsb-on-media a.bsb-btn-primary{color:#0f172a}
+.mk .bsb-on-media a.bsb-btn-outline{color:#fff}

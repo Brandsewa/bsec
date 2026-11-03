@@ -6,7 +6,7 @@ import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getB
 import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
-import { siteStatus } from "@/server/site-settings.ts";
+import { siteChrome, siteStatus } from "@/server/site-settings.ts";
 import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
@@ -25,6 +25,8 @@ import {
 } from "@/components/storefront/StoreStatusScreens.tsx";
 import { computeThemeTokens } from "@/components/storefront/theme-tokens.ts";
 import { googleFontsHref, themeFontFallbackCss } from "@bs/blocks/theme-vars";
+import { WEBSITE_BLOCK_VARS, renderBlockTree } from "@bs/blocks";
+import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
@@ -36,6 +38,7 @@ import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
 const themeBootScript = makeThemeBootScript(THEMED_PATH_SOURCE);
+const websiteBlockCss = `.mk{${Object.entries(WEBSITE_BLOCK_VARS).map(([k, v]) => `${k}:${v}`).join(";")}}`;
 /** The platform's own site follows the visitor's theme on every path; on a store host only the guarded paths do. */
 const marketingThemeBootScript = makeThemeBootScript();
 
@@ -96,15 +99,21 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
   if (isMarketing) {
     // A failed read keeps the built-in links; the marketing site must not depend on this query.
-    const navLinks = await platformSiteHeaderLinks(server().rt._db.db).catch(() => null);
+    const chrome = await siteChrome().catch(() => ({ header: null, announcement: null, footer: null }));
+    const navLinks = await platformSiteHeaderLinks(server().rt._db.db, chrome.header?.menuHandle ?? "header").catch(() => null);
+    const announcement = chrome.announcement
+      ? renderBlockTree([{ id: "site-announcement", type: "Banner", version: 1, props: chrome.announcement }], { renderBanner: ({ children }) => <BannerClient>{children}</BannerClient> })
+      : null;
     return (
       <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`}>
         <head>
           <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
+          {/* The store widgets read --bs-*; on the website they follow its own palette (light and dark). */}
+          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss }} />
         </head>
         <body className="min-h-dvh antialiased">
           <WebThemeProvider always>
-            <SiteNavProvider links={navLinks}>{children}</SiteNavProvider>
+            <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement}>{children}</SiteNavProvider>
           </WebThemeProvider>
         </body>
       </html>

@@ -1,5 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
+import { MK_HEADER_LINKS } from "./marketing-blocks.ts";
 import type { ReactNode } from "react";
 import type { BlockRenderArgs } from "./types.ts";
 import { parseMarkdownToHtml } from "./markdown.ts";
@@ -10,6 +11,8 @@ import type {
   MkDocHeaderProps,
   MkDocSectionProps,
   MkFaqProps,
+  MkFooterProps,
+  MkHeaderProps,
   MkFeaturesProps,
   MkFinalCallProps,
   MkHeroProps,
@@ -227,5 +230,54 @@ export function MkCompanyView({ props, ctx }: BlockRenderArgs<MkCompanyProps>) {
         <Prose text={props.after} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Static picture of the header for the editor canvas. On the website the interactive header (mobile menu, theme switch)
+ * is drawn from the same props.
+ */
+export function MkHeaderView({ props, ctx }: BlockRenderArgs<MkHeaderProps>) {
+  const menu = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const links = menu && menu.kind === "menu" && menu.items.length > 0 ? menu.items.map((i) => ({ label: i.label, href: i.href })) : MK_HEADER_LINKS;
+  return (
+    <header className="top">
+      <div className="wrap top-in">
+        <span className="logo"><i>{props.brand.slice(0, 1)}</i>{props.brand}</span>
+        <nav className="links" aria-label="Main">
+          {links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
+        </nav>
+        <div className="top-acts">
+          {props.showThemeToggle ? <span className="iconbtn" aria-hidden="true"><SvgIcon name="moon" px={18} /></span> : null}
+          <a className="btn login" href={props.loginHref}>{props.loginLabel}</a>
+          <a className="btn pri" href={props.ctaHref}>{props.ctaLabel}</a>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/** The footer, on the website and in the editor. */
+export function MkFooterView({ props }: BlockRenderArgs<MkFooterProps>) {
+  const legal = props.legal.replace("{year}", String(new Date().getFullYear()));
+  return (
+    <footer className="foot">
+      <div className="wrap">
+        <div className="foot-grid">
+          <div className="foot-brand">
+            <span className="logo"><i>{props.brand.slice(0, 1)}</i>{props.brand}</span>
+            <Prose text={props.about} />
+            <address><Prose text={props.contact} /></address>
+          </div>
+          {props.columns.map((col) => (
+            <nav key={col.title} aria-label={col.title}>
+              <h4>{col.title}</h4>
+              {col.links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
+            </nav>
+          ))}
+        </div>
+        <p className="foot-legal">{legal}</p>
+      </div>
+    </footer>
   );
 }

@@ -1,12 +1,12 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { THEME_PAGE_TYPES } from "@bs/blocks";
+import { BannerSchema, type BannerProps, MkFooterSchema, MkHeaderSchema, THEME_PAGE_TYPES, type BlockInstance, type MkFooterProps, type MkHeaderProps } from "@bs/blocks";
 import { getStorefrontPageByPath } from "../content-services.ts";
 import { getPublishedPolicy } from "../policies/service.ts";
 import { getPrivacySettings } from "../privacy/service.ts";
 import type { Runtime } from "../runtime.ts";
 import { listBlogForSitemap } from "../blog/queries.ts";
-import { loadMenusData } from "../themes/block-data.ts";
+import { loadMenusData, resolvePageRenderData } from "../themes/block-data.ts";
 
 /**
  * bcom.si's own content (pages, blog, menus) lives under one internal `platform_site` tenant, so the existing content
@@ -46,10 +46,10 @@ export async function platformSiteBlogSitemap(db: Db, origin: string) {
 }
 
 /** Links of the website's `header` menu, or null when it has none: the site then keeps its built-in links. */
-export async function platformSiteHeaderLinks(db: Db): Promise<Array<{ label: string; href: string }> | null> {
+export async function platformSiteHeaderLinks(db: Db, menuHandle = "header"): Promise<Array<{ label: string; href: string }> | null> {
   const siteId = await getPlatformSiteId(db);
   if (!siteId) return null;
-  const header = { id: "site-header", type: "SiteHeader", version: 1, props: { menuHandle: "header" } };
+  const header = { id: "site-header", type: "SiteHeader", version: 1, props: { menuHandle } };
   const { headerData } = await withTenant(db, siteId, (tx) => loadMenusData(tx as never, siteId, [header] as never, []));
   const links = (headerData[header.id] ?? []).flatMap((item) => (item.url ? [{ label: item.label, href: item.url }] : []));
   return links.length > 0 ? links : null;
@@ -62,7 +62,12 @@ export async function platformSiteHeaderLinks(db: Db): Promise<Array<{ label: st
 export async function getPlatformSitePage(rt: Runtime, path: string[]) {
   const siteId = await getPlatformSiteId(rt._db.db);
   if (!siteId) return null;
-  return getStorefrontPageByPath(rt, { tenantId: siteId, storeStatus: "live", actor: { type: "system" }, roles: [], permissions: [], requestId: crypto.randomUUID() }, path);
+  const found = await getStorefrontPageByPath(rt, { tenantId: siteId, storeStatus: "live", actor: { type: "system" }, roles: [], permissions: [], requestId: crypto.randomUUID() }, path);
+  if (!found) return null;
+  // Images and menus its widgets show, resolved on the website record. A failed lookup leaves the widgets without them.
+  const blocks = ((found.page.document as { blocks?: BlockInstance[] } | null)?.blocks ?? []) as BlockInstance[];
+  const renderData = await getPlatformSiteRenderData(rt, blocks).catch(() => ({ data: {}, media: {}, mediaMeta: {} }));
+  return { ...found, renderData };
 }
 
 /** The website's published pages for the marketing sitemap. `/about` has its own URL, so it is listed once by the caller. */
@@ -132,4 +137,55 @@ export async function getPlatformSitePrivacy(rt: Runtime): Promise<{ email: stri
   } catch {
     return null;
   }
+}
+
+export interface PlatformSiteChrome {
+  header: MkHeaderProps | null;
+  /** The announcement bar above the header, when it is switched on. */
+  announcement: BannerProps | null;
+  footer: MkFooterProps | null;
+}
+
+/**
+ * The website's published header, announcement bar and footer (Storefront > Pages > Header, Footer), or nulls so the
+ * built-in ones show. Anything unreadable or invalid reads as "not set".
+ */
+export async function getPlatformSiteChrome(db: Db): Promise<PlatformSiteChrome> {
+  const none: PlatformSiteChrome = { header: null, announcement: null, footer: null };
+  try {
+    const siteId = await getPlatformSiteId(db);
+    if (!siteId) return none;
+    const docs = await withTenant(db, siteId, async (tx) => {
+      const pages = await tx.select({ type: schema.pages.type, versionId: schema.pages.publishedVersionId }).from(schema.pages).where(and(eq(schema.pages.status, "published"), inArray(schema.pages.type, ["header", "footer"])));
+      const ids = pages.flatMap((p) => (p.versionId ? [p.versionId] : []));
+      if (ids.length === 0) return [] as Array<{ type: string; blocks: BlockInstance[] }>;
+      const versions = await tx.select({ id: schema.pageVersions.id, document: schema.pageVersions.document }).from(schema.pageVersions).where(inArray(schema.pageVersions.id, ids));
+      return pages.flatMap((p) => {
+        const v = versions.find((x) => x.id === p.versionId);
+        return v ? [{ type: p.type ?? "", blocks: ((v.document as { blocks?: BlockInstance[] } | null)?.blocks ?? []) }] : [];
+      });
+    });
+    const headerBlocks = docs.find((d) => d.type === "header")?.blocks ?? [];
+    const footerBlocks = docs.find((d) => d.type === "footer")?.blocks ?? [];
+    const header = headerBlocks.find((b) => b.type === "MkHeader" && !b.hidden);
+    const banner = headerBlocks.find((b) => b.type === "Banner" && !b.hidden);
+    const footer = footerBlocks.find((b) => b.type === "MkFooter" && !b.hidden);
+    const bannerProps = banner ? BannerSchema.safeParse(banner.props) : null;
+    const headerProps = header ? MkHeaderSchema.safeParse(header.props) : null;
+    const footerProps = footer ? MkFooterSchema.safeParse(footer.props) : null;
+    return {
+      header: headerProps?.success ? headerProps.data : null,
+      announcement: bannerProps?.success ? bannerProps.data : null,
+      footer: footerProps?.success ? footerProps.data : null,
+    };
+  } catch {
+    return none;
+  }
+}
+
+/** Images and menus the blocks of a website page need, resolved on the website record. */
+export async function getPlatformSiteRenderData(rt: Runtime, blocks: BlockInstance[]) {
+  const siteId = await getPlatformSiteId(rt._db.db);
+  if (!siteId) return { data: {}, media: {}, mediaMeta: {} };
+  return resolvePageRenderData(rt, { tenantId: siteId, storeStatus: "live", actor: { type: "system" as const }, roles: [], permissions: ["content.write"], requestId: crypto.randomUUID() } as never, blocks);
 }
