@@ -3,7 +3,6 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `perf/storefront-speed-2` · page speed round 2: footer layout shift (skeleton height), hero slider video on phones, responsive section backgrounds; change record `docs/changes/2026-11-02-claude-storefront-page-speed-2.md` · 2026-11-02
 - claude · `fix/billing-invoice-currency` · platform invoices carry their currency (USD, no GST for stores outside India), invoice PDF and lists follow it, Activate screen shows a payment-successful notice before opening the store; change record `docs/changes/2026-11-02-claude-billing-invoice-currency.md` · 2026-11-02
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29
 - claude · `fix/header-bg-dropdown-followups` · follow-ups to the 2026-10-29 batch: header background regression, dropdown spacing and close on click, TOC closed by default, image option on Floating reviews; change record `docs/changes/2026-10-29-claude-header-dropdown-followups.md` · 2026-10-29
