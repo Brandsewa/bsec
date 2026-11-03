@@ -25,6 +25,8 @@ Slice S2 of Phase 5 (`docs/MARKETING-SITE-CMS-PLAN.md` section 5a). Super Admin 
 ## Verification
 See the session's gate output. Real database (`apps/platform/test/marketing.int.test.ts`): the website reads live by default and the first read creates its row; coming soon with a headline, maintenance (owner-only for stores, allowed here), hide from search, a published policy, and the privacy contact all save and read back on the website record; a store's policy is untouched. Driven in headless Chromium against local Platform, Super Admin and web: the four sections load; Coming soon shows the holding block on `/`, `/about`, `/blog`, `/terms` and leaves `/signup` alone; robots says `Disallow: /`; hide from search gives `noindex`; back to live restores everything; a published Terms policy shows on `/terms` with its date; the privacy email shows on `/contact`.
 
+CI caught one defect the local gate missed: the legal pages are prerendered at build time, so the policy and privacy reads ran during the build (no database there, so it failed) and would have been frozen into the pages. The readers in `apps/web/src/server/site-settings.ts` now wait for a real request (`connection()`) and fall back to "as before" on any failure. The local build had passed because PowerShell `$env:X = ""` deletes the variable, so the local database was used; a blank value must be set from Bash (`DATABASE_URL_RW= pnpm --filter @bs/web build`), which now passes.
+
 NOT verified: on the live site (nothing deployed yet), the maintenance window scheduling and transition log on the website, the policy editor typed by hand (the draft and publish went through the API), the holding page on a phone, and `Retry-After` (not sent).
 
 ## Docs updated
