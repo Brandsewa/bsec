@@ -78,7 +78,7 @@ export async function platformSitePagesSitemap(db: Db, origin: string) {
     tx.select({ slug: schema.pages.slug, type: schema.pages.type, parentId: schema.pages.parentId, updatedAt: schema.pages.updatedAt }).from(schema.pages).where(eq(schema.pages.status, "published")),
   );
   return rows
-    .filter((r) => !r.parentId && r.slug !== "about" && !THEME_PAGE_TYPES.has(r.type ?? ""))
+    .filter((r) => !r.parentId && r.slug !== "about" && r.slug !== "bcom-home" && !THEME_PAGE_TYPES.has(r.type ?? ""))
     .map((r) => ({ loc: `${origin}/pages/${r.slug}`, lastmod: r.updatedAt.toISOString(), changefreq: "monthly" as const, priority: 0.5 }));
 }
 

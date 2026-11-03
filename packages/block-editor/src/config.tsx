@@ -1137,6 +1137,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       legal: area("Legal line ({year} becomes the year)"),
     },
   },
+  MkPricing: { label: "Pricing table", category: "website", fields: { heading: text("Heading"), description: area("Description") } },
   MkCompany: { label: "Company details", category: "website", fields: { heading: text("Heading"), after: area("Text after the details") } },
 };
 

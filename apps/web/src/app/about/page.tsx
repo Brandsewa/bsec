@@ -5,6 +5,7 @@ import { CompanyBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { SITE } from "@/components/marketing/landing/site-info.ts";
 import { CheckIcon, GlobeIcon, LockIcon, SparkIcon } from "@/components/marketing/home/icons.tsx";
 import { FinalCta } from "@/components/marketing/home/sections.tsx";
+import { loadLandingPlans } from "@/server/landing-plans.ts";
 import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
 import { marketingPage, marketingPageMeta } from "@/server/marketing-page.ts";
 
@@ -32,7 +33,7 @@ const OFFER = [
 export default async function AboutPage() {
   // The page built in Super Admin when one is published; otherwise, or if it cannot be read, this built-in version (ADR-011).
   const built = await marketingPage(["about"]);
-  const content = built ? marketingPageContent(built.page.document, built.renderData) : null;
+  const content = built ? marketingPageContent(built.page.document, built.renderData, await loadLandingPlans()) : null;
   if (content) return <PageFrame>{content}</PageFrame>;
   return (
     <PageFrame>

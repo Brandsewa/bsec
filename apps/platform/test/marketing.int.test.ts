@@ -186,6 +186,17 @@ describe("Marketing content", () => {
     expect(String(await codeOf(run("marketing.pages.saveDraft", { id: footer.id, blocks: ok }, ctx(admin))))).not.toBe("OK");
   });
 
+  it("the Home page can be created although home is a reserved URL, starts from the built-in layout and is not in the sitemap", async () => {
+    const page = (await run("marketing.pages.create", { title: "Home page", slug: "home" }, ctx(admin))) as { id: string; slug: string };
+    expect(page.slug).toBe("bcom-home");
+    const draft = (await run("marketing.pages.get", { id: page.id, draft: true }, ctx(admin))) as { blocks: Array<{ type: string }> };
+    expect(draft.blocks.map((b) => b.type)).toContain("MkPricing");
+    await run("marketing.pages.publish", { id: page.id }, ctx(admin));
+    expect((await getPlatformSitePage(rtRw, ["bcom-home"]))?.page.title).toBe("Home page");
+    const sitemap = await platformSitePagesSitemap(rtRw._db.db, "https://bcom.test");
+    expect(sitemap.some((e) => e.loc.endsWith("/bcom-home"))).toBe(false);
+  });
+
   it("says why a page cannot be created instead of a generic failure", async () => {
     const reason = async (slug: string) => {
       try {
@@ -195,7 +206,7 @@ describe("Marketing content", () => {
         return e instanceof ORPCError ? `${e.code}: ${e.message}` : `THROWN: ${String(e)}`;
       }
     };
-    expect(await reason("home")).toMatch(/^BAD_REQUEST: .*reserved/);
+    expect(await reason("cart")).toMatch(/^BAD_REQUEST: .*reserved/);
     expect(await reason("not a slug")).toMatch(/^BAD_REQUEST: .*lowercase/);
     await run("marketing.pages.create", { title: "Twice", slug: "twice" }, ctx(admin));
     expect(await reason("twice")).toMatch(/^BAD_REQUEST: .*already exists/);

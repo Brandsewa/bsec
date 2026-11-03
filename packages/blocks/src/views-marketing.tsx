@@ -12,6 +12,7 @@ import type {
   MkDocSectionProps,
   MkFaqProps,
   MkFooterProps,
+  MkPricingProps,
   MkHeaderProps,
   MkFeaturesProps,
   MkFinalCallProps,
@@ -279,5 +280,23 @@ export function MkFooterView({ props }: BlockRenderArgs<MkFooterProps>) {
         <p className="foot-legal">{legal}</p>
       </div>
     </footer>
+  );
+}
+
+/** The plans table. On the website it shows the live plans from Super Admin; the editor draws a placeholder. */
+export function MkPricingView({ props, ctx }: BlockRenderArgs<MkPricingProps>) {
+  const live = ctx?.renderPricing?.({ heading: props.heading, description: props.description });
+  if (live) return <>{live}</>;
+  return (
+    <section className="sec" id="pricing">
+      <div className="wrap">
+        <div className="head center">
+          <span className="kick">Pricing</span>
+          <h2>{props.heading}</h2>
+          <p>{props.description}</p>
+        </div>
+        <div className="box"><p>The plans, prices and limits from Super Admin &gt; Plans appear here on the live site.</p></div>
+      </div>
+    </section>
   );
 }

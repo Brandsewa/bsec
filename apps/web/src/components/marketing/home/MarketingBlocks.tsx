@@ -2,6 +2,8 @@ import { renderBlockDocument, renderBlockTree, type RenderContext } from "@bs/bl
 import { mediaDetailsFor, type BlockRenderData } from "../../blocks/BlockRenderer.tsx";
 import { BannerClient } from "../../blocks/BannerClient.tsx";
 import { GalleryClient } from "../../blocks/GalleryClient.tsx";
+import { FALLBACK_PLANS, type LandingPlan } from "../landing/content.ts";
+import { HomePricing } from "./HomePricing.tsx";
 import { CompanyBox } from "../landing/LegalBits.tsx";
 import { SubdomainAvailabilityChecker } from "../SubdomainAvailabilityChecker.tsx";
 
@@ -9,13 +11,14 @@ import { SubdomainAvailabilityChecker } from "../SubdomainAvailabilityChecker.ts
 const OWN_WIDTH: ReadonlySet<string> = new Set(["Section", "Container", "Block", "ImageBanner", "Banner"]);
 
 /** A website page built in Super Admin. Null when its document cannot be drawn, so the caller keeps the built-in version (ADR-011). */
-export function marketingPageContent(document: unknown, renderData?: BlockRenderData) {
+export function marketingPageContent(document: unknown, renderData?: BlockRenderData, plans?: LandingPlan[]) {
   const result = renderBlockDocument(document);
   if (!result.success || result.blocks.length === 0) return null;
   const media = renderData?.media ?? {};
   const ctx: RenderContext = {
     renderNameChecker: () => <SubdomainAvailabilityChecker platformDomain="bcom.si" />,
     renderCompany: () => <CompanyBox />,
+    renderPricing: ({ heading, description }) => <HomePricing plans={plans && plans.length > 0 ? plans : FALLBACK_PLANS} heading={heading} description={description} />,
     renderBanner: ({ children }) => <BannerClient>{children}</BannerClient>,
     renderGallery: ({ images, children }) => <GalleryClient images={images}>{children}</GalleryClient>,
     data: renderData?.data,

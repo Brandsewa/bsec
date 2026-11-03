@@ -8,7 +8,7 @@ import { CheckIcon } from "./icons.tsx";
 const inr = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
 
 /** `bare` drops the section heading (the pricing page has its own header). */
-export function HomePricing({ plans, bare = false }: { plans: LandingPlan[]; bare?: boolean }) {
+export function HomePricing({ plans, bare = false, heading = "Plans you can read in one go.", description = "Prices in rupees, plus GST. Every plan starts with a 14-day free trial." }: { plans: LandingPlan[]; bare?: boolean; heading?: string; description?: string }) {
   const [interval, setInterval_] = useState<"monthly" | "yearly">("monthly");
   return (
     <section className={bare ? "sec bare" : "sec"} id="pricing">
@@ -17,8 +17,8 @@ export function HomePricing({ plans, bare = false }: { plans: LandingPlan[]; bar
           {!bare && (
             <>
               <span className="kick">Pricing</span>
-              <h2>Plans you can read in one go.</h2>
-              <p>Prices in rupees, plus GST. Every plan starts with a 14-day free trial.</p>
+              <h2>{heading}</h2>
+              <p>{description}</p>
             </>
           )}
           <div className="seg" role="group" aria-label="Billing period">

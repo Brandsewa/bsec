@@ -16,6 +16,7 @@ import { server } from "@/server/runtime.ts";
 import { getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { loadLandingPlans } from "@/server/landing-plans.ts";
 import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
 import { PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
@@ -103,7 +104,7 @@ async function MarketingCustomPage({ path }: { path: string[] }) {
   const built = await marketingPage(path);
   if (!built) notFound();
   if (!built.isCanonical) permanentRedirect(built.canonicalPath);
-  const content = marketingPageContent(built.page.document, built.renderData);
+  const content = marketingPageContent(built.page.document, built.renderData, await loadLandingPlans());
   if (!content) notFound();
   return <PageFrame>{content}</PageFrame>;
 }
