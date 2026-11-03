@@ -14,7 +14,7 @@ import { Badge, Button, Progress } from "@bs/ui";
 import {
   mediaUploadQueue,
   type UploadQueueItem,
-} from "../../lib/media-upload-queue.ts";
+} from "./media-upload-queue.ts";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";

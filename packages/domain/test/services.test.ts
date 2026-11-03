@@ -60,15 +60,17 @@ describe("Domain Services", () => {
         select: () => ({
           from: () => ({
             leftJoin: () => ({
-              orderBy: () => [
-                {
-                  id: "t-1",
-                  slug: "store1",
-                  name: "Store 1",
-                  status: "active",
-                  createdAt: new Date("2026-01-01"),
-                },
-              ],
+              where: () => ({
+                orderBy: () => [
+                  {
+                    id: "t-1",
+                    slug: "store1",
+                    name: "Store 1",
+                    status: "active",
+                    createdAt: new Date("2026-01-01"),
+                  },
+                ],
+              }),
             }),
           }),
         }),

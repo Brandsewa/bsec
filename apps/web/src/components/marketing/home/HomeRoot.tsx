@@ -2,7 +2,7 @@
 
 import { useRef, type ReactNode } from "react";
 import { useRevealMotion } from "./motion.ts";
-import "./home.css";
+import "@bs/blocks/marketing.css";
 
 /** Root of every platform marketing page: scopes the `.mk` styles and arms the scroll reveals. <html data-theme> sets the theme. */
 export function HomeRoot({ children }: { children: ReactNode }) {

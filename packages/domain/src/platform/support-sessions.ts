@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
+import { assertStoreTenants } from "./platform-site.ts";
 import { assertPlatformStaff, assertRoleAtLeast, roleAtLeast, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
 export interface StartSupportSessionInput {
@@ -107,6 +108,7 @@ export async function startSupportSession(
     assertRoleAtLeast(staff.role, "platform_owner", "starting an emergency support session");
   }
 
+  await assertStoreTenants(db, [input.tenantId]);
   const token = `sup_${randomBytes(32).toString("hex")}`;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);

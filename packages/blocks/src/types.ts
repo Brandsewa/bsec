@@ -47,7 +47,20 @@ export type BlockType =
   // The collection page's product grid (sort, filters, cards) without its title block, so a page can put its own content around it
   | "CollectionProducts"
   // Recent posts as a slider (arrows, flat page lines) with cards per row per device and an optional list on phones
-  | "BlogShowcase";
+  | "BlogShowcase"
+  // The platform's own website (ADR-042): fixed sections, never offered to stores
+  | "MkHero"
+  | "MkIncluded"
+  | "MkStatement"
+  | "MkFeatures"
+  | "MkSteps"
+  | "MkBand"
+  | "MkFaq"
+  | "MkFinalCall"
+  | "MkDocHeader"
+  | "MkDocSection"
+  | "MkValues"
+  | "MkCompany";
 
 /** Minimal product shape the product blocks need; the host supplies the real data. Prices are in paise. */
 export interface BlockProduct {
@@ -203,6 +216,10 @@ export interface RenderContext {
   renderProductShowcase?: ((p: { options: ProductShowcaseBehavior; children: ReactNode }) => ReactNode) | undefined;
   /** Wraps the gallery grid with its click-to-open viewer (a client component). The editor draws the grid without it. */
   renderGallery?: ((p: { images: GalleryViewerImage[]; children: ReactNode }) => ReactNode) | undefined;
+  /** The website's store-name checker (a client component supplied by the marketing site); the editor draws a sample. */
+  renderNameChecker?: (() => ReactNode) | undefined;
+  /** The registered company details, kept in one place by the marketing site; the editor draws a sample. */
+  renderCompany?: (() => ReactNode) | undefined;
 }
 
 /** One picture in the gallery viewer: the full-size source and a small one for the thumbnail strip. */

@@ -15,7 +15,7 @@ import {
 import type { Category, CategoryDetail, CollectionRule, RichDescription } from "@bs/contracts";
 import { RichDescriptionField } from "../rich-description-field.tsx";
 import { SeoCard } from "../seo-card.tsx";
-import { MediaField } from "../media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 import { CollectionTypeCard, NEW_RULE, ProductAssignmentsCard, ProductSortingCard, RulesBuilderCard } from "../collection/collection-parts.tsx";
 import type { PickedProduct } from "../product/product-picker-dialog.tsx";
 

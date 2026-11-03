@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import "../src/lib/content-host.ts";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

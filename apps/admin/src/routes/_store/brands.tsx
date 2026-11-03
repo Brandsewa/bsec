@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
 import { orpc } from "../../lib/orpc.ts";
-import { MediaField } from "../../components/media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/brands")({
   pendingComponent: () => <PageSkeleton />,

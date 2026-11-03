@@ -17,6 +17,7 @@
     "@bs/auth": "workspace:*",
     "@bs/block-editor": "workspace:*",
     "@bs/blocks": "workspace:*",
+    "@bs/content-admin": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@bs/ui": "workspace:*",
     "@dnd-kit/core": "6.3.1",

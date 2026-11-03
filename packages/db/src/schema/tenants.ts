@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { citext } from "./custom-types.ts";
@@ -33,6 +35,8 @@ export const tenants = pgTable("tenants", {
   id: uuid("id").default(sql`uuidv7()`).primaryKey(),
   slug: citext("slug").notNull().unique(),
   name: text("name").notNull(),
+  /** `store`, or `platform_site`: the one internal record holding bcom.si's own content (ADR-042). */
+  kind: text("kind").notNull().default("store"),
   organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "restrict" }),
   ownerUserId: uuid("owner_user_id"),
   status: text("status").notNull().default("active"),
@@ -50,4 +54,7 @@ export const tenants = pgTable("tenants", {
   storeNumber: integer("store_number").notNull().unique("tenants_store_number_uniq").default(sql`nextval('tenants_store_number_seq')`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  check("tenants_kind_check", sql`kind in ('store', 'platform_site')`),
+  uniqueIndex("tenants_one_platform_site_uniq").on(t.kind).where(sql`kind = 'platform_site'`),
+]);

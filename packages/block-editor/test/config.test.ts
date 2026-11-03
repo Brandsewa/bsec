@@ -36,7 +36,7 @@ describe("editor config", () => {
 
   it("builds a Puck config whose categories list each component exactly once, for every page kind", () => {
     const union = new Set<string>();
-    for (const pageKind of ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer", "custom"] as const) {
+    for (const pageKind of ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer", "custom", "marketing"] as const) {
       const config = buildPuckConfig({ themeVars: {}, pageKind }) as unknown as {
         components: Record<string, unknown>;
         categories: Record<string, { components?: string[] }>;
@@ -99,9 +99,17 @@ describe("block picker by page kind", () => {
 
   it("every block is offered somewhere", () => {
     for (const type of BLOCK_TYPES) {
-      const kinds = ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer"] as const;
+      const kinds = ["home", "collection", "product", "cart", "blogArchive", "blogPost", "header", "footer", "marketing"] as const;
       expect(kinds.some((k) => blockAllowed(type, k)), type).toBe(true);
     }
+  });
+
+  it("keeps website sections and store blocks apart", () => {
+    expect(blockAllowed("MkHero", "marketing")).toBe(true);
+    expect(blockAllowed("MkHero", "custom")).toBe(false);
+    expect(blockAllowed("MkHero", "home")).toBe(false);
+    expect(blockAllowed("Heading", "marketing")).toBe(false);
+    expect(blockAllowed("Section", "marketing")).toBe(false);
   });
 
   it("offers the Trust strip in the BCOM widgets group on a custom page", () => {

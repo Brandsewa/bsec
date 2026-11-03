@@ -32,6 +32,7 @@ const INPUTS: Record<string, () => unknown> = {
   "ledger.storeTransactions": () => ({}),
   "plans.listRequests": () => undefined,
   "signups.list": () => ({}),
+  "marketing.status": () => undefined,
   "templates.list": () => undefined,
   "templates.get": () => ({ code: "essential-commerce" }),
   "support.list": () => ({}),
@@ -90,7 +91,7 @@ function readProcedures(): string[] {
   const out: string[] = [];
   for (const [ns, procs] of Object.entries(platformContract as unknown as Record<string, Record<string, { "~orpc": { route: { method?: string } } }>>)) {
     for (const [name, def] of Object.entries(procs)) {
-      if ((def["~orpc"].route.method ?? "POST") === "GET") out.push(`${ns}.${name}`);
+      if ("~orpc" in def && (def["~orpc"].route.method ?? "POST") === "GET") out.push(`${ns}.${name}`); // nested Marketing: marketing.int.test.ts
     }
   }
   return out.sort();

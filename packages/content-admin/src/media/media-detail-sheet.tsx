@@ -31,8 +31,8 @@ import {
   toast,
 } from "@bs/ui";
 import type { MediaDetailItem, MediaItem } from "@bs/contracts";
-import { client, orpc } from "../../lib/orpc.ts";
-import { replaceMediaFile } from "../../lib/media-upload-queue.ts";
+import { client, orpc } from "../host.ts";
+import { replaceMediaFile } from "./media-upload-queue.ts";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";

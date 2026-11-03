@@ -50,6 +50,7 @@ export async function previewPlatformReset(rt: Runtime, platformStaffUserId: str
   const stores = await db
     .select({ id: schema.tenants.id, name: schema.tenants.name, slug: schema.tenants.slug, status: schema.tenants.status })
     .from(schema.tenants)
+    .where(eq(schema.tenants.kind, "store"))
     .orderBy(schema.tenants.createdAt);
   const staffIds = (await db.select({ id: schema.platformStaff.userId }).from(schema.platformStaff)).map((r) => r.id);
   const [users] = await db
@@ -93,7 +94,7 @@ export async function resetPlatformData(
   if (input.confirmation !== PLATFORM_RESET_PHRASE) throw new Error(`Bad Request: type "${PLATFORM_RESET_PHRASE}" to confirm`);
 
   const db = rt._db.db;
-  const tenants = await db.select({ id: schema.tenants.id, slug: schema.tenants.slug }).from(schema.tenants);
+  const tenants = await db.select({ id: schema.tenants.id, slug: schema.tenants.slug }).from(schema.tenants).where(eq(schema.tenants.kind, "store"));
   if (tenants.length !== input.expectedStores) {
     throw new Error(`Conflict: there are now ${tenants.length} stores, not ${input.expectedStores}. Review the list and try again`);
   }
@@ -138,7 +139,7 @@ export async function resetPlatformData(
     for (const t of tenants) await purgeTenantData(tx, t.id);
     const staffIds = (await tx.select({ id: schema.platformStaff.userId }).from(schema.platformStaff)).map((r) => r.id);
     await tx.delete(schema.tenantPromotions); // references tenants with ON DELETE RESTRICT
-    await tx.delete(schema.tenants);
+    await tx.delete(schema.tenants).where(eq(schema.tenants.kind, "store")); // the website is not a store (ADR-042)
     await tx.delete(schema.organizations);
     const gone = await tx
       .delete(schema.users)

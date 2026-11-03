@@ -3,7 +3,7 @@
  * Honest by design: what a merchant can use today is shown as ready; the AI-agent features are marked Coming soon.
  * No invented customers, counts or testimonials; previews are labelled sample data.
  * Server component composition; only the nav, AI tabs, pricing toggle and the store-name checker are client components.
- * Styling is scoped under `.mk` (home/home.css), shared with the other marketing pages and signup.
+ * Styling is scoped under `.mk` (`@bs/blocks/marketing.css`), shared with the other marketing pages and signup.
  */
 
 import { FALLBACK_PLANS, type LandingPlan } from "./landing/content.ts";

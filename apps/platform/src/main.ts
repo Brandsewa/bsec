@@ -16,8 +16,11 @@ const log = createLogger("platform");
 // The deletion sweep holds one connection (its advisory lock) while the workflow uses others, so keep the pool >= 4.
 const rt = createRuntime({ service: "platform", databaseUrl: url, poolMax: Math.max(4, Number(process.env.DB_POOL_MAX ?? 5)) });
 const port = Number(process.env.PORT ?? 4000);
+// Marketing runs content services as app_rw so RLS applies (ADR-042). Without the variable it stays closed, nothing else changes.
+const contentUrl = process.env.DATABASE_URL_RW;
+const contentRt = contentUrl ? createRuntime({ service: "platform", databaseUrl: contentUrl, poolMax: Number(process.env.CONTENT_DB_POOL_MAX ?? 2) }) : undefined;
 
-const server = serve({ fetch: createApp(rt, log).fetch, port, hostname: "0.0.0.0" }, (info) => {
+const server = serve({ fetch: createApp(rt, log, contentRt).fetch, port, hostname: "0.0.0.0" }, (info) => {
   log.info({ port: info.port }, "platform api listening");
 });
 
@@ -76,6 +79,6 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     log.info({ signal }, "shutting down");
     clearInterval(sweepTimer);
-    server.close(() => void rt.close().then(() => process.exit(0)));
+    server.close(() => void Promise.all([rt.close(), contentRt?.close()]).then(() => process.exit(0)));
   });
 }

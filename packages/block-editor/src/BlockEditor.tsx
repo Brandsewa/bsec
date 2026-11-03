@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Puck, blocksPlugin, outlinePlugin, useGetPuck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "@bs/blocks/blocks.css";
+import "@bs/blocks/marketing.css";
 import { documentToPuck, puckToDocument, type BlockInstance, type PuckData, type PuckItem } from "@bs/blocks";
 import { buildPuckConfig, type EditorPageKind } from "./config.tsx";
 import { useFontLink } from "./fonts.ts";

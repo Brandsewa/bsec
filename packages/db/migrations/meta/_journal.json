@@ -624,6 +624,13 @@
       "when": 1793496400000,
       "tag": "0094_platform_invoice_currency",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793496500000,
+      "tag": "0095_platform_site_kind",
+      "breakpoints": true
     }
   ]
 }

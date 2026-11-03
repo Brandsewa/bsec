@@ -1,14 +1,13 @@
+import { blogAccess } from "@/server/site-access.ts";
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { headers } from "next/headers";
 import {
   buildBlogArchiveMetadata,
-  evaluateStorefrontAccess,
   generateBlogListJsonLd,
   generateBreadcrumbJsonLd,
 } from "@bs/domain";
 import { getBlockDefinition, type BlockInstance, type BlogListingOptions } from "@bs/blocks";
-import { server } from "@/server/runtime.ts";
 import { getCachedBlogList, getCachedBlogMagazine, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { BlogListingSection } from "./BlogListingSection.tsx";
@@ -23,7 +22,7 @@ import { JsonLd } from "./JsonLd.tsx";
 async function request() {
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
-  const access = await evaluateStorefrontAccess(server().rt, host, { headers: h });
+  const access = await blogAccess(host, h);
   return { host, tenantId: access.tenantId ?? null, noindex: Boolean(access.noindex) };
 }
 

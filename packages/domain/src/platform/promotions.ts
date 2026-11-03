@@ -1,3 +1,4 @@
+import { assertStoreTenants } from "./platform-site.ts";
 import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { schema, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
@@ -291,6 +292,7 @@ export async function grantPromotion(rt: Runtime, staffUserId: string, input: Gr
   await assertOwner(rt, staffUserId, "granting promotions");
   if ((input.promotionId ? 1 : 0) + (input.custom ? 1 : 0) !== 1) throw new Error("Bad Request: choose a promotion or enter custom terms, not both");
   if (!isValidTerm(input.termMonths)) throw new Error("Bad Request: choose a term of 6, 12 or 36 months");
+  await assertStoreTenants(rt._db.db, [input.tenantId]);
 
   const id = await rt._db.db.transaction(async (tx) => {
     const [tenant] = await tx.select({ id: schema.tenants.id, status: schema.tenants.status }).from(schema.tenants).where(eq(schema.tenants.id, input.tenantId)).for("update").limit(1);

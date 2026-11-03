@@ -19,7 +19,7 @@ import { formatProductId } from "@bs/contracts";
 import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
 import { storefrontLink, useStorefrontUrl } from "../../../lib/storefront-url.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
-import { MediaGalleryField } from "../../../components/media/media-gallery-field.tsx";
+import { MediaGalleryField } from "@bs/content-admin/media/media-gallery-field.tsx";
 import type { MediaItem } from "@bs/contracts";
 
 export const Route = createFileRoute("/_store/products/$id")({

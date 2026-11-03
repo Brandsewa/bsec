@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./blocks.css": "./src/blocks.css",
+    "./marketing.css": "./src/marketing.css",
     "./media-image": "./src/media-image.ts",
     "./svg-icon": "./src/svg-icon.tsx",
     "./svg-icon-lite": "./src/svg-icon-lite.tsx",

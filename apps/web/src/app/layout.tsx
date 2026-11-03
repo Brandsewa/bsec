@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import { evaluateStorefrontAccess, tenantTag, type getBrandSettings } from "@bs/domain";
+import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
@@ -90,13 +91,17 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     // no request context (static build): treat as a store host, as before
   }
   if (isMarketing) {
+    // A failed read keeps the built-in links; the marketing site must not depend on this query.
+    const navLinks = await platformSiteHeaderLinks(server().rt._db.db).catch(() => null);
     return (
       <html lang="en" suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`}>
         <head>
           <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
         </head>
         <body className="min-h-dvh antialiased">
-          <WebThemeProvider always>{children}</WebThemeProvider>
+          <WebThemeProvider always>
+            <SiteNavProvider links={navLinks}>{children}</SiteNavProvider>
+          </WebThemeProvider>
         </body>
       </html>
     );

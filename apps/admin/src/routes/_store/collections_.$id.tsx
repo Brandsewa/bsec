@@ -23,7 +23,7 @@ import { orpc } from "../../lib/orpc.ts";
 import { CollectionTypeCard, ProductAssignmentsCard, ProductSortingCard, RulesBuilderCard } from "../../components/collection/collection-parts.tsx";
 import type { PickedProduct } from "../../components/product/product-picker-dialog.tsx";
 import { storefrontLink, useStorefrontUrl } from "../../lib/storefront-url.ts";
-import { MediaField } from "../../components/media/media-field.tsx";
+import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
 export const Route = createFileRoute("/_store/collections_/$id")({
   pendingComponent: () => (

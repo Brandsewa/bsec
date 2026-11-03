@@ -2,7 +2,7 @@ import { and, desc, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
-import { getBlockDefinition, validateBlockDocument } from "@bs/blocks";
+import { getBlockDefinition, hasMarketingBlocks, validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
@@ -1064,6 +1064,12 @@ export async function savePageDraft(rt: Runtime, ctx: TenantContext, input: Save
   const db = rt._db.db;
 
   return withTenant(db, ctx.tenantId, async (tx) => {
+    // Website sections only render on the website record (ADR-042); only a document that has one pays for this read.
+    if (hasMarketingBlocks(validation.data.blocks)) {
+      const [tenant] = await tx.select({ kind: schema.tenants.kind }).from(schema.tenants).where(eq(schema.tenants.id, ctx.tenantId)).limit(1);
+      if (tenant?.kind !== "platform_site") throw new Error("Bad Request: this block belongs to the platform's website");
+    }
+
     const [created] = await tx
       .insert(schema.pageVersions)
       .values({

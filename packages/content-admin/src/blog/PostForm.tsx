@@ -27,8 +27,8 @@ import {
 } from "@bs/ui";
 import type { BlogPostDetail } from "@bs/contracts";
 import { MediaField } from "../media/media-field.tsx";
-import { errorMessage } from "../../lib/errors.ts";
-import { orpc } from "../../lib/orpc.ts";
+import { errorMessage } from "../errors.ts";
+import { orpc, paths } from "../host.ts";
 
 // The editor (Tiptap) is only downloaded on this screen.
 const BlogEditor = lazy(() => import("./BlogEditor.tsx"));
@@ -157,7 +157,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
         setSaved(s);
         invalidate();
         // Leave on the next tick so the blocker sees a clean form.
-        setTimeout(() => void navigate({ to: "/online-store/blog/$id", params: { id: res.id } }), 0);
+        setTimeout(() => void navigate({ to: paths.blogPost(res.id) }), 0);
       },
       onError: (err) => toast.error(errorMessage(err, "Could not save the post")),
     }),
@@ -180,7 +180,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
         toast.success("Post deleted");
         setSaved(s);
         invalidate();
-        setTimeout(() => void navigate({ to: "/online-store/blog" }), 0);
+        setTimeout(() => void navigate({ to: paths.blog }), 0);
       },
       onError: (err) => toast.error(errorMessage(err, "Could not delete the post")),
     }),
@@ -253,7 +253,7 @@ function PostFormInner({ post }: { post: BlogPostDetail | null }) {
     <PageContainer size="full">
       <PageActions>
         <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/online-store/blog" })}>
+            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: paths.blog })}>
               <ArrowLeft className="mr-1.5 size-3.5" aria-hidden />
               Posts
             </Button>

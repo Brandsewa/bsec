@@ -47,10 +47,10 @@ import {
   useDebouncedValue,
 } from "../../../components/data-table/use-table-state.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
-import { mediaUploadQueue } from "../../../lib/media-upload-queue.ts";
-import { MediaUploadTray } from "../../../components/media/media-upload-tray.tsx";
-import { MediaDetailSheet } from "../../../components/media/media-detail-sheet.tsx";
-import { MediaTile } from "../../../components/media/media-tile.tsx";
+import { mediaUploadQueue } from "@bs/content-admin/media/media-upload-queue.ts";
+import { MediaUploadTray } from "@bs/content-admin/media/media-upload-tray.tsx";
+import { MediaDetailSheet } from "@bs/content-admin/media/media-detail-sheet.tsx";
+import { MediaTile } from "@bs/content-admin/media/media-tile.tsx";
 
 const VIEW_STORAGE_KEY = "bs.media.view";
 
