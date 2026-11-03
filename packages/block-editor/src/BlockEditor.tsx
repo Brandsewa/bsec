@@ -194,7 +194,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   // The theme tab is a Puck sidebar plugin in the same rail as Blocks and Outline, listed first (on top).
   const themeEnabled = Boolean(themeTokens && onThemeTokensChange);
   const frameEditable = Boolean(onFrameChange);
-  const website = pageKind === "marketing" || pageKind === "marketingHeader" || pageKind === "marketingFooter";
+  const website = pageKind === "marketing" || pageKind === "marketingHeader" || pageKind === "marketingFooter" || pageKind === "marketingBlogArchive" || pageKind === "marketingBlogPost";
   const plugins = useMemo(
     () =>
       website && frameEditable

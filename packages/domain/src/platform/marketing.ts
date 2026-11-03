@@ -1,4 +1,4 @@
-import { MARKETING_STARTERS, MkFooterSchema, MkHeaderSchema, THEME_SYSTEM_PAGES, isWebsiteFooterBlockSet, isWebsiteHeaderBlockSet, isWebsitePageBlockSet, validateBlockDocument, type BlockInstance } from "@bs/blocks";
+import { MARKETING_STARTERS, MkFooterSchema, MkHeaderSchema, THEME_SYSTEM_PAGES, isWebsiteBlogArchiveBlockSet, isWebsiteBlogPostBlockSet, isWebsiteFooterBlockSet, isWebsiteHeaderBlockSet, isWebsitePageBlockSet, validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import { and, eq } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { createPage, savePageDraft } from "../content-services.ts";
@@ -58,7 +58,12 @@ export async function createPlatformSitePage(rt: Runtime, ctx: TenantContext, in
 export async function savePlatformSiteDraft(rt: Runtime, ctx: TenantContext, input: { id: string; blocks: unknown[] }) {
   const blocks = input.blocks as BlockInstance[];
   const [page] = await withTenant(rt._db.db, ctx.tenantId, (tx) => tx.select({ type: schema.pages.type }).from(schema.pages).where(eq(schema.pages.id, input.id)).limit(1));
-  const ok = page?.type === "header" ? isWebsiteHeaderBlockSet(blocks) : page?.type === "footer" ? isWebsiteFooterBlockSet(blocks) : isWebsitePageBlockSet(blocks);
+  const ok =
+    page?.type === "header" ? isWebsiteHeaderBlockSet(blocks)
+    : page?.type === "footer" ? isWebsiteFooterBlockSet(blocks)
+    : page?.type === "blog_archive_template" ? isWebsiteBlogArchiveBlockSet(blocks)
+    : page?.type === "blog_post_template" ? isWebsiteBlogPostBlockSet(blocks)
+    : isWebsitePageBlockSet(blocks);
   if (!ok) throw new Error("Bad Request: this block belongs to stores, not the website");
   return savePageDraft(rt, ctx, input);
 }

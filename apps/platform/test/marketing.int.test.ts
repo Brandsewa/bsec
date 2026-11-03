@@ -197,6 +197,18 @@ describe("Marketing content", () => {
     expect(sitemap.some((e) => e.loc.endsWith("/bcom-home"))).toBe(false);
   });
 
+  it("the blog archive and post layouts can be created on the website and hold only their own blocks", async () => {
+    const archive = (await run("marketing.pages.ensureTemplate", { key: "blog" }, ctx(admin))) as { id: string; created: boolean };
+    expect(archive.created).toBe(true);
+    expect(((await run("marketing.pages.ensureTemplate", { key: "blog" }, ctx(admin))) as { created: boolean }).created).toBe(false);
+    const post = (await run("marketing.pages.ensureTemplate", { key: "blog-post" }, ctx(admin))) as { id: string };
+    const draft = (await run("marketing.pages.get", { id: archive.id, draft: true }, ctx(admin))) as { blocks: Array<{ type: string }> };
+    expect(draft.blocks.map((b) => b.type)).toEqual(["BlogListing"]);
+    const heading = [{ id: "h", type: "Heading", version: 1, props: { text: "Our blog" } }];
+    await run("marketing.pages.saveDraft", { id: archive.id, blocks: [...draft.blocks, ...heading] }, ctx(admin));
+    expect(String(await codeOf(run("marketing.pages.saveDraft", { id: post.id, blocks: [{ id: "x", type: "MkHero", version: 1, props: {} }] }, ctx(admin))))).not.toBe("OK");
+  });
+
   it("says why a page cannot be created instead of a generic failure", async () => {
     const reason = async (slug: string) => {
       try {

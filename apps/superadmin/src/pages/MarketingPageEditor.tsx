@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BlockEditor, type BlockEditorHost, type EditorPageKind, type MediaAsset } from "@bs/block-editor";
 import { WEBSITE_BLOCK_VARS, type BlockInstance } from "@bs/blocks";
 import type { MediaKind } from "@bs/contracts";
-import { Button, EmptyState, PageContainer, PageSkeleton } from "@bs/ui";
+import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
 import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import { client as contentClient, orpc } from "@bs/content-admin/host.ts";
 import { client } from "../lib/orpc.ts";
@@ -72,7 +72,26 @@ function PageEditor({ id }: { id: string }) {
   );
 
   const page = pageQuery.data;
-  const kind: EditorPageKind = page?.type === "header" ? "marketingHeader" : page?.type === "footer" ? "marketingFooter" : "marketing";
+  const kind: EditorPageKind =
+    page?.type === "header" ? "marketingHeader"
+    : page?.type === "footer" ? "marketingFooter"
+    : page?.type === "blog_archive_template" ? "marketingBlogArchive"
+    : page?.type === "blog_post_template" ? "marketingBlogPost"
+    : "marketing";
+  /** Opens another page; a blog layout the website has no page for yet ("new:blog") is created first. */
+  const openPage = async (value: string) => {
+    let target = value;
+    if (value.startsWith("new:")) {
+      try {
+        target = (await client.marketing.pages.ensureTemplate({ key: value.slice(4) as "blog" | "blog-post" })).id;
+        await queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not open that layout.");
+        return;
+      }
+    }
+    await navigate({ to: "/storefront/pages/$id/editor", params: { id: target } });
+  };
   const exit = () => void navigate({ to: "/storefront/pages" });
   const refresh = () =>
     Promise.all([
@@ -84,7 +103,12 @@ function PageEditor({ id }: { id: string }) {
     const list = listQuery.data ?? [];
     const out: Array<{ value: string; label: string }> = [];
     if (headerId) out.push({ value: headerId, label: "Header" });
-    for (const p of list) if (p.type !== "header" && p.type !== "footer") out.push({ value: p.id, label: p.title || p.slug });
+    for (const p of list) if (p.type !== "header" && p.type !== "footer" && !p.type?.endsWith("_template")) out.push({ value: p.id, label: p.title || p.slug });
+    // The blog layouts: opening one that does not exist yet creates it from the built-in layout.
+    for (const [key, type, label] of [["blog", "blog_archive_template", "Blog archive"], ["blog-post", "blog_post_template", "Blog post"]] as const) {
+      const have = list.find((p) => p.type === type);
+      out.push({ value: have ? have.id : `new:${key}`, label });
+    }
     if (footerId) out.push({ value: footerId, label: "Footer" });
     return out;
   }, [listQuery.data, headerId, footerId]);
@@ -131,7 +155,7 @@ function PageEditor({ id }: { id: string }) {
         onFrameChange={(part, blocks) => setFrameEdits((e) => ({ ...e, [part]: blocks }))}
         externalDirty={Object.keys(frameEdits).length > 0}
         previewHref={previewHref}
-        pages={options.length > 0 ? { value: id, options, onChange: (next) => void navigate({ to: "/storefront/pages/$id/editor", params: { id: next } }) } : undefined}
+        pages={options.length > 0 ? { value: id, options, onChange: (next) => void openPage(next) } : undefined}
         onSaveDraft={async (blocks) => {
           await contentClient.admin.pages.saveDraft({ id, blocks });
           await saveFrame();
