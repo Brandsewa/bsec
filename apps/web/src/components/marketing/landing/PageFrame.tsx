@@ -16,10 +16,12 @@ export async function PageFrame({ children }: { children: ReactNode }) {
   const h = await headers();
   if (!isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"))) notFound();
   const hold = await siteHold();
+  // On hold (coming soon or maintenance) only the holding screen shows: no header, footer or announcement bar.
+  if (hold) return <HomeRoot><main id="main">{hold}</main></HomeRoot>;
   return (
     <HomeRoot>
       <HomeNav />
-      <main id="main">{hold ?? children}</main>
+      <main id="main">{children}</main>
       <HomeFooter />
     </HomeRoot>
   );

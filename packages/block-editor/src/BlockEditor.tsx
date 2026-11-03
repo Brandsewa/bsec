@@ -12,7 +12,7 @@ import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 import { extractGlobalColors } from "./ColorPickerSwatch.tsx";
 import { EDITOR_VIEWPORTS } from "./viewports.ts";
 import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./EditorHeader.tsx";
-import { FooterPanel, HeaderPanel, MkFooterPanel, MkHeaderPanel } from "./HeaderFooterPanels.tsx";
+import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
 import { GeneralPanel, WebsiteThemePanel } from "./GeneralPanel.tsx";
 import { ROOT_ZONE, wrapDroppedWidget } from "./wrap-on-drop.ts";
 
@@ -200,9 +200,8 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       website && frameEditable
         ? [
             // The website has one fixed design: the Theme tab holds the announcement bar, then its header and footer.
+            // The header and footer are edited as pages of their own, from the page switcher.
             { name: "theme-settings", label: "Theme", icon: <ThemeIcon />, render: WebsiteThemePanel },
-            { name: "header-settings", label: "Header", icon: <HeaderIcon />, render: MkHeaderPanel },
-            { name: "footer-settings", label: "Footer", icon: <FooterIcon />, render: MkFooterPanel },
             blocksPlugin(),
             outlinePlugin(),
           ]

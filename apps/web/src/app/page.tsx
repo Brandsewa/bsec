@@ -17,8 +17,6 @@ import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
-import { HomeFooter } from "@/components/marketing/home/HomeFooter.tsx";
-import { HomeNav } from "@/components/marketing/home/HomeNav.tsx";
 import { HomeRoot } from "@/components/marketing/home/HomeRoot.tsx";
 import { siteHold } from "@/components/marketing/home/SiteHold.tsx";
 import { marketingPageContent } from "@/components/marketing/home/MarketingBlocks.tsx";
@@ -154,9 +152,7 @@ export default async function HomePage() {
     if (hold) {
       return (
         <HomeRoot>
-          <HomeNav />
           <main id="main">{hold}</main>
-          <HomeFooter />
         </HomeRoot>
       );
     }

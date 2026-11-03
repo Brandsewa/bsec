@@ -13,6 +13,7 @@ import type {
   MkFaqProps,
   MkFooterProps,
   MkPricingProps,
+  MkThemeProps,
   MkHeaderProps,
   MkFeaturesProps,
   MkFinalCallProps,
@@ -270,11 +271,20 @@ export function MkFooterView({ props }: BlockRenderArgs<MkFooterProps>) {
             <Prose text={props.about} />
             <address><Prose text={props.contact} /></address>
           </div>
+          {/* Wide screens show every column open; tablets and phones get one folded section per column (CSS swaps the two copies). */}
           {props.columns.map((col) => (
-            <nav key={col.title} aria-label={col.title}>
-              <h4>{col.title}</h4>
-              {col.links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
-            </nav>
+            <div key={col.title} className="foot-col">
+              <nav className="foot-open" aria-label={col.title}>
+                <h4>{col.title}</h4>
+                {col.links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
+              </nav>
+              <details className="foot-fold">
+                <summary><span>{col.title}</span><svg className="foot-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+                <div className="foot-links">
+                  {col.links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
+                </div>
+              </details>
+            </div>
           ))}
         </div>
         <p className="foot-legal">{legal}</p>
@@ -299,4 +309,9 @@ export function MkPricingView({ props, ctx }: BlockRenderArgs<MkPricingProps>) {
       </div>
     </section>
   );
+}
+
+/** Settings only (colours and font of the website): nothing to draw. */
+export function MkThemeView(_: BlockRenderArgs<MkThemeProps>) {
+  return null;
 }

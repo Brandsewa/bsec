@@ -34,7 +34,7 @@ import { Ledger } from "./pages/Ledger.tsx";
 import { Promotions } from "./pages/Promotions.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
-import { Marketing } from "./pages/Marketing.tsx";
+import { SettingsShell } from "./pages/Marketing.tsx";
 import { BlogCategoriesScreen } from "@bs/content-admin/blog/BlogCategoriesScreen.tsx";
 import { BlogPostsScreen, validateBlogListSearch } from "@bs/content-admin/blog/BlogPostsScreen.tsx";
 import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
@@ -42,7 +42,6 @@ import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
 import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
 import { PagesScreen } from "@bs/content-admin/pages/PagesScreen.tsx";
 import { StorefrontSettingsScreen } from "@bs/content-admin/settings/StorefrontSettingsScreen.tsx";
-import { PoliciesScreen } from "@bs/content-admin/settings/PoliciesScreen.tsx";
 import { CustomerPrivacyScreen } from "@bs/content-admin/settings/CustomerPrivacyScreen.tsx";
 import { MediaScreen, validateMediaSearch } from "@bs/content-admin/media/MediaScreen.tsx";
 import { Support } from "./pages/Support.tsx";
@@ -293,13 +292,9 @@ const signupsRoute = createRoute({
 const marketingRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/storefront/settings",
-  component: Marketing,
-  pendingComponent: () => (
-    <PageContainer>
-      <PageHeaderSkeleton />
-      <FormSectionSkeleton />
-    </PageContainer>
-  ),
+  beforeLoad: () => {
+    throw redirect({ to: "/storefront/settings/visibility" });
+  },
 });
 
 const marketingPending = () => (
@@ -320,7 +315,7 @@ const settingsVisibilityRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/storefront/settings/visibility",
   component: function WebsiteVisibility() {
-    return <PageContainer size="small"><StorefrontSettingsScreen view="visibility" website /></PageContainer>;
+    return <SettingsShell><StorefrontSettingsScreen view="visibility" website /></SettingsShell>;
   },
   pendingComponent: marketingPending,
 });
@@ -329,16 +324,7 @@ const settingsSearchRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/storefront/settings/search",
   component: function WebsiteSearch() {
-    return <PageContainer size="small"><StorefrontSettingsScreen view="search" website /></PageContainer>;
-  },
-  pendingComponent: marketingPending,
-});
-
-const settingsPoliciesRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: "/storefront/settings/policies",
-  component: function WebsitePolicies() {
-    return <PageContainer size="small"><PoliciesScreen website /></PageContainer>;
+    return <SettingsShell><StorefrontSettingsScreen view="search" website /></SettingsShell>;
   },
   pendingComponent: marketingPending,
 });
@@ -347,7 +333,7 @@ const settingsPrivacyRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/storefront/settings/privacy",
   component: function WebsitePrivacy() {
-    return <PageContainer size="small"><CustomerPrivacyScreen /></PageContainer>;
+    return <SettingsShell><CustomerPrivacyScreen /></SettingsShell>;
   },
   pendingComponent: marketingPending,
 });
@@ -697,7 +683,6 @@ export const routeTree = rootRoute.addChildren([
     marketingMediaRoute,
     settingsVisibilityRoute,
     settingsSearchRoute,
-    settingsPoliciesRoute,
     settingsPrivacyRoute,
     marketingOldRoute,
     storefrontIndexRoute,

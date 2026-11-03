@@ -63,6 +63,7 @@ export type BlockType =
   | "MkCompany"
   // The website's header and footer, edited as pages of their own (defaults are today's layout)
   | "MkPricing"
+  | "MkTheme"
   | "MkHeader"
   | "MkFooter";
 

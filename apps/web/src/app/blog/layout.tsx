@@ -11,10 +11,11 @@ export default async function BlogLayout({ children }: { children: ReactNode }) 
   const h = await headers();
   if (!isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"))) return children;
   const hold = await siteHold();
+  if (hold) return <HomeRoot><main id="main" className="mk-blog">{hold}</main></HomeRoot>;
   return (
     <HomeRoot>
       <HomeNav />
-      <main id="main" className="mk-blog">{hold ?? children}</main>
+      <main id="main" className="mk-blog">{children}</main>
       <HomeFooter />
     </HomeRoot>
   );

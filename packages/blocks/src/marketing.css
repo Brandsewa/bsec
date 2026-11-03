@@ -248,7 +248,9 @@
 .mk .foot-brand address{margin-top:12px;font-style:normal;line-height:1.7}
 .mk .foot nav{display:flex;flex-direction:column;gap:10px}
 .mk .foot h4{margin-bottom:4px;font:500 12px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
-.mk .foot nav a:hover{color:var(--ink)}
+.mk .foot nav a:hover,.mk .foot-links a:hover{color:var(--ink)}
+.mk .foot-fold{display:none}
+.mk .foot-links{display:flex;flex-direction:column;gap:10px;padding-bottom:16px}
 .mk .foot-legal{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--dim)}
 
 /* pricing page */
@@ -436,3 +438,14 @@
 .mk .bsb-tone-primary a.bsb-btn-outline{color:var(--pf)}
 .mk .bsb-on-media a.bsb-btn-primary{color:#0f172a}
 .mk .bsb-on-media a.bsb-btn-outline{color:#fff}
+
+/* Footer link columns fold on tablets and phones. */
+@media(max-width:900px){
+  .mk .foot-grid{grid-template-columns:minmax(0,1fr);gap:0}
+  .mk .foot-brand{margin-bottom:24px}
+  .mk .foot-open{display:none!important}
+  .mk .foot-fold{display:block;border-bottom:1px solid var(--line)}
+  .mk .foot-fold summary{display:flex;align-items:center;justify-content:space-between;padding:14px 0;cursor:pointer;list-style:none;font:500 12px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .mk .foot-fold summary::-webkit-details-marker{display:none}
+  .mk .foot-fold[open] .foot-chev{transform:rotate(180deg)}
+}

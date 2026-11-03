@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
-import { publishedPolicy } from "@/components/marketing/landing/PublishedPolicy.tsx";
 import { GrievanceBox, LegalMeta, RelatedLinks, Summary } from "@/components/marketing/landing/LegalBits.tsx";
 import { ADDRESS_LINE, SITE } from "@/components/marketing/landing/site-info.ts";
 
@@ -11,8 +10,6 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage() {
-  const published = await publishedPolicy("privacy");
-  if (published) return published;
   return (
     <PageFrame>
       <DocHeader eyebrow="Legal" title="Privacy policy" intro="What personal data we collect, why, who sees it, and the choices you have." />
