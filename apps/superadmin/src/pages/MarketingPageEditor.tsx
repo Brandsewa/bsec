@@ -21,7 +21,7 @@ export default function MarketingPageEditor({ id }: { id: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pageQuery = useQuery(orpc.admin.pages.get.queryOptions({ input: { id, draft: true } }));
-  const exit = () => void navigate({ to: "/marketing/pages" });
+  const exit = () => void navigate({ to: "/storefront/pages" });
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() }),

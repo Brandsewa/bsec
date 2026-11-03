@@ -1,6 +1,6 @@
 # Marketing site dashboard, page builder and blog
 
-- Status: **Phases 1 to 4 live** (merged in #198). Marketing opens once `DATABASE_URL_RW` is set on `bsec-platform`. Phase 5 not started. Written 2026-11-02.
+- Status: **Phases 1 to 4 live** (merged in #198). Phase 5 is split into slices S1 to S5 (section 5a). Marketing opens once `DATABASE_URL_RW` is set on `bsec-platform`. Phase 5 not started. Written 2026-11-02.
 - Planner and verifier: Claude Code. Builder: assigned by the owner.
 - Related: ADR-001 (domain logic), ADR-002 (tenancy and roles), ADR-004 (cache tags), ADR-009 and ADR-010 (blocks, no merchant code), ADR-011 (fallbacks), ADR-033 (blog), `docs/MARKETING-SITE-PLAN.md`, `docs/changes/2026-11-02-claude-marketing-home-redesign.md`.
 - A new ADR is written in Phase 0, before any code.
@@ -88,6 +88,25 @@ Rejected:
 | 5 | Home and Pricing as block pages, with fallback | Live pages edited in Puck, rollback tested |
 
 Phases 1 and 2 touch the most sensitive code. Phase 4 is the largest; the order lets the blog ship first.
+
+## 5a. Phase 5, as the owner asked on 2026-11-03
+
+The Marketing section becomes **Storefront** in Super Admin and works like the store admin's own sections. The store screens are moved into `@bs/content-admin` and reused on the website record (the same approach as the blog), so a fix lands in both places.
+
+| Slice | Work | Done means |
+|---|---|---|
+| S1 | Sidebar group **Storefront**: Pages, Blogs, Navigation, Media, Settings (URLs `/storefront/...`, old `/marketing` redirects). Media screen shared. Fix uploads (the Platform image had no `sharp`) and show the real reason when a page cannot be added | An image uploads and shows in Media; a rejected page says why |
+| S2 | **Settings** as sections like the store's: Website visibility, Search engines, Policies, Customer privacy | Each section saves on the website record and is read by bcom.si |
+| S3 | **Builder**: the layout and basic widgets of the store builder, Theme settings tab (announcement bar moves here), Header and Footer tabs, page switcher | A page built from basic widgets and the website sections renders the same in the editor and on bcom.si |
+| S4 | **Home** editable (built-in page with the current layout as its starting point), **Pricing table widget** fed live from Plans (only heading and description editable), Blog archive and Blog post templates in the builder | Home, Pricing and Blog rendered from the builder; unpublish restores the built-in version |
+| S5 | Anything the owner adds, plus polish | Owner sign-off |
+
+Defaults chosen so work can start (change on request):
+- **Website visibility** affects only the marketing pages and the blog, never `/signup`, login or the APIs, so a mistake cannot stop store signups. Default: live.
+- **Policies** are the four legal pages (Terms, Privacy, Refund, Delivery) with draft, publish and version history. The built-in text stays as the fallback, and publishing sets the "last updated" date.
+- **Customer privacy** is the cookie banner (text, on or off) and the privacy contact email shown on the website. Visitors have no accounts, so there is no data request inbox.
+- The generic store widgets (Section, Container, Heading, Text, Image, Button and similar) are allowed on website pages, drawn with the marketing look, next to the website sections. Store-only widgets (products, cart, collections) stay off. This replaces the "website sections only" rule of Phase 4 (ADR-042 update).
+- The announcement bar is a website setting under Theme settings in the builder, not a page block.
 
 ## 6. Acceptance criteria
 

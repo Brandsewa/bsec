@@ -73,13 +73,13 @@ export function isReservedPageSlug(slug: string): boolean {
 export function validatePageSlug(slug: string): string {
   const s = slug.toLowerCase().trim();
   if (!s) {
-    throw new Error("Page slug cannot be empty.");
+    throw new Error("Bad Request: Page slug cannot be empty.");
   }
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) {
-    throw new Error("Page slug must be lowercase alphanumeric characters separated by hyphens (e.g. 'about-us').");
+    throw new Error("Bad Request: Page slug must be lowercase alphanumeric characters separated by hyphens (e.g. 'about-us').");
   }
   if (isReservedPageSlug(s)) {
-    throw new Error(`The URL slug "${s}" is reserved and cannot be used for a custom page.`);
+    throw new Error(`Bad Request: The URL slug "${s}" is reserved and cannot be used for a custom page.`);
   }
   return s;
 }
@@ -275,17 +275,17 @@ function validateHierarchyAndDepth(
   if (!newParentId) return;
 
   if (targetPageId && newParentId === targetPageId) {
-    throw new Error("A page cannot be its own parent.");
+    throw new Error("Bad Request: A page cannot be its own parent.");
   }
 
   const pagesById = new Map(allPages.map((p) => [p.id, p]));
   const parent = pagesById.get(newParentId);
   if (!parent) {
-    throw new Error("Parent page not found.");
+    throw new Error("Bad Request: Parent page not found.");
   }
 
   if (parent.type === "home" || parent.slug === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(parent.type ?? "")) {
-    throw new Error("Cannot set home or system page as parent.");
+    throw new Error("Bad Request: Cannot set home or system page as parent.");
   }
 
   // Cycle check: trace parent up to root. If targetPageId is found, cycle!
@@ -295,10 +295,10 @@ function validateHierarchyAndDepth(
 
   while (curParentId) {
     if (targetPageId && curParentId === targetPageId) {
-      throw new Error("Circular parent reference detected.");
+      throw new Error("Bad Request: Circular parent reference detected.");
     }
     if (visited.has(curParentId)) {
-      throw new Error("Circular parent reference detected.");
+      throw new Error("Bad Request: Circular parent reference detected.");
     }
     visited.add(curParentId);
     parentDepth++;
@@ -334,7 +334,7 @@ function validateHierarchyAndDepth(
 
   // Maximum allowed depth is 3.
   if (parentDepth + 1 + subtreeHeight > 3) {
-    throw new Error("Hierarchy depth cannot exceed 3 levels.");
+    throw new Error("Bad Request: Hierarchy depth cannot exceed 3 levels.");
   }
 }
 
@@ -450,7 +450,7 @@ export async function getPage(
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
-    if (!p) throw new Error(`Page not found: "${input.id}"`);
+    if (!p) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
     const wantedVersionId = input.draft
       ? (p.draftVersionId ?? p.publishedVersionId)
@@ -509,7 +509,7 @@ export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: {
   assertPermission(ctx, "content.write");
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
-    if (!p) throw new Error(`Page not found: "${input.id}"`);
+    if (!p) throw new Error(`Not Found: Page not found: "${input.id}"`);
     const rows = await tx
       .select({
         id: schema.pageVersions.id,
@@ -544,7 +544,7 @@ export async function createPage(rt: Runtime, ctx: TenantContext, input: CreateP
       .limit(1);
 
     if (existingSlug) {
-      throw new Error(`A page with the URL slug "${validSlug}" already exists.`);
+      throw new Error(`Bad Request: A page with the URL slug "${validSlug}" already exists.`);
     }
 
     const allPages = await tx
@@ -642,14 +642,14 @@ export async function updatePage(rt: Runtime, ctx: TenantContext, input: UpdateP
         .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.id, input.id)))
         .limit(1);
 
-      if (!existing) throw new Error(`Page not found: "${input.id}"`);
+      if (!existing) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
       const isHome = existing.type === "home" || existing.slug === "home";
 
       let validSlug: string | undefined = undefined;
       if (input.slug !== undefined) {
         if (isHome && input.slug !== existing.slug) {
-          throw new Error("Cannot change URL slug for home page.");
+          throw new Error("Bad Request: Cannot change URL slug for home page.");
         }
         validSlug = isHome ? existing.slug : validatePageSlug(input.slug);
 
@@ -660,13 +660,13 @@ export async function updatePage(rt: Runtime, ctx: TenantContext, input: UpdateP
             .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.slug, validSlug)))
             .limit(1);
           if (collision) {
-            throw new Error(`A page with the URL slug "${validSlug}" already exists.`);
+            throw new Error(`Bad Request: A page with the URL slug "${validSlug}" already exists.`);
           }
         }
       }
 
       if (isHome && input.parentId) {
-        throw new Error("Home page cannot have a parent.");
+        throw new Error("Bad Request: Home page cannot have a parent.");
       }
 
       const allPages = await tx
@@ -696,7 +696,7 @@ export async function updatePage(rt: Runtime, ctx: TenantContext, input: UpdateP
         .where(eq(schema.pages.id, input.id))
         .returning();
 
-      if (!row) throw new Error(`Page not found: "${input.id}"`);
+      if (!row) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
       const slugChanged = validSlug !== undefined && validSlug !== existing.slug;
       const parentChanged = input.parentId !== undefined && input.parentId !== existing.parentId;
@@ -767,10 +767,10 @@ export async function deletePage(rt: Runtime, ctx: TenantContext, input: { id: s
       .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.id, input.id)))
       .limit(1);
 
-    if (!page) throw new Error(`Page not found: "${input.id}"`);
+    if (!page) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
     if (page.type === "home" || page.slug === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(page.type ?? "")) {
-      throw new Error("Cannot delete home or system pages.");
+      throw new Error("Bad Request: Cannot delete home or system pages.");
     }
 
     const [child] = await tx
@@ -780,7 +780,7 @@ export async function deletePage(rt: Runtime, ctx: TenantContext, input: { id: s
       .limit(1);
 
     if (child) {
-      throw new Error("Cannot delete page: It has child pages. Delete or reassign its child pages first.");
+      throw new Error("Bad Request: Cannot delete page: It has child pages. Delete or reassign its child pages first.");
     }
 
     const menus = await tx
@@ -808,7 +808,7 @@ export async function deletePage(rt: Runtime, ctx: TenantContext, input: { id: s
     );
 
     if (referencedMenu) {
-      throw new Error(`Cannot delete page: It is referenced by navigation menu "${referencedMenu}". Remove the menu link first.`);
+      throw new Error(`Bad Request: Cannot delete page: It is referenced by navigation menu "${referencedMenu}". Remove the menu link first.`);
     }
 
     await clearMediaUsagesForOwner(tx, ctx, { ownerType: "page", ownerId: page.id });
@@ -834,10 +834,10 @@ export async function unpublishPage(rt: Runtime, ctx: TenantContext, input: { id
       .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.id, input.id)))
       .limit(1);
 
-    if (!page) throw new Error(`Page not found: "${input.id}"`);
+    if (!page) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
     if (page.type === "home" || page.slug === "home") {
-      throw new Error("Cannot unpublish the home page.");
+      throw new Error("Bad Request: Cannot unpublish the home page.");
     }
 
     const [row] = await tx
@@ -894,10 +894,10 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
       .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.id, input.id)))
       .limit(1);
 
-    if (!page) throw new Error(`Page not found: "${input.id}"`);
+    if (!page) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
     if (page.type === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(page.type ?? "")) {
-      throw new Error("Cannot duplicate home or system pages.");
+      throw new Error("Bad Request: Cannot duplicate home or system pages.");
     }
 
     const baseSlug = `${page.slug}-copy`;
@@ -1228,16 +1228,16 @@ export function isProtectedMenu(handle: string): boolean {
 function validateMenuItems(kind: string, items: unknown[], depth = 1): void {
   if (kind === "filter") {
     if (depth > 1) {
-      throw new Error("Filter menus cannot have nested items");
+      throw new Error("Bad Request: Filter menus cannot have nested items");
     }
     for (const item of items) {
       const parsed = FilterItemSchema.safeParse(item);
       if (!parsed.success) {
-        throw new Error(`Invalid filter menu item: ${parsed.error.message}`);
+        throw new Error(`Bad Request: Invalid filter menu item: ${parsed.error.message}`);
       }
       const children = (item as { children?: unknown[] }).children;
       if (Array.isArray(children) && children.length > 0) {
-        throw new Error("Filter menus cannot have nested items");
+        throw new Error("Bad Request: Filter menus cannot have nested items");
       }
     }
     return;
@@ -1245,22 +1245,22 @@ function validateMenuItems(kind: string, items: unknown[], depth = 1): void {
 
   // Navigation menu validation
   if (depth > 3) {
-    throw new Error("Navigation menus cannot exceed 3 levels of nesting");
+    throw new Error("Bad Request: Navigation menus cannot exceed 3 levels of nesting");
   }
 
   for (const item of items) {
     if (!item || typeof item !== "object") {
-      throw new Error("Invalid menu item");
+      throw new Error("Bad Request: Invalid menu item");
     }
     const it = item as Record<string, unknown>;
     const type = typeof it.type === "string" ? it.type : "url";
     if (type === "url" && typeof it.url === "string") {
       const u = it.url.trim();
       if (u && !SAFE_MENU_SCHEME.test(u)) {
-        throw new Error(`Unsafe URL scheme in menu item: "${u}"`);
+        throw new Error(`Bad Request: Unsafe URL scheme in menu item: "${u}"`);
       }
       if (Boolean(it.openInNewTab || it.newTab) && !/^https:\/\//i.test(u)) {
-        throw new Error("Only https: links can be set to open in a new tab");
+        throw new Error("Bad Request: Only https: links can be set to open in a new tab");
       }
     }
     if (Array.isArray(it.children) && it.children.length > 0) {
@@ -1381,7 +1381,7 @@ export async function getMenu(rt: Runtime, ctx: TenantContext, input: { handle: 
       .from(schema.menus)
       .where(eq(schema.menus.handle, input.handle));
 
-    if (!row) throw new Error(`Menu not found: "${input.handle}"`);
+    if (!row) throw new Error(`Not Found: Menu not found: "${input.handle}"`);
 
     // Legacy seeded menus lack item ids and types, which broke the editor (blank screen).
     const items = row.kind === "filter" ? ((row.items as unknown[]) ?? []) : normalizeMenuItems(row.items);
@@ -1475,11 +1475,11 @@ export async function updateMenu(
 
   const row = await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.menus).where(eq(schema.menus.id, input.id));
-    if (!existing) throw new Error(`Menu not found: "${input.id}"`);
+    if (!existing) throw new Error(`Not Found: Menu not found: "${input.id}"`);
 
     if (input.handle !== undefined && input.handle !== existing.handle) {
       if (isProtectedMenu(existing.handle)) {
-        throw new Error(`Cannot change handle of protected menu "${existing.handle}"`);
+        throw new Error(`Bad Request: Cannot change handle of protected menu "${existing.handle}"`);
       }
     }
 
@@ -1499,7 +1499,7 @@ export async function updateMenu(
       .where(eq(schema.menus.id, input.id))
       .returning();
 
-    if (!updated) throw new Error(`Menu not found: "${input.id}"`);
+    if (!updated) throw new Error(`Not Found: Menu not found: "${input.id}"`);
     return updated;
   });
 
@@ -1524,7 +1524,7 @@ export async function deleteMenu(rt: Runtime, ctx: TenantContext, input: { id: s
 
   await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx.select().from(schema.menus).where(eq(schema.menus.id, input.id));
-    if (!existing) throw new Error(`Menu not found: "${input.id}"`);
+    if (!existing) throw new Error(`Not Found: Menu not found: "${input.id}"`);
 
     // Default menus (header, footer) can be deleted like any other menu; a store may start from scratch.
     await tx.delete(schema.menus).where(eq(schema.menus.id, input.id));

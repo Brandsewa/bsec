@@ -41,6 +41,7 @@ import { PostForm } from "@bs/content-admin/blog/PostForm.tsx";
 import { MenuEditorScreen } from "@bs/content-admin/menus/MenuEditorScreen.tsx";
 import { MenusScreen } from "@bs/content-admin/menus/MenusScreen.tsx";
 import { PagesScreen } from "@bs/content-admin/pages/PagesScreen.tsx";
+import { MediaScreen, validateMediaSearch } from "@bs/content-admin/media/MediaScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
@@ -142,7 +143,7 @@ const TemplateEditor = lazy(() => import("./pages/TemplateEditor.tsx"));
 const MarketingPageEditor = lazy(() => import("./pages/MarketingPageEditor.tsx"));
 const marketingPageEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/marketing/pages/$id/editor",
+  path: "/storefront/pages/$id/editor",
   beforeLoad: ({ context }) => {
     if (!context.user) {
       throw redirect({ to: "/login" });
@@ -288,7 +289,7 @@ const signupsRoute = createRoute({
 
 const marketingRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing",
+  path: "/storefront/settings",
   component: Marketing,
   pendingComponent: () => (
     <PageContainer>
@@ -307,21 +308,48 @@ const marketingPending = () => (
 
 const marketingPagesRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/pages",
+  path: "/storefront/pages",
   component: PagesScreen,
   pendingComponent: marketingPending,
 });
 
+const marketingMediaRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront/media",
+  validateSearch: validateMediaSearch,
+  component: function StorefrontMedia() {
+    return <MediaScreen search={marketingMediaRoute.useSearch()} />;
+  },
+  pendingComponent: marketingPending,
+});
+
+// Older links: Marketing was renamed Storefront.
+const marketingOldRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketing",
+  beforeLoad: () => {
+    throw redirect({ to: "/storefront/settings" });
+  },
+});
+
+const storefrontIndexRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/storefront",
+  beforeLoad: () => {
+    throw redirect({ to: "/storefront/pages" });
+  },
+});
+
 const marketingNavigationRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/navigation",
+  path: "/storefront/navigation",
   component: MenusScreen,
   pendingComponent: marketingPending,
 });
 
 const marketingMenuRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/navigation/$handle",
+  path: "/storefront/navigation/$handle",
   component: function MarketingMenu() {
     return <MenuEditorScreen handle={marketingMenuRoute.useParams().handle} />;
   },
@@ -330,7 +358,7 @@ const marketingMenuRoute = createRoute({
 
 const marketingBlogRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/blog",
+  path: "/storefront/blog",
   validateSearch: validateBlogListSearch,
   component: function MarketingBlog() {
     return <BlogPostsScreen search={marketingBlogRoute.useSearch()} />;
@@ -340,14 +368,14 @@ const marketingBlogRoute = createRoute({
 
 const marketingBlogCategoriesRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/blog/categories",
+  path: "/storefront/blog/categories",
   component: BlogCategoriesScreen,
   pendingComponent: marketingPending,
 });
 
 const marketingBlogNewRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/blog/new",
+  path: "/storefront/blog/new",
   component: function MarketingBlogNew() {
     return <PostForm />;
   },
@@ -356,7 +384,7 @@ const marketingBlogNewRoute = createRoute({
 
 const marketingBlogPostRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: "/marketing/blog/$id",
+  path: "/storefront/blog/$id",
   component: function MarketingBlogPost() {
     return <PostForm postId={marketingBlogPostRoute.useParams().id} />;
   },
@@ -627,6 +655,9 @@ export const routeTree = rootRoute.addChildren([
     overviewRoute,
     marketingRoute,
     marketingPagesRoute,
+    marketingMediaRoute,
+    marketingOldRoute,
+    storefrontIndexRoute,
     marketingNavigationRoute,
     marketingMenuRoute,
     marketingBlogRoute,
