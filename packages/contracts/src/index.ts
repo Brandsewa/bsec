@@ -61,9 +61,8 @@ export const storeContract = {
 };
 
 // The website has no theme templates to create.
-const { ensureTemplate: _ensureTemplate, ...sitePagesBase } = adminContract.pages;
 const sitePagesContract = {
-  ...sitePagesBase,
+  ...adminContract.pages,
   // The website's header and footer are pages of their own; this creates the missing one from today's layout.
   ensureChrome: oc
     .route({ method: "POST", path: "/marketing/pages/chrome/{key}" })

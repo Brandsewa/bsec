@@ -1229,7 +1229,7 @@ function EditorBlock({ type, props }: { type: BlockType; props: AnyProps }): Rea
 }
 
 /** Which kind of theme page is being edited; limits the block picker to blocks that make sense there. */
-export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom" | "marketing" | "marketingHeader" | "marketingFooter";
+export type EditorPageKind = "home" | "collections" | "collection" | "product" | "cart" | "blogArchive" | "blogPost" | "header" | "footer" | "custom" | "marketing" | "marketingHeader" | "marketingFooter" | "marketingBlogArchive" | "marketingBlogPost";
 
 const ONLY: Record<"header" | "footer", BlockType[]> = {
   header: ["SiteHeader", "Banner"],
@@ -1251,6 +1251,9 @@ export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   // footer page the footer.
   if (kind === "marketingHeader") return type === "MkHeader" || type === "Banner";
   if (kind === "marketingFooter") return type === "MkFooter";
+  // The website's blog layouts: the listing or the post body, plus the generic widgets.
+  if (kind === "marketingBlogArchive") return type === "BlogListing" || WEBSITE_GENERIC_BLOCK_TYPES.has(type);
+  if (kind === "marketingBlogPost") return type === "BlogPostContent" || WEBSITE_GENERIC_BLOCK_TYPES.has(type);
   if (kind === "marketing") return (MARKETING_BLOCK_TYPES.has(type) && type !== "MkHeader" && type !== "MkFooter") || WEBSITE_GENERIC_BLOCK_TYPES.has(type);
   if (MARKETING_BLOCK_TYPES.has(type)) return false;
   if (kind === "header" || kind === "footer") return ONLY[kind].includes(type);
@@ -1296,7 +1299,7 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
       // Page-level settings (SEO etc.) live on the page record, not in the block document.
       fields: {},
       // The canvas shows the store's own theme: same --bs-* variables the storefront sets.
-      render: ({ children }: { children: ReactNode }) => kind === "marketing" || kind === "marketingHeader" || kind === "marketingFooter" ? (
+      render: ({ children }: { children: ReactNode }) => kind === "marketing" || kind === "marketingHeader" || kind === "marketingFooter" || kind === "marketingBlogArchive" || kind === "marketingBlogPost" ? (
         // The fonts are the web app's, so name plain ones here; the page's words and spacing still match. The store
         // theme variables the generic widgets read point at the website palette (WEBSITE_BLOCK_VARS).
         <div className="mk" style={{ ...(WEBSITE_BLOCK_VARS as CSSProperties), "--font-sans": "Inter", "--font-mono": "ui-monospace" } as CSSProperties}>

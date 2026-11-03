@@ -180,6 +180,9 @@ export const isWebsitePageBlockSet = (blocks: BlockInstance[]): boolean =>
 /** The header page holds the header and the announcement bar; the footer page holds the footer. */
 export const isWebsiteHeaderBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkHeader" || t === "Banner");
 export const isWebsiteFooterBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "MkFooter");
+/** The blog layouts of the website: the listing or the post body, plus the generic widgets. */
+export const isWebsiteBlogArchiveBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "BlogListing" || WEBSITE_GENERIC_BLOCK_TYPES.has(t));
+export const isWebsiteBlogPostBlockSet = (blocks: BlockInstance[]): boolean => only(blocks, (t) => t === "BlogPostContent" || WEBSITE_GENERIC_BLOCK_TYPES.has(t));
 export const isWebsiteBlockSet = (blocks: BlockInstance[]): boolean =>
   isWebsitePageBlockSet(blocks) || isWebsiteHeaderBlockSet(blocks) || isWebsiteFooterBlockSet(blocks);
 
