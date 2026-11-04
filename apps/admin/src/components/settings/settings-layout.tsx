@@ -89,7 +89,8 @@ export function SettingsLayout({ permissions }: { permissions: readonly string[]
 
       {/* Main settings content: centered */}
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 lg:px-10 lg:py-8">
-        <div className="mx-auto w-full max-w-3xl">
+        {/* Markets hold wide tables (bulk variant pricing), so that section uses the full width. */}
+        <div className={cn("mx-auto w-full", pathname.startsWith("/settings/markets") ? "max-w-none" : "max-w-3xl")}>
           <div className="hidden lg:block">
             <SettingsUpdateBanner />
           </div>
