@@ -145,7 +145,24 @@ export function getClientIp(
  * Resolves effective quota for a tenant:
  * 1. Tenant Quota Override -> 2. Tenant Size Tier -> 3. Default Tier (XS)
  */
+/** A tenant's quota changes rarely (a plan change or an override), but it was looked up with three queries on every storefront request. */
+const QUOTA_TTL_MS = process.env.VITEST ? 0 : 60_000;
+const quotaCache = new Map<string, { at: number; value: number }>();
+
 export async function resolveTenantQuota(
+  db: Db,
+  tenantId: string,
+  quotaKey: QuotaKey,
+): Promise<number> {
+  const cacheKey = `${tenantId}:${quotaKey}`;
+  const hit = QUOTA_TTL_MS > 0 ? quotaCache.get(cacheKey) : undefined;
+  if (hit && Date.now() - hit.at < QUOTA_TTL_MS) return hit.value;
+  const value = await resolveTenantQuotaUncached(db, tenantId, quotaKey);
+  if (QUOTA_TTL_MS > 0) quotaCache.set(cacheKey, { at: Date.now(), value });
+  return value;
+}
+
+async function resolveTenantQuotaUncached(
   db: Db,
   tenantId: string,
   quotaKey: QuotaKey,
