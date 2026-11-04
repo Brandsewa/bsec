@@ -5,8 +5,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 
 /**
  * Background video that costs nothing until it is worth it. Server HTML carries only the poster; the file is attached
- * after load, and only on screens of 768px and up, without Data Saver and without reduced-motion. Phones therefore
- * never download a multi-megabyte clip they would barely notice (the poster stays as the background).
+ * after idle, and only without Data Saver and without reduced-motion (those visitors keep the poster as background).
  */
 export function BgVideo({ src, poster, style }: { src: string; poster?: string | undefined; style?: CSSProperties | undefined }) {
   const ref = useRef<HTMLVideoElement | null>(null);
@@ -16,7 +15,9 @@ export function BgVideo({ src, poster, style }: { src: string; poster?: string |
     if (!el) return;
     const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     const matches = (query: string) => (globalThis as unknown as { matchMedia: (q: string) => { matches: boolean } }).matchMedia(query).matches;
-    const allowed = matches("(min-width: 768px)") && !conn?.saveData && !matches("(prefers-reduced-motion: reduce)");
+    // Phones play it too (a merchant who picked a background video expects to see it there); the file is still attached
+    // only after idle, so it never competes with LCP. Data Saver and reduced-motion visitors keep the poster.
+    const allowed = !conn?.saveData && !matches("(prefers-reduced-motion: reduce)");
     if (!allowed) return;
     let cancelled = false;
     const start = () => {

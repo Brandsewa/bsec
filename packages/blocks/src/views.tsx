@@ -286,7 +286,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
 
   const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
@@ -371,7 +371,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
 
   const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
@@ -463,7 +463,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   
   // If custom width is given, use it; otherwise use flex: 1 1 0 with minWidth: 0 so sibling blocks distribute space automatically
   const hasCustomWidth = Boolean(props.sizing?.width);
