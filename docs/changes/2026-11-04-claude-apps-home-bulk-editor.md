@@ -24,8 +24,10 @@ Owner request after #213 and #214: an Apps section in the main sidebar with an a
 
 ## Verification
 - Ran: typecheck and lint for admin, web, domain, contracts; admin unit tests for the grid logic.
-- Written, not run locally (Docker engine not running): real-database tests for pinning, the grid read, bulk save, SKU lookup and the isolation mapping; CI runs them.
-- NOT done: no browser walk-through of the app home, pinning, Settings tabs, the grid, import and export, or the new popup.
+- Walked in a browser against a fresh local database (desktop width): app home (card, Installed, Open); Settings > Apps tabs and the row menu; pin to sidebar (sidebar shows "All apps" and the pinned "State Pricing"); the grid (25 of 33 products per page, page 2, search by name and by SKU, multi-variant product expands, dirty cells marked, a 2x2 paste, an invalid price keeps the unsaved bar and disables Save, a valid save persisted and wrote one `state_prices.bulk` audit row, edits survive paging and searching); CSV export (matches the Excel layout) and a CSV import with Sikkim and West Bengal columns and one unknown SKU; more than 10 states (ten inline plus "+2 more" opening a popup); the storefront popup (solid white card, one field, Continue, small footer line; a pincode set the Karnataka price).
+- Found and fixed during the walk: the unsaved-changes bar vanished while a cell was invalid.
+- Written, not run locally: the real-database tests (pinning, grid read, bulk save, SKU lookup, isolation mapping); CI runs them.
+- NOT checked: a real phone-width layout, keyboard arrow navigation by hand, `.xlsx` files (unsupported).
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (migration table, section 20)

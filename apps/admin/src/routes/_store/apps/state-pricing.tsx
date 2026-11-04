@@ -292,7 +292,8 @@ function PricesGrid() {
   }
 
   const available = stateList.filter((s) => !shownStates.includes(s.code));
-  const dirtyCount = changes.length;
+  // While a cell is invalid there are no sendable changes, but the bar must stay so the problem and Discard stay visible.
+  const dirtyCount = invalid ? Object.keys(edits).length : changes.length;
 
   return (
     <div className="space-y-3">
