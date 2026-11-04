@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/bulk-fixes-markets-checkout` (not merged yet)
+- **Branch:** `feat/bulk-fixes-markets-checkout` (merged in #220, 87d0c38; production deploy succeeded)
 - **Area:** web, blocks, block-editor, admin, domain, contracts
 - **Type:** feature
 - **Supersedes:** none
@@ -63,4 +63,4 @@ NOT verified:
 - [x] Tests added (real-DB for the market gateway change)
 - [x] Docs updated
 - [x] No secrets, no generated files in the diff
-- [ ] After merge: record the PR and commit, remove the in-flight line, delete the branch and worktree
+- [x] After merge: PR and commit recorded, in-flight line removed, branch and worktree deleted

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `fix/market-prices-switch` (not merged yet)
+- **Branch:** `fix/market-prices-switch` (merged in #226)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none
@@ -32,4 +32,4 @@ Owner report on the live store (theexoteas.bcom.si, International market): categ
 - Page loads on the live store take 0.8 to 1.7 s and the evaluate call alone about 0.5 s from a browser; the middleware runs it on every request.
 
 ## Definition of done
-- [ ] After merge: record PR and commit, remove in-flight line, delete branch and worktree
+- [x] After merge: PR recorded, in-flight line removed, branch deleted
