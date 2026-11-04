@@ -30,6 +30,8 @@ export interface StoreAppRecord {
   status: "installed" | "disabled" | null;
   /** Super Admin switched this app off for the store. */
   suspended: boolean;
+  /** Pinned to the admin sidebar. */
+  pinned: boolean;
   settings: Record<string, unknown>;
 }
 
@@ -68,6 +70,7 @@ export async function readStoreApps(tx: Db, tenantId: string): Promise<StoreAppR
         installed: !!inst,
         status: (inst?.status as "installed" | "disabled" | undefined) ?? null,
         suspended: inst?.platformSuspended ?? false,
+        pinned: inst?.pinned ?? false,
         settings: (inst?.settings as Record<string, unknown> | undefined) ?? {},
       };
     });
@@ -141,6 +144,24 @@ export async function setAppStatus(rt: Runtime, ctx: TenantContext, key: string,
     return storeAppOrFail(tx, ctx.tenantId, key);
   });
   await invalidateCache(rt, ctx, { type: "markets_changed" });
+  return result;
+}
+
+/** Pins or unpins an installed app in the admin sidebar. A store-wide setting, so every staff member sees the same sidebar. */
+export async function setAppPinned(rt: Runtime, ctx: TenantContext, key: string, pinned: boolean): Promise<StoreAppRecord> {
+  assertPermission(ctx, "apps.manage");
+  const result = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [inst] = await tx
+      .select()
+      .from(schema.tenantApps)
+      .where(and(eq(schema.tenantApps.tenantId, ctx.tenantId), eq(schema.tenantApps.appKey, key)))
+      .limit(1);
+    if (!inst) fail("Not Found", "Install the app first");
+    if (inst.platformSuspended) fail("Forbidden", "This app has been turned off for your store by Brand Sewa");
+    await tx.update(schema.tenantApps).set({ pinned, updatedAt: new Date() }).where(eq(schema.tenantApps.id, inst.id));
+    await audit(tx, ctx, pinned ? "app.pin" : "app.unpin", key, {});
+    return storeAppOrFail(tx, ctx.tenantId, key);
+  });
   return result;
 }
 

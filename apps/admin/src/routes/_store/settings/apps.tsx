@@ -1,31 +1,26 @@
 import { useState } from "react";
-import { Link, createFileRoute, useRouteContext } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowRight, MapPin, Puzzle } from "lucide-react";
-import { Alert, Badge, Button, ConfirmDialog, EmptyState, Field, PageSkeleton, SimpleSelect, toast } from "@bs/ui";
+import { AlertCircle, ExternalLink, MoreHorizontal, Pin, PinOff, Power, Trash2 } from "lucide-react";
+import { Alert, Badge, Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, EmptyState, PageSkeleton, Tabs, TabsContent, TabsList, TabsTrigger, toast } from "@bs/ui";
 import type { StoreAppRecord } from "@bs/contracts";
 import { SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { client, orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
+import { appHref, appIcon, isAppOn } from "../../../lib/app-meta.ts";
 
 export const Route = createFileRoute("/_store/settings/apps")({
   pendingComponent: () => <PageSkeleton />,
-  component: AppsPage,
+  component: AppsSettingsPage,
 });
 
 const TITLE = "Apps";
-const DESCRIPTION = "Add features to your store. Install an app, then change its settings here.";
+const DESCRIPTION = "The apps installed on your store, and the ones you can still add.";
 
-const STATE_PRICING = "state-pricing";
-
-const MODE_OPTIONS = [
-  { value: "auto", label: "Automatic: detect the shopper's state" },
-  { value: "manual", label: "Manual: ask the shopper for their pincode" },
-];
-
-function AppsPage() {
+function AppsSettingsPage() {
   const { store } = useRouteContext({ from: "/_store" });
   const canManage = (store?.permissions ?? []).includes("apps.manage");
+  const navigate = useNavigate();
   const query = useQuery(orpc.admin.apps.list.queryOptions());
   const [busy, setBusy] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<StoreAppRecord | null>(null);
@@ -50,7 +45,6 @@ function AppsPage() {
       </SettingsPageFrame>
     );
   }
-
   if (query.isError || !query.data) {
     return (
       <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
@@ -61,7 +55,8 @@ function AppsPage() {
     );
   }
 
-  const apps = query.data;
+  const installed = query.data.filter((a) => a.installed);
+  const available = query.data.filter((a) => !a.installed);
 
   return (
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
@@ -71,82 +66,103 @@ function AppsPage() {
         </Alert>
       ) : null}
 
-      {apps.length === 0 ? (
-        <SettingsCard>
-          <EmptyState icon={Puzzle} title="No apps available yet" description="Apps made available to your store will appear here." />
-        </SettingsCard>
-      ) : (
-        apps.map((app) => {
-          const active = app.installed && app.status === "installed" && !app.suspended;
-          return (
-            <SettingsCard key={app.key} title={app.name} description={app.description}>
-              <div className="flex flex-wrap items-center gap-2">
-                {app.suspended ? (
-                  <Badge variant="outline" className="border-destructive/40 text-destructive">Turned off by Brand Sewa</Badge>
-                ) : active ? (
-                  <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">On</Badge>
-                ) : app.installed ? (
-                  <Badge variant="outline">Off</Badge>
-                ) : (
-                  <Badge variant="outline">Not installed</Badge>
-                )}
-              </div>
+      <Tabs defaultValue="installed">
+        <TabsList>
+          <TabsTrigger value="installed">Installed ({installed.length})</TabsTrigger>
+          <TabsTrigger value="uninstalled">Uninstalled ({available.length})</TabsTrigger>
+        </TabsList>
 
-              {app.key === STATE_PRICING && app.installed && !app.suspended ? (
-                <div className="mt-4 max-w-md">
-                  <Field id="state-pricing-mode" label="How to find the shopper's state">
-                    <SimpleSelect
-                      value={String(app.settings.mode ?? "auto")}
-                      onChange={(mode) => void run(app.key, () => client.admin.apps.updateSettings({ key: app.key, settings: { mode } }), "Settings saved")}
-                      options={MODE_OPTIONS}
-                    />
-                  </Field>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Automatic uses the shopper's location from their connection. Manual shows a pincode box as soon as the store opens, and the price follows the pincode they enter.
-                  </p>
-                </div>
-              ) : null}
+        <TabsContent value="installed" className="mt-4">
+          <SettingsCard>
+            {installed.length === 0 ? (
+              <EmptyState title="No apps installed" description="Browse the app home to find apps for your store." action={<Button asChild><Link to="/apps">Browse apps</Link></Button>} />
+            ) : (
+              <ul className="divide-y divide-border">
+                {installed.map((app) => {
+                  const Icon = appIcon(app.icon);
+                  const on = isAppOn(app);
+                  const href = appHref(app.key);
+                  return (
+                    <li key={app.key} className="flex items-center gap-3 py-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <Icon className="size-5" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        {href && on ? (
+                          <Link to={href} className="truncate text-sm font-medium text-foreground hover:underline">{app.name}</Link>
+                        ) : (
+                          <span className="truncate text-sm font-medium text-foreground">{app.name}</span>
+                        )}
+                        <p className="truncate text-xs text-muted-foreground">{app.description}</p>
+                      </div>
+                      {app.pinned ? <Badge variant="outline" className="hidden sm:inline-flex">Pinned</Badge> : null}
+                      {app.suspended ? <Badge variant="outline" className="border-destructive/40 text-destructive">Turned off by Brand Sewa</Badge> : on ? <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">On</Badge> : <Badge variant="outline">Off</Badge>}
+                      {canManage && !app.suspended ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${app.name}`} disabled={busy === app.key} />}>
+                            <MoreHorizontal />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-48">
+                            {href && on ? (
+                              <DropdownMenuItem onClick={() => void navigate({ to: href })}>
+                                <ExternalLink /> Open app
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem
+                              onClick={() => void run(app.key, () => client.admin.apps.setPinned({ key: app.key, pinned: !app.pinned }), app.pinned ? `${app.name} unpinned` : `${app.name} pinned to the sidebar`)}
+                            >
+                              {app.pinned ? <PinOff /> : <Pin />} {app.pinned ? "Unpin from sidebar" : "Pin to sidebar"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void run(app.key, () => client.admin.apps.setStatus({ key: app.key, status: on ? "disabled" : "installed" }), on ? `${app.name} turned off` : `${app.name} turned on`)}
+                            >
+                              <Power /> {on ? "Turn off" : "Turn on"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setUninstallTarget(app)}>
+                              <Trash2 /> Uninstall
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SettingsCard>
+        </TabsContent>
 
-              {canManage && !app.suspended ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {!app.installed ? (
-                    <Button size="sm" disabled={busy === app.key} onClick={() => void run(app.key, () => client.admin.apps.install({ key: app.key }), `${app.name} installed`)}>
-                      Install
-                    </Button>
-                  ) : (
-                    <>
-                      {app.key === STATE_PRICING ? (
-                        <Button size="sm" asChild>
-                          <Link to="/settings/apps/state-pricing">
-                            <MapPin className="mr-1.5 h-3.5 w-3.5" /> Set state prices <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                          </Link>
+        <TabsContent value="uninstalled" className="mt-4">
+          <SettingsCard>
+            {available.length === 0 ? (
+              <EmptyState title="Nothing left to install" description="Every app available to your store is already installed." />
+            ) : (
+              <ul className="divide-y divide-border">
+                {available.map((app) => {
+                  const Icon = appIcon(app.icon);
+                  return (
+                    <li key={app.key} className="flex items-center gap-3 py-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <Icon className="size-5" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-medium text-foreground">{app.name}</span>
+                        <p className="truncate text-xs text-muted-foreground">{app.description}</p>
+                      </div>
+                      {canManage ? (
+                        <Button size="sm" disabled={busy === app.key} onClick={() => void run(app.key, () => client.admin.apps.install({ key: app.key }), `${app.name} installed`)}>
+                          Install
                         </Button>
                       ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy === app.key}
-                        onClick={() =>
-                          void run(
-                            app.key,
-                            () => client.admin.apps.setStatus({ key: app.key, status: active ? "disabled" : "installed" }),
-                            active ? `${app.name} turned off` : `${app.name} turned on`,
-                          )
-                        }
-                      >
-                        {active ? "Turn off" : "Turn on"}
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={busy === app.key} onClick={() => setUninstallTarget(app)}>
-                        Uninstall
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </SettingsCard>
-          );
-        })
-      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SettingsCard>
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDialog
         open={uninstallTarget !== null}

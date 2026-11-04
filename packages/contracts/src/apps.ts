@@ -15,6 +15,7 @@ export const StoreAppRecord = z.object({
   installed: z.boolean(),
   status: z.enum(["installed", "disabled"]).nullable(),
   suspended: z.boolean(),
+  pinned: z.boolean(),
   settings: z.record(z.string(), z.unknown()),
 });
 export type StoreAppRecord = z.infer<typeof StoreAppRecord>;
@@ -46,6 +47,10 @@ export const appsContract = {
     .route({ method: "PUT", path: "/admin/apps/{key}/status" })
     .input(z.object({ key: AppKey, status: z.enum(["installed", "disabled"]) }))
     .output(StoreAppRecord),
+  setPinned: oc
+    .route({ method: "PUT", path: "/admin/apps/{key}/pinned" })
+    .input(z.object({ key: AppKey, pinned: z.boolean() }))
+    .output(StoreAppRecord),
   uninstall: oc.route({ method: "DELETE", path: "/admin/apps/{key}" }).input(KeyInput).output(z.object({ removed: z.literal(true) })),
   updateSettings: oc
     .route({ method: "PUT", path: "/admin/apps/{key}/settings" })
@@ -56,6 +61,24 @@ export const appsContract = {
     .route({ method: "GET", path: "/admin/apps/state-pricing/products/{productId}" })
     .input(z.object({ productId: Uuid }))
     .output(ProductStatePricing),
+  listGrid: oc
+    .route({ method: "GET", path: "/admin/apps/state-pricing/grid" })
+    .input(z.object({ search: z.string().max(100).optional(), limit: z.number().int().min(1).max(100).default(25), offset: z.number().int().min(0).default(0) }))
+    .output(
+      z.object({
+        rows: z.array(ProductStatePricing),
+        total: z.number().int(),
+        usedStates: z.array(StateCode),
+      }),
+    ),
+  setPricesBulk: oc
+    .route({ method: "PUT", path: "/admin/apps/state-pricing/prices" })
+    .input(z.object({ items: z.array(z.object({ variantId: Uuid, state: StateCode, price: z.number().int().positive().nullable() })).min(1).max(1000) }))
+    .output(z.object({ saved: z.number().int(), removed: z.number().int() })),
+  lookupSkus: oc
+    .route({ method: "POST", path: "/admin/apps/state-pricing/sku-lookup" })
+    .input(z.object({ skus: z.array(z.string().max(100)).min(1).max(2000) }))
+    .output(z.array(z.object({ sku: z.string(), variantId: Uuid, productTitle: z.string(), variantTitle: z.string(), basePrice: z.number().int() }))),
   setVariantPricing: oc
     .route({ method: "PUT", path: "/admin/apps/state-pricing/variants/{variantId}" })
     .input(

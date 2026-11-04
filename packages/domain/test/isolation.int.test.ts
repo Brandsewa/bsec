@@ -140,6 +140,10 @@ import {
   listIndianStates,
   getProductStatePricing,
   setVariantStatePrices,
+  setAppPinned,
+  listStatePricingGrid,
+  setStatePricesBulk,
+  lookupVariantsBySku,
   getMarketDetail,
   createMarket,
   updateMarket,
@@ -2391,6 +2395,19 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         await isoApp(rt, ctx);
         return await updateAppSettings(rt, ctx, "state-pricing", { mode: "auto" });
       }
+      case "apps.setPinned": {
+        await isoApp(rt, ctx);
+        return await setAppPinned(rt, ctx, "state-pricing", true);
+      }
+      case "apps.listGrid":
+        return await listStatePricingGrid(rt, ctx, { limit: 10, offset: 0 });
+      case "apps.setPricesBulk": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setStatePricesBulk(rt, ctx, [{ variantId: v.variantId, state: "MH", price: 1234 }]);
+      }
+      case "apps.lookupSkus":
+        return await lookupVariantsBySku(rt, ctx, ["ISO-SKU"]);
       case "apps.states":
         await listStoreApps(rt, ctx);
         return await listIndianStates(rt);

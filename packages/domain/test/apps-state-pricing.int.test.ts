@@ -25,6 +25,10 @@ import {
   updatePlatformApp,
   createRuntime,
   loadStatePriceMap,
+  setAppPinned,
+  listStatePricingGrid,
+  setStatePricesBulk,
+  lookupVariantsBySku,
   importPincodeDirectory,
   lookupStateByPincode,
   STATE_PRICING_APP,
@@ -210,5 +214,74 @@ describe("pincode directory", () => {
 
   it("is read-only for the store runtime", async () => {
     await expect(rtWeb._db.db.insert(schema.platformInPincodes).values({ pincode: "110001", stateCode: "DL" })).rejects.toThrow();
+  });
+});
+
+describe("pinning, the bulk grid and SKU lookup", () => {
+  let zedA = "";
+  let zedB = "";
+
+  it("pins an installed app, and refuses when it is suspended or not installed", async () => {
+    const pinned = await setAppPinned(rtWeb, ctxA, STATE_PRICING_APP, true);
+    expect(pinned.pinned).toBe(true);
+    expect((await listStoreApps(rtWeb, ctxA)).find((a) => a.key === STATE_PRICING_APP)?.pinned).toBe(true);
+    expect((await setAppPinned(rtWeb, ctxA, STATE_PRICING_APP, false)).pinned).toBe(false);
+    await expect(setAppPinned(rtWeb, { ...ctxB, tenantId: "00000000-0000-7000-8000-000000000001" }, STATE_PRICING_APP, true)).rejects.toThrow(/Install the app first/);
+    await setTenantAppSuspended(rtPlatform, adminId, ctxA.tenantId, STATE_PRICING_APP, true);
+    await expect(setAppPinned(rtWeb, ctxA, STATE_PRICING_APP, true)).rejects.toThrow(/turned off/);
+    await setTenantAppSuspended(rtPlatform, adminId, ctxA.tenantId, STATE_PRICING_APP, false);
+  });
+
+  it("pages products with their variants, searches by title or SKU, and lists the states in use", async () => {
+    const db = rtPlatform._db.db;
+    const [p] = await db.insert(schema.products).values({ tenantId: ctxA.tenantId, title: "Zed Bottle", slug: "zed-bottle", status: "active" }).returning();
+    const [v1] = await db.insert(schema.variants).values({ tenantId: ctxA.tenantId, productId: p!.id, sku: "ZB-360", title: "360ml", price: 13000n, position: 0 }).returning();
+    const [v2] = await db.insert(schema.variants).values({ tenantId: ctxA.tenantId, productId: p!.id, sku: "ZB-660", title: "660ml", price: 20000n, position: 1 }).returning();
+    zedA = v1!.id;
+    zedB = v2!.id;
+
+    const first = await listStatePricingGrid(rtWeb, ctxA, { limit: 1, offset: 0 });
+    expect(first.total).toBe(2);
+    expect(first.rows.map((r) => r.productTitle)).toEqual(["Desk Lamp"]);
+    expect(first.usedStates).toContain("MH");
+    const second = await listStatePricingGrid(rtWeb, ctxA, { limit: 1, offset: 1 });
+    expect(second.rows[0]?.productTitle).toBe("Zed Bottle");
+    expect(second.rows[0]?.variants.map((v) => v.sku)).toEqual(["ZB-360", "ZB-660"]);
+    const bySku = await listStatePricingGrid(rtWeb, ctxA, { search: "zb-66", limit: 25, offset: 0 });
+    expect(bySku.rows.map((r) => r.productTitle)).toEqual(["Zed Bottle"]);
+    const byTitle = await listStatePricingGrid(rtWeb, ctxA, { search: "lamp", limit: 25, offset: 0 });
+    expect(byTitle.total).toBe(1);
+    expect((await listStatePricingGrid(rtWeb, ctxB, { limit: 25, offset: 0 })).total).toBe(0);
+  });
+
+  it("saves and removes many state prices at once, with one audit row, all or nothing", async () => {
+    const res = await setStatePricesBulk(rtWeb, ctxA, [
+      { variantId: zedA, state: "MH", price: 12000 },
+      { variantId: zedA, state: "TN", price: 12500 },
+      { variantId: zedB, state: "MH", price: 19000 },
+      { variantId: variantA, state: "MH", price: null },
+    ]);
+    expect(res).toEqual({ saved: 3, removed: 1 });
+    const grid = await listStatePricingGrid(rtWeb, ctxA, { search: "zed", limit: 25, offset: 0 });
+    expect(grid.rows[0]?.variants[0]?.prices).toMatchObject({ MH: { price: 12000 }, TN: { price: 12500 } });
+    expect(grid.rows[0]?.variants[1]?.prices).toMatchObject({ MH: { price: 19000 } });
+    const lamp = await listStatePricingGrid(rtWeb, ctxA, { search: "lamp", limit: 25, offset: 0 });
+    expect(lamp.rows[0]?.variants[0]?.prices.MH).toBeUndefined();
+    const audit = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.auditLogs).where(eq(schema.auditLogs.action, "state_prices.bulk")));
+    expect(audit).toHaveLength(1);
+
+    await expect(setStatePricesBulk(rtWeb, ctxA, [{ variantId: zedA, state: "KA", price: 100 }, { variantId: "00000000-0000-7000-8000-0000000000ff", state: "KA", price: 100 }])).rejects.toThrow(/not found/);
+    expect((await listStatePricingGrid(rtWeb, ctxA, { search: "zed", limit: 25, offset: 0 })).rows[0]?.variants[0]?.prices.KA).toBeUndefined();
+    await expect(setStatePricesBulk(rtWeb, ctxA, [{ variantId: zedA, state: "KA", price: 100 }, { variantId: zedA, state: "KA", price: 200 }])).rejects.toThrow(/twice/);
+    await expect(setStatePricesBulk(rtWeb, ctxA, [{ variantId: zedA, state: "ZZ", price: 100 }])).rejects.toThrow(/Unknown state/);
+    await expect(setStatePricesBulk(rtWeb, ctxB, [{ variantId: zedA, state: "KA", price: 100 }])).rejects.toThrow(/Conflict|Not Found/);
+  });
+
+  it("finds variants by SKU for the store only", async () => {
+    const found = await lookupVariantsBySku(rtWeb, ctxA, ["ZB-360", "LAMP-1", "NOPE", " ZB-660 "]);
+    expect(found.map((f) => f.sku).sort()).toEqual(["LAMP-1", "ZB-360", "ZB-660"]);
+    expect(found.find((f) => f.sku === "ZB-360")).toMatchObject({ productTitle: "Zed Bottle", variantTitle: "360ml", basePrice: 13000 });
+    expect(await lookupVariantsBySku(rtWeb, ctxB, ["ZB-360", "LAMP-1"])).toEqual([]);
+    expect(await lookupVariantsBySku(rtWeb, ctxA, [])).toEqual([]);
   });
 });
