@@ -1,3 +1,4 @@
+import { ACCESS_READ_TTL_MS, accessReads } from "./access-cache.ts";
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { and, desc, eq, isNotNull, or, sql } from "drizzle-orm";
@@ -264,7 +265,11 @@ export async function evaluateStorefrontAccess(
       }
     | undefined = undefined;
 
-  try {
+  const cachedReads = ACCESS_READ_TTL_MS > 0 ? accessReads.get(tenantId) : undefined;
+  const accessHit = cachedReads && Date.now() - cachedReads.at < ACCESS_READ_TTL_MS ? cachedReads : undefined;
+  let readsOk = true;
+  if (accessHit) statusRow = accessHit.statusRow as typeof statusRow;
+  else try {
     const queryStatus = async (qdb: Db) => {
       return await qdb
         .select({
@@ -295,14 +300,15 @@ export async function evaluateStorefrontAccess(
     statusRow = rows[0];
   } catch {
     // Gracefully handle unconfigured or mocked db
+    readsOk = false;
   }
 
   const mode: StorefrontMode = (statusRow?.mode as StorefrontMode) ?? "coming_soon";
   recordHostMode(rawHost, mode);
 
   // 4. SEO & Robots Policy (PLAN §8.3)
-  let indexingEnabled = true;
-  try {
+  let indexingEnabled = accessHit ? accessHit.indexingEnabled : true;
+  if (!accessHit) try {
     const querySeo = async (qdb: Db) => {
       return await qdb
         .select({
@@ -323,7 +329,9 @@ export async function evaluateStorefrontAccess(
     }
   } catch {
     // Default indexing enabled if not configured
+    readsOk = false;
   }
+  if (!accessHit && readsOk && ACCESS_READ_TTL_MS > 0) accessReads.set(tenantId, { at: Date.now(), statusRow, indexingEnabled });
 
   const cookies = parseCookies(opts?.cookies, opts?.headers);
 
