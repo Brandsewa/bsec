@@ -12,7 +12,7 @@ import type { HeroSliderBehavior } from "@bs/blocks";
  * never re-renders React, so the markup is not hydrated twice and a slider costs a single small effect.
  * Autoplay stops for visitors who prefer reduced motion, while the slider is off screen or in a hidden tab,
  * while it is hovered or focused, and after the visitor swipes or uses a control. Videos are skipped on
- * Save-Data connections (the poster image stays).
+ * Save-Data connections and for reduced-motion visitors (the poster image stays). Phones play videos too.
  */
 export function HeroSliderClient({ options, children }: { options: HeroSliderBehavior; children: ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -23,13 +23,12 @@ export function HeroSliderClient({ options, children }: { options: HeroSliderBeh
     if (!root || !track) return;
     const slides = [...track.querySelectorAll<HTMLElement>("[data-hs-slide]")];
     const n = slides.length;
-    // Phones, Save-Data and reduced-motion keep the poster: the clip is several MB and barely noticed on a small screen.
-    const wide = window.matchMedia("(min-width: 768px)").matches;
+    // Save-Data and reduced-motion visitors keep the poster. Phones play the video like any other screen.
     if (n < 2) {
-      // One slide: no controls to drive, but its video still plays (on screens that can afford it).
+      // One slide: no controls to drive, but its video still plays (unless Save-Data or reduced motion).
       const only = slides[0]?.querySelector("video");
       const lean = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (only && wide && !lean) {
+      if (only && !lean) {
         only.preload = "auto";
         only.play().catch(() => undefined);
       }
@@ -60,7 +59,7 @@ export function HeroSliderClient({ options, children }: { options: HeroSliderBeh
       slides.forEach((slide, i) => {
         const video = slide.querySelector<HTMLVideoElement>("video");
         if (!video) return;
-        if (saveData || reduced || !wide) {
+        if (saveData || reduced) {
           video.pause();
           return;
         }
