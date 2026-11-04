@@ -34,6 +34,8 @@ export const tenantApps = tenantTable(
     settingsVersion: integer("settings_version").notNull().default(1),
     /** Super Admin turned this app off for this store; the store cannot turn it back on. */
     platformSuspended: boolean("platform_suspended").notNull().default(false),
+    /** Shown in the admin sidebar under Apps. */
+    pinned: boolean("pinned").notNull().default(false),
     installedBy: uuid("installed_by"),
     installedAt: timestamp("installed_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

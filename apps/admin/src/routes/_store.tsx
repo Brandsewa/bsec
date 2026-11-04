@@ -1,8 +1,10 @@
 import { useStorefrontUrl } from "../lib/storefront-url.ts";
 import { StoreNotifications } from "../components/notifications/StoreNotifications.tsx";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
+  Puzzle,
   BadgePercent,
   Banknote,
   BarChart3,
@@ -53,6 +55,8 @@ import {
 } from "@bs/ui";
 import { AppShell } from "@/components/app-shell";
 import { fetchMe, signOut } from "../lib/auth.ts";
+import { orpc } from "../lib/orpc.ts";
+import { appHref, appIcon, isAppOn } from "../lib/app-meta.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
 import { ActivateStore } from "../components/billing/activate-store.tsx";
@@ -129,6 +133,12 @@ const nav: GatedGroup[] = [
     ],
   },
   {
+    // Apps home, plus any app the store pinned (added in StoreShell).
+    label: "Apps",
+    icon: Puzzle,
+    items: [{ label: "Apps", href: "/apps", icon: Puzzle, perm: "apps.manage" }],
+  },
+  {
     // One entry: the Settings workspace has its own section navigation.
     label: "Settings",
     items: [{ label: "Settings", href: "/settings", icon: Settings, perm: "settings.write" }],
@@ -164,6 +174,9 @@ function StoreShell() {
   const { me, store } = Route.useRouteContext();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const storefrontUrl = useStorefrontUrl();
+  const canManageApps = (store?.permissions ?? []).includes("apps.manage");
+  const appsQuery = useQuery({ ...orpc.admin.apps.list.queryOptions(), enabled: canManageApps, staleTime: 30_000 });
+  const pinnedApps = (appsQuery.data ?? []).filter((a) => a.pinned && isAppOn(a) && appHref(a.key));
 
   async function onSignOut() {
     if (me.support) {
@@ -195,9 +208,20 @@ function StoreShell() {
     <>
       <AppShell
         brand={<span className="text-sm font-semibold">{store.name}</span>}
-        groups={visibleNav(store.permissions).map((g) =>
-          g.label === "Online Store" && storefrontUrl ? { ...g, external: { href: storefrontUrl, label: "View your store" } } : g,
-        )}
+        groups={visibleNav(store.permissions).map((g) => {
+          if (g.label === "Online Store" && storefrontUrl) return { ...g, external: { href: storefrontUrl, label: "View your store" } };
+          // Pinned apps sit under Apps; with none pinned the group stays a single "Apps" link.
+          if (g.label === "Apps" && pinnedApps.length > 0) {
+            return {
+              ...g,
+              items: [
+                { label: "All apps", href: "/apps", icon: Puzzle },
+                ...pinnedApps.map((a) => ({ label: a.name, href: appHref(a.key) as string, icon: appIcon(a.icon) })),
+              ],
+            };
+          }
+          return g;
+        })}
         activeHref={pathname}
         banner={
           me.support ? (

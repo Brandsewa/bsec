@@ -262,7 +262,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "" }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
           {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
-          {marketCtx?.regionState.needsPincode ? <PincodeGate storeName={storeName} error={pinError} /> : null}
+          {marketCtx?.regionState.needsPincode ? <PincodeGate error={pinError} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} currency={marketCtx?.currency ?? "INR"} locale={marketCtx?.locale ?? "en-IN"} />

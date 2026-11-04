@@ -193,6 +193,10 @@ import {
   listIndianStates,
   getProductStatePricing,
   setVariantStatePrices,
+  setAppPinned,
+  listStatePricingGrid,
+  setStatePricesBulk,
+  lookupVariantsBySku,
   addToCart,
   updateCartItemQuantity,
   removeCartItem,
@@ -757,6 +761,42 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateAppSettings(context.rt, context.tenantCtx, input.key, input.settings).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPinned: os.admin.apps.setPinned
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAppPinned(context.rt, context.tenantCtx, input.key, input.pinned).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      listGrid: os.admin.apps.listGrid
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStatePricingGrid(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPricesBulk: os.admin.apps.setPricesBulk
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setStatePricesBulk(context.rt, context.tenantCtx, input.items).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      lookupSkus: os.admin.apps.lookupSkus
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return lookupVariantsBySku(context.rt, context.tenantCtx, input.skus).catch((e) => {
             throw mapAuthError(e);
           });
         }),

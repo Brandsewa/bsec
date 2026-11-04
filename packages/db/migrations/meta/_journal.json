@@ -638,6 +638,13 @@
       "when": 1793582900000,
       "tag": "0096_apps_state_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793669300000,
+      "tag": "0097_tenant_apps_pinned",
+      "breakpoints": true
     }
   ]
 }
