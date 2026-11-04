@@ -30,6 +30,7 @@ import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
+import { countryName } from "@bs/contracts/countries";
 import { MarketProvider } from "@/components/market/MarketProvider.tsx";
 import { getMarketContext, type MarketContext } from "@/server/market.ts";
 import { PATH_HEADER, PIN_ERROR_COOKIE } from "@/lib/market-constants.ts";
@@ -256,7 +257,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <WebThemeProvider>
-          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "", ...(marketCtx && marketCtx.markets.length > 1 && marketCtx.market ? { markets: marketCtx.markets.map((m) => ({ handle: m.handle, name: m.name, currency: m.currency, countries: m.countries })), currentHandle: marketCtx.market.handle, path: requestPath } : {}) }}>
+          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "", ...(marketCtx && marketCtx.markets.length > 1 && marketCtx.market ? { markets: marketCtx.markets.map((m) => ({ handle: m.handle, name: m.name, currency: m.currency, countries: m.countries.map((code) => ({ code, name: countryName(code) })) })), currentHandle: marketCtx.market.handle, path: requestPath } : {}) }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
           {marketCtx?.regionState.needsPincode ? <PincodeGate error={pinError} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
