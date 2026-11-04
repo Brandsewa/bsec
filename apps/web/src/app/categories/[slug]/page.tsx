@@ -159,7 +159,7 @@ export default async function CategoryDetailPage({
       inStockOnly: inStockOnly || undefined,
       filterMenuHandle,
       filters: filterParams,
-    });
+    }, marketId);
   } catch {
     notFound();
   }
