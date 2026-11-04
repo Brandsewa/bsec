@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `fix/hero-slider-video-mobile`
+- **Branch:** `fix/hero-slider-video-mobile` (merged in #218, 0759f2d)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none
@@ -16,3 +16,4 @@ Follow-up to the background-video fix (#217). The Hero Slider widget has its own
 
 ## Docs updated
 - [ ] ARCHITECTURE, ADR, DEPLOYMENT not needed
+- Verified live by the owner on mobile after deploy: video plays.
