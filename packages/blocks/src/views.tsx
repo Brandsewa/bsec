@@ -927,9 +927,6 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
                             </svg>
                           </summary>
                           <div className="bsb-mobile-sublist">
-                            <NavLink ctx={ctx} href={item.url} className="bsb-mobile-link bsb-mobile-parent-link">
-                              All {item.label}
-                            </NavLink>
                             {item.children.map((child) => (
                               <div key={child.id} className="bsb-mobile-subitem">
                                 {child.children && child.children.length > 0 ? (
@@ -941,9 +938,6 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
                                       </svg>
                                     </summary>
                                     <div className="bsb-mobile-subsublist">
-                                      <NavLink ctx={ctx} href={child.url} className="bsb-mobile-link bsb-mobile-parent-link">
-                                        All {child.label}
-                                      </NavLink>
                                       {child.children.map((sub) => (
                                         <NavLink key={sub.id} ctx={ctx} href={sub.url} className="bsb-mobile-link">
                                           {sub.label}
@@ -980,7 +974,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
           {hasResolvedMenu ? (
             menuData.map((item) =>
               item.children && item.children.length > 0 ? (
-                <div key={item.id} className="bsb-nav-item bsb-has-dropdown">
+                <div key={item.id} className={`bsb-nav-item bsb-has-dropdown${item.children.some((c) => c.children && c.children.length > 0) ? " bsb-has-mega" : ""}`}>
                   <NavLink ctx={ctx} href={item.url} className="bsb-nav-link">
                     <span>{item.label}</span>
                     <svg className="bsb-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1609,7 +1603,7 @@ export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>):
               <div className={cx("bsb-psc-tabs", `bsb-psc-tabs-${props.tabsStyle}`)} role="tablist" aria-label="Product groups">
                 {tabs.map((t, i) => (
                   <button key={i} type="button" role="tab" className="bsb-psc-tab" data-psc-tab="" aria-selected={i === 0} tabIndex={i === 0 ? 0 : -1}>
-                    {t.label || (t.source === "collection" ? t.collectionSlug : t.source === "featured" ? "Featured" : "New arrivals") || `Tab ${i + 1}`}
+                    {t.label || (t.source === "collection" ? t.collectionSlug : t.source === "featured" ? "Featured" : t.source === "manual" ? "Selected" : "New arrivals") || `Tab ${i + 1}`}
                   </button>
                 ))}
               </div>

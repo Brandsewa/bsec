@@ -275,6 +275,16 @@
 .bsb-dropdown-sublist { list-style: none; margin: 0; padding: 0 0 0 1rem; border-left: 2px solid var(--b, #e5e7eb); }
 .bsb-dropdown-sublink { display: block; padding: 0.35rem 1rem; font-size: 0.8125rem; color: inherit; text-decoration: none; }
 .bsb-dropdown-sublink:hover { color: var(--p); }
+/* Nested menus: the panel spans the header row and each top-level child becomes a column (up to 6, fewer on narrow screens). */
+.bsb-site-header-row { position: relative; }
+.bsb-has-mega { position: static; }
+.bsb-has-mega > .bsb-dropdown-menu { top: 100%; left: 0; right: 0; min-width: 0; padding: 1.25rem 1.5rem; max-height: calc(100vh - 6rem); overflow-y: auto; }
+.bsb-has-mega > .bsb-dropdown-menu::before { top: -0.5rem; height: 0.5rem; }
+.bsb-has-mega .bsb-dropdown-list { display: grid; gap: 1.25rem 1.5rem; grid-template-columns: repeat(auto-fill, minmax(max(11rem, calc((100% - 5 * 1.5rem) / 6)), 1fr)); align-items: start; }
+.bsb-has-mega .bsb-dropdown-link { padding: 0.35rem 0; font-weight: 600; }
+.bsb-has-mega .bsb-dropdown-link:hover { background: none; }
+.bsb-has-mega .bsb-dropdown-sublist { padding: 0; border-left: 0; margin-top: 0.15rem; }
+.bsb-has-mega .bsb-dropdown-sublink { padding: 0.3rem 0; }
 
 .bsb-mobile-menu { display: block; position: relative; }
 @media (min-width: 1024px) { .bsb-mobile-menu { display: none; } }

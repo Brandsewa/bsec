@@ -6,6 +6,9 @@ import { invalidateCache } from "../cache-invalidation.ts";
 import { parseStoreConfig } from "./store-config.ts";
 import {
   parseCheckoutSettings,
+  parseCheckoutDisplay,
+  isSafeLogoUrl,
+  type CheckoutDisplayConfig,
   type CheckoutSettingsConfig,
 } from "./checkout-config.ts";
 import { readCustomerAccountSettingsInternal } from "./customer-account-settings.ts";
@@ -27,6 +30,13 @@ export interface UpdateCheckoutSettingsInput {
     detectAfterMinutes: number;
     recoveryEnabled: boolean;
     steps: Array<{ delayHours: number }>;
+  } | undefined;
+  /** Wording of the shipping and payment sections. `payment` entries replace that provider's entry; an empty one clears it. */
+  display?: {
+    shippingTitle?: string | undefined;
+    shippingFreeLabel?: string | undefined;
+    paymentTitle?: string | undefined;
+    payment?: Record<string, { title: string; subtitle: string; logos: Array<{ url: string; alt: string }> }> | undefined;
   } | undefined;
   expectedUpdatedAt?: string | undefined;
 }
@@ -149,6 +159,23 @@ export async function updateCheckoutSettings(
       }
     }
 
+    let nextDisplay: CheckoutDisplayConfig = currentParsed.display;
+    if (input.display) {
+      const d = input.display;
+      const merged: Record<string, unknown> = {
+        shippingTitle: d.shippingTitle ?? nextDisplay.shippingTitle,
+        shippingFreeLabel: d.shippingFreeLabel ?? nextDisplay.shippingFreeLabel,
+        paymentTitle: d.paymentTitle ?? nextDisplay.paymentTitle,
+        payment: { ...nextDisplay.payment, ...(d.payment ?? {}) },
+      };
+      for (const [provider, entry] of Object.entries(d.payment ?? {})) {
+        for (const l of entry.logos) {
+          if (!isSafeLogoUrl(l.url.trim())) throw new Error(`Bad Request: ${provider} logo "${l.alt || l.url.slice(0, 40)}" must be an https image URL or an uploaded file`);
+        }
+      }
+      nextDisplay = parseCheckoutDisplay(merged);
+    }
+
     const mergedCheckout: Record<string, unknown> = {
       ...rawCheckout,
       v: 1,
@@ -160,6 +187,7 @@ export async function updateCheckoutSettings(
       marketingEmail: nextMarketing,
       termsConsent: nextTermsConsent,
       abandoned: nextAbandoned,
+      display: nextDisplay,
     };
 
     const now = new Date();
@@ -194,6 +222,9 @@ export async function updateCheckoutSettings(
     }
     if (input.abandoned) {
       diff.abandoned = { before: currentParsed.abandoned, after: nextAbandoned };
+    }
+    if (input.display) {
+      diff.display = { before: currentParsed.display, after: nextDisplay };
     }
 
     if (Object.keys(diff).length > 0) {

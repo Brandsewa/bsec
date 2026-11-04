@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./money": "./src/money.ts",
+    "./countries": "./src/countries.ts",
     "./units": "./src/units.ts",
     "./product-bulk-io": "./src/product-bulk-io/index.ts"
   },

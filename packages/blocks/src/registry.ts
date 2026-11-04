@@ -907,8 +907,10 @@ export const HeroSliderBlock: BlockDefinition<HeroSliderProps> = {
 export const ShowcaseTabSchema = z.object({
   label: z.string().max(40).default(""),
   /** "related" is for the product page: products from the same collections or categories as the product being viewed (newest elsewhere). */
-  source: z.enum(["newest", "featured", "collection", "related"]).default("collection"),
+  source: z.enum(["newest", "featured", "collection", "related", "manual"]).default("collection"),
   collectionSlug: z.string().max(120).default(""),
+  /** For "manual": the products the merchant hand-picked, shown in this order. */
+  productSlugs: z.array(z.string().max(200)).max(24).default([]),
 });
 export type ShowcaseTab = z.infer<typeof ShowcaseTabSchema>;
 
@@ -930,7 +932,7 @@ export const ProductShowcaseSchema = z.object({
   headerAlign: alignSchema.default("left"),
   tone: toneSchema.default("default"),
   // Products. More than one tab turns the tab bar on; one tab shows no tabs.
-  tabs: z.array(ShowcaseTabSchema).min(1).max(6).default([{ label: "New arrivals", source: "newest", collectionSlug: "" }]),
+  tabs: z.array(ShowcaseTabSchema).min(1).max(6).default([{ label: "New arrivals", source: "newest", collectionSlug: "", productSlugs: [] }]),
   limit: z.number().int().min(2).max(24).default(10),
   tabsStyle: z.enum(["text", "pill"]).default("text"),
   // Card: the order of the rows below the image is the order of this list (drag to reorder in the editor).

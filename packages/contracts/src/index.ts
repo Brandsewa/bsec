@@ -118,4 +118,5 @@ export type PlatformClient = ContractRouterClient<PlatformContract>;
 export type { ContractRouterClient };
 export type StoreClient = ContractRouterClient<StoreContract>;
 export * from "./money.ts";
+export * from "./countries.ts";
 export * from "./units.ts";

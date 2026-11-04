@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { phoneProblem, postalCodeProblem, regionsFor } from "@bs/domain/addresses";
+import { countryName } from "@bs/contracts/countries";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 
 export const INDIAN_STATES_AND_UTS = [
@@ -72,7 +73,22 @@ export interface CheckoutRegion {
   defaultCountry: string;
 }
 
-const COUNTRY_LABELS: Record<string, string> = { IN: "India", US: "United States", CA: "Canada" };
+/** Wording the merchant set for the shipping and payment sections (Settings > Checkout and the payment gateway screen). */
+export interface CheckoutDisplay {
+  shippingTitle: string;
+  shippingFreeLabel: string;
+  paymentTitle: string;
+  /** Keyed by provider: cod, razorpay, stripe, paypal. */
+  payment: Record<string, { title: string; subtitle: string; logos: Array<{ url: string; alt: string }> }>;
+}
+
+/** Every country the store sells to, across its markets, so the shopper picks the country first and the market follows. */
+export interface CheckoutCountryPicker {
+  options: Array<{ code: string; marketHandle: string }>;
+  currentMarketHandle: string;
+}
+
+const DEFAULT_DISPLAY: CheckoutDisplay = { shippingTitle: "Shipping Method", shippingFreeLabel: "Free", paymentTitle: "Payment Method", payment: {} };
 const PHONE_PREFIX: Record<string, string> = { IN: "+91", US: "+1", CA: "+1" };
 
 type PaymentChoice = "cod" | "online" | "stripe" | "paypal";
@@ -118,6 +134,8 @@ export interface CheckoutFormProps {
   paymentOptions: CheckoutPaymentOptions;
   consent: StorefrontCheckoutConsent;
   region?: CheckoutRegion | undefined;
+  display?: CheckoutDisplay | undefined;
+  countryPicker?: CheckoutCountryPicker | undefined;
   paymentMethod?: PaymentChoice;
   onPaymentMethodChange?: (method: PaymentChoice) => void;
   shippingMethod?: string;
@@ -135,6 +153,8 @@ export function CheckoutForm({
   paymentOptions,
   consent,
   region = { countries: ["IN"], defaultCountry: "IN" },
+  display = DEFAULT_DISPLAY,
+  countryPicker,
   paymentMethod: controlledPaymentMethod,
   onPaymentMethodChange,
   shippingMethod: controlledShippingMethod,
@@ -424,6 +444,43 @@ export function CheckoutForm({
         ) : null}
       </section>
 
+      {/* 2a. Country first: the market (currency, shipping, payment methods) follows the country */}
+      {countryPicker ? (
+        <section className={CARD} data-testid="checkout-country">
+          <h2 className="mb-2.5 text-base font-semibold tracking-tight text-foreground sm:text-lg">Country</h2>
+          <div className="relative">
+            <select
+              id="checkout-market-country"
+              value={country}
+              onChange={(e) => {
+                const next = countryPicker.options.find((o) => o.code === e.target.value);
+                if (!next) return;
+                if (next.marketHandle === countryPicker.currentMarketHandle) {
+                  changeCountry(next.code, setCountry, setState);
+                  return;
+                }
+                // Another market: prices, shipping and payment methods all change, so the server switches market and reloads this page.
+                window.location.assign(`/api/storefront/market/select?handle=${encodeURIComponent(next.marketHandle)}&next=${encodeURIComponent(`/checkout?country=${next.code}`)}`);
+              }}
+              className={`${FIELD_CLASS} appearance-none pr-8`}
+            >
+              {countryPicker.options.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {countryName(o.code)}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="checkout-market-country" className={LABEL_TOP}>
+              Country / region *
+            </label>
+            <svg aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Shipping options, prices and payment methods depend on where you are ordering from.</p>
+        </section>
+      ) : null}
+
       {/* 2. Billing and shipping address; one form, or two when the order ships elsewhere */}
       <section className={CARD}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -489,7 +546,7 @@ export function CheckoutForm({
           idPrefix="checkout"
           showName={false}
           country={country}
-          countries={region.countries}
+          countries={countryPicker ? [country] : region.countries}
           onCountryChange={(c) => changeCountry(c, setCountry, setState)}
           values={{ fullName, addressLine1, city, state, pincode }}
           onChange={(k, v) => {
@@ -536,7 +593,7 @@ export function CheckoutForm({
 
       {/* 3. Shipping Method: the store's own options and prices */}
       <section className={CARD}>
-        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Method</h2>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">{display.shippingTitle}</h2>
         <div className="grid grid-cols-1 gap-2">
           {shippingRates.map((rate) => (
             <label
@@ -558,7 +615,7 @@ export function CheckoutForm({
                 </div>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {rate.amount === 0 ? "Free" : money(rate.amount)}
+                {rate.amount === 0 ? display.shippingFreeLabel : money(rate.amount)}
               </span>
             </label>
           ))}
@@ -567,7 +624,7 @@ export function CheckoutForm({
 
       {/* 4. Payment Method: only what this store can really take */}
       <section className={CARD}>
-        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Payment Method</h2>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">{display.paymentTitle}</h2>
         <div className="space-y-2">
           {available.includes("cod") && (
             <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
@@ -581,13 +638,14 @@ export function CheckoutForm({
                   className="text-primary focus:ring-primary"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Cash on Delivery (COD)</p>
+                  <p className="text-sm font-semibold text-foreground">{display.payment.cod?.title || "Cash on Delivery (COD)"}</p>
                   <p className="text-xs text-muted-foreground">
-                    Pay with cash or UPI upon delivery
+                    {display.payment.cod?.subtitle || "Pay with cash or UPI upon delivery"}
                     {paymentOptions.codFeePaise > 0 ? ` (${money(paymentOptions.codFeePaise)} handling fee)` : ""}
                   </p>
                 </div>
               </div>
+              <PaymentLogos logos={display.payment.cod?.logos} />
             </label>
           )}
 
@@ -608,10 +666,11 @@ export function CheckoutForm({
                     className="text-primary focus:ring-primary"
                   />
                   <div>
-                    <p className="text-sm font-semibold text-foreground">{title}</p>
-                    <p className="text-xs text-muted-foreground">{hint}</p>
+                    <p className="text-sm font-semibold text-foreground">{display.payment[value === "online" ? "razorpay" : value]?.title || title}</p>
+                    <p className="text-xs text-muted-foreground">{display.payment[value === "online" ? "razorpay" : value]?.subtitle || hint}</p>
                   </div>
                 </div>
+                <PaymentLogos logos={display.payment[value === "online" ? "razorpay" : value]?.logos} />
               </label>
             ) : null,
           )}
@@ -770,6 +829,19 @@ function PhoneField({ id, label, value, onChange, required = true, country = "IN
   );
 }
 
+/** Small card and wallet images the merchant uploaded, on the right of a payment option. */
+function PaymentLogos({ logos }: { logos?: Array<{ url: string; alt: string }> | undefined }) {
+  if (!logos || logos.length === 0) return null;
+  return (
+    <span className="ml-3 flex shrink-0 flex-wrap items-center justify-end gap-1.5" data-testid="payment-logos">
+      {logos.map((l) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={l.url} src={l.url} alt={l.alt} loading="lazy" className="h-5 w-auto max-w-[3.25rem] object-contain" />
+      ))}
+    </span>
+  );
+}
+
 type AddressKey = "fullName" | "addressLine1" | "city" | "state" | "pincode";
 
 /** Name, street, city, state and postal code: used once for the billing and shipping address, and again for a separate shipping address. */
@@ -801,7 +873,7 @@ function AddressFields({
           <select id={`${idPrefix}-country`} value={country} onChange={(e) => onCountryChange?.(e.target.value)} className={`${FIELD_CLASS} appearance-none pr-8`}>
             {countries.map((c) => (
               <option key={c} value={c}>
-                {COUNTRY_LABELS[c] ?? c}
+                {countryName(c)}
               </option>
             ))}
           </select>

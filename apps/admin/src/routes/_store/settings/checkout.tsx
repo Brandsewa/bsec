@@ -32,6 +32,9 @@ interface CheckoutFormState {
   termsConsentEnabled: boolean;
   recoveryEnabled: boolean;
   detectAfterMinutes: number;
+  shippingTitle: string;
+  shippingFreeLabel: string;
+  paymentTitle: string;
 }
 
 export function CheckoutSettingsPage() {
@@ -83,6 +86,9 @@ function CheckoutSettingsForm({
     termsConsentEnabled: initial.termsConsent?.enabled === true,
     recoveryEnabled: initial.abandoned.recoveryEnabled,
     detectAfterMinutes: initial.abandoned.detectAfterMinutes,
+    shippingTitle: initial.display.shippingTitle,
+    shippingFreeLabel: initial.display.shippingFreeLabel,
+    paymentTitle: initial.display.paymentTitle,
   });
 
   const dirty =
@@ -95,7 +101,10 @@ function CheckoutSettingsForm({
     form.marketingEmailLabel !== initial.marketingEmail.label ||
     form.termsConsentEnabled !== (initial.termsConsent?.enabled === true) ||
     form.recoveryEnabled !== initial.abandoned.recoveryEnabled ||
-    form.detectAfterMinutes !== initial.abandoned.detectAfterMinutes;
+    form.detectAfterMinutes !== initial.abandoned.detectAfterMinutes ||
+    form.shippingTitle !== initial.display.shippingTitle ||
+    form.shippingFreeLabel !== initial.display.shippingFreeLabel ||
+    form.paymentTitle !== initial.display.paymentTitle;
 
   const guard = useUnsavedGuard(dirty);
 
@@ -126,6 +135,11 @@ function CheckoutSettingsForm({
         recoveryEnabled: form.recoveryEnabled,
         detectAfterMinutes: form.detectAfterMinutes,
         steps: initial.abandoned.steps,
+      },
+      display: {
+        shippingTitle: form.shippingTitle.trim() || "Shipping Method",
+        shippingFreeLabel: form.shippingFreeLabel.trim() || "Free",
+        paymentTitle: form.paymentTitle.trim() || "Payment Method",
       },
       expectedUpdatedAt: initial.updatedAt,
     });
@@ -230,6 +244,23 @@ function CheckoutSettingsForm({
                 />
               </Field>
             </div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Checkout wording"
+          description="The headings shoppers read in the shipping and payment steps. Each shipping option's own name and description are edited under Settings, Shipping; payment option text and card logos are edited on the gateway under Settings, Payments."
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field id="shippingTitle" label="Shipping section heading" hint="Shown above the shipping options.">
+              <Input id="shippingTitle" value={form.shippingTitle} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, shippingTitle: e.target.value }))} />
+            </Field>
+            <Field id="shippingFreeLabel" label="Free shipping label" hint="Shown instead of a price when shipping costs nothing.">
+              <Input id="shippingFreeLabel" value={form.shippingFreeLabel} maxLength={40} onChange={(e) => setForm((prev) => ({ ...prev, shippingFreeLabel: e.target.value }))} />
+            </Field>
+            <Field id="paymentTitle" label="Payment section heading" hint="Shown above the payment options.">
+              <Input id="paymentTitle" value={form.paymentTitle} maxLength={80} onChange={(e) => setForm((prev) => ({ ...prev, paymentTitle: e.target.value }))} />
+            </Field>
           </div>
         </SettingsCard>
 

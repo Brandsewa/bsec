@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Button, Input, Field, MultiSelect, SimpleSelect, toast } from "@bs/ui";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
+import { suggestCurrencyForCountries } from "@bs/contracts/countries";
 import {
-  MARKET_PRESETS,
-  AVAILABLE_CURRENCIES,
-  PLATFORM_SUPPORTED_COUNTRIES,
+  MARKET_COUNTRY_OPTIONS,
+  MARKET_CURRENCY_OPTIONS,
+  IMPERIAL_COUNTRIES,
   ROUNDING_OPTIONS,
   UNIT_SYSTEM_OPTIONS,
   TAX_DISPLAY_OPTIONS,
@@ -22,35 +23,26 @@ export function AddMarketDialog({
   baseCurrency: string;
   onCreated: (createdId: string) => void;
 }) {
-  const [selectedPreset, setSelectedPreset] = useState<string>("usa");
-  const [name, setName] = useState("United States");
-  const [currency, setCurrency] = useState("USD");
-  const [countries, setCountries] = useState<string[]>(["US"]);
-  const [pathPrefix, setPathPrefix] = useState("/us");
-  const [fxRate, setFxRate] = useState<string>("0.012");
-  const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("imperial");
+  const [name, setName] = useState("");
+  const [currency, setCurrency] = useState(baseCurrency);
+  const [currencyTouched, setCurrencyTouched] = useState(false);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [pathPrefix, setPathPrefix] = useState("");
+  const [fxRate, setFxRate] = useState<string>("");
+  const [unitSystem, setUnitSystem] = useState<"metric" | "imperial">("metric");
   const [taxDisplay, setTaxDisplay] = useState<"inclusive" | "exclusive">("exclusive");
   const [rounding, setRounding] = useState<"none" | "nearest_whole" | "charm_99" | "charm_95">("none");
   const [priceAdjustPercent, setPriceAdjustPercent] = useState<string>("0");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function applyPreset(presetId: string) {
-    setSelectedPreset(presetId);
-    const p = MARKET_PRESETS.find((x) => x.id === presetId);
-    if (!p) return;
-    setName(p.name);
-    setCurrency(p.currency);
-    setCountries(p.countries);
-    setPathPrefix(p.pathPrefix);
-    setUnitSystem(p.unitSystem);
-    setTaxDisplay(p.taxDisplay);
-    if (p.currency === baseCurrency) {
-      setFxRate("");
-    } else if (p.currency === "USD") {
-      setFxRate("0.012");
-    } else if (p.currency === "CAD") {
-      setFxRate("0.016");
+  // Picking countries suggests their currency and units, until the merchant chooses a currency themselves.
+  function changeCountries(next: string[]) {
+    setCountries(next);
+    if (!currencyTouched) {
+      const suggested = suggestCurrencyForCountries(next);
+      if (suggested) setCurrency(suggested);
     }
+    setUnitSystem(next.length > 0 && next.every((c) => IMPERIAL_COUNTRIES.has(c)) ? "imperial" : "metric");
   }
 
   const isCrossCurrency = currency !== baseCurrency;
@@ -103,42 +95,18 @@ export function AddMarketDialog({
         <DialogHeader>
           <DialogTitle>Add a new market</DialogTitle>
           <DialogDescription>
-            Choose a quick preset or customize regional currency, pricing rules, and URL prefix.
+            Name the market, choose the countries it covers and the currency it sells in.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="font-medium text-foreground block mb-2">Preset</label>
-            <div className="grid grid-cols-2 gap-2">
-              {MARKET_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => applyPreset(p.id)}
-                  className={`p-2.5 rounded-lg border text-left transition-colors ${
-                    selectedPreset === p.id
-                      ? "border-primary bg-primary/5 text-foreground font-medium"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="font-medium text-foreground">{p.title}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">{p.description}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2">
             <Field id="market-name" label="Market name">
               <Input
                 id="market-name"
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setSelectedPreset("custom");
-                }}
-                placeholder="e.g. United States"
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Europe, Gulf, Rest of world"
                 required
               />
             </Field>
@@ -148,21 +116,18 @@ export function AddMarketDialog({
                 value={currency}
                 onChange={(val) => {
                   setCurrency(val);
-                  setSelectedPreset("custom");
+                  setCurrencyTouched(true);
                 }}
-                options={AVAILABLE_CURRENCIES}
+                options={MARKET_CURRENCY_OPTIONS}
               />
             </Field>
           </div>
 
           <Field id="market-countries" label="Target Countries" hint="Countries in this market. A country can be in only one market.">
             <MultiSelect
-              options={PLATFORM_SUPPORTED_COUNTRIES}
+              options={MARKET_COUNTRY_OPTIONS}
               value={countries}
-              onChange={(next) => {
-                setCountries(next);
-                setSelectedPreset("custom");
-              }}
+              onChange={changeCountries}
               placeholder="Select countries..."
               searchPlaceholder="Search country..."
             />
@@ -173,11 +138,8 @@ export function AddMarketDialog({
               <Input
                 id="market-prefix"
                 value={pathPrefix}
-                onChange={(e) => {
-                  setPathPrefix(e.target.value);
-                  setSelectedPreset("custom");
-                }}
-                placeholder="/us"
+                onChange={(e) => setPathPrefix(e.target.value)}
+                placeholder="Leave blank to generate one"
               />
             </Field>
 
