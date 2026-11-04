@@ -24,6 +24,8 @@ import {
   listPromotions,
   listPlatformApps,
   updatePlatformApp,
+  getPincodeDirectoryStatus,
+  importPincodesFromJson,
   setTenantAppSuspended,
   createPromotion,
   updatePromotion,
@@ -793,6 +795,8 @@ export const platformRouter = os.router({
   marketplace: {
     list: os.marketplace.list.use(requirePlatformStaff).handler(({ context }) => listPlatformApps(context.rt, actor(context))),
     update: os.marketplace.update.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlatformApp(context.rt, actor(context), input.key, input, context.meta)),
+    pincodeStatus: os.marketplace.pincodeStatus.use(requirePlatformStaff).handler(({ context }) => getPincodeDirectoryStatus(context.rt, actor(context))),
+    importPincodes: os.marketplace.importPincodes.use(requireStaff("platform_admin")).handler(({ context, input }) => importPincodesFromJson(context.rt, actor(context), input.data, context.meta)),
     setSuspended: os.marketplace.setSuspended
       .use(requireStaff("platform_admin"))
       .handler(({ context, input }) => setTenantAppSuspended(context.rt, actor(context), input.tenantId, input.key, input.suspended, context.meta)),

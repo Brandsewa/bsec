@@ -34,6 +34,8 @@ export function Marketplace() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const apps = useQuery({ queryKey: ["platform", "marketplace"], queryFn: () => client.marketplace.list() });
+  const pins = useQuery({ queryKey: ["platform", "marketplace", "pincodes"], queryFn: () => client.marketplace.pincodeStatus() });
+  const [uploading, setUploading] = useState(false);
   const tenants = useQuery({ queryKey: ["platform", "tenants", "marketplace"], queryFn: () => client.tenants.list({}) });
 
   async function act(id: string, fn: () => Promise<unknown>, done: string) {
@@ -46,6 +48,20 @@ export function Marketplace() {
       toast.error(messageOf(err, "Could not save the change"));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function uploadPincodes(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await client.marketplace.importPincodes({ data: await file.text() });
+      toast.success(`Loaded ${res.imported.toLocaleString()} pincodes${res.skipped ? `, skipped ${res.skipped}` : ""}`);
+      await pins.refetch();
+    } catch (err) {
+      toast.error(messageOf(err, "Could not load the pincode file"));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -154,6 +170,28 @@ export function Marketplace() {
           </section>
         ))}
       </div>
+
+      <section className="mt-6 rounded-lg border border-border bg-card p-5">
+        <h2 className="text-base font-semibold text-foreground">Pincode directory</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Used by State Pricing in manual mode to turn a shopper's pincode into a state. Choose the India Post file (JSON keyed by pincode). Loading it again updates the pincodes already there.
+        </p>
+        <p className="mt-3 text-sm text-foreground">{pins.data ? `${pins.data.count.toLocaleString()} pincodes loaded` : "Checking…"}</p>
+        <div className="mt-3">
+          <input
+            type="file"
+            accept="application/json,.json"
+            aria-label="Pincode directory file"
+            disabled={!canManage || uploading}
+            onChange={(e) => {
+              void uploadPincodes(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+            className="text-sm"
+          />
+          {uploading ? <span className="ml-2 text-sm text-muted-foreground">Loading…</span> : null}
+        </div>
+      </section>
     </PageContainer>
   );
 }
