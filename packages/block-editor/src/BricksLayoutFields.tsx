@@ -384,6 +384,16 @@ function BackgroundControl({
     else onChange(next);
   };
 
+  const choosePoster = async () => {
+    if (!host?.pickMedia) return;
+    try {
+      const assets = await host.pickMedia({ accept: ["image"], multiple: false, selected: v.videoPosterMediaId ? [v.videoPosterMediaId as string] : [] });
+      if (assets && assets[0]) set("videoPosterMediaId", assets[0].id);
+    } catch (e) {
+      console.error("Media selection failed:", e);
+    }
+  };
+
   const chooseMedia = async (kind: "image" | "video") => {
     if (!host?.pickMedia) return;
     try {
@@ -549,6 +559,25 @@ function BackgroundControl({
           onChange={(e) => set("videoUrl", e.target.value)}
           style={{ width: "100%", padding: "4px 8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, boxSizing: "border-box" }}
         />
+        {v.videoUrl ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginTop: 4 }}>
+            <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>
+              Poster {v.videoPosterMediaId ? `(${media[v.videoPosterMediaId as string] ? "set" : "ID: " + v.videoPosterMediaId})` : "(uses background image)"}
+            </span>
+            <span style={{ display: "flex", gap: 6 }}>
+              {host?.pickMedia ? (
+                <button type="button" onClick={choosePoster} style={{ border: "1px solid #e4e4e7", background: "#ffffff", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 500, color: "#18181b", cursor: "pointer" }}>
+                  Media Library
+                </button>
+              ) : null}
+              {v.videoPosterMediaId ? (
+                <button type="button" onClick={() => set("videoPosterMediaId", undefined)} style={{ border: 0, background: "none", color: "#dc2626", fontSize: 11, cursor: "pointer" }}>
+                  Remove
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         {v.videoUrl ? (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 4 }}>
             <label style={{ display: "grid", gap: 2, fontSize: 11, color: "#52525b" }}>
