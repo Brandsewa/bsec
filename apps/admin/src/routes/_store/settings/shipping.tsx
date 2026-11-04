@@ -195,6 +195,7 @@ interface MarketOption {
   currency: string;
   unitSystem: "metric" | "imperial" | null;
   countries: string[];
+  status?: string | undefined;
 }
 
 function ZoneCard({
@@ -236,8 +237,19 @@ function ZoneCard({
     return COUNTRY_OPTIONS;
   }, [activeMarket]);
 
+  // A market other than the base one covers all its countries: the zone follows it, with no country or state choice
+  // (unless the merchant asks to narrow it to some of the market's countries).
+  const followsMarket = !!activeMarket && !activeMarket.isBase && activeMarket.countries.length > 0;
+  const [narrow, setNarrow] = useState(followsMarket && zone.countries.length > 0 && zone.countries.length < (activeMarket?.countries.length ?? 0));
+  const showCountryFields = !followsMarket || narrow;
+
   const handleMarketChange = (newMarketId: string) => {
     const nextMarket = markets.find((m) => m.id === newMarketId);
+    if (nextMarket && !nextMarket.isBase && nextMarket.countries.length > 0) {
+      setNarrow(false);
+      onChange({ ...zone, marketId: newMarketId, countries: [...nextMarket.countries], states: [] });
+      return;
+    }
     let nextCountries = zone.countries;
     if (nextMarket && nextMarket.countries.length > 0) {
       const allowed = new Set(nextMarket.countries);
@@ -258,7 +270,7 @@ function ZoneCard({
   const marketSelectOptions = useMemo(() => {
     return markets.map((m) => ({
       value: m.id,
-      label: `${m.name} (${m.currency})${m.isBase ? " — Base" : ""}`,
+      label: `${m.name} (${m.currency})${m.isBase ? " — Base" : ""}${m.status === "draft" ? " — Draft" : ""}`,
     }));
   }, [markets]);
 
@@ -293,10 +305,33 @@ function ZoneCard({
               onChange={handleMarketChange}
               options={marketSelectOptions}
             />
-            <p className="text-[11px] text-muted-foreground">Countries and rates for this zone follow the selected market.</p>
+            <p className="text-[11px] text-muted-foreground">Countries and rates for this zone follow the selected market. A draft market can be set up here before you publish it.</p>
           </div>
         ) : null}
 
+        {followsMarket ? (
+          <div className="grid gap-2">
+            <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Covers all {activeMarket?.countries.length} countries of {activeMarket?.name}.
+            </p>
+            {(activeMarket?.countries.length ?? 0) > 1 ? (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={narrow}
+                  onChange={(e) => {
+                    setNarrow(e.target.checked);
+                    if (!e.target.checked && activeMarket) onChange({ ...zone, countries: [...activeMarket.countries], states: [] });
+                  }}
+                  className="h-3.5 w-3.5 rounded border-border/70"
+                />
+                Choose specific countries for this zone
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+
+        {showCountryFields ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <span className="text-xs font-medium text-foreground">Countries</span>
@@ -322,6 +357,7 @@ function ZoneCard({
             )}
           </div>
         </div>
+        ) : null}
 
         <div className="grid gap-3">
           <div className="flex items-center justify-between">
