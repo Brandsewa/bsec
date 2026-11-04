@@ -3,6 +3,7 @@ import { schema, withTenant } from "@bs/db";
 import type { TenantContext } from "./context.ts";
 import type { Runtime } from "./runtime.ts";
 import { tenantTag } from "./cache-tags.ts";
+import { clearStorefrontAccessCache } from "./storefront/access-cache.ts";
 import { findUntrackedReferences } from "./media/untracked-references.ts";
 
 export type CacheChange =
@@ -327,6 +328,8 @@ export async function invalidateCache(
   change: CacheChange,
 ): Promise<string[]> {
   const tags = computeInvalidationTags(ctx, change);
+  // A store status or SEO change must show in this process at once, not after the access read TTL.
+  clearStorefrontAccessCache(typeof ctx === "string" ? ctx : ctx.tenantId);
   if (rt.revalidateTags && tags.length > 0) {
     await rt.revalidateTags(tags);
   }
