@@ -8,6 +8,11 @@ export interface MarketClientValue {
   locale: string;
   /** "/us" for a prefixed market, "" otherwise. */
   prefix: string;
+  /** Every market the shopper can be in, for the footer selector. */
+  markets?: Array<{ handle: string; name: string; currency: string; countries: string[] }> | undefined;
+  currentHandle?: string | undefined;
+  /** The page's path without the market prefix, so a change of market returns to the same page. */
+  path?: string | undefined;
 }
 
 const DEFAULT: MarketClientValue = { currency: "INR", locale: "en-IN", prefix: "" };
