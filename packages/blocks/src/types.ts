@@ -196,6 +196,8 @@ export interface RenderContext {
   renderLink?: ((p: { href: string; className?: string; children: ReactNode }) => ReactNode) | undefined;
   /** Cart icon with live count (a client component supplied by the storefront). */
   renderCart?: (() => ReactNode) | undefined;
+  /** Country and currency selector for the footer, under the store description (a client component supplied by the storefront). */
+  renderMarketSwitcher?: (() => ReactNode) | undefined;
   /** Account link showing "Login" or the signed-in shopper's name (a client component supplied by the storefront). */
   renderAccount?: (() => ReactNode) | undefined;
   /** The real product page body / collection listing; the editor draws labelled placeholders instead. */

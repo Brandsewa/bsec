@@ -1156,6 +1156,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
     <div className="bsb-site-footer-brand">
       {logoUrl ? <img className="bsb-logo-img" {...logoAttrs(ctx, props.logoMediaId, logoUrl)} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
       {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+      {ctx?.renderMarketSwitcher?.()}
       <FooterSocials props={props} />
     </div>
   );
