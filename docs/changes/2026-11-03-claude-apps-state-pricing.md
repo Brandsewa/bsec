@@ -35,6 +35,8 @@ See ADR-043 and ADR-044. In short: apps are our code, price is locked to the det
 - [x] `progress.md` (in flight)
 
 ## Follow-ups and open questions
+- Pincode directory: the owner supplied `pincode_state_map.json` (19,586 pincodes). `import:pincodes` now reads that JSON (or a CSV). Parsed against the real file: 19,472 rows, all 36 states and union territories, 114 rows with a blank state skipped. Two plainly wrong rows are corrected in code (799001 Tripura, 334002 Rajasthan). To review against India Post: 504346, 612906, 791701, 781131, 384316, 813208, 814131, 900099. Not yet imported into any database in this session (Docker was not running); run `pnpm --filter @bs/platform import:pincodes <file>` against each environment.
+- 3-digit prefix ranges were considered and rejected as the only source (80 of 405 prefixes span more than one state in the real file); exact pincode lookup is the rule.
 - Owner: approve downloading the India Post pincode directory (data.gov.in) and the MaxMind database (terms and credit are the owner's to settle).
 - Phase 6 of the plan: benchmark Cloudflare vs MaxMind on real Indian traffic, enable the transform on the customer's zone, then make the app visible to the customer from Super Admin > Marketplace.
 - Bulk CSV import/export for state prices; per-product entry point from the product page.

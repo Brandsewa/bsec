@@ -90,6 +90,36 @@ export function parsePincodeCsv(text: string): PincodeParseResult {
   return { rows: [...byPin].map(([pincode, stateCode]) => ({ pincode, stateCode })), skipped };
 }
 
+/**
+ * Parses a pincode directory JSON: an object keyed by 6-digit pincode, each value { state, district? } (the file the
+ * owner supplied from India Post, 19,586 pincodes). Rows with an empty or unknown state are skipped and reported, so a
+ * pincode we cannot place never gets a guessed price.
+ */
+// Rows in the supplied file that are plainly wrong (799001 is Agartala, Tripura; 334002 is Bikaner, Rajasthan). Add to this
+// list only after checking a pincode against India Post; the rest of the file is used as supplied.
+const PINCODE_CORRECTIONS: Readonly<Record<string, InStateCode>> = { "799001": "TR", "334002": "RJ" };
+
+export function parsePincodeJson(text: string): PincodeParseResult {
+  const data = JSON.parse(text) as unknown;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error("Expected an object keyed by pincode");
+  const rows: PincodeParseResult["rows"] = [];
+  const skipped: PincodeParseResult["skipped"] = [];
+  for (const [pin, value] of Object.entries(data as Record<string, { state?: unknown }>)) {
+    if (!isPincode(pin)) {
+      skipped.push({ line: 0, reason: `not a pincode: ${pin}` });
+      continue;
+    }
+    const name = typeof value?.state === "string" ? value.state : "";
+    const state = stateCodeForName(name);
+    if (!state) {
+      skipped.push({ line: 0, reason: name ? `unknown state for ${pin}: ${name}` : `no state for ${pin}` });
+      continue;
+    }
+    rows.push({ pincode: pin, stateCode: PINCODE_CORRECTIONS[pin] ?? state });
+  }
+  return { rows, skipped };
+}
+
 /** Loads parsed rows (platform role). Safe to re-run: existing pincodes are updated. */
 export async function importPincodeDirectory(rt: Runtime, rows: PincodeParseResult["rows"]): Promise<{ imported: number }> {
   const db = rt._db.db;

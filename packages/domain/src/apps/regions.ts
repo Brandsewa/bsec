@@ -42,7 +42,8 @@ export const IN_STATE_NAMES: Readonly<Record<InStateCode, string>> = {
   UP: "Uttar Pradesh", UT: "Uttarakhand", WB: "West Bengal",
 };
 
-const squash = (name: string) => name.toUpperCase().replace(/&/g, "AND").replace(/[^A-Z]/g, "");
+// Some datasets write "The Dadra And Nagar Haveli And Daman And Diu"; the leading article is not part of the name.
+const squash = (name: string) => name.toUpperCase().replace(/&/g, "AND").replace(/[^A-Z]/g, "").replace(/^THE(?=DADRA)/, "");
 
 const NAME_TO_CODE = new Map<string, InStateCode>([
   ...(Object.entries(IN_STATE_NAMES) as [InStateCode, string][]).map(([code, name]) => [squash(name), code] as [string, InStateCode]),
