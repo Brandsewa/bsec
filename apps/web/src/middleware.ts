@@ -4,6 +4,9 @@ import { isPlatformMarketingHost } from "./server/hosts.ts";
 import { BOT_UA, decideMarket, type MarketEntry } from "./lib/market-detect.ts";
 import { MARKET_COOKIE, MARKET_PREFIX_HEADER, PATH_HEADER } from "./lib/market-constants.ts";
 
+/** Last market list the evaluation endpoint returned per host, for a moment when it cannot be reached. */
+const lastMarketPrefixes = new Map<string, MarketEntry[]>();
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -82,6 +85,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Why the market list may be missing, shown in the x-bs-eval response header (no secrets: a status or an error name).
+  let evalStatus = "ok";
   let access: {
     allowed: boolean;
     httpStatus: 200 | 404 | 503;
@@ -109,22 +114,43 @@ export async function middleware(request: NextRequest) {
     // Fail-open timeout protection:
     // If the evaluation route times out (e.g. 3s under heavy DB load), abort request
     // and fail open to prevent transient infrastructure hiccups from taking down the storefront.
-    const res = await fetch(evalUrl.toString(), {
-      headers: {
-        ...Object.fromEntries(request.headers.entries()),
-        host,
-      },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      access = await res.json();
-    } else {
-      // Fail open on non-200 responses from the internal evaluation endpoint
-      access = { allowed: true, httpStatus: 200, mode: "live" };
+    const evalHeaders = { ...Object.fromEntries(request.headers.entries()), host };
+    // The address this request arrived on first; if that cannot be reached from inside the server (a proxy, a bind address such as
+    // 0.0.0.0), the server's own loopback port.
+    const targets = [evalUrl.toString()];
+    const port = process.env.PORT ?? request.nextUrl.port;
+    if (port) {
+      const local = new URL(evalUrl.toString());
+      local.protocol = "http:";
+      local.hostname = "127.0.0.1";
+      local.port = port;
+      if (local.toString() !== targets[0]) targets.push(local.toString());
     }
+    let got: typeof access | null = null;
+    for (const target of targets) {
+      try {
+        const res = await fetch(target, { headers: evalHeaders, signal: AbortSignal.timeout(3000) });
+        if (res.ok) {
+          got = await res.json();
+          evalStatus = "ok";
+          break;
+        }
+        evalStatus = `http-${res.status}`;
+      } catch (err) {
+        evalStatus = `error-${err instanceof Error ? err.name : "unknown"}`;
+      }
+    }
+    // Fail open when the evaluation endpoint cannot be reached (a transient DB or network problem must not take the store down).
+    access = got ?? { allowed: true, httpStatus: 200, mode: "live" };
   } catch {
-    // Fail open on fetch network errors or timeout aborts
+    evalStatus = "error-setup";
     access = { allowed: true, httpStatus: 200, mode: "live" };
+  }
+  // The market list only decides URLs and detection, never access, so the last good one keeps market URLs working through a blip.
+  if (access.marketPrefixes) lastMarketPrefixes.set(host, access.marketPrefixes);
+  else if (evalStatus !== "ok") {
+    const known = lastMarketPrefixes.get(host);
+    if (known) access = { ...access, marketPrefixes: known };
   }
 
   // Handle blocked access (maintenance, provisioning, suspended, archived, deleted, not found)
@@ -202,6 +228,7 @@ export async function middleware(request: NextRequest) {
     forwarded.set(MARKET_PREFIX_HEADER, requestedPrefix);
     forwarded.set(PATH_HEADER, stripped.pathname + stripped.search);
     const rewritten = NextResponse.rewrite(stripped, { request: { headers: forwarded } });
+    rewritten.headers.set("x-bs-eval", evalStatus);
     // Remember the choice so links without the prefix keep the shopper in this market (a strictly necessary cookie).
     rewritten.cookies.set({ name: MARKET_COOKIE, value: matchedMarket.handle, path: "/", sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 });
     if (access.noindex) rewritten.headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -236,12 +263,14 @@ export async function middleware(request: NextRequest) {
       const qs = search.toString();
       const moved = NextResponse.redirect(new URL(`${decision.redirectPrefix}${pathname === "/" ? "" : pathname}${qs ? `?${qs}` : ""}` || "/", `${proto}://${host}`), 307);
       if (cookie) moved.cookies.set(cookie);
+      moved.headers.set("x-bs-eval", evalStatus);
       moved.headers.set("Vary", "Cookie, Accept");
       return moved;
     }
     if (cookie) {
       const placed = NextResponse.next({ request: { headers: forwarded } });
       placed.cookies.set(cookie);
+      placed.headers.set("x-bs-eval", evalStatus);
       if (access.noindex) placed.headers.set("X-Robots-Tag", "noindex, nofollow");
       return placed;
     }
@@ -249,6 +278,7 @@ export async function middleware(request: NextRequest) {
 
   // Allowed request (live, bypass, unlocked password)
   const response = NextResponse.next({ request: { headers: forwarded } });
+  response.headers.set("x-bs-eval", evalStatus);
   if (access.noindex) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }
