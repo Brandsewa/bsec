@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/admin-branding-colours` (not merged yet)
+- **Branch:** `feat/admin-branding-colours` (merged in #223, deployed)
 - **Area:** admin, domain, contracts, db (type only)
 - **Type:** feature
 - **Supersedes:** none

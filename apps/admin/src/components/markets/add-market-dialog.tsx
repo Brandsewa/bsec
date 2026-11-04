@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Button, Input, Field, SimpleSelect, toast } from "@bs/ui";
-import { CountryPicker } from "./country-picker.tsx";
+import { CountryPicker, useTakenCountries } from "./country-picker.tsx";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { suggestCurrencyForCountries } from "@bs/contracts/countries";
@@ -23,6 +23,7 @@ export function AddMarketDialog({
   baseCurrency: string;
   onCreated: (createdId: string) => void;
 }) {
+  const takenCountries = useTakenCountries();
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState(baseCurrency);
   const [currencyTouched, setCurrencyTouched] = useState(false);
@@ -124,7 +125,7 @@ export function AddMarketDialog({
           </div>
 
           <Field id="market-countries" label="Target Countries" hint="Countries in this market. A country can be in only one market.">
-            <CountryPicker value={countries} onChange={changeCountries} />
+            <CountryPicker value={countries} onChange={changeCountries} taken={takenCountries} />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">

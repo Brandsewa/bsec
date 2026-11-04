@@ -6,25 +6,10 @@ import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { FieldLabel } from "@bs/ui";
-import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
-import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { orpc } from "../../../lib/orpc.ts";
 import { MediaField } from "@bs/content-admin/media/media-field.tsx";
-
-const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
-const colorFields = [
-  { key: "primaryColor", label: "Primary color" },
-  { key: "secondaryColor", label: "Secondary color" },
-  { key: "accentColor", label: "Accent color" },
-  { key: "backgroundColor", label: "Background color" },
-  { key: "surfaceColor", label: "Surface color" },
-  { key: "textColor", label: "Text color" },
-] as const;
-
-type ColorKey = (typeof colorFields)[number]["key"];
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
 
@@ -39,8 +24,8 @@ function contrast(a: string, b: string): number {
 }
 
 const ADMIN_MODES = [
-  { mode: "light", title: "Light mode", sidebar: "adminLightSidebar", text: "adminLightText", defaultSidebar: "#ffffff", defaultText: "#0f172a" },
-  { mode: "dark", title: "Dark mode", sidebar: "adminDarkSidebar", text: "adminDarkText", defaultSidebar: "#0a0a0a", defaultText: "#fafafa" },
+  { mode: "light", title: "Light mode", sidebar: "adminLightSidebar", text: "adminLightText", hover: "adminLightHover", hoverText: "adminLightHoverText", defaultSidebar: "#ffffff", defaultText: "#0f172a" },
+  { mode: "dark", title: "Dark mode", sidebar: "adminDarkSidebar", text: "adminDarkText", hover: "adminDarkHover", hoverText: "adminDarkHoverText", defaultSidebar: "#0a0a0a", defaultText: "#fafafa" },
 ] as const;
 
 const IMAGE_SLOTS = [
@@ -59,19 +44,14 @@ interface FormState {
   appleTouchIconMediaId: string | null;
   socialImageMediaId: string | null;
   logoWidth: number;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  backgroundColor: string;
-  surfaceColor: string;
-  textColor: string;
-  colorMode: BrandSettings["colorMode"];
-  cornerRadius: BrandSettings["cornerRadius"];
-  buttonStyle: BrandSettings["buttonStyle"];
   adminLightSidebar: string;
   adminLightText: string;
+  adminLightHover: string;
+  adminLightHoverText: string;
   adminDarkSidebar: string;
   adminDarkText: string;
+  adminDarkHover: string;
+  adminDarkHoverText: string;
 }
 
 function fromServer(b: BrandSettings, storeName: string): FormState {
@@ -83,25 +63,20 @@ function fromServer(b: BrandSettings, storeName: string): FormState {
     appleTouchIconMediaId: b.appleTouchIconMediaId ?? null,
     socialImageMediaId: b.socialImageMediaId ?? null,
     logoWidth: b.logoWidth,
-    primaryColor: b.primaryColor,
-    secondaryColor: b.secondaryColor,
-    accentColor: b.accentColor,
-    backgroundColor: b.backgroundColor,
-    surfaceColor: b.surfaceColor,
-    textColor: b.textColor,
-    colorMode: b.colorMode,
-    cornerRadius: b.cornerRadius,
-    buttonStyle: b.buttonStyle,
     adminLightSidebar: b.adminColors?.light?.sidebar ?? "",
     adminLightText: b.adminColors?.light?.sidebarText ?? "",
+    adminLightHover: b.adminColors?.light?.hover ?? "",
+    adminLightHoverText: b.adminColors?.light?.hoverText ?? "",
     adminDarkSidebar: b.adminColors?.dark?.sidebar ?? "",
     adminDarkText: b.adminColors?.dark?.sidebarText ?? "",
+    adminDarkHover: b.adminColors?.dark?.hover ?? "",
+    adminDarkHoverText: b.adminColors?.dark?.hoverText ?? "",
   };
 }
 
 function BrandingLoading() {
   return (
-    <SettingsPageFrame title="Branding" description="Logos and colours.">
+    <SettingsPageFrame title="Branding" description="Logos and the admin dashboard colours.">
       <SettingsCard>
         <FormSkeleton fields={6} />
       </SettingsCard>
@@ -160,7 +135,6 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
 
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const guard = useUnsavedGuard(dirty);
-  const invalidColors = colorFields.filter((f) => !HEX.test(form[f.key]));
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
 
@@ -176,11 +150,13 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
 
   const validate = (): string | null => {
     if (!form.storeName.trim()) return "Store name is required";
-    if (invalidColors.length > 0) return `Enter valid hex colours for: ${invalidColors.map((f) => f.label).join(", ")}`;
     for (const m of ADMIN_MODES) {
       const bg = form[m.sidebar];
       const fg = form[m.text];
-      if ((bg && !HEX6.test(bg)) || (fg && !HEX6.test(fg))) return `Admin ${m.title.toLowerCase()} colours must be 6-digit hex values like #1a2b3c`;
+      const hv = form[m.hover];
+      const hvt = form[m.hoverText];
+      if ([bg, fg, hv, hvt].some((v) => v && !HEX6.test(v))) return `Admin ${m.title.toLowerCase()} colours must be 6-digit hex values like #1a2b3c`;
+      if (hv && contrast(hv, hvt || fg || m.defaultText) < 3) return `Admin ${m.title.toLowerCase()}: the hover text is too hard to read on the hover colour.`;
       if (contrast(bg || m.defaultSidebar, fg || m.defaultText) < 3) return `Admin ${m.title.toLowerCase()}: the text is too hard to read on that sidebar colour. Pick more contrasting colours.`;
     }
     if (!Number.isInteger(form.logoWidth) || form.logoWidth < 20 || form.logoWidth > 1000) return "Logo width must be between 20 and 1000 px";
@@ -193,10 +169,10 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
       toast.error(problem);
       return false;
     }
-    const { storeName: name, adminLightSidebar, adminLightText, adminDarkSidebar, adminDarkText, ...brandFields } = form;
+    const { storeName: name, adminLightSidebar, adminLightText, adminLightHover, adminLightHoverText, adminDarkSidebar, adminDarkText, adminDarkHover, adminDarkHoverText, ...brandFields } = form;
     const adminColors = {
-      light: { sidebar: adminLightSidebar || null, sidebarText: adminLightText || null },
-      dark: { sidebar: adminDarkSidebar || null, sidebarText: adminDarkText || null },
+      light: { sidebar: adminLightSidebar || null, sidebarText: adminLightText || null, hover: adminLightHover || null, hoverText: adminLightHoverText || null },
+      dark: { sidebar: adminDarkSidebar || null, sidebarText: adminDarkText || null, hover: adminDarkHover || null, hoverText: adminDarkHoverText || null },
     };
     try {
       if (name.trim() !== baseline.storeName) await updateSettings.mutateAsync({ storeName: name.trim() });
@@ -287,69 +263,11 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
           </SettingsCard>
 
           <SettingsCard
-            title="Brand colours"
-            description="Hex palette & button geometry"
+            title="Admin dashboard"
+            description="Colours of the sidebar and navigation in your team's dashboard"
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {colorFields.map((f) => {
-                const value = form[f.key as ColorKey];
-                const valid = HEX.test(value);
-                return (
-                  <div key={f.key} className="grid gap-1.5">
-                    <FieldLabel htmlFor={f.key}>{f.label}</FieldLabel>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id={f.key}
-                        type="color"
-                        value={valid && value.length === 7 ? value : "#000000"}
-                        onChange={(e) => set(f.key, e.target.value)}
-                        className="size-8 cursor-pointer rounded-md border border-border p-0.5 bg-background shrink-0"
-                      />
-                      <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono h-8 text-xs" />
-                    </div>
-                    {valid ? null : <p className="text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="pt-2 border-t border-border grid gap-3 sm:grid-cols-3">
-              <Field id="color-mode" label="Colour mode">
-                <SimpleSelect
-                  id="color-mode"
-                  className="w-full"
-                  value={form.colorMode}
-                  onChange={(v) => set("colorMode", v as FormState["colorMode"])}
-                  options={[
-                    { value: "light", label: "Light" },
-                    { value: "dark", label: "Dark" },
-                    { value: "auto", label: "Match device" },
-                  ]}
-                />
-              </Field>
-              <Field id="corner-radius" label="Corner radius">
-                <SimpleSelect
-                  id="corner-radius"
-                  className="w-full"
-                  value={form.cornerRadius}
-                  onChange={(v) => set("cornerRadius", v as FormState["cornerRadius"])}
-                  options={(["none", "small", "medium", "large", "full"] as const).map((r) => ({ value: r, label: r }))}
-                />
-              </Field>
-              <Field id="button-style" label="Button style">
-                <SimpleSelect
-                  id="button-style"
-                  className="w-full"
-                  value={form.buttonStyle}
-                  onChange={(v) => set("buttonStyle", v as FormState["buttonStyle"])}
-                  options={(["solid", "outline", "pill"] as const).map((r) => ({ value: r, label: r }))}
-                />
-              </Field>
-            </div>
-            <div className="pt-4 mt-2 border-t border-border grid gap-4">
-              <div>
-                <p className="text-sm font-medium text-foreground">Admin dashboard</p>
-                <p className="text-xs text-muted-foreground">Sidebar and navigation colours for your team's dashboard only, set separately for light and dark mode. Leave a field empty to keep the default.</p>
-              </div>
+            <div className="grid gap-4">
+              <p className="text-xs text-muted-foreground">Set separately for light and dark mode. Leave a field empty to keep the default; an empty hover colour is worked out from your sidebar colours.</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 {ADMIN_MODES.map((m) => (
                   <div key={m.mode} className="grid gap-3 rounded-lg border border-border p-3">
@@ -357,6 +275,8 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
                     {([
                       { key: m.sidebar, label: "Sidebar colour", fallback: m.defaultSidebar },
                       { key: m.text, label: "Sidebar text colour", fallback: m.defaultText },
+                      { key: m.hover, label: "Hover colour", fallback: m.defaultSidebar },
+                      { key: m.hoverText, label: "Hover text colour", fallback: m.defaultText },
                     ] as const).map((f) => {
                       const value = form[f.key];
                       const valid = value === "" || HEX6.test(value);
@@ -382,11 +302,18 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
                         </div>
                       );
                     })}
-                    <div
-                      className="rounded-md px-3 py-2 text-xs"
-                      style={{ background: HEX6.test(form[m.sidebar]) ? form[m.sidebar] : m.defaultSidebar, color: HEX6.test(form[m.text]) ? form[m.text] : m.defaultText }}
-                    >
-                      Preview: Orders, Products, Settings
+                    <div className="grid gap-1 rounded-md p-1.5 text-xs" style={{ background: HEX6.test(form[m.sidebar]) ? form[m.sidebar] : m.defaultSidebar, color: HEX6.test(form[m.text]) ? form[m.text] : m.defaultText }}>
+                      <div className="rounded px-2 py-1.5">Orders</div>
+                      <div
+                        className="rounded px-2 py-1.5"
+                        style={{
+                          background: HEX6.test(form[m.hover]) ? form[m.hover] : `color-mix(in srgb, ${HEX6.test(form[m.text]) ? form[m.text] : m.defaultText} 14%, ${HEX6.test(form[m.sidebar]) ? form[m.sidebar] : m.defaultSidebar})`,
+                          color: HEX6.test(form[m.hoverText]) ? form[m.hoverText] : HEX6.test(form[m.text]) ? form[m.text] : m.defaultText,
+                        }}
+                      >
+                        Products (hovered or current)
+                      </div>
+                      <div className="rounded px-2 py-1.5">Settings</div>
                     </div>
                   </div>
                 ))}

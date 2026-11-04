@@ -4,13 +4,14 @@ import { Plus, Trash2 } from "lucide-react";
 import { FormSkeleton, PageSkeleton, MultiSelect, SimpleSelect, toast } from "@bs/ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ShippingSettings } from "@bs/contracts";
-import { currencySymbol, formatMoney } from "@bs/contracts/money";
+import { currencySymbol } from "@bs/contracts/money";
 import { defaultWeightUnit, type WeightUnit } from "@bs/contracts/units";
 import { Button } from "@bs/ui";
 import { Badge } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
 import { ConfirmDialog } from "@bs/ui";
+import { Disclosure } from "../../../components/settings/disclosure.tsx";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { INDIAN_STATES } from "../../../lib/india.ts";
@@ -118,7 +119,7 @@ function RateRow({
   const sym = currencySymbol(currency);
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3">
+    <div className="grid gap-3">
       <div className="grid gap-3 sm:grid-cols-[1fr_9rem_14rem_auto] sm:items-end">
         <Field id={id("name")} label="Rate name">
           <Input id={id("name")} value={rate.name} onChange={(e) => set({ name: e.target.value })} maxLength={80} />
@@ -205,6 +206,7 @@ function ZoneCard({
   onRemove,
   onMakeDefault,
   canRemove,
+  defaultOpen,
 }: {
   zone: ZoneDraft;
   markets: MarketOption[];
@@ -212,6 +214,7 @@ function ZoneCard({
   onRemove: () => void;
   onMakeDefault: () => void;
   canRemove: boolean;
+  defaultOpen: boolean;
 }) {
   const setRate = (key: string, next: RateDraft) => onChange({ ...zone, rates: zone.rates.map((r) => (r.key === key ? next : r)) });
   const isIndiaOnly = zone.countries.length === 1 && zone.countries[0] === "IN";
@@ -276,13 +279,12 @@ function ZoneCard({
 
   return (
     <SettingsCard>
-      <div className="grid gap-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid min-w-56 flex-1 gap-1.5 sm:max-w-md">
-            <label htmlFor={`${zone.key}-name`} className="text-xs font-medium text-foreground">Zone name</label>
-            <Input id={`${zone.key}-name`} value={zone.name} onChange={(e) => onChange({ ...zone, name: e.target.value })} maxLength={80} placeholder="e.g. South India" />
-          </div>
-          <div className="flex items-center gap-2">
+      <Disclosure
+        defaultOpen={defaultOpen}
+        title={zone.name.trim() || "Untitled zone"}
+        summary={`${activeMarket?.name ?? "No market"} · ${zone.rates.length} ${zone.rates.length === 1 ? "rate" : "rates"}${zone.isDefault ? " · Default" : ""}`}
+        actions={
+          <>
             {zone.isDefault ? (
               <Badge variant="secondary">Default zone</Badge>
             ) : (
@@ -293,7 +295,13 @@ function ZoneCard({
             <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!canRemove || zone.isDefault} onClick={onRemove} aria-label={`Remove zone ${zone.name}`} title={zone.isDefault ? "Make another zone the default first" : undefined}>
               <Trash2 className="size-4" aria-hidden />
             </Button>
-          </div>
+          </>
+        }
+      >
+      <div className="grid gap-5">
+        <div className="grid max-w-md gap-1.5">
+          <label htmlFor={`${zone.key}-name`} className="text-xs font-medium text-foreground">Zone name</label>
+          <Input id={`${zone.key}-name`} value={zone.name} onChange={(e) => onChange({ ...zone, name: e.target.value })} maxLength={80} placeholder="e.g. South India" />
         </div>
 
         {markets.length > 0 ? (
@@ -367,22 +375,30 @@ function ZoneCard({
             </Button>
           </div>
           {zone.rates.map((r) => (
-            <RateRow
+            <Disclosure
               key={r.key}
-              rate={r}
-              zoneKey={zone.key}
-              currency={currency}
-              weightUnit={weightUnit}
-              onChange={(next) => setRate(r.key, next)}
-              onRemove={() => onChange({ ...zone, rates: zone.rates.filter((x) => x.key !== r.key) })}
-              canRemove={zone.rates.length > 1}
-            />
+              className="rounded-lg border border-border bg-muted/20 px-3 py-1.5"
+              defaultOpen={!r.id}
+              title={r.name.trim() || "Untitled rate"}
+              summary={`${r.method === "express" ? "Express" : "Standard"} · ${RATE_TYPES.find((t) => t.value === r.rateType)?.label ?? r.rateType}${r.rateType !== "flat" ? "" : r.price ? ` · ${currencySymbol(currency)}${r.price}` : ""}`}
+            >
+              <RateRow
+                rate={r}
+                zoneKey={zone.key}
+                currency={currency}
+                weightUnit={weightUnit}
+                onChange={(next) => setRate(r.key, next)}
+                onRemove={() => onChange({ ...zone, rates: zone.rates.filter((x) => x.key !== r.key) })}
+                canRemove={zone.rates.length > 1}
+              />
+            </Disclosure>
           ))}
           <p className="text-[11px] text-muted-foreground">
             Shoppers see one option per speed: the cheapest rate that applies to their cart. Price and weight ranges include the lower value and exclude the upper one, and ranges for the same speed should not overlap.
           </p>
         </div>
       </div>
+      </Disclosure>
     </SettingsCard>
   );
 }
@@ -435,6 +451,20 @@ function ShippingSettingsForm({ initialData, markets }: { initialData: ShippingS
     <SettingsPageFrame title={TITLE} description={DESCRIPTION}>
       {guard}
       <HeaderActions>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={zones.length >= 20}
+          onClick={() => {
+            const baseMarket = markets.find((m) => m.isBase) ?? markets[0];
+            const z = emptyZone(`Zone ${zones.length + 1}`, baseMarket?.id);
+            const firstCountry = baseMarket?.countries[0];
+            if (firstCountry) z.countries = [firstCountry];
+            setZones((prev) => [...prev, z]);
+          }}
+        >
+          <Plus className="mr-1.5 size-4" aria-hidden /> Add zone
+        </Button>
         <Button type="submit" form="shipping-form" disabled={saveMutation.isPending || !dirty}>
           {saveMutation.isPending ? "Saving…" : "Save changes"}
         </Button>
@@ -465,27 +495,9 @@ function ShippingSettingsForm({ initialData, markets }: { initialData: ShippingS
             onRemove={() => setZoneToRemove(zone)}
             onMakeDefault={() => makeDefault(zone.key)}
             canRemove={zones.length > 1}
+            defaultOpen={!zone.id || zones.length === 1}
           />
         ))}
-
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={zones.length >= 20}
-            onClick={() => {
-              const baseMarket = markets.find((m) => m.isBase) ?? markets[0];
-              const z = emptyZone(`Zone ${zones.length + 1}`, baseMarket?.id);
-              const firstCountry = baseMarket?.countries[0];
-              if (firstCountry) {
-                z.countries = [firstCountry];
-              }
-              setZones((prev) => [...prev, z]);
-            }}
-          >
-            <Plus className="mr-1.5 size-4" aria-hidden /> Add zone
-          </Button>
-        </div>
 
         {formError ? (
           <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive">
@@ -494,139 +506,6 @@ function ShippingSettingsForm({ initialData, markets }: { initialData: ShippingS
         ) : null}
       </form>
 
-      <ShippingPreviewCalculator hasUnsavedChanges={dirty} markets={markets} />
     </SettingsPageFrame>
-  );
-}
-
-function ShippingPreviewCalculator({ hasUnsavedChanges, markets }: { hasUnsavedChanges: boolean; markets: MarketOption[] }) {
-  const [selectedMarketId, setSelectedMarketId] = useState<string>(() => {
-    return markets.find((m) => m.isBase)?.id ?? markets[0]?.id ?? "";
-  });
-  const [testSubtotal, setTestSubtotal] = useState("500");
-  const [testWeight, setTestWeight] = useState("");
-  const [testCountry, setTestCountry] = useState("IN");
-  const [testState, setTestState] = useState("");
-  const previewMutation = useMutation(orpc.admin.shipping.preview.mutationOptions());
-
-  const activeMarket = useMemo(() => {
-    return markets.find((m) => m.id === selectedMarketId) ?? markets.find((m) => m.isBase) ?? markets[0];
-  }, [selectedMarketId, markets]);
-
-  const currency = activeMarket?.currency ?? "INR";
-  const unitSystem = activeMarket?.unitSystem ?? "metric";
-  const weightUnit = defaultWeightUnit(unitSystem);
-
-  const handlePreview = (e: React.FormEvent) => {
-    e.preventDefault();
-    const paise = Math.round((parseFloat(testSubtotal) || 0) * 100);
-    const weightNum = parseFloat(testWeight);
-    const grams = testWeight.trim() === "" || Number.isNaN(weightNum)
-      ? undefined
-      : (weightUnit === "g" ? Math.round(weightNum) : Math.max(0, Math.round(weightNum * (weightUnit === "lb" ? 453.59237 : weightUnit === "kg" ? 1000 : 28.3495))));
-    previewMutation.mutate({
-      subtotalPaise: paise,
-      marketId: selectedMarketId || undefined,
-      ...(grams !== undefined ? { weightGrams: grams } : {}),
-      ...(testCountry ? { destinationCountry: testCountry } : {}),
-      ...(testCountry === "IN" && testState ? { destinationState: testState } : {}),
-    });
-  };
-
-  const marketSelectOptions = useMemo(() => {
-    return markets.map((m) => ({
-      value: m.id,
-      label: `${m.name} (${m.currency})${m.isBase ? " — Base" : ""}`,
-    }));
-  }, [markets]);
-
-  const countrySelectOptions = useMemo(() => {
-    if (activeMarket?.countries && activeMarket.countries.length > 0) {
-      const allowed = new Set(activeMarket.countries);
-      return COUNTRY_OPTIONS.filter((c) => allowed.has(c.value));
-    }
-    return COUNTRY_OPTIONS;
-  }, [activeMarket]);
-
-  return (
-    <SettingsCard title="Rate preview & calculator" description="Try a cart to see which zone and rates a shopper would get">
-      <form onSubmit={handlePreview} className="grid items-end gap-3 sm:grid-cols-5">
-        {markets.length > 0 ? (
-          <Field id="testMarket" label="Market">
-            <SimpleSelect
-              ariaLabel="Market"
-              value={selectedMarketId}
-              onChange={(v) => {
-                setSelectedMarketId(v);
-                const m = markets.find((x) => x.id === v);
-                const firstCountry = m?.countries[0];
-                if (m && m.countries.length > 0 && firstCountry && !m.countries.includes(testCountry)) {
-                  setTestCountry(firstCountry);
-                }
-              }}
-              options={marketSelectOptions}
-            />
-          </Field>
-        ) : null}
-        <Field id="testSubtotal" label={`Order subtotal (${currencySymbol(currency)})`}>
-          <CurrencyInput id="testSubtotal" value={testSubtotal} onChange={setTestSubtotal} currency={currency} />
-        </Field>
-        <Field id="testWeight" label={`Cart weight (${weightUnit})`}>
-          <Input id="testWeight" type="number" min="0" step="any" value={testWeight} onChange={(e) => setTestWeight(e.target.value)} placeholder="e.g. 1.5" />
-        </Field>
-        <Field id="testCountry" label="Country">
-          <SimpleSelect
-            ariaLabel="Shipping country"
-            value={testCountry}
-            onChange={(c) => {
-              setTestCountry(c);
-              if (c !== "IN") setTestState("");
-            }}
-            options={countrySelectOptions}
-          />
-        </Field>
-        {testCountry === "IN" ? (
-          <Field id="testState" label="State (India)">
-            <SimpleSelect
-              ariaLabel="Shipping state"
-              value={testState}
-              onChange={setTestState}
-              options={[{ value: "", label: "Not specified" }, ...STATE_OPTIONS]}
-            />
-          </Field>
-        ) : null}
-        <Button type="submit" variant="secondary" disabled={previewMutation.isPending}>
-          {previewMutation.isPending ? "Calculating…" : "Calculate rates"}
-        </Button>
-      </form>
-      {hasUnsavedChanges ? <p className="mt-2 text-[11px] text-muted-foreground">The calculator uses your saved zones. Save your changes to try them.</p> : null}
-
-      {previewMutation.isError ? <p className="mt-3 text-xs text-destructive">{previewMutation.error.message}</p> : null}
-
-      {previewMutation.data ? (
-        <div className="mt-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
-          <div className="font-medium text-foreground">
-            Matched zone: <span className="font-semibold text-primary">{previewMutation.data.zoneName}</span>
-          </div>
-          {previewMutation.data.rates.length === 0 ? (
-            <p className="text-muted-foreground">No rate applies to this cart in that zone.</p>
-          ) : (
-            <div className="divide-y divide-border/60">
-              {previewMutation.data.rates.map((r, i) => (
-                <div key={i} className="flex flex-col gap-1 py-2.5 first:pt-1 last:pb-0">
-                  <div className="flex justify-between font-medium text-foreground">
-                    <span>
-                      {r.title} ({r.estimatedDays})
-                    </span>
-                    <span className="font-semibold">{r.isFree ? "Free" : formatMoney(r.amountPaise, currency)}</span>
-                  </div>
-                  <div className="rounded border border-border/40 bg-background/80 p-2 font-mono text-[11px] text-muted-foreground">{r.trace}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </SettingsCard>
   );
 }

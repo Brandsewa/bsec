@@ -108,7 +108,7 @@ export function MarketDetailPage() {
   return (
     <SettingsPageFrame
       title={market.name}
-      description={`Market configuration for ${market.countries.join(", ") || "unassigned countries"} (${market.currency})`}
+      description={`${market.countries.length} ${market.countries.length === 1 ? "country" : "countries"}, sold in ${market.currency}`}
     >
       <HeaderActions>
         <div className="flex items-center gap-2">

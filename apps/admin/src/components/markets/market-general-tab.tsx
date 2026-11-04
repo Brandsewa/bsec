@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Field, Input, SimpleSelect, toast } from "@bs/ui";
-import { CountryPicker } from "./country-picker.tsx";
+import { CountryPicker, useTakenCountries } from "./country-picker.tsx";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import type { MarketDetail } from "@bs/contracts";
@@ -18,6 +18,7 @@ export function MarketGeneralTab({
   market: MarketDetail;
   onUpdated: () => void;
 }) {
+  const takenCountries = useTakenCountries(market.id);
   const [name, setName] = useState(market.name);
   const [currency, setCurrency] = useState(market.currency);
   const [countries, setCountries] = useState<string[]>(market.countries);
@@ -103,7 +104,7 @@ export function MarketGeneralTab({
         label="Target Countries"
         hint="Countries assigned to this market. A country cannot belong to multiple markets."
       >
-        <CountryPicker value={countries} onChange={setCountries} />
+        <CountryPicker value={countries} onChange={setCountries} taken={takenCountries} />
       </Field>
 
       <div className="grid gap-3 sm:grid-cols-2">
