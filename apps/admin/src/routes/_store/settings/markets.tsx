@@ -147,8 +147,8 @@ export function MarketsListPage() {
                     <MarketBadge status={m.status} />
                   </TableCell>
                   <TableCell>
-                    <span className="text-muted-foreground font-mono text-[11px]">
-                      {m.countries.join(", ") || "None"}
+                    <span className="text-muted-foreground font-mono text-[11px]" title={m.countries.join(", ")}>
+                      {m.countries.length === 0 ? "None" : m.countries.length <= 4 ? m.countries.join(", ") : `${m.countries.slice(0, 4).join(", ")} +${m.countries.length - 4} more`}
                     </span>
                   </TableCell>
                   <TableCell>

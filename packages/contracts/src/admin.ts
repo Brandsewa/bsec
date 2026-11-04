@@ -937,6 +937,18 @@ export const APPROVED_BRAND_FONTS = [
 
 export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
 
+const AdminHex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex color code (#rrggbb)");
+/** Sidebar and navigation colours of the store admin for one colour mode; null or absent means the default. */
+const AdminModeColors = z.object({
+  sidebar: AdminHex.nullable().optional(),
+  sidebarText: AdminHex.nullable().optional(),
+  /** Background and text of a hovered or current navigation row. */
+  hover: AdminHex.nullable().optional(),
+  hoverText: AdminHex.nullable().optional(),
+});
+export const AdminDashboardColors = z.object({ light: AdminModeColors.optional(), dark: AdminModeColors.optional() });
+export type AdminDashboardColors = z.infer<typeof AdminDashboardColors>;
+
 export const BrandSettings = z.object({
   // "default" until the store saves branding for the first time (no row yet), so not a uuid.
   id: z.string(),
@@ -959,6 +971,8 @@ export const BrandSettings = z.object({
   colorMode: z.enum(["light", "dark", "auto"]),
   cornerRadius: z.enum(["none", "small", "medium", "large", "full"]),
   buttonStyle: z.enum(["solid", "outline", "pill"]),
+  /** Colours of the admin dashboard sidebar and navigation, per mode (only the store team sees them). */
+  adminColors: AdminDashboardColors.optional(),
   version: z.number(),
   publishedAt: z.string().nullable().optional(),
 });
@@ -986,6 +1000,8 @@ export const UpdateBrandSettingsInput = z.object({
   colorMode: z.enum(["light", "dark", "auto"]).optional(),
   cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
   buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
+  /** Replaces the admin dashboard colours; send null values to go back to the default. */
+  adminColors: AdminDashboardColors.optional(),
 });
 export type UpdateBrandSettingsInput = z.infer<typeof UpdateBrandSettingsInput>;
 

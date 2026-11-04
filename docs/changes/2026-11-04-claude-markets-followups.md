@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/markets-followups` (not merged yet)
+- **Branch:** `feat/markets-followups` (merged in #222, deployed)
 - **Area:** admin, blocks
 - **Type:** feature
 - **Supersedes:** none

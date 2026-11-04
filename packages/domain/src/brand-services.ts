@@ -25,7 +25,10 @@ export const APPROVED_BRAND_FONTS = [
 
 export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
 
+type AdminModeInput = { sidebar?: string | null | undefined; sidebarText?: string | null | undefined; hover?: string | null | undefined; hoverText?: string | null | undefined };
+
 export interface UpdateBrandSettingsInput {
+  adminColors?: { light?: AdminModeInput | undefined; dark?: AdminModeInput | undefined } | undefined;
   logoLightMediaId?: string | null | undefined;
   logoDarkMediaId?: string | null | undefined;
   logoWidth?: number | undefined;
@@ -175,6 +178,7 @@ export async function getBrandSettingsInternal(rt: Runtime, tenantId: string) {
       colorMode: (existing.colorScheme || "light") as "light" | "dark" | "auto",
       cornerRadius: (existing.radius === "md" ? "medium" : existing.radius || "medium") as "none" | "small" | "medium" | "large" | "full",
       buttonStyle: (existing.buttonStyle || "solid") as "solid" | "outline" | "pill",
+      adminColors: colors.admin,
       version: existing.version,
       publishedAt: existing.updatedAt?.toISOString(),
     };
@@ -283,6 +287,24 @@ async function validateMediaSlot(
 /**
  * Updates store brand settings.
  */
+type AdminModeColors = { sidebar?: string; sidebarText?: string; hover?: string; hoverText?: string };
+
+/** Keeps only valid hex values, lower-cased; an empty result means the default admin colours. */
+function cleanAdminColors(input: { light?: AdminModeInput | undefined; dark?: AdminModeInput | undefined }): { light?: AdminModeColors; dark?: AdminModeColors } | undefined {
+  const out: { light?: AdminModeColors; dark?: AdminModeColors } = {};
+  for (const mode of ["light", "dark"] as const) {
+    const m = input[mode];
+    if (!m) continue;
+    const clean: AdminModeColors = {};
+    if (m.sidebar) clean.sidebar = m.sidebar.toLowerCase();
+    if (m.sidebarText) clean.sidebarText = m.sidebarText.toLowerCase();
+    if (m.hover) clean.hover = m.hover.toLowerCase();
+    if (m.hoverText) clean.hoverText = m.hoverText.toLowerCase();
+    if (Object.keys(clean).length > 0) out[mode] = clean;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function updateBrandSettings(
   rt: Runtime,
   ctx: TenantContext,
@@ -334,6 +356,8 @@ export async function updateBrandSettings(
       surface: input.surfaceColor ?? currentColors.surface,
       text: input.textColor ?? currentColors.text,
     };
+    const adminColors = input.adminColors ? cleanAdminColors(input.adminColors) : currentColors.admin;
+    if (adminColors) (updatedColors as { admin?: typeof adminColors }).admin = adminColors;
     const sec = input.secondaryColor ?? currentColors.secondary;
     if (sec) updatedColors.secondary = sec;
     const acc = input.accentColor ?? currentColors.accent;

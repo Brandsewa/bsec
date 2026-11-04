@@ -6,34 +6,27 @@ import { FormSkeleton, PageSkeleton, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { FieldLabel } from "@bs/ui";
-import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
-import { SimpleSelect } from "@bs/ui";
 import type { BrandSettings } from "@bs/contracts";
 import { orpc } from "../../../lib/orpc.ts";
 import { MediaField } from "@bs/content-admin/media/media-field.tsx";
 
-const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
 
-const curatedFonts = [
-  { id: "Inter", name: "Inter", category: "Sans-serif", devanagari: false },
-  { id: "Plus Jakarta Sans", name: "Plus Jakarta Sans", category: "Sans-serif", devanagari: false },
-  { id: "DM Sans", name: "DM Sans", category: "Sans-serif", devanagari: false },
-  { id: "Poppins", name: "Poppins", category: "Geometric Sans", devanagari: true },
-  { id: "Mukta", name: "Mukta", category: "Humanist Sans", devanagari: true },
-  { id: "Rozha One", name: "Rozha One", category: "Display Serif", devanagari: true },
-];
+/** WCAG contrast ratio of two #rrggbb colours (1 to 21). */
+function contrast(a: string, b: string): number {
+  const lum = (hex: string) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * (c[0] ?? 0) + 0.7152 * (c[1] ?? 0) + 0.0722 * (c[2] ?? 0);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
+}
 
-const colorFields = [
-  { key: "primaryColor", label: "Primary color" },
-  { key: "secondaryColor", label: "Secondary color" },
-  { key: "accentColor", label: "Accent color" },
-  { key: "backgroundColor", label: "Background color" },
-  { key: "surfaceColor", label: "Surface color" },
-  { key: "textColor", label: "Text color" },
+const ADMIN_MODES = [
+  { mode: "light", title: "Light mode", sidebar: "adminLightSidebar", text: "adminLightText", hover: "adminLightHover", hoverText: "adminLightHoverText", defaultSidebar: "#ffffff", defaultText: "#0f172a" },
+  { mode: "dark", title: "Dark mode", sidebar: "adminDarkSidebar", text: "adminDarkText", hover: "adminDarkHover", hoverText: "adminDarkHoverText", defaultSidebar: "#0a0a0a", defaultText: "#fafafa" },
 ] as const;
-
-type ColorKey = (typeof colorFields)[number]["key"];
 
 const IMAGE_SLOTS = [
   { key: "logoLightMediaId", label: "Logo (light background)", aspect: undefined },
@@ -51,18 +44,14 @@ interface FormState {
   appleTouchIconMediaId: string | null;
   socialImageMediaId: string | null;
   logoWidth: number;
-  fontHeading: BrandSettings["fontHeading"];
-  fontBody: BrandSettings["fontBody"];
-  fontSizeScale: string;
-  primaryColor: string;
-  secondaryColor: string;
-  accentColor: string;
-  backgroundColor: string;
-  surfaceColor: string;
-  textColor: string;
-  colorMode: BrandSettings["colorMode"];
-  cornerRadius: BrandSettings["cornerRadius"];
-  buttonStyle: BrandSettings["buttonStyle"];
+  adminLightSidebar: string;
+  adminLightText: string;
+  adminLightHover: string;
+  adminLightHoverText: string;
+  adminDarkSidebar: string;
+  adminDarkText: string;
+  adminDarkHover: string;
+  adminDarkHoverText: string;
 }
 
 function fromServer(b: BrandSettings, storeName: string): FormState {
@@ -74,24 +63,20 @@ function fromServer(b: BrandSettings, storeName: string): FormState {
     appleTouchIconMediaId: b.appleTouchIconMediaId ?? null,
     socialImageMediaId: b.socialImageMediaId ?? null,
     logoWidth: b.logoWidth,
-    fontHeading: b.fontHeading,
-    fontBody: b.fontBody,
-    fontSizeScale: b.fontSizeScale,
-    primaryColor: b.primaryColor,
-    secondaryColor: b.secondaryColor,
-    accentColor: b.accentColor,
-    backgroundColor: b.backgroundColor,
-    surfaceColor: b.surfaceColor,
-    textColor: b.textColor,
-    colorMode: b.colorMode,
-    cornerRadius: b.cornerRadius,
-    buttonStyle: b.buttonStyle,
+    adminLightSidebar: b.adminColors?.light?.sidebar ?? "",
+    adminLightText: b.adminColors?.light?.sidebarText ?? "",
+    adminLightHover: b.adminColors?.light?.hover ?? "",
+    adminLightHoverText: b.adminColors?.light?.hoverText ?? "",
+    adminDarkSidebar: b.adminColors?.dark?.sidebar ?? "",
+    adminDarkText: b.adminColors?.dark?.sidebarText ?? "",
+    adminDarkHover: b.adminColors?.dark?.hover ?? "",
+    adminDarkHoverText: b.adminColors?.dark?.hoverText ?? "",
   };
 }
 
 function BrandingLoading() {
   return (
-    <SettingsPageFrame title="Branding" description="Logos, colours and typography.">
+    <SettingsPageFrame title="Branding" description="Logos and the admin dashboard colours.">
       <SettingsCard>
         <FormSkeleton fields={6} />
       </SettingsCard>
@@ -111,7 +96,7 @@ export function BrandingSettingsPage() {
   const failed = brandQuery.isError ? brandQuery : settingsQuery.isError ? settingsQuery : null;
   if (failed) {
     return (
-      <SettingsPageFrame title="Branding" description="Logos, colours and typography.">
+      <SettingsPageFrame title="Branding" description="Logos and colours.">
         <SettingsCard>
           <div role="alert" className="flex flex-col items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4">
             <p className="text-xs font-medium text-foreground">Could not load branding settings</p>
@@ -150,7 +135,6 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
 
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
   const guard = useUnsavedGuard(dirty);
-  const invalidColors = colorFields.filter((f) => !HEX.test(form[f.key]));
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
 
@@ -166,7 +150,15 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
 
   const validate = (): string | null => {
     if (!form.storeName.trim()) return "Store name is required";
-    if (invalidColors.length > 0) return `Enter valid hex colours for: ${invalidColors.map((f) => f.label).join(", ")}`;
+    for (const m of ADMIN_MODES) {
+      const bg = form[m.sidebar];
+      const fg = form[m.text];
+      const hv = form[m.hover];
+      const hvt = form[m.hoverText];
+      if ([bg, fg, hv, hvt].some((v) => v && !HEX6.test(v))) return `Admin ${m.title.toLowerCase()} colours must be 6-digit hex values like #1a2b3c`;
+      if (hv && contrast(hv, hvt || fg || m.defaultText) < 3) return `Admin ${m.title.toLowerCase()}: the hover text is too hard to read on the hover colour.`;
+      if (contrast(bg || m.defaultSidebar, fg || m.defaultText) < 3) return `Admin ${m.title.toLowerCase()}: the text is too hard to read on that sidebar colour. Pick more contrasting colours.`;
+    }
     if (!Number.isInteger(form.logoWidth) || form.logoWidth < 20 || form.logoWidth > 1000) return "Logo width must be between 20 and 1000 px";
     return null;
   };
@@ -177,10 +169,14 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
       toast.error(problem);
       return false;
     }
-    const { storeName: name, ...brandFields } = form;
+    const { storeName: name, adminLightSidebar, adminLightText, adminLightHover, adminLightHoverText, adminDarkSidebar, adminDarkText, adminDarkHover, adminDarkHoverText, ...brandFields } = form;
+    const adminColors = {
+      light: { sidebar: adminLightSidebar || null, sidebarText: adminLightText || null, hover: adminLightHover || null, hoverText: adminLightHoverText || null },
+      dark: { sidebar: adminDarkSidebar || null, sidebarText: adminDarkText || null, hover: adminDarkHover || null, hoverText: adminDarkHoverText || null },
+    };
     try {
       if (name.trim() !== baseline.storeName) await updateSettings.mutateAsync({ storeName: name.trim() });
-      await updateBrand.mutateAsync(brandFields);
+      await updateBrand.mutateAsync({ ...brandFields, adminColors });
       return true;
     } catch (err) {
       toast.error(`Could not save branding: ${err instanceof Error ? err.message : "unknown error"}`);
@@ -267,102 +263,61 @@ function BrandingEditor({ brand, storeName }: { brand: BrandSettings; storeName:
           </SettingsCard>
 
           <SettingsCard
-            title="Brand colours"
-            description="Hex palette & button geometry"
+            title="Admin dashboard"
+            description="Colours of the sidebar and navigation in your team's dashboard"
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {colorFields.map((f) => {
-                const value = form[f.key as ColorKey];
-                const valid = HEX.test(value);
-                return (
-                  <div key={f.key} className="grid gap-1.5">
-                    <FieldLabel htmlFor={f.key}>{f.label}</FieldLabel>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id={f.key}
-                        type="color"
-                        value={valid && value.length === 7 ? value : "#000000"}
-                        onChange={(e) => set(f.key, e.target.value)}
-                        className="size-8 cursor-pointer rounded-md border border-border p-0.5 bg-background shrink-0"
-                      />
-                      <Input aria-label={`${f.label} hex value`} value={value} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono h-8 text-xs" />
+            <div className="grid gap-4">
+              <p className="text-xs text-muted-foreground">Set separately for light and dark mode. Leave a field empty to keep the default; an empty hover colour is worked out from your sidebar colours.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {ADMIN_MODES.map((m) => (
+                  <div key={m.mode} className="grid gap-3 rounded-lg border border-border p-3">
+                    <p className="text-xs font-semibold text-foreground">{m.title}</p>
+                    {([
+                      { key: m.sidebar, label: "Sidebar colour", fallback: m.defaultSidebar },
+                      { key: m.text, label: "Sidebar text colour", fallback: m.defaultText },
+                      { key: m.hover, label: "Hover colour", fallback: m.defaultSidebar },
+                      { key: m.hoverText, label: "Hover text colour", fallback: m.defaultText },
+                    ] as const).map((f) => {
+                      const value = form[f.key];
+                      const valid = value === "" || HEX6.test(value);
+                      return (
+                        <div key={f.key} className="grid gap-1.5">
+                          <FieldLabel htmlFor={f.key}>{f.label}</FieldLabel>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id={f.key}
+                              type="color"
+                              value={HEX6.test(value) ? value : f.fallback}
+                              onChange={(e) => set(f.key, e.target.value)}
+                              className="size-8 cursor-pointer rounded-md border border-border p-0.5 bg-background shrink-0"
+                            />
+                            <Input aria-label={`${m.title} ${f.label} hex value`} value={value} placeholder={`Default ${f.fallback}`} aria-invalid={!valid} onChange={(e) => set(f.key, e.target.value)} className="font-mono h-8 text-xs" />
+                            {value ? (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => set(f.key, "")}>
+                                Reset
+                              </Button>
+                            ) : null}
+                          </div>
+                          {valid ? null : <p className="text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
+                        </div>
+                      );
+                    })}
+                    <div className="grid gap-1 rounded-md p-1.5 text-xs" style={{ background: HEX6.test(form[m.sidebar]) ? form[m.sidebar] : m.defaultSidebar, color: HEX6.test(form[m.text]) ? form[m.text] : m.defaultText }}>
+                      <div className="rounded px-2 py-1.5">Orders</div>
+                      <div
+                        className="rounded px-2 py-1.5"
+                        style={{
+                          background: HEX6.test(form[m.hover]) ? form[m.hover] : `color-mix(in srgb, ${HEX6.test(form[m.text]) ? form[m.text] : m.defaultText} 14%, ${HEX6.test(form[m.sidebar]) ? form[m.sidebar] : m.defaultSidebar})`,
+                          color: HEX6.test(form[m.hoverText]) ? form[m.hoverText] : HEX6.test(form[m.text]) ? form[m.text] : m.defaultText,
+                        }}
+                      >
+                        Products (hovered or current)
+                      </div>
+                      <div className="rounded px-2 py-1.5">Settings</div>
                     </div>
-                    {valid ? null : <p className="text-xs text-destructive">Use a hex colour like #1a2b3c</p>}
                   </div>
-                );
-              })}
-            </div>
-            <div className="pt-2 border-t border-border grid gap-3 sm:grid-cols-3">
-              <Field id="color-mode" label="Colour mode">
-                <SimpleSelect
-                  id="color-mode"
-                  className="w-full"
-                  value={form.colorMode}
-                  onChange={(v) => set("colorMode", v as FormState["colorMode"])}
-                  options={[
-                    { value: "light", label: "Light" },
-                    { value: "dark", label: "Dark" },
-                    { value: "auto", label: "Match device" },
-                  ]}
-                />
-              </Field>
-              <Field id="corner-radius" label="Corner radius">
-                <SimpleSelect
-                  id="corner-radius"
-                  className="w-full"
-                  value={form.cornerRadius}
-                  onChange={(v) => set("cornerRadius", v as FormState["cornerRadius"])}
-                  options={(["none", "small", "medium", "large", "full"] as const).map((r) => ({ value: r, label: r }))}
-                />
-              </Field>
-              <Field id="button-style" label="Button style">
-                <SimpleSelect
-                  id="button-style"
-                  className="w-full"
-                  value={form.buttonStyle}
-                  onChange={(v) => set("buttonStyle", v as FormState["buttonStyle"])}
-                  options={(["solid", "outline", "pill"] as const).map((r) => ({ value: r, label: r }))}
-                />
-              </Field>
-            </div>
-          </SettingsCard>
-
-          <SettingsCard
-            title="Typography"
-            description="Font families & text sizing scale"
-          >
-            <div className="grid gap-3 sm:grid-cols-3">
-              {(
-                [
-                  { key: "fontHeading", label: "Heading font" },
-                  { key: "fontBody", label: "Body font" },
-                ] as const
-              ).map((f) => (
-                <Field key={f.key} id={f.key} label={f.label}>
-                  <SimpleSelect
-                    id={f.key}
-                    value={form[f.key]}
-                    onChange={(v) => set(f.key, v as BrandSettings[typeof f.key])}
-                    options={[
-                      ...(curatedFonts.some((c) => c.id === form[f.key]) ? [] : [{ value: form[f.key], label: form[f.key] }]),
-                      ...curatedFonts.map((c) => ({ value: c.id, label: `${c.name} (${c.category})${c.devanagari ? " - Devanagari" : ""}` })),
-                    ]}
-                  />
-                </Field>
-              ))}
-              <Field id="font-scale" label="Text size">
-                <SimpleSelect
-                  id="font-scale"
-                  value={form.fontSizeScale}
-                  onChange={(v) => set("fontSizeScale", v)}
-                  options={[
-                    ...(["small", "default", "large"].includes(form.fontSizeScale) ? [] : [{ value: form.fontSizeScale, label: form.fontSizeScale }]),
-                    { value: "small", label: "Small" },
-                    { value: "default", label: "Default" },
-                    { value: "large", label: "Large" },
-                  ]}
-                />
-              </Field>
+                ))}
+              </div>
             </div>
           </SettingsCard>
     </SettingsPageFrame>
