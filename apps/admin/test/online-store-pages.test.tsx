@@ -129,7 +129,9 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
     const html = await renderRouted(client, BrandingSettingsPage);
     expect(html).toContain("Saree Studio");
     expect(html).toContain("#7c3aed");
-    expect(html).toContain("Rozha One");
+    // Fonts are set in the theme builder, so the branding page no longer offers them; it does offer the admin dashboard colours.
+    expect(html).not.toContain("Typography");
+    expect(html).toContain("Admin dashboard");
     expectNoSample(html);
   });
 });
