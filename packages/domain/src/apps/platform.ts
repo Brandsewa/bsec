@@ -2,12 +2,13 @@
  * Super Admin "Marketplace" (ADR-043): who can see each app, a global on/off, and a per-store suspension. Every change
  * writes `platform_audit_logs` (rule 6) and clears the affected stores' storefront cache.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { manifestFor } from "./registry.ts";
+import { importPincodeDirectory, parsePincodeJson } from "./pincodes.ts";
 
 function fail(kind: "Bad Request" | "Not Found", message: string): never {
   throw new Error(`${kind}: ${message}`);
@@ -138,4 +139,38 @@ export async function setTenantAppSuspended(
   });
   await invalidateCache(rt, tenantId, { type: "markets_changed" });
   return { ok: true };
+}
+
+export async function getPincodeDirectoryStatus(rt: Runtime, platformStaffUserId: string): Promise<{ count: number }> {
+  await assertPlatformStaff(rt, platformStaffUserId);
+  const [row] = await rt._db.db.select({ n: count() }).from(schema.platformInPincodes);
+  return { count: row?.n ?? 0 };
+}
+
+export interface PincodeImportResult {
+  imported: number;
+  skipped: number;
+  total: number;
+  /** The first few skipped rows, for the operator to check. */
+  skippedSample: string[];
+}
+
+/**
+ * Loads the India Post pincode directory (JSON keyed by pincode) from Super Admin. Safe to re-run: existing pincodes are
+ * updated. Rows without a usable state are skipped and reported, never guessed.
+ */
+export async function importPincodesFromJson(rt: Runtime, platformStaffUserId: string, text: string, meta?: AuditMeta): Promise<PincodeImportResult> {
+  const staff = await assertPlatformStaff(rt, platformStaffUserId);
+  assertRoleAtLeast(staff.role, "platform_admin", "load the pincode directory");
+  if (text.length > 6_000_000) fail("Bad Request", "The file is too large");
+  let parsed: ReturnType<typeof parsePincodeJson>;
+  try {
+    parsed = parsePincodeJson(text);
+  } catch (err) {
+    fail("Bad Request", err instanceof SyntaxError ? "The file is not valid JSON" : err instanceof Error ? err.message : "Could not read the file");
+  }
+  if (parsed.rows.length < 100) fail("Bad Request", "The file has too few usable pincodes to be the India Post directory");
+  const { imported } = await importPincodeDirectory(rt, parsed.rows);
+  await writePlatformAudit(rt._db.db, platformStaffUserId, "marketplace.pincodes.import", "pincode_directory", "in", null, { imported, skipped: parsed.skipped.length }, meta);
+  return { imported, skipped: parsed.skipped.length, total: imported + parsed.skipped.length, skippedSample: parsed.skipped.slice(0, 10).map((s) => s.reason) };
 }

@@ -275,6 +275,13 @@ const CASES: Record<string, Case> = {
     action: "marketplace.app.update",
     input: async () => ({ key: "state-pricing", enabled: true }),
   },
+  "marketplace.importPincodes": {
+    role: "platform_admin",
+    action: "marketplace.pincodes.import",
+    input: async () => ({
+      data: JSON.stringify(Object.fromEntries(Array.from({ length: 120 }, (_, i) => [String(560001 + i), { state: "Karnataka", district: "Bengaluru" }]))),
+    }),
+  },
   "marketplace.setSuspended": {
     role: "platform_admin",
     action: "marketplace.app.suspend",

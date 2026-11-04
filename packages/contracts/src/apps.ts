@@ -91,6 +91,11 @@ export const platformMarketplaceContract = {
     .route({ method: "PATCH", path: "/platform/marketplace/apps/{key}" })
     .input(z.object({ key: AppKey, visibility: z.enum(["public", "private"]).optional(), allowedTenantIds: z.array(Uuid).max(500).optional(), enabled: z.boolean().optional() }))
     .output(PlatformAppRecord),
+  pincodeStatus: oc.route({ method: "GET", path: "/platform/marketplace/pincodes" }).output(z.object({ count: z.number().int() })),
+  importPincodes: oc
+    .route({ method: "POST", path: "/platform/marketplace/pincodes" })
+    .input(z.object({ data: z.string().min(2).max(6_000_000) }))
+    .output(z.object({ imported: z.number().int(), skipped: z.number().int(), total: z.number().int(), skippedSample: z.array(z.string()) })),
   setSuspended: oc
     .route({ method: "PUT", path: "/platform/marketplace/apps/{key}/tenants/{tenantId}" })
     .input(z.object({ key: AppKey, tenantId: Uuid, suspended: z.boolean() }))
