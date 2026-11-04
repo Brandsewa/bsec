@@ -4,9 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMarket } from "./MarketProvider.tsx";
 
-/** The country list pop-up of the footer selector. Loaded only when the shopper opens it, so it is not in every page's JavaScript. */
+/** The country list pop-up of the footer selector. Choosing a country opens that market's home page (the page being viewed may not exist there). Loaded only when the shopper opens it, so it is not in every page's JavaScript. */
 export default function MarketSelectorDialog({ onClose }: { onClose: () => void }) {
-  const { markets = [], currentHandle, path = "/" } = useMarket();
+  const { markets = [], currentHandle } = useMarket();
   const [query, setQuery] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +55,7 @@ export default function MarketSelectorDialog({ onClose }: { onClose: () => void 
             return (
               <li key={r.code}>
                 <a
-                  href={`/api/storefront/market/select?handle=${encodeURIComponent(r.market.handle)}&next=${encodeURIComponent(path)}`}
+                  href={`/api/storefront/market/select?handle=${encodeURIComponent(r.market.handle)}&next=%2F`}
                   aria-current={here ? "true" : undefined}
                   className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm hover:bg-muted ${here ? "font-semibold" : ""}`}
                 >
