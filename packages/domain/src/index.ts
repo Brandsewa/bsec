@@ -32,6 +32,7 @@ export * from "./themes/launch-template.ts";
 export * from "./themes/commerce-templates.ts";
 export * from "./themes/seed-commerce-templates.ts";
 export * from "./storefront/lifecycle.ts";
+export { clearStorefrontAccessCache } from "./storefront/access-cache.ts";
 export * from "./storefront/product-status.ts";
 export * from "./storefront/catalog.ts";
 export * from "./catalog/variant-builder.ts";
