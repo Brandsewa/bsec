@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/pincode-upload` (not merged yet)
+- **Branch:** `feat/pincode-upload` (merged in #214, 4e75400)
 - **Area:** domain, contracts, platform, superadmin
 - **Type:** feature
 - **Supersedes:** none
