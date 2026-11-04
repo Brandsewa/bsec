@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `perf/request-overhead` (not merged yet)
+- **Branch:** `perf/request-overhead` (merged in #227)
 - **Area:** domain, db, web
 - **Type:** fix
 - **Supersedes:** none

@@ -1,6 +1,6 @@
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontProductSummary } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CardCartButton } from "./CardCartButton.tsx";
