@@ -95,9 +95,21 @@ export function parsePincodeCsv(text: string): PincodeParseResult {
  * owner supplied from India Post, 19,586 pincodes). Rows with an empty or unknown state are skipped and reported, so a
  * pincode we cannot place never gets a guessed price.
  */
-// Rows in the supplied file that are plainly wrong (799001 is Agartala, Tripura; 334002 is Bikaner, Rajasthan). Add to this
-// list only after checking a pincode against India Post; the rest of the file is used as supplied.
-const PINCODE_CORRECTIONS: Readonly<Record<string, InStateCode>> = { "799001": "TR", "334002": "RJ" };
+// Rows where the owner's decision (2026-11-04) or a check against India Post overrides the supplied file; the rest of the
+// file is used as supplied. 799001 is Agartala (Tripura) and 334002 is Bikaner (Rajasthan). The other rows sit in border or
+// enclave pockets of their prefix: 900099 is a Military Post (Kolkata hub), priced as West Bengal.
+const PINCODE_CORRECTIONS: Readonly<Record<string, InStateCode>> = {
+  "799001": "TR",
+  "334002": "RJ",
+  "504346": "TG",
+  "612906": "TN",
+  "791701": "MZ",
+  "781131": "AS",
+  "384316": "GJ",
+  "813208": "JH",
+  "814131": "BR",
+  "900099": "WB",
+};
 
 export function parsePincodeJson(text: string): PincodeParseResult {
   const data = JSON.parse(text) as unknown;
@@ -110,12 +122,12 @@ export function parsePincodeJson(text: string): PincodeParseResult {
       continue;
     }
     const name = typeof value?.state === "string" ? value.state : "";
-    const state = stateCodeForName(name);
+    const state = PINCODE_CORRECTIONS[pin] ?? stateCodeForName(name);
     if (!state) {
       skipped.push({ line: 0, reason: name ? `unknown state for ${pin}: ${name}` : `no state for ${pin}` });
       continue;
     }
-    rows.push({ pincode: pin, stateCode: PINCODE_CORRECTIONS[pin] ?? state });
+    rows.push({ pincode: pin, stateCode: state });
   }
   return { rows, skipped };
 }

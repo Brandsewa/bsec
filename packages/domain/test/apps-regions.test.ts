@@ -83,9 +83,11 @@ describe("parsePincodeJson", () => {
         "555555": { state: "Atlantis", district: "" },
         "12": { state: "Delhi" },
         "799001": { state: "Telangana" },
+        "504346": { state: "Andhra Pradesh" },
+        "900099": { state: "" },
       }),
     );
-    expect(out.rows.map((r) => `${r.pincode}:${r.stateCode}`).sort()).toEqual(["110001:DL", "180001:JK", "396230:DD", "744101:AN", "799001:TR"]);
+    expect(out.rows.map((r) => `${r.pincode}:${r.stateCode}`).sort()).toEqual(["110001:DL", "180001:JK", "396230:DD", "504346:TG", "744101:AN", "799001:TR", "900099:WB"]);
     expect(out.skipped.map((x) => x.reason)).toEqual(expect.arrayContaining(["no state for 121999", "unknown state for 555555: Atlantis", "not a pincode: 12"]));
   });
 
