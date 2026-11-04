@@ -196,9 +196,9 @@ describe("Branding Service: Permissions, Media Validation, and Audit (ADR-020, Â
 
   it("saves admin dashboard colours per mode, keeps them across other edits, clears them, and keeps stores apart", async () => {
     const ctx = ctxFor(storeA, ["branding.manage", "settings.read"]);
-    await updateBrandSettings(rtWeb, ctx, { adminColors: { light: { sidebar: "#0F172A", sidebarText: "#F8FAFC" }, dark: { sidebar: "#111827", sidebarText: null } } });
+    await updateBrandSettings(rtWeb, ctx, { adminColors: { light: { sidebar: "#0F172A", sidebarText: "#F8FAFC", hover: "#1E293B", hoverText: "#FFFFFF" }, dark: { sidebar: "#111827", sidebarText: null } } });
     const saved = await getBrandSettings(rtWeb, ctx);
-    expect(saved.adminColors).toEqual({ light: { sidebar: "#0f172a", sidebarText: "#f8fafc" }, dark: { sidebar: "#111827" } });
+    expect(saved.adminColors).toEqual({ light: { sidebar: "#0f172a", sidebarText: "#f8fafc", hover: "#1e293b", hoverText: "#ffffff" }, dark: { sidebar: "#111827" } });
 
     // An unrelated edit leaves them alone.
     await updateBrandSettings(rtWeb, ctx, { primaryColor: "#123456" });

@@ -37,7 +37,7 @@ export const brandSettings = tenantTable(
       warning?: string;
       error?: string;
       /** Store admin sidebar and navigation colours per mode (no migration: part of this JSON). */
-      admin?: { light?: { sidebar?: string; sidebarText?: string }; dark?: { sidebar?: string; sidebarText?: string } };
+      admin?: { light?: { sidebar?: string; sidebarText?: string; hover?: string; hoverText?: string }; dark?: { sidebar?: string; sidebarText?: string; hover?: string; hoverText?: string } };
     }>(),
     colorScheme: text("color_scheme").notNull().default("light"), // light, dark, auto
     fontHeading: text("font_heading").notNull().default("Inter"),

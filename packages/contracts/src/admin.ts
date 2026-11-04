@@ -942,6 +942,9 @@ const AdminHex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex co
 const AdminModeColors = z.object({
   sidebar: AdminHex.nullable().optional(),
   sidebarText: AdminHex.nullable().optional(),
+  /** Background and text of a hovered or current navigation row. */
+  hover: AdminHex.nullable().optional(),
+  hoverText: AdminHex.nullable().optional(),
 });
 export const AdminDashboardColors = z.object({ light: AdminModeColors.optional(), dark: AdminModeColors.optional() });
 export type AdminDashboardColors = z.infer<typeof AdminDashboardColors>;

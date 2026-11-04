@@ -56,8 +56,18 @@ function useAdminDashboardColors() {
   const brand = useQuery(orpc.admin.branding.get.queryOptions());
   const colors = brand.data?.adminColors;
   useEffect(() => {
-    const rule = (sel: string, m?: { sidebar?: string | null | undefined; sidebarText?: string | null | undefined }) => {
-      const decls = [m?.sidebar ? `--sidebar:${m.sidebar};` : "", m?.sidebarText ? `--sidebar-foreground:${m.sidebarText};--sidebar-accent-foreground:${m.sidebarText};` : ""].join("");
+    type Mode = { sidebar?: string | null | undefined; sidebarText?: string | null | undefined; hover?: string | null | undefined; hoverText?: string | null | undefined };
+    const rule = (sel: string, m?: Mode) => {
+      // Hovered and current rows: the chosen hover colours, else a tint of the sidebar text over the sidebar, so a dark
+      // sidebar never gets the light default highlight.
+      const hover = m?.hover ?? (m?.sidebar || m?.sidebarText ? `color-mix(in srgb, ${m?.sidebarText ?? "var(--foreground)"} 14%, ${m?.sidebar ?? "var(--background)"})` : null);
+      const hoverText = m?.hoverText ?? m?.sidebarText;
+      const decls = [
+        m?.sidebar ? `--sidebar:${m.sidebar};` : "",
+        m?.sidebarText ? `--sidebar-foreground:${m.sidebarText};` : "",
+        hover ? `--sidebar-accent:${hover};` : "",
+        hoverText ? `--sidebar-accent-foreground:${hoverText};` : "",
+      ].join("");
       return decls ? `${sel}{${decls}}` : "";
     };
     const css = rule(':root', colors?.light) + rule(':root[data-theme="dark"]', colors?.dark);
@@ -67,7 +77,7 @@ function useAdminDashboardColors() {
     el.textContent = css;
     document.head.appendChild(el);
     return () => el.remove();
-  }, [colors?.light?.sidebar, colors?.light?.sidebarText, colors?.dark?.sidebar, colors?.dark?.sidebarText]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [colors?.light?.sidebar, colors?.light?.sidebarText, colors?.light?.hover, colors?.light?.hoverText, colors?.dark?.sidebar, colors?.dark?.sidebarText, colors?.dark?.hover, colors?.dark?.hoverText]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function AppShell({
