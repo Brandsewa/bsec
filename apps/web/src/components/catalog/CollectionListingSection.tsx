@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCollectionDetail, StorefrontFacetedResult } from "@bs/domain";
 import type { CollectionListingOptions } from "@bs/blocks";
 import { ProductCard } from "./ProductCard.tsx";

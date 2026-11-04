@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `perf/link-prefetch` · storefront links prefetch only on hover, touch or focus (cuts 25-40 background requests per page view); change record `docs/changes/2026-11-04-claude-link-prefetch-storm.md` · 2026-11-04
 - claude · `fix/market-prices-switch` · category prices in other markets, country switch to market home, middleware market list on the live server; change record `docs/changes/2026-11-04-claude-market-price-and-switch-fixes.md` · 2026-11-04
 - claude · `feat/market-detection-perf` · silent country detection, one URL rule per market, footer country selector (top bar removed), real-host redirect; change record `docs/changes/2026-11-04-claude-market-detection-selector.md` · 2026-11-04
 - claude · `feat/markets-shipping-ux` · short country lists, taken countries muted, shipping zone and rate accordions, Add zone in header, no rate calculator, admin colours with hover and no Brand colours card; change record `docs/changes/2026-11-04-claude-markets-shipping-ux.md` · 2026-11-04

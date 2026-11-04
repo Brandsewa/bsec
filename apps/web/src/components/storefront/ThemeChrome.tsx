@@ -1,6 +1,6 @@
 import { FooterMarketSelector } from "@/components/market/FooterMarketSelector.tsx";
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import { renderBlockTree, type BlockInstance } from "@bs/blocks";
 import "@bs/blocks/blocks.css";
 import { mediaDetailsFor, type BlockRenderData } from "@/components/blocks/BlockRenderer.tsx";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import { BlogCard, NewsletterForm, formatBlogDate, type BlogListingOptions } from "@bs/blocks";
 import { toBlockBlogPost, type BlogMagazineData, type BlogPostSummary } from "@bs/domain";
 

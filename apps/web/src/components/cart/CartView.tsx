@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCart } from "@bs/domain";
 import { CartItemRow } from "./CartItemRow.tsx";
 import { ShippingEstimator } from "./ShippingEstimator.tsx";

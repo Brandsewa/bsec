@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { StorefrontCart } from "@bs/domain";
 import { MiniCartDrawer } from "./MiniCartDrawer.tsx";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 
 export interface CartBadgeProps {
   count?: number | undefined;
