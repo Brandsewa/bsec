@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-03
 - **Agent:** claude
-- **Branch:** `feat/apps-state-pricing` (not merged yet)
+- **Branch:** `feat/apps-state-pricing` (merged in #213, addfcf0)
 - **Area:** db, domain, contracts, auth, web, admin, superadmin, platform, docs
 - **Type:** feature
 - **Supersedes:** none

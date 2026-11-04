@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/apps-home-bulk-editor` (not merged yet)
+- **Branch:** `feat/apps-home-bulk-editor` (merged in #215, 5973b2f)
 - **Area:** db, domain, contracts, admin, web, docs
 - **Type:** feature
 - **Supersedes:** none
