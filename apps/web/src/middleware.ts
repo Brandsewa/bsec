@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { MARKETING_PAGES } from "./components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "./server/hosts.ts";
+import { BOT_UA, decideMarket, type MarketEntry } from "./lib/market-detect.ts";
 import { MARKET_COOKIE, MARKET_PREFIX_HEADER, PATH_HEADER } from "./lib/market-constants.ts";
 
 export async function middleware(request: NextRequest) {
@@ -92,7 +93,7 @@ export async function middleware(request: NextRequest) {
     isBypass?: boolean | undefined;
     message?: string | undefined;
     headline?: string | null | undefined;
-    marketPrefixes?: { prefix: string; handle: string }[] | undefined;
+    marketPrefixes?: MarketEntry[] | undefined;
   };
 
   try {
@@ -189,12 +190,12 @@ export async function middleware(request: NextRequest) {
   // A market URL prefix such as /us (ADR-040): strip it before routing and tell the page which market it asked for.
   const firstSegment = pathname.split("/")[1] ?? "";
   const requestedPrefix = firstSegment ? `/${firstSegment.toLowerCase()}` : "";
-  const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix === requestedPrefix) : undefined;
+  const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix && m.prefix === requestedPrefix) : undefined;
   // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
   // so the layout can write hreflang links and the market switcher can return to the same page.
   const forwarded = new Headers(request.headers);
   forwarded.delete(MARKET_PREFIX_HEADER);
-  const hasMarkets = (access.marketPrefixes?.length ?? 0) > 0;
+  const hasMarkets = (access.marketPrefixes?.length ?? 0) > 1;
   if (matchedMarket) {
     const stripped = request.nextUrl.clone();
     stripped.pathname = pathname.slice(firstSegment.length + 1) || "/";
@@ -207,6 +208,44 @@ export async function middleware(request: NextRequest) {
     return rewritten;
   }
   if (hasMarkets) forwarded.set(PATH_HEADER, request.nextUrl.pathname + request.nextUrl.search);
+
+  // A visitor with no market in the URL: place a first-time visitor by country (once, silently), and keep a shopper who chose
+  // another market on that market's own address. Only for page loads by real browsers.
+  if (hasMarkets) {
+    const accept = request.headers.get("accept") ?? "";
+    const isDocument = request.method === "GET" && accept.includes("text/html") && !pathname.startsWith("/api/") && !pathname.startsWith("/_next/") && !request.headers.has("rsc") && !request.headers.has("next-router-prefetch");
+    // Cloudflare's country header counts only when the request really came through Cloudflare; ?country=XX is a development aid.
+    const cfCountry = request.headers.get("cf-ray") ? request.headers.get("cf-ipcountry") : null;
+    const devCountry = process.env.NODE_ENV !== "production" ? request.nextUrl.searchParams.get("country") : null;
+    const country = [devCountry, cfCountry].find((c) => c && /^[A-Za-z]{2}$/.test(c) && c.toUpperCase() !== "XX") ?? null;
+    const decision = decideMarket({
+      markets: access.marketPrefixes ?? [],
+      prefixMatched: false,
+      cookieHandle: request.cookies.get(MARKET_COOKIE)?.value ?? null,
+      country,
+      isBot: BOT_UA.test(request.headers.get("user-agent") ?? ""),
+      isDocument,
+    });
+    const cookie = decision.setCookie
+      ? { name: MARKET_COOKIE, value: decision.setCookie, path: "/", sameSite: "lax" as const, httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 }
+      : null;
+    if (decision.redirectPrefix) {
+      const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || request.nextUrl.protocol.replace(":", "");
+      const search = new URLSearchParams(request.nextUrl.search);
+      search.delete("country");
+      const qs = search.toString();
+      const moved = NextResponse.redirect(new URL(`${decision.redirectPrefix}${pathname === "/" ? "" : pathname}${qs ? `?${qs}` : ""}` || "/", `${proto}://${host}`), 307);
+      if (cookie) moved.cookies.set(cookie);
+      moved.headers.set("Vary", "Cookie, Accept");
+      return moved;
+    }
+    if (cookie) {
+      const placed = NextResponse.next({ request: { headers: forwarded } });
+      placed.cookies.set(cookie);
+      if (access.noindex) placed.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return placed;
+    }
+  }
 
   // Allowed request (live, bypass, unlocked password)
   const response = NextResponse.next({ request: { headers: forwarded } });

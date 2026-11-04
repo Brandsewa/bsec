@@ -30,8 +30,8 @@ import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
+import { countryName } from "@bs/contracts/countries";
 import { MarketProvider } from "@/components/market/MarketProvider.tsx";
-import { MarketBar } from "@/components/market/MarketBar.tsx";
 import { getMarketContext, type MarketContext } from "@/server/market.ts";
 import { PATH_HEADER, PIN_ERROR_COOKIE } from "@/lib/market-constants.ts";
 import { PincodeGate } from "@/components/market/pincode-gate.tsx";
@@ -135,7 +135,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let marketCtx: MarketContext | null = null;
   let requestPath = "/";
   let requestHost = "localhost";
-  let visitorCountryCode: string | null = null;
   let pinError: string | null = null;
 
   try {
@@ -147,7 +146,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });
     requestHost = host;
     requestPath = h.get(PATH_HEADER) ?? "/";
-    visitorCountryCode = h.get("cf-ray") ? (h.get("cf-ipcountry")?.toUpperCase() ?? null) : null;
 
     if (access.tenantId) {
       marketCtx = await getMarketContext(access.tenantId).catch(() => null);
@@ -259,9 +257,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <WebThemeProvider>
-          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "" }}>
+          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "", ...(marketCtx && marketCtx.markets.length > 1 && marketCtx.market ? { markets: marketCtx.markets.map((m) => ({ handle: m.handle, name: m.name, currency: m.currency, countries: m.countries.map((code) => ({ code, name: countryName(code) })) })), currentHandle: marketCtx.market.handle, path: requestPath } : {}) }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
-          {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
           {marketCtx?.regionState.needsPincode ? <PincodeGate error={pinError} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
