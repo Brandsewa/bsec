@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Button, Input, Field, MultiSelect, SimpleSelect, toast } from "@bs/ui";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Button, Input, Field, SimpleSelect, toast } from "@bs/ui";
+import { CountryPicker } from "./country-picker.tsx";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { suggestCurrencyForCountries } from "@bs/contracts/countries";
 import {
-  MARKET_COUNTRY_OPTIONS,
   MARKET_CURRENCY_OPTIONS,
   IMPERIAL_COUNTRIES,
   ROUNDING_OPTIONS,
@@ -124,13 +124,7 @@ export function AddMarketDialog({
           </div>
 
           <Field id="market-countries" label="Target Countries" hint="Countries in this market. A country can be in only one market.">
-            <MultiSelect
-              options={MARKET_COUNTRY_OPTIONS}
-              value={countries}
-              onChange={changeCountries}
-              placeholder="Select countries..."
-              searchPlaceholder="Search country..."
-            />
+            <CountryPicker value={countries} onChange={changeCountries} />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
