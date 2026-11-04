@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `fix/hero-bg-video-mobile`
+- **Branch:** `fix/hero-bg-video-mobile` (merged in #217, c68befd)
 - **Area:** blocks, block-editor
 - **Type:** fix
 - **Supersedes:** none
