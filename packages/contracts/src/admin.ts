@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import { marketsContract } from "./markets.ts";
+import { appsContract } from "./apps.ts";
 import { z } from "zod";
 import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
@@ -2168,6 +2169,7 @@ const ProductImportRunSchema = z.object({
 
 export const adminContract = {
   markets: marketsContract,
+  apps: appsContract,
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
     approve: oc

@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import type { ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
+import { platformMarketplaceContract } from "./apps.ts";
 import { blogContract } from "./blog.ts";
 import {
   platformTenantsContract,
@@ -29,6 +30,7 @@ import { platformNotificationsContract } from "./notifications.ts";
 
 export * from "./admin.ts";
 export * from "./markets.ts";
+export * from "./apps.ts";
 export * from "./finance.ts";
 export * from "./blog.ts";
 export * from "./notifications.ts";
@@ -99,6 +101,7 @@ export const platformContract = {
   quotas: platformQuotasContract,
   features: platformFeaturesContract,
   promotions: platformPromotionsContract,
+  marketplace: platformMarketplaceContract,
   staff: platformStaffContract,
   audit: platformAuditContract,
   email: platformEmailContract,

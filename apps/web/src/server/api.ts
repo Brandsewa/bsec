@@ -185,6 +185,14 @@ import {
   searchStorefrontProducts,
   getSearchSuggestions,
   getOrCreateCart,
+  listStoreApps,
+  installApp,
+  setAppStatus,
+  uninstallApp,
+  updateAppSettings,
+  listIndianStates,
+  getProductStatePricing,
+  setVariantStatePrices,
   addToCart,
   updateCartItemQuantity,
   removeCartItem,
@@ -704,6 +712,75 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return disconnectStoreGoogle(context.rt, context.tenantCtx);
+        }),
+    },
+    apps: {
+      list: os.admin.apps.list
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreApps(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      install: os.admin.apps.install
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return installApp(context.rt, context.tenantCtx, input.key).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setStatus: os.admin.apps.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAppStatus(context.rt, context.tenantCtx, input.key, input.status).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      uninstall: os.admin.apps.uninstall
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return uninstallApp(context.rt, context.tenantCtx, input.key).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateSettings: os.admin.apps.updateSettings
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateAppSettings(context.rt, context.tenantCtx, input.key, input.settings).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      states: os.admin.apps.states
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context }) => listIndianStates(context.rt)),
+      getProductPricing: os.admin.apps.getProductPricing
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProductStatePricing(context.rt, context.tenantCtx, input.productId).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setVariantPricing: os.admin.apps.setVariantPricing
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setVariantStatePrices(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
         }),
     },
     markets: {

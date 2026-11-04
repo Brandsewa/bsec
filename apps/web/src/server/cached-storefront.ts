@@ -3,6 +3,8 @@ import { cacheLife, cacheTag } from "next/cache";
 import {
   tenantTag,
   getStorefrontProduct,
+  getStatePricingScope,
+  type StatePricingScope,
   getStorefrontCollection,
   getStorefrontCategory,
   listStorefrontCategories,
@@ -56,6 +58,11 @@ import { server } from "./runtime.ts";
  * Helper to build standard tenant context for cached storefront reads.
  */
 function createStorefrontTenantContext(tenantId: string, marketId?: string | null): TenantContext {
+  // The scope is a market id, optionally followed by "@XX", the State Pricing app's state (base market only, ADR-044).
+  // It is an argument of every cached loader below, so two markets or two states never share a cache entry.
+  const at = marketId?.indexOf("@") ?? -1;
+  const region = at >= 0 ? (marketId as string).slice(at + 1) : null;
+  const realMarketId = at >= 0 ? (marketId as string).slice(0, at) || null : marketId;
   return {
     tenantId,
     storeStatus: "live",
@@ -64,7 +71,8 @@ function createStorefrontTenantContext(tenantId: string, marketId?: string | nul
     permissions: ["products.read", "settings.write", "content.write", "theme.publish"],
     requestId: crypto.randomUUID(),
     // The market is an argument of every cached loader below, so it is part of the cache key: two markets never share a price (ADR-040).
-    marketId: marketId ?? null,
+    marketId: realMarketId ?? null,
+    priceRegion: region,
   };
 }
 
@@ -74,6 +82,14 @@ export async function getCachedStorefrontMarkets(tenantId: string): Promise<Stor
   cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
   return listStorefrontMarkets(rt, tenantId);
+}
+
+/** Whether the State Pricing app is active for the store, and its mode. Tagged like the shell, so install and settings changes refresh it. */
+export async function getCachedStatePricingScope(tenantId: string): Promise<StatePricingScope> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return getStatePricingScope(rt, tenantId);
 }
 
 export async function getCachedStorefrontProduct(

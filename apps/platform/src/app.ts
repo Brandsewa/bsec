@@ -22,6 +22,9 @@ import {
   updatePlatformFeatureFlag,
   retirePlatformFeatureFlag,
   listPromotions,
+  listPlatformApps,
+  updatePlatformApp,
+  setTenantAppSuspended,
   createPromotion,
   updatePromotion,
   listTenantPromotions,
@@ -786,6 +789,13 @@ export const platformRouter = os.router({
     restore: os.features.restore.use(requireStaff("platform_owner")).handler(({ context, input }) =>
       restorePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
     ),
+  },
+  marketplace: {
+    list: os.marketplace.list.use(requirePlatformStaff).handler(({ context }) => listPlatformApps(context.rt, actor(context))),
+    update: os.marketplace.update.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlatformApp(context.rt, actor(context), input.key, input, context.meta)),
+    setSuspended: os.marketplace.setSuspended
+      .use(requireStaff("platform_admin"))
+      .handler(({ context, input }) => setTenantAppSuspended(context.rt, actor(context), input.tenantId, input.key, input.suspended, context.meta)),
   },
   promotions: {
     list: os.promotions.list.use(requirePlatformStaff).handler(({ context }) => listPromotions(context.rt, actor(context))),

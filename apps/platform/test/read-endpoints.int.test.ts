@@ -60,6 +60,7 @@ const INPUTS: Record<string, () => unknown> = {
   "integrations.billingSettings": () => undefined,
   "integrations.billingPlans": () => undefined,
   "integrations.billingWebhooks": () => undefined,
+  "marketplace.list": () => undefined,
   "promotions.list": () => undefined,
   "promotions.listForTenant": () => ({ tenantId }),
   "promotions.quote": () => ({ planCode: "growth", termMonths: 12 }),

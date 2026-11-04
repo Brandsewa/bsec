@@ -126,7 +126,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
     tenantId = access.tenantId;
     marketCtx = await getMarketContext(tenantId);
-    marketId = marketCtx.marketId;
+    marketId = marketCtx.scope;
     marketCurrency = marketCtx.currency;
     marketLocale = marketCtx.locale;
     product = await getCachedStorefrontProduct(tenantId, slug, marketId);

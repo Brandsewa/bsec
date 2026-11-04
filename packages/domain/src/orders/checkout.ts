@@ -638,6 +638,7 @@ export async function placeOrder(
       paymentStatus: isCod ? "cod_pending" : "pending",
       fulfillmentStatus: "unfulfilled",
       marketId: mkt.id,
+      priceRegion: cart.priceRegion ?? null,
       baseCurrency: mkt.baseCurrency,
       fxRate: !mkt.isBase && mkt.fxRate ? String(mkt.fxRate) : null,
       baseGrandTotal: mkt.isBase ? grandTotal : toBaseCurrencyAmount(grandTotal, mkt.fxRate, minorUnitExponent(mkt.currency), minorUnitExponent(mkt.baseCurrency)),

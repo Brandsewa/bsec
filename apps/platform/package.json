@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:fast": "vitest run --exclude '**/*.int.test.ts'",
     "test:heavy": "vitest run int.test.ts --no-file-parallelism",
-    "seed:templates": "tsx src/seed-templates-cli.ts"
+    "seed:templates": "tsx src/seed-templates-cli.ts",
+    "import:pincodes": "tsx src/import-pincodes-cli.ts"
   },
   "dependencies": {
     "@bs/auth": "workspace:*",

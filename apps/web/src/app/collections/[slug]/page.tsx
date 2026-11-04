@@ -147,7 +147,7 @@ export default async function CollectionDetailPage({
 
     tenantId = access.tenantId;
     const marketCtx = await getMarketContext(tenantId);
-    const marketId = marketCtx.marketId;
+    const marketId = marketCtx.scope;
     marketCurrency = marketCtx.currency;
     marketLocale = marketCtx.locale;
 

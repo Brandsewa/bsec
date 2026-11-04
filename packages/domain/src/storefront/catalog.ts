@@ -6,7 +6,8 @@ import type { TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { publicMediaUrl } from "../media/storage.ts";
 import type { RichDescriptionValue } from "../rich-description.ts";
-import { getScopedMarketId, withMarketScope } from "../markets/scope.ts";
+import { getScopedMarketId, getScopedPriceRegion, withMarketScope } from "../markets/scope.ts";
+import { loadStatePriceMap } from "../apps/state-pricing.ts";
 import { isNonBaseMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 
 export interface CollectionRule {
@@ -419,6 +420,9 @@ export async function getStorefrontProduct(
     const marketPrices = marketPriced ? await loadMarketPriceMap(tx, ctx.tenantId, scopedMarketId, variantRows.map((v) => v.id)) : new Map<string, { price: number; compareAtPrice: number | null }>();
     const sellableRows = marketPriced ? variantRows.filter((v) => marketPrices.has(v.id)) : variantRows;
     if (marketPriced && sellableRows.length === 0) return null;
+    // State Pricing app (ADR-044): the region is only set for stores where the app is active; base market only.
+    const priceRegion = marketPriced ? null : await getScopedPriceRegion(tx);
+    const statePrices = priceRegion ? await loadStatePriceMap(tx, ctx.tenantId, priceRegion, sellableRows.map((v) => v.id)) : new Map<string, { price: number; compareAtPrice: number | null }>();
 
     const variants: StorefrontVariant[] = sellableRows.map((v) => {
       const inv = inventoryByVariant[v.id];
@@ -441,8 +445,12 @@ export async function getStorefrontProduct(
         barcode: v.barcode,
         title: v.title,
         optionValues: v.optionValues as Record<string, string> | null,
-        price: marketPriced ? (marketPrices.get(v.id)?.price ?? Number(v.price)) : Number(v.price),
-        compareAtPrice: marketPriced ? (marketPrices.get(v.id)?.compareAtPrice ?? undefined) : v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+        price: marketPriced ? (marketPrices.get(v.id)?.price ?? Number(v.price)) : (statePrices.get(v.id)?.price ?? Number(v.price)),
+        compareAtPrice: marketPriced
+          ? (marketPrices.get(v.id)?.compareAtPrice ?? undefined)
+          : statePrices.has(v.id)
+            ? (statePrices.get(v.id)?.compareAtPrice ?? undefined)
+            : v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
         costPrice: v.costPrice ? Number(v.costPrice) : undefined,
         weightGrams: v.weightGrams ?? undefined,
         dimensions: v.dimensions as Record<string, unknown> | null,

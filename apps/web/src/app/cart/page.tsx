@@ -52,7 +52,7 @@ export default async function CartPage() {
   const token = cookieStore.get(CART_COOKIE_NAME)?.value;
 
   const marketCtx = await getMarketContext(access.tenantId);
-  const cart = await getOrCreateCart(rt, tenantCtx, token, undefined, marketCtx.marketId);
+  const cart = await getOrCreateCart(rt, { ...tenantCtx, priceRegion: marketCtx.region }, token, undefined, marketCtx.marketId);
 
   // The theme's own cart layout, when the store has one; the built-in layout otherwise.
   const template = await getCachedThemePage(access.tenantId, "cart").catch(() => null);

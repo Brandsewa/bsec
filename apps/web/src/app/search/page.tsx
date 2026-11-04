@@ -108,6 +108,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           permissions: ["products.read", "settings.write"],
           requestId: crypto.randomUUID(),
           marketId: marketCtx.marketId,
+          priceRegion: marketCtx.region,
         };
 
         results = await searchStorefrontProducts(rt, tenantCtx, q, { page, limit });
