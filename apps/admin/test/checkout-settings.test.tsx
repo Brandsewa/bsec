@@ -44,6 +44,7 @@ describe("Checkout Settings Page (/settings/checkout)", () => {
         recoveryEnabled: false,
         steps: [],
       },
+      display: { shippingTitle: "Shipping Method", shippingFreeLabel: "Free", paymentTitle: "Payment Method", payment: {} },
       updatedAt: "2026-10-04T12:00:00.000Z",
     });
 
@@ -56,6 +57,7 @@ describe("Checkout Settings Page (/settings/checkout)", () => {
     expect(html).toContain("Consent at checkout");
     expect(html).toContain("Email marketing opt-in checkbox");
     expect(html).toContain("Require agreement to Terms");
+    expect(html).toContain("Checkout wording");
     expect(html).toContain("Abandoned checkouts");
     expect(html).toContain("Enable abandoned checkout recovery emails");
     expect(html).toContain("Email delivery notice");

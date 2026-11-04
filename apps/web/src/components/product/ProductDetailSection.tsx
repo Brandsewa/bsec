@@ -80,7 +80,7 @@ export function ProductDetailSection({
   const usps = options.showUsps ? (options.usps ?? []).slice(0, 4) : [];
 
   const gallery = (
-    <div className={options.galleryPosition === "right" ? "lg:order-2" : undefined}>
+    <div className={`lg:sticky lg:top-24 ${options.galleryPosition === "right" ? "lg:order-2" : ""}`}>
       <ProductGallery media={product.media} title={product.title} thumbPosition={options.thumbPosition ?? "bottom"} />
     </div>
   );

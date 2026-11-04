@@ -7,6 +7,7 @@ import { FacetedFilters } from "./FacetedFilters.tsx";
 import { Pagination } from "./Pagination.tsx";
 import { LoadMore } from "./LoadMore.tsx";
 import { ListingViewProvider, ProductsContainer } from "./ListingView.tsx";
+import { CollapsibleLongDescription } from "./CollapsibleLongDescription.tsx";
 import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 import { layoutStyle } from "@bs/blocks";
 
@@ -186,8 +187,10 @@ export function CollectionListingSection({
 
         {/* Long description: detail content below the products */}
         {(bare ? o.showLongDescription : o.showDescription) && collection.descriptionJson && collection.descriptionJson.blocks.length > 0 ? (
-          <section className="mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${collection.title}`}>
-            <RichBlocks blocks={collection.descriptionJson.blocks} />
+          <section className="mx-auto mt-12 max-w-3xl border-t border-border pt-8" aria-label={`About ${collection.title}`}>
+            <CollapsibleLongDescription title={collection.title}>
+              <RichBlocks blocks={collection.descriptionJson.blocks} />
+            </CollapsibleLongDescription>
           </section>
         ) : null}
        </div>

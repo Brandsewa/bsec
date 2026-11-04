@@ -324,6 +324,21 @@ export const SettingsUpdateView = z.object({
 });
 export type SettingsUpdateView = z.infer<typeof SettingsUpdateView>;
 
+const PaymentLogo = z.object({ url: z.string().min(1).max(2000), alt: z.string().max(80).default("") });
+const PaymentOptionDisplay = z.object({
+  title: z.string().max(80).default(""),
+  subtitle: z.string().max(160).default(""),
+  logos: z.array(PaymentLogo).max(6).default([]),
+});
+/** Wording of the checkout's shipping and payment sections, and per-gateway payment text and logos. */
+export const CheckoutDisplay = z.object({
+  shippingTitle: z.string().min(1).max(80).default("Shipping Method"),
+  shippingFreeLabel: z.string().min(1).max(40).default("Free"),
+  paymentTitle: z.string().min(1).max(80).default("Payment Method"),
+  payment: z.record(z.string(), PaymentOptionDisplay).default({}),
+});
+export type CheckoutDisplay = z.infer<typeof CheckoutDisplay>;
+
 export const CheckoutSettings = z.object({
   v: z.literal(1).default(1),
   guestCheckout: z.boolean().default(true),
@@ -345,6 +360,7 @@ export const CheckoutSettings = z.object({
     recoveryEnabled: z.boolean().default(false),
     steps: z.array(AbandonedCheckoutStep).max(3).default([]),
   }),
+  display: CheckoutDisplay.default({ shippingTitle: "Shipping Method", shippingFreeLabel: "Free", paymentTitle: "Payment Method", payment: {} }),
   updatedAt: z.string().optional(),
 });
 export type CheckoutSettings = z.infer<typeof CheckoutSettings>;
@@ -369,6 +385,15 @@ export const UpdateCheckoutSettingsInput = z.object({
     recoveryEnabled: z.boolean(),
     steps: z.array(AbandonedCheckoutStep).max(3),
   }).optional(),
+  /** Only the keys sent change; `payment` entries replace that gateway's text and logos (send empty values to clear). */
+  display: z
+    .object({
+      shippingTitle: z.string().min(1).max(80).optional(),
+      shippingFreeLabel: z.string().min(1).max(40).optional(),
+      paymentTitle: z.string().min(1).max(80).optional(),
+      payment: z.record(z.string(), PaymentOptionDisplay).optional(),
+    })
+    .optional(),
   expectedUpdatedAt: z.string().optional(),
 });
 export type UpdateCheckoutSettingsInput = z.infer<typeof UpdateCheckoutSettingsInput>;

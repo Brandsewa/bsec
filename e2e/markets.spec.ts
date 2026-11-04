@@ -13,7 +13,7 @@ async function signIn(page: Page, email = EMAIL, password = PASSWORD) {
 }
 
 test.describe("Settings > Markets Admin UI", () => {
-  test("creates a new market from preset, sets fixed price, and navigates readiness checklist", async ({ page }) => {
+  test("creates a custom market, sets fixed price, and navigates readiness checklist", async ({ page }) => {
     test.skip(!EMAIL || !PASSWORD, "Skipping: E2E_EMAIL and E2E_PASSWORD not set");
 
     await signIn(page);
@@ -29,10 +29,13 @@ test.describe("Settings > Markets Admin UI", () => {
     if (await addMarketButton.isEnabled()) {
       await addMarketButton.click();
       await expect(page.getByRole("dialog")).toBeVisible();
-      await expect(page.getByText("United States (USD)")).toBeVisible();
-
-      // Click USA preset
-      await page.getByText("United States (USD)").click();
+      // No presets: name the market and pick countries; the currency follows the first country.
+      await page.getByLabel("Market name").fill("E2E Market");
+      await page.getByText("Select countries...").click();
+      await page.getByPlaceholder("Search country...").fill("Germany");
+      await page.getByRole("option", { name: /Germany/ }).click();
+      await page.keyboard.press("Escape");
+      await page.getByLabel(/Exchange Rate/).fill("0.011");
 
       // Submit new market
       await page.getByRole("button", { name: "Create market" }).click();

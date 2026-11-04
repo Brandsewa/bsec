@@ -6,6 +6,7 @@ import { galleryImagesField } from "./GalleryImagesField.tsx";
 import { iconField } from "./IconField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
+import { productsField } from "./ProductsField.tsx";
 import { trustStylesField } from "./TrustStripField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
@@ -893,10 +894,11 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
             getItemSummary: (i: { label?: string; source?: string; collectionSlug?: string }, idx?: number) => i.label || i.collectionSlug || i.source || `Tab ${(idx ?? 0) + 1}`,
             arrayFields: {
               label: text("Tab name"),
-              source: select("Products", { newest: "Newest products", featured: "Featured products", collection: "From a collection", related: "Related to the product (product page)" }),
+              source: select("Products", { newest: "Newest products", featured: "Featured products", collection: "From a collection", manual: "Custom (pick products)", related: "Related to the product (product page)" }),
               collectionSlug: text("Collection slug (for \u201cFrom a collection\u201d)"),
+              productSlugs: productsField("Products (for \u201cCustom\u201d)") as Field,
             },
-            defaultItemProps: { label: "New tab", source: "collection", collectionSlug: "" },
+            defaultItemProps: { label: "New tab", source: "collection", collectionSlug: "", productSlugs: [] },
           } as Field,
           limit: num("Products per tab", 2, 24),
           tabsStyle: select("Tab style", { text: "Underlined text", pill: "Pills" }),

@@ -4,8 +4,8 @@ import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import type { MarketDetail } from "@bs/contracts";
 import {
-  AVAILABLE_CURRENCIES,
-  PLATFORM_SUPPORTED_COUNTRIES,
+  MARKET_COUNTRY_OPTIONS,
+  MARKET_CURRENCY_OPTIONS,
   ROUNDING_OPTIONS,
   UNIT_SYSTEM_OPTIONS,
   TAX_DISPLAY_OPTIONS,
@@ -92,7 +92,7 @@ export function MarketGeneralTab({
             <SimpleSelect
               value={currency}
               onChange={setCurrency}
-              options={AVAILABLE_CURRENCIES}
+              options={MARKET_CURRENCY_OPTIONS}
             />
           )}
         </Field>
@@ -104,7 +104,7 @@ export function MarketGeneralTab({
         hint="Countries assigned to this market. A country cannot belong to multiple markets."
       >
         <MultiSelect
-          options={PLATFORM_SUPPORTED_COUNTRIES}
+          options={MARKET_COUNTRY_OPTIONS}
           value={countries}
           onChange={setCountries}
           placeholder="Select countries..."

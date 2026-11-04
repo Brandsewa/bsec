@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ payment?: string }> }) {
-  const { payment } = await searchParams;
+export default async function CheckoutPage({ searchParams }: { searchParams: Promise<{ payment?: string; country?: string }> }) {
+  const { payment, country: wantedCountry } = await searchParams;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
 
@@ -65,7 +65,19 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
 
   const consent = await getStorefrontCheckoutConsent(rt, access.tenantId);
   const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available, methods: options.methods };
-  const region = { countries: options.countries, defaultCountry: options.defaultCountry };
+  // A shopper who picked a country in another market arrives here with ?country=; it is honoured when this market sells to it.
+  const requested = (wantedCountry ?? "").toUpperCase();
+  const region = { countries: options.countries, defaultCountry: options.countries.includes(requested) ? requested : options.defaultCountry };
+
+  // With more than one market, the shopper chooses the country first; each country belongs to one market (its prices, shipping and payment methods).
+  const currentHandle = cartMarket?.handle ?? marketCtx.market?.handle ?? "";
+  const countryPicker =
+    marketCtx.markets.length > 1
+      ? {
+          currentMarketHandle: currentHandle,
+          options: marketCtx.markets.flatMap((m) => m.countries.map((code) => ({ code, marketHandle: m.handle }))).sort((a, b) => a.code.localeCompare(b.code)),
+        }
+      : undefined;
 
   // A signed-in shopper starts with their saved address chosen (default first).
   const account = await accountContext();
@@ -92,7 +104,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         </p>
       ) : null}
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} display={options.display} countryPicker={countryPicker} />
 
       {copy.showTrustBadges ? (
         <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">

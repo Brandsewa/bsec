@@ -13,6 +13,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { currencySymbol } from "@bs/contracts/money";
 import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
+import { PaymentDisplayForm } from "../../../components/payments/payment-display-form.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -758,6 +759,8 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
               {busy === "save" ? "Saving…" : "Save keys"}
             </Button>
           </form>
+
+          <PaymentDisplayForm provider={provider.provider} providerName={provider.displayName} disabled={!canManage} />
 
           <div className="space-y-1 rounded-md border border-border p-3">
             <p className="font-medium text-foreground">Webhook URL</p>

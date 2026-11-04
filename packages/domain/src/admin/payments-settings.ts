@@ -9,6 +9,7 @@ import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
 import { isHostedProviderReady } from "../payments/online-checkout.ts";
 import { loadCheckoutMarket } from "../markets/lookup.ts";
 import { gatewayCurrencyCheck } from "../markets/gateways.ts";
+import { parseCheckoutDisplay, type CheckoutDisplayConfig } from "./checkout-config.ts";
 import {
   getTenantPaymentMethods,
   parseCodPublicConfig,
@@ -61,6 +62,8 @@ export interface StorefrontCheckoutOptions extends StorefrontPaymentOptions {
   defaultCountry: string;
   /** What the shopper can pick, in order: cod, razorpay (shown as online), stripe, paypal. Empty = no way to pay. */
   methods: Array<"cod" | "razorpay" | "stripe" | "paypal">;
+  /** The merchant's wording for the shipping and payment sections, and the payment option text and logos. */
+  display: CheckoutDisplayConfig;
 }
 
 /**
@@ -77,6 +80,9 @@ export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string
   if (base.online.available && offered("razorpay")) methods.push("razorpay");
   if (offered("stripe") && (await isHostedProviderReady(rt._db.db, tenantId, "stripe"))) methods.push("stripe");
   if (offered("paypal") && (await isHostedProviderReady(rt._db.db, tenantId, "paypal"))) methods.push("paypal");
+  const [settingsRow] = await withTenant(rt._db.db, tenantId, (tx) =>
+    tx.select({ checkout: schema.storeSettings.checkout }).from(schema.storeSettings).where(eq(schema.storeSettings.tenantId, tenantId)).limit(1),
+  );
   const sameCurrency = mkt.currency === mkt.baseCurrency;
   const countries = mkt.countries.length > 0 ? mkt.countries : ["IN"];
   const home = countries.includes(mkt.merchantCountry) ? mkt.merchantCountry : (countries[0] ?? "IN");
@@ -88,6 +94,7 @@ export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string
     countries: [home, ...countries.filter((c) => c !== home)],
     defaultCountry: home,
     methods,
+    display: parseCheckoutDisplay((settingsRow?.checkout as Record<string, unknown> | null | undefined)?.display),
   };
 }
 
