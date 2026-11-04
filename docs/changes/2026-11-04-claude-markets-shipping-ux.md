@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/markets-shipping-ux` (not merged yet)
+- **Branch:** `feat/markets-shipping-ux` (merged in #224, deployed)
 - **Area:** admin, domain, contracts
 - **Type:** feature
 - **Supersedes:** none
@@ -34,4 +34,4 @@ Owner feedback on the live markets, shipping and branding screens (items 22 to 2
 
 ## Definition of done
 - [x] Gate commands above pass; no secrets or generated files
-- [ ] After merge: record PR and commit, remove in-flight line, delete branch and worktree
+- [x] After merge: PR recorded, in-flight line removed, branch and worktree deleted

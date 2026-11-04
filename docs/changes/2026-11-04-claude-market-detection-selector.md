@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `feat/market-detection-perf` (not merged yet)
+- **Branch:** `feat/market-detection-perf` (merged in #225, deployed)
 - **Area:** web, blocks
 - **Type:** feature
 - **Supersedes:** none
@@ -44,4 +44,4 @@ Production build of this branch against the local dev database (store with 24 pr
 - `/api/storefront/market/select` redirects to `http://<the request host>/...`, not 0.0.0.0.
 
 ## Definition of done
-- [ ] After merge: record PR and commit, remove in-flight line, delete branch and worktree
+- [x] After merge: PR recorded, in-flight line removed, branch and worktree deleted
