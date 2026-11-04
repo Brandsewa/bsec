@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { orpc } from "../lib/orpc.ts";
 import { ChevronRight, ExternalLink } from "lucide-react";
 import {
   cn,
@@ -46,6 +48,28 @@ function savedOpen(): boolean {
  * Store admin shell with collapsible grouped navigation. Desktop: left rail that collapses to icons (Ctrl/Cmd+B or the rail edge).
  * Mobile: drawer opened from the header trigger.
  */
+/**
+ * Applies the store's admin sidebar colours (Settings > Branding) as CSS variables, per colour mode. With nothing set, no
+ * style is added and the dashboard looks as before.
+ */
+function useAdminDashboardColors() {
+  const brand = useQuery(orpc.admin.branding.get.queryOptions());
+  const colors = brand.data?.adminColors;
+  useEffect(() => {
+    const rule = (sel: string, m?: { sidebar?: string | null | undefined; sidebarText?: string | null | undefined }) => {
+      const decls = [m?.sidebar ? `--sidebar:${m.sidebar};` : "", m?.sidebarText ? `--sidebar-foreground:${m.sidebarText};--sidebar-accent-foreground:${m.sidebarText};` : ""].join("");
+      return decls ? `${sel}{${decls}}` : "";
+    };
+    const css = rule(':root', colors?.light) + rule(':root[data-theme="dark"]', colors?.dark);
+    if (!css) return;
+    const el = document.createElement("style");
+    el.setAttribute("data-admin-colors", "");
+    el.textContent = css;
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, [colors?.light?.sidebar, colors?.light?.sidebarText, colors?.dark?.sidebar, colors?.dark?.sidebarText]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 export function AppShell({
   brand,
   groups,
@@ -61,6 +85,7 @@ export function AppShell({
   banner?: ReactNode;
   children: ReactNode;
 }) {
+  useAdminDashboardColors();
   const current = bestMatch(groups, activeHref);
 
   const isGroupActive = (g: NavGroup) => {

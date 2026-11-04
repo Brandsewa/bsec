@@ -31,10 +31,10 @@ test.describe("Settings > Markets Admin UI", () => {
       await expect(page.getByRole("dialog")).toBeVisible();
       // No presets: name the market and pick countries; the currency follows the first country.
       await page.getByLabel("Market name").fill("E2E Market");
-      await page.getByText("Select countries...").click();
-      await page.getByPlaceholder("Search country...").fill("Germany");
-      await page.getByRole("option", { name: /Germany/ }).click();
-      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: /choose countries/i }).click();
+      await page.getByPlaceholder("Search countries").fill("Germany");
+      await page.getByRole("checkbox", { name: /Germany/ }).check();
+      await page.getByRole("button", { name: "Done" }).click();
       await page.getByLabel(/Exchange Rate/).fill("0.011");
 
       // Submit new market

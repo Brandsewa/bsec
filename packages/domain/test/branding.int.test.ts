@@ -194,6 +194,24 @@ describe("Branding Service: Permissions, Media Validation, and Audit (ADR-020, Â
     });
   });
 
+  it("saves admin dashboard colours per mode, keeps them across other edits, clears them, and keeps stores apart", async () => {
+    const ctx = ctxFor(storeA, ["branding.manage", "settings.read"]);
+    await updateBrandSettings(rtWeb, ctx, { adminColors: { light: { sidebar: "#0F172A", sidebarText: "#F8FAFC" }, dark: { sidebar: "#111827", sidebarText: null } } });
+    const saved = await getBrandSettings(rtWeb, ctx);
+    expect(saved.adminColors).toEqual({ light: { sidebar: "#0f172a", sidebarText: "#f8fafc" }, dark: { sidebar: "#111827" } });
+
+    // An unrelated edit leaves them alone.
+    await updateBrandSettings(rtWeb, ctx, { primaryColor: "#123456" });
+    expect((await getBrandSettings(rtWeb, ctx)).adminColors?.light?.sidebar).toBe("#0f172a");
+
+    // Another store sees nothing.
+    expect((await getBrandSettings(rtWeb, ctxFor(storeB, ["branding.manage", "settings.read"]))).adminColors).toBeUndefined();
+
+    // Empty values go back to the default.
+    await updateBrandSettings(rtWeb, ctx, { adminColors: { light: { sidebar: null, sidebarText: null }, dark: {} } });
+    expect((await getBrandSettings(rtWeb, ctx)).adminColors).toBeUndefined();
+  });
+
   it("enforces permission checks (settings.read for get, branding.manage for update/publish)", async () => {
     const deniedCtx = ctxFor(storeA, ["analytics.read"]);
     const readCtx = ctxFor(storeA, ["settings.read"]);
