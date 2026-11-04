@@ -1,3 +1,4 @@
+import { createContext, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ShieldAlert } from "lucide-react";
 import { EmptyState } from "@bs/ui";
@@ -5,6 +6,17 @@ import { SimpleSelect } from "@bs/ui";
 import { cn } from "@/lib/utils";
 import { SettingsUpdateBanner } from "./settings-update.tsx";
 import { activeSettingsItem, canOpenSettingsPath, visibleSettingsGroups } from "./settings-nav.ts";
+
+const SettingsWidthContext = createContext<(wide: boolean) => void>(() => {});
+
+/** A settings screen with a wide table (market pricing) calls this with true while that table is on screen; the content column then uses the full width. */
+export function useWideSettings(wide: boolean) {
+  const setWide = useContext(SettingsWidthContext);
+  useEffect(() => {
+    setWide(wide);
+    return () => setWide(false);
+  }, [wide, setWide]);
+}
 
 /**
  * The Settings workspace. Desktop: a compact grouped navigation column that stays put while the content
@@ -15,6 +27,7 @@ import { activeSettingsItem, canOpenSettingsPath, visibleSettingsGroups } from "
 export function SettingsLayout({ permissions }: { permissions: readonly string[] }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const [wide, setWide] = useState(false);
 
   const groups = visibleSettingsGroups(permissions);
   const items = groups.flatMap((g) => g.items);
@@ -89,13 +102,15 @@ export function SettingsLayout({ permissions }: { permissions: readonly string[]
 
       {/* Main settings content: centered */}
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 lg:px-10 lg:py-8">
-        {/* Markets hold wide tables (bulk variant pricing), so that section uses the full width. */}
-        <div className={cn("mx-auto w-full", pathname.startsWith("/settings/markets") ? "max-w-none" : "max-w-3xl")}>
+        {/* Centred like every settings page; a screen with a wide table asks for the full width (useWideSettings). */}
+        <div className={cn("mx-auto w-full", wide ? "max-w-none" : "max-w-3xl")}>
           <div className="hidden lg:block">
             <SettingsUpdateBanner />
           </div>
           {canOpenSettingsPath(permissions, pathname) ? (
-            <Outlet />
+            <SettingsWidthContext.Provider value={setWide}>
+              <Outlet />
+            </SettingsWidthContext.Provider>
           ) : (
             <EmptyState
               icon={ShieldAlert}

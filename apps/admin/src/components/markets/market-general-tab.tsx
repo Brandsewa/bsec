@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Button, Field, Input, MultiSelect, SimpleSelect, toast } from "@bs/ui";
+import { Button, Field, Input, SimpleSelect, toast } from "@bs/ui";
+import { CountryPicker } from "./country-picker.tsx";
 import { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import type { MarketDetail } from "@bs/contracts";
 import {
-  MARKET_COUNTRY_OPTIONS,
   MARKET_CURRENCY_OPTIONS,
   ROUNDING_OPTIONS,
   UNIT_SYSTEM_OPTIONS,
@@ -103,13 +103,7 @@ export function MarketGeneralTab({
         label="Target Countries"
         hint="Countries assigned to this market. A country cannot belong to multiple markets."
       >
-        <MultiSelect
-          options={MARKET_COUNTRY_OPTIONS}
-          value={countries}
-          onChange={setCountries}
-          placeholder="Select countries..."
-          searchPlaceholder="Search country..."
-        />
+        <CountryPicker value={countries} onChange={setCountries} />
       </Field>
 
       <div className="grid gap-3 sm:grid-cols-2">
