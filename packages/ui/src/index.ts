@@ -148,6 +148,7 @@ export { Spinner, Empty, type SpinnerProps, type EmptyProps } from "./components
 export { RouteProgress, type RouteProgressProps } from "./components/route-progress.tsx";
 export { StatusBadge, Money, RelativeTime, type StatusBadgeProps, type StatusTone, type MoneyProps, type RelativeTimeProps } from "./components/status-parts.tsx";
 export { AuthShell, type AuthShellProps } from "./layout/auth-shell.tsx";
+export { PlatformLogo, loadPlatformBrand, setPlatformBrand, usePlatformBrand, type PlatformBrand } from "./layout/platform-brand.tsx";
 
 // Skeletons
 export {

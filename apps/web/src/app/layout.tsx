@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies, headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
+import { evaluateStorefrontAccess, getPublicPlatformBrand, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
@@ -61,7 +61,14 @@ export async function generateMetadata(): Promise<Metadata> {
       // Website visibility and "hide from search engines" in Super Admin > Storefront > Settings (ADR-042).
       const site = await siteStatus();
       const indexable = site.mode === "live" && !site.hideFromSearchEngines;
-      return { title: "BCOM", description: "Launch your online store in 10 minutes.", robots: { index: indexable, follow: indexable } };
+      const brand = await getPublicPlatformBrand(server().rt).catch(() => null);
+      const icon = brand?.explicit ? brand.tokens.favicon?.url : undefined;
+      return {
+        title: "BCOM",
+        description: "Launch your online store in 10 minutes.",
+        robots: { index: indexable, follow: indexable },
+        ...(icon ? { icons: { icon } } : {}),
+      };
     }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
@@ -102,6 +109,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     // A failed read keeps the built-in links; the marketing site must not depend on this query.
     const chrome = await siteChrome().catch(() => ({ header: null, announcement: null, footer: null, theme: null }));
     const design = websiteThemeCss(chrome.theme);
+    // Validated hex-only CSS built from the Super Admin brand; empty until a brand is saved.
+    const brand = await getPublicPlatformBrand(server().rt).catch(() => null);
+    const brandCss = brand?.explicit ? brand.css : "";
     const navLinks = await platformSiteHeaderLinks(server().rt._db.db, chrome.header?.menuHandle ?? "header").catch(() => null);
     const announcement = chrome.announcement
       ? renderBlockTree([{ id: "site-announcement", type: "Banner", version: 1, props: chrome.announcement }], { renderBanner: ({ children }) => <BannerClient>{children}</BannerClient> })
@@ -111,7 +121,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <head>
           <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
           {/* The store widgets read --bs-*; on the website they follow its own palette (light and dark). */}
-          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss + design.css }} />
+          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss + design.css + brandCss }} />
           {design.fontsHref ? <link rel="stylesheet" href={design.fontsHref} /> : null}
         </head>
         <body className="min-h-dvh antialiased">

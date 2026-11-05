@@ -56,6 +56,7 @@ import {
   DropdownMenuTrigger,
   Label,
   ThemeToggle,
+  setPlatformBrand,
   type NavGroup,
 } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
@@ -122,27 +123,7 @@ const navGroups: NavGroup[] = [
 function useBrand() {
   const { data } = useQuery({ queryKey: ["platform", "branding"], queryFn: () => client.branding.get(), staleTime: 60_000 });
   React.useEffect(() => {
-    if (!data) return;
-    let style = document.getElementById("bs-brand-vars") as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement("style");
-      style.id = "bs-brand-vars";
-      document.head.appendChild(style);
-    }
-    // css is built server-side from validated hex values only; primary/ring follow the brand once one is saved.
-    style.textContent = data.explicit
-      ? `${data.css}:root,.dark{--primary:var(--brand-primary);--primary-foreground:var(--brand-primary-foreground);--ring:var(--brand-primary);}`
-      : "";
-    const fav = data.tokens.favicon?.url;
-    if (fav) {
-      let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-      if (!link) {
-        link = document.createElement("link");
-        link.rel = "icon";
-        document.head.appendChild(link);
-      }
-      link.href = fav;
-    }
+    if (data) setPlatformBrand(data);
   }, [data]);
   return data?.tokens ?? null;
 }

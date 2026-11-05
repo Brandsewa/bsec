@@ -28,3 +28,19 @@ describe("parseBrandTokens", () => {
     expect(css).toContain(".dark{");
   });
 });
+
+import { emailBaseFromBrand } from "../src/notifications/branding-loader.ts";
+describe("emailBaseFromBrand", () => {
+  it("uses the light logo, primary colour and light button; drops non-https logos", () => {
+    const { tokens } = parseBrandTokens({
+      logo: { light: { full: { url: "https://cdn.test/l.png" } }, dark: { full: { url: "https://cdn.test/d.png" } } },
+      color: { primary: "#112233" },
+      button: { light: { background: "#112233", text: "#ffffff" } },
+    });
+    const e = emailBaseFromBrand(tokens);
+    expect(e.logoUrl).toBe("https://cdn.test/l.png");
+    expect(e.accent).toBe("#112233");
+    expect(e.buttonBackground).toBe("#112233");
+    expect(emailBaseFromBrand(parseBrandTokens({ favicon: { url: "/media/f.png" }, logo: { light: { full: { url: "/media/l.png" } } } }).tokens).logoUrl).toBeNull();
+  });
+});

@@ -75,3 +75,22 @@ export async function updatePlatformBrand(
     return { ok: true as const, version };
   });
 }
+
+export interface PublicPlatformBrand {
+  tokens: PlatformBrandTokens;
+  css: string;
+  version: number;
+  /** False until a brand has been saved: consumers keep their built-in look. */
+  explicit: boolean;
+}
+
+/** Unauthenticated read for the website, dashboards and sign-in pages. Only the safe token subset: no staff or audit data. */
+export async function getPublicPlatformBrand(rt: Runtime): Promise<PublicPlatformBrand> {
+  const [row] = await rt._db.db
+    .select({ tokens: schema.platformBranding.tokens, version: schema.platformBranding.version })
+    .from(schema.platformBranding)
+    .where(eq(schema.platformBranding.id, "default"))
+    .limit(1);
+  const tokens = parseBrandTokens(row?.tokens, DEFAULT_BRAND).tokens;
+  return { tokens, css: buildBrandCss(tokens), version: row?.version ?? 0, explicit: Boolean(row) };
+}

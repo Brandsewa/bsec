@@ -1,4 +1,4 @@
-# Platform Branding, phase 1 (Super Admin page, API, Super Admin shell)
+# Platform Branding, phases 1 and 2 (Super Admin page, API, every platform surface)
 
 - **Date:** 2026-11-05
 - **Agent:** claude
@@ -8,7 +8,7 @@
 - **Supersedes:** none
 
 ## Summary
-New **Branding** item in Super Admin (Administration group): logos (dark/light x logo/icon), favicon, primary and secondary colour, dark and light button colours. Phase 1 of `docs/PLATFORM-BRANDING-PLAN.md`; Super Admin itself consumes the brand (sidebar logo, favicon, primary colour). Website, store admin, auth pages and emails are phase 2.
+New **Branding** item in Super Admin (Administration group): logos (dark/light x logo/icon), favicon, primary and secondary colour, dark and light button colours. Phases 1 and 2 of `docs/PLATFORM-BRANDING-PLAN.md`. Consumers: Super Admin shell, public `GET /api/brand` (apps/web, CORS open, cached 5 min), website favicon + brand CSS variables, store admin favicon/primary colour/sign-in logo (`loadPlatformBrand` in `@bs/ui`, `AuthShell` shows `PlatformLogo`), platform emails (`loadPlatformBranding` starts from the brand, explicit `platform_email_branding` values win). Store customer emails deliberately do not use the platform logo.
 
 ## What changed
 - Migration `0099_platform_branding` (single-row platform table, empty by default, `app_platform` writes, `app_rw` reads).
@@ -20,8 +20,8 @@ New **Branding** item in Super Admin (Administration group): logos (dark/light x
 Owner defaults (2026-11-05): "dark" = asset for dark surfaces; platform_admin may edit; existing email branding wins until reset; all platform surfaces to follow the primary colour; name/tagline/font deferred. Save is refused whole when any value is invalid (no partial save). Logos come from the existing media library picker. Version history is not built yet (a `version` counter is stored).
 
 ## Verification
-- Ran: `pnpm --filter @bs/superadmin|domain|platform typecheck` pass; `branding-tokens.test.ts` 5 pass.
-- NOT verified: lint, `pnpm build`, `docs:check`, platform real-DB suites (rbac/audit), and the page in a browser.
+- Ran: `pnpm typecheck` (17/17) and `pnpm lint` (0 errors) pass; `branding-tokens.test.ts` + `email-branding.test.ts` 22 pass.
+- NOT verified: platform real-DB suites (rbac/audit; no Postgres here), any screen in a browser, Super Admin sign-in pages (pre-login, different API origin, not wired).
 
 ## Docs updated
 - [ ] `docs/ARCHITECTURE.md` (route, table, contract) - to do before merge
