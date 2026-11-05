@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockInstance, BlockType } from "./types.ts";
 import { hexColorSchema, hrefSchema, iconNameSchema } from "./common.ts";
-import { resolveThemeTokens } from "./theme-vars.ts";
+import { THEME_FONTS, googleFontsHref, resolveThemeTokens, type ThemeTokensLike } from "./theme-vars.ts";
 import { childrenOf } from "./tree.ts";
 import * as V from "./views-marketing.tsx";
 
@@ -104,26 +104,90 @@ export const WEBSITE_FONTS = {
   playfair: { label: "Playfair Display", family: "Playfair Display", google: "Playfair+Display:wght@400;500;600;700" },
 } as const;
 export const MkThemeSchema = z.object({
+  /** The store theme tokens (colours, fonts, corners, buttons, layout, icons), edited with the store's Theme settings. `darkColors` holds the dark mode set. */
+  tokens: z.record(z.string(), z.unknown()).default({}),
+  // Earlier quick settings, still honoured when no tokens are set.
   light: themeColours.default({ primary: "", primaryInk: "", background: "", text: "" }),
   dark: themeColours.default({ primary: "", primaryInk: "", background: "", text: "" }),
   font: z.enum(["default", "inter", "dm-sans", "poppins", "lora", "playfair"]).default("default"),
 });
 export type MkThemeProps = z.infer<typeof MkThemeSchema>;
 
+const RADIUS_PX: Record<string, string> = { none: "0", sm: "4px", md: "8px", lg: "14px", full: "9999px" };
+/** Website parts that follow the "cards, images and fields" corner setting, and those that follow the button corners. */
+const CARD_SELECTORS = [".win", ".joined", ".tabs", ".bm-su-card", ".doc .box", ".lock", ".bm-panel", ".claim", ".stats div", ".spark", ".attrs span", ".payopts span", ".chat p", ".bm-input", ".bm-opt"];
+const BUTTON_SELECTORS = [".btn", ".bm-pill", ".bm-outline", ".seg", ".iconbtn"];
+
+/** The website palette variables a set of store colours changes. Only colours that were set are emitted, so the built-in palette stays for the rest. */
+function paletteVars(c: Record<string, string | undefined>): string {
+  const bg = c["siteBackground"] || c["background"];
+  const out: Array<[string, string | undefined]> = [
+    ["--bg", bg],
+    ["--ink", c["lightHeading"]],
+    ["--mut", c["lightText"]],
+    ["--surface", c["lightBackground"]],
+    ["--soft", c["lightBackground"] ? `color-mix(in srgb, ${c["lightBackground"]} 55%, ${bg ?? "var(--bg)"})` : undefined],
+    ["--pri", c["lightButton"] || c["primary"]],
+    ["--pri-ink", c["lightButtonText"]],
+  ];
+  const ink = c["lightHeading"];
+  if (ink) {
+    out.push(["--dim", `color-mix(in srgb, ${ink} 55%, ${bg ?? "var(--bg)"})`], ["--line", `color-mix(in srgb, ${ink} 12%, ${bg ?? "var(--bg)"})`], ["--line2", `color-mix(in srgb, ${ink} 22%, ${bg ?? "var(--bg)"})`]);
+  }
+  return out.filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(";");
+}
+
 /** CSS for the website's theme settings, scoped to `.mk`, and the Google Fonts stylesheet it needs. Empty when nothing is set. */
 export function websiteThemeCss(theme: MkThemeProps | null | undefined): { css: string; fontsHref: string | null } {
   if (!theme) return { css: "", fontsHref: null };
-  const vars = (c: MkThemeProps["light"]) =>
-    [["--pri", c.primary], ["--pri-ink", c.primaryInk], ["--bg", c.background], ["--ink", c.text]].filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(";");
-  const light = vars(theme.light);
-  const dark = vars(theme.dark);
-  const font = WEBSITE_FONTS[theme.font];
-  const css = [
-    light ? `.mk{${light}}` : "",
-    dark ? `[data-theme=dark] .mk{${dark}}` : "",
-    font.family ? `.mk{--sans:"${font.family}",system-ui,sans-serif}` : "",
-  ].join("");
-  return { css, fontsHref: font.google ? `https://fonts.googleapis.com/css2?family=${font.google}&display=swap` : null };
+  const t = theme.tokens as ThemeTokensLike & { darkColors?: Record<string, string> };
+  const hasTokens = Object.keys(theme.tokens).length > 0;
+  const css: string[] = [];
+  let fontsHref: string | null;
+
+  if (hasTokens) {
+    const light = paletteVars((t.colors ?? {}) as Record<string, string | undefined>);
+    const dark = paletteVars(t.darkColors ?? {});
+    if (light) css.push(`.mk{${light}}`);
+    if (dark) css.push(`[data-theme=dark] .mk{${dark}}`);
+    const fonts = t.fonts ?? {};
+    const quote = (f: unknown) => (typeof f === "string" && (THEME_FONTS as readonly string[]).includes(f) ? `"${f}"` : null);
+    const body = quote(fonts["body"]);
+    const heading = quote(fonts["heading"]);
+    if (body) css.push(`.mk{--sans:${body},system-ui,sans-serif}`);
+    const hw = fonts["headingWeight"];
+    if (heading || hw) css.push(`.mk h1,.mk h2,.mk h3,.mk h4{${heading ? `font-family:${heading},system-ui,sans-serif;` : ""}${hw ? `font-weight:${hw}` : ""}}`);
+    if (fonts["bodyWeight"]) css.push(`.mk{font-weight:${fonts["bodyWeight"]}}`);
+    const radius = t.radius ? RADIUS_PX[t.radius] : undefined;
+    if (radius) css.push(`${CARD_SELECTORS.map((s) => `.mk ${s}`).join(",")}{border-radius:${radius}}`);
+    const bRadius = t.buttons?.radius ? RADIUS_PX[t.buttons.radius] : radius;
+    if (bRadius) css.push(`${BUTTON_SELECTORS.map((s) => `.mk ${s}`).join(",")}{border-radius:${bRadius}}`);
+    if (t.buttons?.uppercase) css.push(`.mk .btn,.mk .bm-pill{text-transform:uppercase;letter-spacing:.04em}`);
+    if (t.buttons?.darkBg) css.push(`.mk .btn.pri{background:${t.buttons.darkBg};border-color:${t.buttons.darkBg}}`);
+    if (t.buttons?.darkText) css.push(`.mk .btn.pri{color:${t.buttons.darkText}}`);
+    if (t.buttons?.style === "outline") css.push(`.mk .btn.pri{background:transparent;color:var(--pri)}`);
+    const widthOf = (d: "desktop" | "tablet" | "mobile") => {
+      const w = t.layout?.[d]?.siteWidth;
+      return typeof w === "string" && /^[0-9.]+(px|%|rem)$/.test(w) ? w : null;
+    };
+    const [dw, tw, mw] = [widthOf("desktop"), widthOf("tablet"), widthOf("mobile")];
+    if (dw) css.push(`@media(min-width:1024px){.mk .wrap{max-width:${dw}}}`);
+    if (tw) css.push(`@media(min-width:768px) and (max-width:1023px){.mk .wrap{max-width:${tw}}}`);
+    if (mw) css.push(`@media(max-width:767px){.mk .wrap{max-width:${mw}}}`);
+    fontsHref = googleFontsHref(t);
+  } else {
+    // Earlier quick settings.
+    const vars = (c: MkThemeProps["light"]) =>
+      [["--pri", c.primary], ["--pri-ink", c.primaryInk], ["--bg", c.background], ["--ink", c.text]].filter(([, v]) => v).map(([k, v]) => `${k}:${v}`).join(";");
+    const light = vars(theme.light);
+    const dark = vars(theme.dark);
+    if (light) css.push(`.mk{${light}}`);
+    if (dark) css.push(`[data-theme=dark] .mk{${dark}}`);
+    const font = WEBSITE_FONTS[theme.font];
+    if (font.family) css.push(`.mk{--sans:"${font.family}",system-ui,sans-serif}`);
+    fontsHref = font.google ? `https://fonts.googleapis.com/css2?family=${font.google}&display=swap` : null;
+  }
+  return { css: css.join(""), fontsHref };
 }
 
 export const MkCompanySchema = z.object({ heading: z.string().max(200).default(""), after: z.string().max(4000).default("") });

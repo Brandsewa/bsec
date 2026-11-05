@@ -1,8 +1,9 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { WEBSITE_FONTS, type BlockInstance } from "@bs/blocks";
+import type { BlockInstance } from "@bs/blocks";
 import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import { useFrameEdit } from "./context.tsx";
 import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
+import { ThemeSettingsPanel, type ThemeTokens } from "./ThemeSettings.tsx";
 
 /**
  * The General tab of the editor's left rail: store-wide settings that are not about one page. For now the
@@ -223,42 +224,24 @@ export function GeneralPanel() {
  * The Theme tab of the website's editor: the announcement bar above the header. The website keeps one fixed design with
  * a light and a dark theme, so colours and fonts are not editable here (ADR-042).
  */
-type ThemeMode = "light" | "dark";
-const THEME_COLOURS: Array<[string, string]> = [["primary", "Primary (buttons, logo mark)"], ["primaryInk", "Text on primary"], ["background", "Page background"], ["text", "Text"]];
-const THEME_FONTS: DropdownOption[] = Object.entries(WEBSITE_FONTS).map(([value, f]) => ({ value, label: f.label }));
-
-/** Colours and font of the website. They live in a MkTheme block on the Header page and apply to every page once published. */
+/**
+ * The website's design settings: the same Layout, Fonts, Colours, Corners, Buttons and Icons as the store's Theme settings,
+ * without presets, and with the colours in Light and Dark tabs. They live in a MkTheme block on the Header page and apply
+ * site-wide once it is published.
+ */
 function WebsiteDesignSection() {
   const edit = useFrameEdit();
   if (!edit) return null;
   const blocks = edit.frame.header;
   const index = blocks.findIndex((b) => b.type === "MkTheme");
-  const props = (index >= 0 ? blocks[index]?.props : {}) as { light?: Record<string, string>; dark?: Record<string, string>; font?: string };
-  const save = (next: Record<string, unknown>) => {
-    const merged = { light: {}, dark: {}, font: "default", ...props, ...next };
+  const props = (index >= 0 ? blocks[index]?.props : {}) as { tokens?: ThemeTokens };
+  const tokens = (props.tokens ?? {}) as ThemeTokens;
+  const save = (next: ThemeTokens) => {
+    const merged = { ...(index >= 0 ? blocks[index]?.props : {}), tokens: next };
     if (index >= 0) edit.setBlocks("header", blocks.map((b, i) => (i === index ? { ...b, props: merged } : b)));
     else edit.setBlocks("header", [...blocks, { id: crypto.randomUUID(), type: "MkTheme", version: 1, props: merged } as BlockInstance]);
   };
-  const setColour = (mode: ThemeMode, key: string, hex: string | undefined) => save({ [mode]: { primary: "", primaryInk: "", background: "", text: "", ...(props[mode] ?? {}), [key]: hex ?? "" } });
-  return (
-    <>
-      {(["light", "dark"] as const).map((mode) => (
-        <Accordion key={mode} title={mode === "light" ? "Colours (light mode)" : "Colours (dark mode)"}>
-          {THEME_COLOURS.map(([key, title]) => (
-            <Row key={key} title={title}>
-              <ColourBox name={`${mode} ${title}`} value={props[mode]?.[key] || undefined} onChange={(v) => setColour(mode, key, v)} />
-            </Row>
-          ))}
-          <span style={{ fontSize: 11, color: "#71717a" }}>An empty colour keeps the built-in one.</span>
-        </Accordion>
-      ))}
-      <Accordion title="Font">
-        <Row title="Font of the whole website">
-          <Dropdown ariaLabel="Website font" value={props.font ?? "default"} options={THEME_FONTS} onChange={(v) => save({ font: v })} />
-        </Row>
-      </Accordion>
-    </>
-  );
+  return <ThemeSettingsPanel tokens={tokens} onChange={save} hidePresets colorModes note="Applies to every page of the website. Saved and live when you publish." />;
 }
 
 export function WebsiteThemePanel() {
