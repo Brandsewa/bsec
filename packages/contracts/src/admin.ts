@@ -652,6 +652,7 @@ export const Collection = z.object({
   sortOrder: z.string(),
   published: z.boolean(),
   indexable: z.boolean(),
+  seo: CollectionSeo.nullable().optional(),
   productCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -1306,6 +1307,80 @@ export const ResourceCustomFields = z.object({
   fields: z.array(ResourceCustomField),
 });
 export type ResourceCustomFields = z.infer<typeof ResourceCustomFields>;
+
+// --- Bulk editor (docs/BULK-EDITOR-PLAN.md) ---
+export const BulkResult = z.object({ id: z.string().uuid(), ok: z.boolean(), error: z.string().optional() });
+export const BulkResults = z.object({ results: z.array(BulkResult) });
+const BulkSeo = z.object({ title: z.string().max(200).nullable().optional(), description: z.string().max(500).nullable().optional() });
+export const BulkVariantPatch = z.object({
+  id: z.string().uuid(),
+  sku: z.string().min(1).max(64).optional(),
+  barcode: z.string().max(64).nullable().optional(),
+  price: z.number().int().min(0).optional(),
+  compareAtPrice: z.number().int().min(0).nullable().optional(),
+  costPrice: z.number().int().min(0).nullable().optional(),
+  trackInventory: z.boolean().optional(),
+  allowBackorder: z.boolean().optional(),
+  preorderEnabled: z.boolean().optional(),
+  preorderShipsOn: z.string().nullable().optional(),
+  preorderMessage: z.string().max(200).nullable().optional(),
+  weightGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  dimensions: z.object({ lengthCm: z.number().min(0).max(1000).optional(), widthCm: z.number().min(0).max(1000).optional(), heightCm: z.number().min(0).max(1000).optional() }).nullable().optional(),
+  /** Wanted on-hand quantity at the default location (saved as a correction movement). */
+  stockOnHand: z.number().int().min(0).max(10_000_000).optional(),
+});
+export const BulkProductPatch = z.object({
+  title: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
+  descriptionJson: z.unknown().optional(),
+  shortDescription: z.string().max(1000).optional(),
+  brandId: z.string().uuid().nullable().optional(),
+  productType: z.string().max(100).optional(),
+  tags: z.array(z.string().max(60)).max(100).optional(),
+  requiresShipping: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  priceOnRequest: z.boolean().optional(),
+  returnable: z.boolean().optional(),
+  taxClassId: z.string().uuid().nullable().optional(),
+  hsn: z.string().max(20).nullable().optional(),
+  seo: BulkSeo.nullable().optional(),
+  primaryCategoryId: z.string().uuid().nullable().optional(),
+  extraCategoryIds: z.array(z.string().uuid()).optional(),
+  collectionIds: z.array(z.string().uuid()).optional(),
+});
+export const BulkProductItem = z.object({
+  id: z.string().uuid(),
+  product: BulkProductPatch.optional(),
+  variants: z.array(BulkVariantPatch).max(250).optional(),
+  customFields: z.record(z.string().uuid(), z.unknown()).optional(),
+});
+export const BulkCategoryItem = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  description: z.string().max(500).nullable().optional(),
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
+  parentId: z.string().uuid().nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  position: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  sortOrder: z.string().optional(),
+  seo: BulkSeo.nullable().optional(),
+});
+export const BulkCollectionItem = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  description: z.string().max(300).nullable().optional(),
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  sortOrder: z.enum(["manual", "best_selling", "title_asc", "title_desc", "price_asc", "price_desc", "created_desc", "created_asc"]).optional(),
+  published: z.boolean().optional(),
+  indexable: z.boolean().optional(),
+  seo: BulkSeo.nullable().optional(),
+});
 
 // --- Admin oRPC Contract ---
 export const PaymentsStatus = z.object({
@@ -2687,6 +2762,23 @@ export const adminContract = {
         }),
       )
       .output(ProductDetail),
+    /** Bulk editor: up to 250 products with variants, stock at the default location and custom fields. */
+    getMany: oc
+      .route({ method: "POST", path: "/admin/products/bulk/get" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(250) }))
+      .output(
+        z.object({
+          items: z.array(ProductDetail),
+          locationId: z.string().uuid().nullable(),
+          stock: z.record(z.string(), z.number()),
+          customFields: z.object({ enabled: z.boolean(), definitions: z.array(CustomFieldDefinition), values: z.record(z.string(), z.record(z.string(), z.unknown())) }),
+        }),
+      ),
+    /** Bulk editor save: up to 100 products, one result per product (a failure never blocks the others). */
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/products/bulk/update" })
+      .input(z.object({ items: z.array(BulkProductItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/products/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2891,6 +2983,10 @@ export const adminContract = {
         }),
       )
       .output(CategoryDetail),
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/categories/bulk/update" })
+      .input(z.object({ items: z.array(BulkCategoryItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/categories/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2981,6 +3077,10 @@ export const adminContract = {
         }),
       )
       .output(CollectionDetail),
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/collections/bulk/update" })
+      .input(z.object({ items: z.array(BulkCollectionItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))

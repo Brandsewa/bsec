@@ -18,6 +18,7 @@ export * from "./media/image-helper.ts";
 export * from "./media/derivatives.ts";
 export * from "./media/document-usages.ts";
 export * from "./catalog-services.ts";
+export * from "./catalog/bulk-edit.ts";
 export * from "./review-services.ts";
 export * from "./media-services.ts";
 export * from "./brand-services.ts";

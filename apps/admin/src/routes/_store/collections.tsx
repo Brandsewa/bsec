@@ -7,6 +7,7 @@ import {
   Layers,
   MoreHorizontal,
   Package,
+  Pencil,
   Plus,
   Trash2,
   Zap,
@@ -22,6 +23,7 @@ import { ConfirmDialog } from "@bs/ui";
 import { ScrollTabs } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
+import { openBulkEditor } from "../../lib/bulk-edit-entry.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 type CollectionStatusFilter = "all" | "active" | "draft";
@@ -109,10 +111,16 @@ export function CollectionsPage() {
         title="Collections"
         description="Group products manually or with automated condition rules to build merchandising pages."
         aside={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" disabled={collections.length === 0} onClick={() => openBulkEditor("collections", collections.map((r) => r.id), () => void navigate({ to: "/collections/bulk-edit" }))}>
+              <Pencil className="mr-1.5 size-4" aria-hidden />
+              Bulk edit
+            </Button>
           <Button render={<Link to="/collections/new" />} size="default">
             <Plus className="mr-1.5 size-4" aria-hidden />
             Create collection
           </Button>
+          </div>
         }
       />
 

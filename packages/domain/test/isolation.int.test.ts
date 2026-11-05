@@ -265,6 +265,10 @@ import {
   updateMenu,
   updatePage,
   updateProduct,
+  bulkUpdateProducts,
+  bulkUpdateCategories,
+  bulkUpdateCollections,
+  getProductsForBulkEdit,
   updateStoreSettings,
   updateTheme,
   updateVariant,
@@ -1108,6 +1112,10 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         });
         return await deleteProduct(rt, ctx, { id: p.id });
       }
+      case "products.getMany":
+        return await getProductsForBulkEdit(rt, ctx, { ids: [testProductA] });
+      case "products.bulkUpdate":
+        return await bulkUpdateProducts(rt, ctx, { items: [{ id: testProductA, product: { title: "Bulk Updated Product A" } }] });
       case "variants.update":
         return await updateVariant(rt, ctx, { id: testVariantA, price: 2500 });
       case "customFields.listDefinitions":
@@ -1144,6 +1152,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await createCategory(rt, ctx, { name: `Cat-${Date.now()}` });
       case "categories.update":
         return await updateCategory(rt, ctx, { id: testCategoryA, name: "Updated Category" });
+      case "categories.bulkUpdate":
+        return await bulkUpdateCategories(rt, ctx, { items: [{ id: testCategoryA, name: "Bulk Category" }] });
       case "categories.delete": {
         const c = await createCategory(rt, ctx, { name: `Del Cat-${Date.now()}` });
         return await deleteCategory(rt, ctx, { id: c.id });
@@ -1156,6 +1166,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await createCollection(rt, ctx, { title: `Col-${Date.now()}` });
       case "collections.update":
         return await updateCollection(rt, ctx, { id: testCollectionA, title: "Updated Collection" });
+      case "collections.bulkUpdate":
+        return await bulkUpdateCollections(rt, ctx, { items: [{ id: testCollectionA, title: "Bulk Collection" }] });
       case "collections.delete": {
         const col = await createCollection(rt, ctx, { title: `Del Col-${Date.now()}` });
         return await deleteCollection(rt, ctx, { id: col.id });
