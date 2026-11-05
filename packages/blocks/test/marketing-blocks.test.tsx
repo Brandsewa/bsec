@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
+import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, MkThemeSchema, websiteThemeCss, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
 
 const about = MARKETING_STARTERS["about"]!;
 
@@ -55,5 +55,38 @@ describe("website sections", () => {
 
   it("the stylesheet has no gradients", () => {
     expect(readFileSync(join(__dirname, "..", "src", "marketing.css"), "utf8")).not.toMatch(/gradient\(/);
+  });
+});
+
+describe("website theme settings", () => {
+  it("turns the store theme tokens into website CSS, light and dark, only for what was set", () => {
+    const theme = MkThemeSchema.parse({
+      tokens: {
+        colors: { siteBackground: "#fafafa", lightHeading: "#111111", lightButton: "#1f3a5f" },
+        darkColors: { siteBackground: "#0b0b0b", lightHeading: "#eeeeee" },
+        fonts: { heading: "Lora", body: "Inter", headingWeight: 600 },
+        radius: "lg",
+        buttons: { uppercase: true, radius: "full" },
+        layout: { desktop: { siteWidth: "1100px" } },
+      },
+    });
+    const { css, fontsHref } = websiteThemeCss(theme);
+    expect(css).toContain(".mk{--bg:#fafafa;--ink:#111111");
+    expect(css).toContain("--pri:#1f3a5f");
+    expect(css).toContain("[data-theme=dark] .mk{--bg:#0b0b0b;--ink:#eeeeee");
+    expect(css).toContain('--sans:"Inter"');
+    expect(css).toContain("font-weight:600");
+    expect(css).toContain("border-radius:14px");
+    expect(css).toContain("border-radius:9999px");
+    expect(css).toContain("max-width:1100px");
+    expect(css).not.toContain("--surface");
+    expect(fontsHref).toContain("fonts.googleapis.com");
+  });
+
+  it("keeps the earlier quick settings working when no tokens are set", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ light: { primary: "#1f3a5f", primaryInk: "", background: "", text: "" }, font: "inter" }));
+    expect(css).toContain("--pri:#1f3a5f");
+    expect(css).toContain('--sans:"Inter"');
+    expect(websiteThemeCss(MkThemeSchema.parse({})).css).toBe("");
   });
 });

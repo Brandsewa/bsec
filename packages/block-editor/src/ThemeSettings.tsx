@@ -947,6 +947,13 @@ export interface ThemeSettingsPanelProps {
   disabled?: boolean | undefined;
   /** Small line under the title (default: applies to every page of this theme). */
   note?: string | undefined;
+  /** Leave out the colour presets (the website sets its own colours). */
+  hidePresets?: boolean | undefined;
+  /**
+   * Edit two colour sets under Light and Dark tabs. Light is `tokens.colors`; Dark is `tokens.darkColors`, with the
+   * same fields. Used by the website, which has a light and a dark mode.
+   */
+  colorModes?: boolean | undefined;
 }
 
 /**
@@ -954,8 +961,11 @@ export interface ThemeSettingsPanelProps {
  * settings are edited: the platform theme builder shows it in the page editor's sidebar on every page, and
  * the store's theme screen shows it beside its preview. A new group of settings is a new Section here.
  */
-export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSettingsPanelProps) {
+export function ThemeSettingsPanel({ tokens, onChange, disabled, note, hidePresets, colorModes }: ThemeSettingsPanelProps) {
   const v = useMemo(() => readThemeSettings(tokens), [tokens]);
+  const [colorMode, setColorMode] = useState<"light" | "dark">("light");
+  const darkColors = ((tokens as { darkColors?: Record<string, string> }).darkColors ?? {}) as Record<string, string>;
+  const setDarkColor = (key: string, hex: string) => onChange({ ...tokens, darkColors: { ...darkColors, [key]: hex } } as ThemeTokens);
   const [openId, setOpenId] = useState<string | null>(null);
   const toggle = (id: string) => setOpenId((current) => (current === id ? null : id));
 
@@ -1052,6 +1062,16 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
         <HeadingSizesEditor sizes={v.sizes} bodySizes={v.bodySizes} disabled={disabled} onChange={(sizes, bodySizes) => commit({ sizes, bodySizes })} />
       </Section>
       <Section id="colors" title="Colours" open={openId === "colors"} onToggle={() => toggle("colors")}>
+        {colorModes ? (
+          <div role="tablist" aria-label="Colour mode" style={{ display: "flex", gap: 4, marginBottom: 12, padding: 3, background: "#f4f4f5", borderRadius: 8 }}>
+            {(["light", "dark"] as const).map((m) => (
+              <button key={m} type="button" role="tab" aria-selected={colorMode === m} onClick={() => setColorMode(m)} style={{ flex: 1, border: 0, borderRadius: 6, padding: "5px 0", fontSize: 12, fontWeight: 600, cursor: "pointer", background: colorMode === m ? "#fff" : "transparent", color: "#18181b", boxShadow: colorMode === m ? "0 1px 2px rgba(0,0,0,0.12)" : "none" }}>
+                {m === "light" ? "Light" : "Dark"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {hidePresets ? null : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {PRESETS.map((p) => (
             <button
@@ -1087,6 +1107,7 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
             </button>
           ))}
         </div>
+        )}
         {COLOR_SECTIONS.map((sec, secIdx) => (
           <div key={secIdx} style={{ display: "grid", gap: 10, borderTop: secIdx > 0 ? "1px dashed #e4e4e7" : undefined, paddingTop: secIdx > 0 ? 12 : 0 }}>
             {sec.title ? (
@@ -1099,9 +1120,9 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note }: ThemeSe
                 key={f.key}
                 title={f.label}
                 hint={f.hint}
-                value={v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
+                value={colorModes && colorMode === "dark" ? darkColors[f.key] ?? DEFAULT_THEME_COLORS[f.key] : v.colors[f.key] ?? DEFAULT_THEME_COLORS[f.key]}
                 disabled={disabled}
-                onChange={(hex) => hex && commit({ colors: { [f.key]: hex } })}
+                onChange={(hex) => hex && (colorModes && colorMode === "dark" ? setDarkColor(f.key, hex) : commit({ colors: { [f.key]: hex } }))}
               />
             ))}
           </div>
