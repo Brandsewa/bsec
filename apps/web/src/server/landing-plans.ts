@@ -13,6 +13,9 @@ export async function loadLandingPlans(): Promise<LandingPlan[]> {
       monthlyPaise: p.priceMonthlyPaise,
       yearlyPaise: p.priceYearlyPaise,
       limits: p.limits,
+      tagline: p.tagline,
+      badge: p.badge,
+      bullets: p.bullets,
     }));
   } catch {
     return [];

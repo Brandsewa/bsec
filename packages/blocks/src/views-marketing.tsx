@@ -1,7 +1,7 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import { MK_HEADER_LINKS } from "./marketing-blocks.ts";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BlockRenderArgs } from "./types.ts";
 import { parseMarkdownToHtml } from "./markdown.ts";
 import { SvgIcon } from "./svg-icon.tsx";
@@ -86,7 +86,14 @@ export function MkStatementView({ props }: BlockRenderArgs<MkStatementProps>) {
   );
 }
 
-export function MkFeaturesView({ props }: BlockRenderArgs<MkFeaturesProps>) {
+export function MkFeaturesView({ props, ctx }: BlockRenderArgs<MkFeaturesProps>) {
+  const group = `mkf-${ctx?.blockId ?? "grid"}`;
+  const accordion = props.mobileAccordion;
+  const indicator = (
+    <svg className={`cell-ind ind-${props.iconStyle}`} viewBox="0 0 24 24" width={props.iconSize} height={props.iconSize} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {props.iconStyle === "plus" ? <><path d="M5 12h14" /><path className="ind-v" d="M12 5v14" /></> : <path d="m6 9 6 6 6-6" />}
+    </svg>
+  );
   return (
     <section className={props.tone === "soft" ? "sec soft" : "sec"}>
       <div className="wrap">
@@ -95,15 +102,29 @@ export function MkFeaturesView({ props }: BlockRenderArgs<MkFeaturesProps>) {
           <h2>{props.title}</h2>
           {props.intro ? <p>{props.intro}</p> : null}
         </div>
-        <div className="joined bento rv">
-          {props.items.map((item) => (
-            <article className="cell sm" key={item.title}>
-              <div className="cell-t">
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </div>
-            </article>
-          ))}
+        <div className={`joined bento rv${accordion ? " mkf-acc" : ""}`} style={{ "--mkf-pad": `${props.rowPadding}px` } as CSSProperties}>
+          {props.items.map((item, i) => {
+            const icon = item.icon ? <span className="cell-ic"><SvgIcon name={item.icon} px={22} /></span> : null;
+            return (
+              <article className="cell sm" key={item.title + i}>
+                <div className="cell-t cell-open">
+                  {icon}
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </div>
+                {accordion ? (
+                  <details className={`cell-fold ind-${props.iconPosition}`} {...(props.singleOpen ? { name: group } : {})} open={props.openFirst && i === 0}>
+                    <summary>
+                      {props.iconPosition === "left" ? indicator : null}
+                      <span className="cell-ttl">{icon}<h3>{item.title}</h3></span>
+                      {props.iconPosition === "right" ? indicator : null}
+                    </summary>
+                    <p>{item.body}</p>
+                  </details>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -244,7 +265,7 @@ export function MkHeaderView({ props, ctx }: BlockRenderArgs<MkHeaderProps>) {
   const links = menu && menu.kind === "menu" && menu.items.length > 0 ? menu.items.map((i) => ({ label: i.label, href: i.href })) : MK_HEADER_LINKS;
   return (
     <header className="top">
-      <div className="wrap top-in">
+      <div className={`wrap top-in lay-${props.layout}`}>
         <span className="logo"><i>{props.brand.slice(0, 1)}</i>{props.brand}</span>
         <nav className="links" aria-label="Main">
           {links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
@@ -293,10 +314,13 @@ export function MkFooterView({ props }: BlockRenderArgs<MkFooterProps>) {
   );
 }
 
-/** The plans table. On the website it shows the live plans from Super Admin; the editor draws a placeholder. */
+/** The plans table. On the website it shows the live plans from Super Admin; the editor gets the same plans through the block data. */
 export function MkPricingView({ props, ctx }: BlockRenderArgs<MkPricingProps>) {
   const live = ctx?.renderPricing?.({ heading: props.heading, description: props.description });
   if (live) return <>{live}</>;
+  const data = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const plans = data && data.kind === "plans" ? data.plans : [];
+  const inr = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
   return (
     <section className="sec" id="pricing">
       <div className="wrap">
@@ -305,7 +329,20 @@ export function MkPricingView({ props, ctx }: BlockRenderArgs<MkPricingProps>) {
           <h2>{props.heading}</h2>
           <p>{props.description}</p>
         </div>
-        <div className="box"><p>The plans, prices and limits from Super Admin &gt; Plans appear here on the live site.</p></div>
+        {plans.length > 0 ? (
+          <div className="joined plans">
+            {plans.map((p) => (
+              <div key={p.code} className="plan">
+                <h3>{p.name}{p.badge ? <span className="tag">{p.badge}</span> : null}</h3>
+                {p.tagline ? <p className="bill">{p.tagline}</p> : null}
+                <div className="price">{inr(p.priceMonthlyPaise)}<small>/month</small></div>
+                <ul className="checks">{p.bullets.map((b) => (<li key={b}>{b}</li>))}</ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="box"><p>The plans, prices and limits from Super Admin &gt; Plans appear here.</p></div>
+        )}
       </div>
     </section>
   );

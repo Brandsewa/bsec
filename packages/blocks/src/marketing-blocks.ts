@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BlockDefinition, BlockInstance, BlockType } from "./types.ts";
 import { hexColorSchema, hrefSchema, iconNameSchema } from "./common.ts";
-import { THEME_FONTS, googleFontsHref, resolveThemeTokens, type ThemeTokensLike } from "./theme-vars.ts";
+import { HEADING_LEVELS, THEME_FONTS, googleFontsHref, resolveBodySizes, resolveHeadingSizes, resolveThemeTokens, type ThemeTokensLike } from "./theme-vars.ts";
 import { childrenOf } from "./tree.ts";
 import * as V from "./views-marketing.tsx";
 
@@ -34,7 +34,17 @@ export const MkFeaturesSchema = z.object({
   title: line,
   intro: z.string().max(600).default(""),
   tone: z.enum(["default", "soft"]).default("soft"),
-  items: z.array(z.object({ title: line, body: para })).min(1).max(12),
+  items: z.array(z.object({ icon: iconNameSchema.optional(), title: line, body: para })).min(1).max(12),
+  /** On phones each card folds to its title with a drop-down arrow. */
+  mobileAccordion: z.boolean().default(true),
+  iconPosition: z.enum(["right", "left"]).default("right"),
+  iconStyle: z.enum(["plus", "chevron"]).default("plus"),
+  /** Open/close icon size in pixels. */
+  iconSize: z.number().int().min(10).max(48).default(18),
+  /** Space above and below each folded title in pixels. */
+  rowPadding: z.number().int().min(4).max(48).default(14),
+  singleOpen: z.boolean().default(false),
+  openFirst: z.boolean().default(false),
 });
 export type MkFeaturesProps = z.infer<typeof MkFeaturesSchema>;
 
@@ -174,6 +184,27 @@ export function websiteThemeCss(theme: MkThemeProps | null | undefined): { css: 
     if (dw) css.push(`@media(min-width:1024px){.mk .wrap{max-width:${dw}}}`);
     if (tw) css.push(`@media(min-width:768px) and (max-width:1023px){.mk .wrap{max-width:${tw}}}`);
     if (mw) css.push(`@media(max-width:767px){.mk .wrap{max-width:${mw}}}`);
+    // Heading and body sizes per device, for the website's own sections.
+    if (t.fontSizes) {
+      const sizes = resolveHeadingSizes(t);
+      const body = resolveBodySizes(t);
+      const rules = (d: "desktop" | "tablet" | "mobile") =>
+        `${HEADING_LEVELS.map((l) => `.mk.mk.mk ${l}{font-size:${sizes[l][d]}px}`).join("")}.mk.mk.mk{font-size:${body[d]}px}`;
+      css.push(`@media(min-width:1024px){${rules("desktop")}}@media(min-width:768px) and (max-width:1023px){${rules("tablet")}}@media(max-width:767px){${rules("mobile")}}`);
+    }
+    // The store widgets on website pages read --bs-*: hand them the settings that were set.
+    const bs = resolveThemeTokens(null, t) as Record<string, string>;
+    const keep: RegExp[] = [];
+    if (t.fontSizes) keep.push(/^--bs-(h[1-6]|body)-[dtm]$/);
+    if (t.fonts?.["heading"]) keep.push(/^--bs-font-heading$/);
+    if (t.fonts?.["body"]) keep.push(/^--bs-font-body$/);
+    if (t.fonts?.["headingWeight"]) keep.push(/^--bs-heading-weight$/);
+    if (t.fonts?.["bodyWeight"]) keep.push(/^--bs-body-weight$/);
+    if (t.radius) keep.push(/^--bs-radius$/);
+    if (t.buttons) keep.push(/^--bs-btn-(radius|pad|fs|case)$/);
+    if (t.icons) keep.push(/^--bs-icon-(size|weight|color-dark|color-light)$/);
+    const widgetVars = Object.entries(bs).filter(([k]) => keep.some((r) => r.test(k))).map(([k, v]) => `${k}:${v}`);
+    if (widgetVars.length > 0) css.push(`.mk{${widgetVars.join(";")}}`);
     fontsHref = googleFontsHref(t);
   } else {
     // Earlier quick settings.
@@ -210,6 +241,8 @@ export const MkHeaderSchema = z.object({
   ctaLabel: z.string().max(40).default("Start free"),
   ctaHref: hrefSchema.default("/signup"),
   showThemeToggle: z.boolean().default(true),
+  /** Logo left with the menu beside it, logo left with the menu in the middle, or the logo in the middle with the menu on the left. */
+  layout: z.enum(["left", "nav-center", "logo-center"]).default("left"),
 });
 export type MkHeaderProps = z.infer<typeof MkHeaderSchema>;
 
@@ -267,7 +300,7 @@ export type MkFooterProps = z.infer<typeof MkFooterSchema>;
 
 /** Widgets of the store builder that also work on website pages: layout and basic elements, nothing that needs a store. */
 export const WEBSITE_GENERIC_BLOCK_TYPES: ReadonlySet<string> = new Set([
-  "Section", "Container", "Block", "Heading", "Text", "Image", "Video", "Button", "Gallery", "ImageBanner", "FaqSection", "MultiCard", "TrustStrip",
+  "Section", "Container", "Block", "Heading", "Text", "Image", "Video", "Button", "Gallery", "ImageBanner", "FaqSection", "MultiCard", "TrustStrip", "BlogShowcase",
 ]);
 const WEBSITE_CHROME_TYPES: ReadonlySet<string> = new Set(["MkHeader", "MkFooter"]);
 
@@ -313,7 +346,7 @@ export const MARKETING_BLOCK_DEFINITIONS = {
   MkHero: block("MkHero", MkHeroSchema, { stamp: "", title: "A clear headline for this page", lead: "One or two sentences on what this page offers.", showNameChecker: true, fine: "" }, V.MkHeroView),
   MkIncluded: block("MkIncluded", MkIncludedSchema, { label: "Included on every plan", items: [{ icon: "check", label: "A point" }] }, V.MkIncludedView),
   MkStatement: block("MkStatement", MkStatementSchema, { text: "A short statement.", muted: "" }, V.MkStatementView),
-  MkFeatures: block("MkFeatures", MkFeaturesSchema, { eyebrow: "", title: "What you get", intro: "", tone: "soft", items: [{ title: "A feature", body: "What it does for the store." }] }, V.MkFeaturesView),
+  MkFeatures: block("MkFeatures", MkFeaturesSchema, { eyebrow: "", title: "What you get", intro: "", tone: "soft", items: [{ title: "A feature", body: "What it does for the store." }], mobileAccordion: true, iconPosition: "right", iconStyle: "plus", iconSize: 18, rowPadding: 14, singleOpen: false, openFirst: false }, V.MkFeaturesView),
   MkSteps: block("MkSteps", MkStepsSchema, { label: "How it works", items: [{ icon: "check", title: "A step", body: "What happens in this step." }] }, V.MkStepsView),
   MkBand: block("MkBand", MkBandSchema, { title: "A short line on a dark band.", items: [{ name: "Name", note: "A short note" }] }, V.MkBandView),
   MkFaq: block("MkFaq", MkFaqSchema, { eyebrow: "FAQ", title: "Straight answers.", items: [{ question: "A question?", answer: "A clear answer." }] }, V.MkFaqView),
@@ -364,7 +397,7 @@ export const MARKETING_STARTERS: Record<string, BlockInstance[]> = {
     ] }),
     home(6, "MkBand", { title: "Designed for the open standards behind AI commerce.", items: [{ name: "MCP", note: "Tools for assistants" }, { name: "UCP", note: "Google commerce" }, { name: "ACP", note: "OpenAI commerce" }, { name: "AP2", note: "Safe agent payments" }, { name: "A2A", note: "Agent to agent" }] }),
     home(7, "MkPricing", {}),
-    home(8, "MkFaq", { eyebrow: "FAQ", title: "Straight answers.", items: [{ question: "Is there a free trial?", answer: "Yes. Every plan starts with a 14-day free trial and no card is needed to start." }] }),
+    home(8, "FaqSection", { eyebrow: "FAQ", title: "Straight answers.", description: "", items: [{ question: "Is there a free trial?", answer: "Yes. Every plan starts with a 14-day free trial and no card is needed to start." }] }),
     home(9, "MkFinalCall", { title: "Open your store today. Be ready for what comes next.", text: "14-day free trial. No card needed to start.", showPlansLink: true }),
   ],
   about: [

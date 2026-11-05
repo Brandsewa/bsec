@@ -10,6 +10,10 @@ export interface LandingPlan {
   monthlyPaise: number;
   yearlyPaise: number;
   limits: Record<string, unknown>;
+  /** From Super Admin > Plans: the line under the name, the badge, and the card lines (limits already filled in). */
+  tagline?: string | null | undefined;
+  badge?: string | null | undefined;
+  bullets?: string[] | undefined;
 }
 
 /** Used only when the plans table cannot be read (build time, outage). Mirrors migration 0012 and is replaced by live data. */

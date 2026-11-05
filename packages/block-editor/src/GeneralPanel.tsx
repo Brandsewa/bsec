@@ -241,7 +241,7 @@ function WebsiteDesignSection() {
     if (index >= 0) edit.setBlocks("header", blocks.map((b, i) => (i === index ? { ...b, props: merged } : b)));
     else edit.setBlocks("header", [...blocks, { id: crypto.randomUUID(), type: "MkTheme", version: 1, props: merged } as BlockInstance]);
   };
-  return <ThemeSettingsPanel tokens={tokens} onChange={save} hidePresets colorModes note="Applies to every page of the website. Saved and live when you publish." />;
+  return <ThemeSettingsPanel tokens={tokens} onChange={save} hidePresets colorModes bare />;
 }
 
 export function WebsiteThemePanel() {

@@ -51,7 +51,7 @@
 .mk .links a:hover{color:var(--ink)}
 .mk .top-acts{display:flex;align-items:center;gap:8px;margin-left:auto}
 .mk .iconbtn.menu{display:none}
-.mk .mpanel{display:none}
+.mk .mdrawer,.mk .mdrawer-bg{display:none}
 
 /* hero */
 .mk .hero{border-bottom:1px solid var(--line)}
@@ -370,8 +370,8 @@
 @media(max-width:860px){
   .mk .links,.mk .btn.login{display:none}
   .mk .iconbtn.menu{display:grid}
-  .mk .mpanel{display:grid;gap:2px;padding:8px 16px 14px;border-top:1px solid var(--line);background:var(--bg)}
-  .mk .mpanel a{padding:12px 8px;font-size:16px;font-weight:500}
+  .mk .iconbtn.menu{order:-1}
+  .mk .mdrawer,.mk .mdrawer-bg{display:block}
   .mk .plans{grid-template-columns:minmax(0,1fr)}
   .mk .tabpanel{grid-template-columns:minmax(0,1fr)}
   .mk .tab-copy{padding:28px 24px}
@@ -448,4 +448,43 @@
   .mk .foot-fold summary{display:flex;align-items:center;justify-content:space-between;padding:14px 0;cursor:pointer;list-style:none;font:500 12px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
   .mk .foot-fold summary::-webkit-details-marker{display:none}
   .mk .foot-fold[open] .foot-chev{transform:rotate(180deg)}
+}
+
+/* Header layouts (desktop). */
+@media(min-width:861px){
+  .mk .top-in.lay-nav-center .links{margin-inline:auto}
+  .mk .top-in.lay-logo-center{display:grid;grid-template-columns:1fr auto 1fr}
+  .mk .top-in.lay-logo-center .logo{grid-column:2;grid-row:1}
+  .mk .top-in.lay-logo-center .links{grid-column:1;grid-row:1;justify-self:start}
+  .mk .top-in.lay-logo-center .top-acts{grid-column:3;grid-row:1;justify-self:end}
+}
+
+/* Mobile menu: a drawer sliding in from the left. */
+.mk .mdrawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .25s;z-index:60}
+.mk .mdrawer-bg[data-open=true]{opacity:1;pointer-events:auto}
+.mk .mdrawer{position:fixed;top:0;bottom:0;left:0;width:min(86vw,340px);padding:14px 16px 24px;overflow-y:auto;background:var(--bg);border-right:1px solid var(--line);transform:translateX(-100%);visibility:hidden;transition:transform .28s ease,visibility 0s .28s;z-index:61}
+.mk .mdrawer[data-open=true]{transform:none;visibility:visible;transition:transform .28s ease}
+.mk .mdrawer-top{display:flex;align-items:center;justify-content:space-between;height:48px;margin-bottom:8px}
+.mk .mdrawer nav{display:grid;gap:2px}
+.mk .mdrawer nav a,.mk .mdrawer-login{display:block;padding:12px 8px;font-size:16px;font-weight:500;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.mk .mdrawer,.mk .mdrawer-bg{transition:none}}
+
+/* Feature grid: icon above the heading; on phones each card folds to its title. */
+.mk .cell-ic{display:inline-flex;margin-bottom:12px;color:var(--ink)}
+.mk .cell-fold{display:none}
+.mk .cell-fold summary{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:var(--mkf-pad,14px) 0;cursor:pointer;list-style:none}
+.mk .cell-fold summary::-webkit-details-marker{display:none}
+.mk .cell-fold.ind-left summary{justify-content:flex-start}
+.mk .cell-ttl{display:flex;align-items:center;gap:10px;min-width:0}
+.mk .cell-ttl .cell-ic{margin:0}
+.mk .cell-fold h3{margin:0}
+.mk .cell-fold>p{padding-bottom:var(--mkf-pad,14px);color:var(--mut)}
+.mk .cell-ind{flex:none;transition:transform .2s}
+.mk .cell-fold[open] .ind-chevron{transform:rotate(180deg)}
+.mk .cell-fold[open] .ind-v{display:none}
+@media(max-width:767px){
+  .mk .mkf-acc.bento{grid-template-columns:minmax(0,1fr)}
+  .mk .mkf-acc .cell-open{display:none}
+  .mk .mkf-acc .cell-fold{display:block}
+  .mk .mkf-acc .cell{padding-block:0}
 }

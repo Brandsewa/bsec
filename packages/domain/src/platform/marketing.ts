@@ -1,5 +1,8 @@
 import { MARKETING_STARTERS, MkFooterSchema, MkHeaderSchema, THEME_SYSTEM_PAGES, isWebsiteBlogArchiveBlockSet, isWebsiteBlogPostBlockSet, isWebsiteFooterBlockSet, isWebsiteHeaderBlockSet, isWebsitePageBlockSet, validateBlockDocument, type BlockInstance } from "@bs/blocks";
 import { and, eq } from "drizzle-orm";
+import { listPublicPlans } from "../saas/signup.ts";
+import { saasDb } from "../runtime.ts";
+import { previewPageRenderData } from "../themes/block-data.ts";
 import { schema, withTenant } from "@bs/db";
 import { createPage, savePageDraft } from "../content-services.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -100,4 +103,15 @@ export async function ensurePlatformSiteChrome(rt: Runtime, ctx: TenantContext, 
     await tx.insert(schema.auditLogs).values({ tenantId: ctx.tenantId, actorType: ctx.actor.type, actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null, action: "page.chrome_created", targetType: "page", targetId: row.id, diff: { key: input.key } });
     return { id: row.id, created: true };
   });
+}
+
+/** The editor's block data, plus the live plans for every Pricing table on the canvas. */
+export async function previewPlatformSiteRenderData(rt: Runtime, ctx: TenantContext, input: Parameters<typeof previewPageRenderData>[2]) {
+  const base = await previewPageRenderData(rt, ctx, input);
+  const ids = (input.blocks as BlockInstance[]).filter((b) => b.type === "MkPricing" && !b.hidden).map((b) => b.id);
+  if (ids.length === 0) return base;
+  const plans = (await listPublicPlans(saasDb(rt)).catch(() => [])).map((p) => ({ code: p.code, name: p.name, priceMonthlyPaise: p.priceMonthlyPaise, priceYearlyPaise: p.priceYearlyPaise, tagline: p.tagline, badge: p.badge, bullets: p.bullets }));
+  const data = { ...(base.data as Record<string, unknown>) };
+  for (const id of ids) data[id] = { kind: "plans", plans };
+  return { ...base, data } as typeof base;
 }
