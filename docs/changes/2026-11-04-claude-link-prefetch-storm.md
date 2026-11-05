@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `perf/link-prefetch` (not merged yet)
+- **Branch:** `perf/link-prefetch` (merged in #228, deployed)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none
@@ -27,4 +27,4 @@ Cloudflare request logs (owner, 2026-11-04) showed one visitor's page views prod
 - [x] `progress.md`
 
 ## Definition of done
-- [ ] After merge: record PR and commit, remove in-flight line, delete branch and worktree
+- [x] After merge: PR recorded, in-flight line removed, branch deleted

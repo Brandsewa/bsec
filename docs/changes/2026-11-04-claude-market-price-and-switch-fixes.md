@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `fix/market-prices-switch` (merged in #226)
+- **Branch:** `fix/market-prices-switch` (merged in #226, deployed)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none
