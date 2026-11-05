@@ -156,6 +156,7 @@ export type BlockData =
   | { kind: "blog-posts"; posts: BlockBlogPost[]; viewAllHref: string }
   | { kind: "reviews"; reviews: BlockReview[] }
   | { kind: "menu"; items: ResolvedMenuItem[] }
+  | { kind: "plans"; plans: Array<{ code: string; name: string; priceMonthlyPaise: number; priceYearlyPaise: number; tagline: string | null; badge: string | null; bullets: string[] }> }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 

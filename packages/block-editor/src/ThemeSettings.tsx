@@ -954,6 +954,8 @@ export interface ThemeSettingsPanelProps {
    * same fields. Used by the website, which has a light and a dark mode.
    */
   colorModes?: boolean | undefined;
+  /** Only the sections: no title, note or padding, so they sit in a panel next to other accordions. */
+  bare?: boolean | undefined;
 }
 
 /**
@@ -961,7 +963,7 @@ export interface ThemeSettingsPanelProps {
  * settings are edited: the platform theme builder shows it in the page editor's sidebar on every page, and
  * the store's theme screen shows it beside its preview. A new group of settings is a new Section here.
  */
-export function ThemeSettingsPanel({ tokens, onChange, disabled, note, hidePresets, colorModes }: ThemeSettingsPanelProps) {
+export function ThemeSettingsPanel({ tokens, onChange, disabled, note, hidePresets, colorModes, bare }: ThemeSettingsPanelProps) {
   const v = useMemo(() => readThemeSettings(tokens), [tokens]);
   const [colorMode, setColorMode] = useState<"light" | "dark">("light");
   const darkColors = ((tokens as { darkColors?: Record<string, string> }).darkColors ?? {}) as Record<string, string>;
@@ -1039,9 +1041,13 @@ export function ThemeSettingsPanel({ tokens, onChange, disabled, note, hidePrese
   };
 
   return (
-    <div aria-label="Theme settings" style={{ padding: "4px 16px 24px" }}>
-      <h2 style={{ fontSize: 13, fontWeight: 700, margin: "10px 0 2px" }}>Theme settings</h2>
-      <p style={{ fontSize: 11, color: "#71717a", margin: "0 0 4px" }}>{note ?? "Applies to every page of this theme."}</p>
+    <div aria-label="Theme settings" style={bare ? undefined : { padding: "4px 16px 24px" }}>
+      {bare ? null : (
+        <>
+          <h2 style={{ fontSize: 13, fontWeight: 700, margin: "10px 0 2px" }}>Theme settings</h2>
+          <p style={{ fontSize: 11, color: "#71717a", margin: "0 0 4px" }}>{note ?? "Applies to every page of this theme."}</p>
+        </>
+      )}
 
       <Section id="layout" title="Layout" open={openId === "layout"} onToggle={() => toggle("layout")}>
         <LayoutSettingsEditor layout={v.layout} disabled={disabled} onChange={(layout) => commit({ layout })} />

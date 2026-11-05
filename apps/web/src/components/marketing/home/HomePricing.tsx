@@ -33,17 +33,21 @@ export function HomePricing({ plans, bare = false, heading = "Plans you can read
           {plans.map((p) => {
             const perMonth = interval === "monthly" ? p.monthlyPaise : p.yearlyPaise / 12;
             const saving = p.monthlyPaise * 12 - p.yearlyPaise;
-            const hot = p.code === "growth";
+            // The badge set in Super Admin > Plans; without any badge there, Growth keeps "Popular".
+            const anyBadge = plans.some((x) => x.badge);
+            const badge = p.badge ?? (!anyBadge && p.code === "growth" ? "Popular" : null);
+            const hot = Boolean(badge);
             return (
               <div key={p.code} className="plan">
-                <h3>{p.name}{hot && <span className="tag">Popular</span>}</h3>
+                <h3>{p.name}{badge && <span className="tag">{badge}</span>}</h3>
+                {p.tagline ? <p className="bill">{p.tagline}</p> : null}
                 <div className="price">{inr(perMonth)}<small>/month</small></div>
                 <p className="bill">
                   {interval === "yearly" ? `Billed ${inr(p.yearlyPaise)} a year${saving > 0 ? ` · you save ${inr(saving)}` : ""}` : "Billed monthly"}
                 </p>
                 <Link className={`btn wide ${hot ? "pri" : ""}`} href={`/signup?plan=${p.code}&interval=${interval}`}>Start free trial</Link>
                 <ul className="checks">
-                  {planBullets(p.limits).map((b) => (
+                  {(p.bullets && p.bullets.length > 0 ? p.bullets : planBullets(p.limits)).map((b) => (
                     <li key={b}><CheckIcon size={15} />{b}</li>
                   ))}
                 </ul>

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, MkThemeSchema, websiteThemeCss, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
+import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, MkThemeSchema, MkFeaturesSchema, MkHeaderSchema, MkPricingSchema, websiteThemeCss, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
 
 const about = MARKETING_STARTERS["about"]!;
 
@@ -88,5 +88,42 @@ describe("website theme settings", () => {
     expect(css).toContain("--pri:#1f3a5f");
     expect(css).toContain('--sans:"Inter"');
     expect(websiteThemeCss(MkThemeSchema.parse({})).css).toBe("");
+  });
+});
+
+describe("website builder round two", () => {
+  const render = (type: "MkFeatures" | "MkHeader" | "MkPricing", props: Record<string, unknown>, data?: Record<string, unknown>) => {
+    const block = { id: "b1", type, version: 1, props } as BlockInstance;
+    return renderToStaticMarkup(<>{renderBlockTree([block], { data } as never)}</>);
+  };
+
+  it("feature cards can have an icon and fold to an accordion on phones", () => {
+    const html = render("MkFeatures", MkFeaturesSchema.parse({ title: "T", items: [{ icon: "check", title: "One", body: "Body one" }], openFirst: true, singleOpen: true, iconStyle: "chevron" }));
+    expect(html).toContain("cell-ic");
+    expect(html).toContain("mkf-acc");
+    expect(html).toContain("<details");
+    expect(html).toContain('name="mkf-b1"');
+    expect(html).toContain("ind-chevron");
+    expect(render("MkFeatures", MkFeaturesSchema.parse({ title: "T", items: [{ title: "One", body: "Body" }], mobileAccordion: false }))).not.toContain("<details");
+  });
+
+  it("the header takes a layout", () => {
+    expect(render("MkHeader", MkHeaderSchema.parse({ layout: "logo-center" }))).toContain("lay-logo-center");
+    expect(render("MkHeader", MkHeaderSchema.parse({}))).toContain("lay-left");
+  });
+
+  it("the pricing table shows the live plans handed to the editor", () => {
+    const html = render("MkPricing", MkPricingSchema.parse({}), { b1: { kind: "plans", plans: [{ code: "starter", name: "Starter", priceMonthlyPaise: 99900, priceYearlyPaise: 999000, tagline: "For a first store", badge: "New", bullets: ["Up to 500 products"] }] } });
+    expect(html).toContain("Starter");
+    expect(html).toContain("₹999");
+    expect(html).toContain("Up to 500 products");
+    expect(html).toContain("For a first store");
+  });
+
+  it("theme sizes reach the website's headings and the widgets", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ tokens: { fontSizes: { h1: { desktop: 40, tablet: 34, mobile: 28 } }, fonts: { heading: "Lora" } } }));
+    expect(css).toContain(".mk.mk.mk h1{font-size:40px}");
+    expect(css).toContain("--bs-h1-d:2.5rem");
+    expect(css).toContain("--bs-font-heading");
   });
 });

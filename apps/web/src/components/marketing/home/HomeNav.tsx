@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useTheme } from "@bs/ui";
 import { CloseIcon, MenuIcon, MoonIcon, SunIcon } from "./icons.tsx";
 import { SiteNavContext } from "./site-nav.tsx";
@@ -32,11 +32,28 @@ export function HomeNav() {
   const h = nav?.header;
   const brand = h?.brand ?? "BCOM";
   const loginHref = h?.loginHref ?? "https://admin.bcom.si";
+
+  // The drawer closes on Escape and holds the page still while it is open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   return (
     <>
     {nav?.announcement}
     <header className="top">
-      <div className="wrap top-in">
+      <div className={`wrap top-in lay-${h?.layout ?? "left"}`}>
+        <button type="button" className="iconbtn menu" aria-label="Open menu" aria-expanded={open} aria-controls="mk-menu" onClick={() => setOpen(true)}>
+          <MenuIcon />
+        </button>
         <Link className="logo" href="/" aria-label={`${brand} home`}>
           <i>{brand.slice(0, 1)}</i>{brand}
         </Link>
@@ -49,20 +66,22 @@ export function HomeNav() {
           {h?.showThemeToggle === false ? null : <ThemeToggle />}
           <a className="btn login" href={loginHref}>{h?.loginLabel ?? "Log in"}</a>
           <Link className="btn pri" href={h?.ctaHref ?? "/signup"}>{h?.ctaLabel ?? "Start free"}</Link>
-          <button type="button" className="iconbtn menu" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} aria-controls="mk-menu" onClick={() => setOpen((o) => !o)}>
-            {open ? <CloseIcon /> : <MenuIcon />}
-          </button>
         </div>
       </div>
-      {open && (
-        <div id="mk-menu" className="mpanel">
-          {links.map(({ label, href }) => (
-            <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>
-          ))}
-          <a href={loginHref}>{h?.loginLabel ?? "Log in"}</a>
-        </div>
-      )}
     </header>
+    <div className="mdrawer-bg" data-open={open} onClick={() => setOpen(false)} aria-hidden="true" />
+    <aside id="mk-menu" className="mdrawer" data-open={open} aria-label="Menu">
+      <div className="mdrawer-top">
+        <Link className="logo" href="/" onClick={() => setOpen(false)}><i>{brand.slice(0, 1)}</i>{brand}</Link>
+        <button type="button" className="iconbtn" aria-label="Close menu" onClick={() => setOpen(false)}><CloseIcon /></button>
+      </div>
+      <nav aria-label="Main">
+        {links.map(({ label, href }) => (
+          <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>
+        ))}
+      </nav>
+      <a className="mdrawer-login" href={loginHref}>{h?.loginLabel ?? "Log in"}</a>
+    </aside>
     </>
   );
 }
