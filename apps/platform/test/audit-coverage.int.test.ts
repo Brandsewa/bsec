@@ -89,6 +89,7 @@ async function mkTemplate(): Promise<string> {
 
 const CASES: Record<string, Case> = {
   "settings.update": { role: "platform_owner", action: "platform_settings.update", input: async () => ({ requireStaffMfa: true }) },
+  "branding.update": { role: "platform_admin", action: "platform_branding.update", input: async () => ({ logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } } }) },
   "marketing.enable": {
     role: "platform_admin",
     action: "platform_site.create",

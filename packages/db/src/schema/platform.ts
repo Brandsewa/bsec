@@ -197,3 +197,15 @@ export const platformSettings = pgTable("platform_settings", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Platform Branding (single row, id = 'default'): validated brand tokens (logos, favicon, colours, buttons).
+ * Created empty by migration 0099; absence means built-in defaults. Platform-level: no tenant column, no RLS.
+ */
+export const platformBranding = pgTable("platform_branding", {
+  id: text("id").primaryKey().default("default"),
+  tokens: jsonb("tokens").notNull().default(sql`'{}'::jsonb`),
+  version: integer("version").notNull().default(0),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
