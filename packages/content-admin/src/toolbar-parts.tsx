@@ -96,7 +96,7 @@ export function BulkBar({
 }) {
   if (count === 0) return null;
   return (
-    <div className="grid gap-1 rounded-lg border border-border bg-muted px-3 py-2" role="region" aria-label="Bulk actions">
+    <div className="grid gap-1 rounded-lg border border-border bg-muted px-3 py-2 text-xs" role="region" aria-label="Bulk actions">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-foreground">
           {allResults ? `All ${total.toLocaleString("en-IN")} ${noun}s selected` : `${count} ${noun}${count === 1 ? "" : "s"} selected`}

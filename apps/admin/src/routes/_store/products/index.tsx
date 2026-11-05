@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Archive, Copy, Download, ExternalLink, FileCheck, FilePen, MoreHorizontal, Package, Plus, Trash2, Upload } from "lucide-react";
+import { Archive, Copy, Download, ExternalLink, FileCheck, FilePen, MoreHorizontal, Package, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { formatMoney } from "@bs/contracts/money";
@@ -34,6 +34,7 @@ import { SimpleSelect } from "@bs/ui";
 import { ProductExportDialog } from "../../../components/product/bulk/product-export-dialog.tsx";
 import { ProductImportDialog } from "../../../components/product/bulk/product-import-dialog.tsx";
 import { errorMessage } from "../../../lib/errors.ts";
+import { BULK_EDIT_LIMIT, openBulkEditor } from "../../../lib/bulk-edit-entry.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -162,6 +163,19 @@ export function ProductsPage() {
 
   const sel = useTableSelection({ rows, getId: (p: ProductRow) => p.id, total, resetKey: JSON.stringify([s.status, s.q, s.stock, s.from, s.to]) });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: orpc.admin.products.key() });
+
+  /** Opens the bulk editor with the ticked rows, or every matching product (up to the editor's limit) when "all results" is on. */
+  const editSelected = async () => {
+    let ids = sel.picked.map((p) => p.id);
+    if (sel.allResults) {
+      ids = [];
+      for (let offset = 0; offset < Math.min(total, BULK_EDIT_LIMIT); offset += 100) {
+        const page = await client.admin.products.list(productsListInput(s, { limit: 100, offset }));
+        ids.push(...page.items.map((p) => p.id));
+      }
+    }
+    openBulkEditor("products", ids, () => void navigate({ to: "/products/bulk-edit" }));
+  };
 
   const setStatus = (items: ProductRow[], status: ProductStatus) =>
     bulk.run({
@@ -390,8 +404,11 @@ export function ProductsPage() {
             pageFullySelected={sel.pageFullySelected}
             onSelectAllResults={sel.selectAllResults}
             onClear={sel.clear}
-            note={sel.allResults ? "Status changes and delete work on products you tick yourself. Export covers every matching product." : undefined}
+            note={sel.allResults ? "Edit opens up to 250 matching products. Status changes and delete work on products you tick yourself. Export covers every matching product." : undefined}
           >
+            <Button size="sm" disabled={bulk.busy} onClick={() => void editSelected()}>
+              <Pencil className="mr-1.5" /> Edit
+            </Button>
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "active")}>
               <FileCheck className="mr-1.5" /> Activate
             </Button>

@@ -162,6 +162,10 @@ import {
   updateMenu,
   updatePage,
   updateProduct,
+  bulkUpdateProducts,
+  bulkUpdateCategories,
+  bulkUpdateCollections,
+  getProductsForBulkEdit,
   updateStoreSettings,
   updateTheme,
   updateVariant,
@@ -1563,6 +1567,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateProduct(context.rt, context.tenantCtx, input);
         }),
+      getMany: os.admin.products.getMany
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProductsForBulkEdit(context.rt, context.tenantCtx, input);
+        }),
+      bulkUpdate: os.admin.products.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateProducts(context.rt, context.tenantCtx, input);
+        }),
       delete: os.admin.products.delete
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -1687,6 +1705,13 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCategory(context.rt, context.tenantCtx, input);
         }),
+      bulkUpdate: os.admin.categories.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateCategories(context.rt, context.tenantCtx, input);
+        }),
       delete: os.admin.categories.delete
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -1732,6 +1757,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCollection(context.rt, context.tenantCtx, input);
+        }),
+      bulkUpdate: os.admin.collections.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateCollections(context.rt, context.tenantCtx, input);
         }),
       delete: os.admin.collections.delete
         .use(requireAdmin)
