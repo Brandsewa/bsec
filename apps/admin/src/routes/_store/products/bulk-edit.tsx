@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Plus, Redo2, Save, Undo2, X } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, PageContainer, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { ProductDetail } from "@bs/contracts";
 import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import {
@@ -16,6 +16,7 @@ import {
   emptyDash,
   type BulkColumn,
   type BulkRow,
+  useGridLayout,
 } from "../../../components/data-grid/bulk-grid.tsx";
 import { useColumnVisibility } from "../../../components/data-table/use-table-state.ts";
 import { buildProductItems } from "../../../lib/bulk-edit-products.ts";
@@ -25,6 +26,22 @@ import { client, orpc } from "../../../lib/orpc.ts";
 import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 
 export const BULK_PRODUCTS_KEY = "bulk-edit:products";
+/** Products fetched per request: the grid loads the next batch only when the user scrolls to the bottom. */
+const PAGE = 25;
+type Many = Awaited<ReturnType<typeof client.admin.products.getMany>>;
+
+/** Joins the batches loaded so far into one list, one stock map and one custom-field value map. */
+function combineBatches(results: UseQueryResult<Many, Error>[]) {
+  const first = results.find((r) => r.data)?.data?.customFields;
+  return {
+    items: results.flatMap((r) => r.data?.items ?? []),
+    stock: Object.assign({}, ...results.map((r) => r.data?.stock ?? {})) as Record<string, number>,
+    cf: first ? { ...first, values: Object.assign({}, ...results.map((r) => r.data?.customFields.values ?? {})) as typeof first.values } : undefined,
+    firstLoading: results[0]?.isLoading ?? false,
+    anyLoading: results.some((r) => r.isLoading),
+    error: results.find((r) => r.isError)?.error ?? null,
+  };
+}
 
 export const Route = createFileRoute("/_store/products/bulk-edit")({
   pendingComponent: () => (
@@ -69,15 +86,25 @@ function ProductsBulkEditPage() {
   const [failed, setFailed] = useState<Record<string, string>>({});
   const [mediaFor, setMediaFor] = useState<ProductDetail | null>(null);
 
-  const data = useQuery({ ...orpc.admin.products.getMany.queryOptions({ input: { ids: ids.length ? ids : ["00000000-0000-0000-0000-000000000000"] } }), enabled: ids.length > 0, staleTime: 0 });
+  const [batches, setBatches] = useState(1);
+  const data = useQueries({
+    queries: Array.from({ length: Math.min(batches, Math.ceil(ids.length / PAGE)) }, (_, i) => ({
+      ...orpc.admin.products.getMany.queryOptions({ input: { ids: ids.slice(i * PAGE, (i + 1) * PAGE) } }),
+      staleTime: 0,
+    })),
+    combine: combineBatches,
+  });
+  const hasMore = batches * PAGE < ids.length;
+  const loadMore = useCallback(() => setBatches((b) => (b * PAGE < ids.length ? b + 1 : b)), [ids.length]);
+  const layout = useGridLayout("products");
   const categories = useQuery(orpc.admin.categories.list.queryOptions({ input: { status: "all" } }));
   const collections = useQuery(orpc.admin.collections.list.queryOptions({ input: { status: "all" } }));
   const brands = useQuery(orpc.admin.brands.list.queryOptions());
   const taxClasses = useQuery(orpc.admin.taxClasses.list.queryOptions({}));
 
-  const products = useMemo(() => data.data?.items ?? [], [data.data]);
-  const stock = data.data?.stock ?? {};
-  const cf = data.data?.customFields;
+  const products = data.items;
+  const stock = data.stock;
+  const cf = data.cf;
   const cfDefs = useMemo(() => (cf?.enabled ? cf.definitions.filter((d) => ["text", "number", "boolean", "dropdown"].includes(d.type)) : []), [cf]);
   const cfTypes = useMemo(() => Object.fromEntries(cfDefs.map((d) => [d.id, d.type])), [cfDefs]);
 
@@ -134,9 +161,13 @@ function ProductsBulkEditPage() {
 
   // --- cell helpers ---------------------------------------------------------------------------------------------
   const err = (target: string, field: string) => errors[editKey(target, field)];
-  const text = (target: string, field: string, saved: string, o?: { align?: "right"; mono?: boolean; placeholder?: string }) => (
-    <TextCell col={field} row={target} value={ed.get(target, field, saved)} onChange={(v) => ed.set(target, field, v, saved)} dirty={ed.isDirty(target, field)} error={err(target, field)} {...o} />
-  );
+  /** Text opens a small box under the cell; short codes and numbers (`inline`, right-aligned) edit in place. */
+  const text = (target: string, field: string, saved: string, o?: { align?: "right"; mono?: boolean; placeholder?: string; inline?: boolean; multiline?: boolean }) => {
+    const { inline, ...rest } = o ?? {};
+    return (
+      <TextCell col={field} row={target} value={ed.get(target, field, saved)} onChange={(v) => ed.set(target, field, v, saved)} dirty={ed.isDirty(target, field)} error={err(target, field)} box={!inline && rest.align !== "right"} {...rest} />
+    );
+  };
   const sel = (target: string, field: string, saved: string, options: Array<{ value: string; label: string }>, label: string) => (
     <SelectCell label={label} value={ed.get(target, field, saved)} onChange={(v) => ed.set(target, field, v, saved)} options={options} dirty={ed.isDirty(target, field)} />
   );
@@ -185,7 +216,7 @@ function ProductsBulkEditPage() {
       header: "Short description",
       group: "General",
       width: 220,
-      cell: P((p) => text(p.id, "shortDescription", p.shortDescription ?? "")),
+      cell: P((p) => text(p.id, "shortDescription", p.shortDescription ?? "", { multiline: true })),
     },
     {
       id: "description",
@@ -237,11 +268,11 @@ function ProductsBulkEditPage() {
     { id: "vendor", header: "Vendor", group: "General", width: 150, defaultHidden: true, cell: P((p) => sel(p.id, "brandId", p.brandId ?? "", brandOptions, "Vendor")) },
     { id: "isFeatured", header: "Featured", group: "General", width: 80, defaultHidden: true, cell: P((p) => check(p.id, "isFeatured", p.isFeatured, "Featured")) },
 
-    { id: "sku", header: "SKU", group: "Inventory", width: 140, cell: V((v) => text(v.id, "sku", v.sku, { mono: true })) },
+    { id: "sku", header: "SKU", group: "Inventory", width: 140, cell: V((v) => text(v.id, "sku", v.sku, { mono: true, inline: true })) },
     { id: "stock", header: "Stock quantity", group: "Inventory", width: 110, align: "right", cell: V((v) => text(v.id, "stock", String(stock[v.id] ?? 0), { align: "right" })) },
     { id: "trackInventory", header: "Track quantity", group: "Inventory", width: 100, defaultHidden: true, cell: V((v) => check(v.id, "trackInventory", v.trackInventory, "Track quantity")) },
     { id: "allowBackorder", header: "Sell when out of stock", group: "Inventory", width: 140, defaultHidden: true, cell: V((v) => check(v.id, "allowBackorder", v.allowBackorder, "Sell when out of stock")) },
-    { id: "barcode", header: "Barcode", group: "Inventory", width: 140, defaultHidden: true, cell: V((v) => text(v.id, "barcode", v.barcode ?? "", { mono: true })) },
+    { id: "barcode", header: "Barcode", group: "Inventory", width: 140, defaultHidden: true, cell: V((v) => text(v.id, "barcode", v.barcode ?? "", { mono: true, inline: true })) },
 
     { id: "price", header: `Base price (${currency})`, group: "Pricing", width: 120, align: "right", cell: V((v) => text(v.id, "price", formatMoneyText(v.price, currency), { align: "right" })) },
     { id: "compareAtPrice", header: "Compare-at price", group: "Pricing", width: 120, align: "right", cell: V((v) => text(v.id, "compareAtPrice", formatMoneyText(v.compareAtPrice, currency), { align: "right" })) },
@@ -250,14 +281,14 @@ function ProductsBulkEditPage() {
     { id: "priceOnRequest", header: "Price on request", group: "Pricing", width: 110, defaultHidden: true, cell: P((p) => check(p.id, "priceOnRequest", p.priceOnRequest, "Price on request")) },
 
     { id: "seoTitle", header: "SEO title", group: "SEO", width: 220, cell: P((p) => text(p.id, "seoTitle", seoOf(p.seo).title)) },
-    { id: "seoDescription", header: "Meta description", group: "SEO", width: 260, cell: P((p) => text(p.id, "seoDescription", seoOf(p.seo).description)) },
+    { id: "seoDescription", header: "Meta description", group: "SEO", width: 260, cell: P((p) => text(p.id, "seoDescription", seoOf(p.seo).description, { multiline: true })) },
     { id: "slug", header: "URL handle", group: "SEO", width: 200, cell: P((p) => text(p.id, "slug", p.slug, { mono: true })) },
 
     { id: "weightGrams", header: "Weight (g)", group: "Shipping", width: 100, align: "right", defaultHidden: true, cell: V((v) => text(v.id, "weightGrams", v.weightGrams != null ? String(v.weightGrams) : "", { align: "right" })) },
     { id: "lengthCm", header: "Length (cm)", group: "Shipping", width: 90, align: "right", defaultHidden: true, cell: V((v) => text(v.id, "lengthCm", dim(v, "lengthCm"), { align: "right" })) },
     { id: "widthCm", header: "Width (cm)", group: "Shipping", width: 90, align: "right", defaultHidden: true, cell: V((v) => text(v.id, "widthCm", dim(v, "widthCm"), { align: "right" })) },
     { id: "heightCm", header: "Height (cm)", group: "Shipping", width: 90, align: "right", defaultHidden: true, cell: V((v) => text(v.id, "heightCm", dim(v, "heightCm"), { align: "right" })) },
-    { id: "hsn", header: "HSN code", group: "Shipping", width: 110, defaultHidden: true, cell: P((p) => text(p.id, "hsn", p.hsn ?? "", { mono: true })) },
+    { id: "hsn", header: "HSN code", group: "Shipping", width: 110, defaultHidden: true, cell: P((p) => text(p.id, "hsn", p.hsn ?? "", { mono: true, inline: true })) },
     { id: "requiresShipping", header: "Requires shipping", group: "Shipping", width: 110, defaultHidden: true, cell: P((p) => check(p.id, "requiresShipping", p.requiresShipping, "Requires shipping")) },
     { id: "returnable", header: "Returnable", group: "Shipping", width: 90, defaultHidden: true, cell: P((p) => check(p.id, "returnable", p.returnable ?? true, "Returnable")) },
 
@@ -280,7 +311,7 @@ function ProductsBulkEditPage() {
   ];
 
   const hidden = useColumnVisibility("products-bulk", columns);
-  const shown = columns.filter((c) => c.locked || hidden.isVisible(c.id));
+  const shown = layout.arrange(columns.filter((c) => c.locked || hidden.isVisible(c.id)));
 
   if (ids.length === 0) {
     return (
@@ -303,7 +334,7 @@ function ProductsBulkEditPage() {
           <ArrowLeft />
         </Button>
         <h1 className="text-sm font-semibold text-foreground">
-          Editing {products.length || ids.length} product{(products.length || ids.length) === 1 ? "" : "s"}
+          Editing {ids.length} product{ids.length === 1 ? "" : "s"}
         </h1>
         <div className="ml-auto flex items-center gap-1.5">
           <Button variant="outline" size="icon" aria-label="Undo" disabled={!ed.canUndo} onClick={ed.undo}>
@@ -312,7 +343,7 @@ function ProductsBulkEditPage() {
           <Button variant="outline" size="icon" aria-label="Redo" disabled={!ed.canRedo} onClick={ed.redo}>
             <Redo2 />
           </Button>
-          <GridColumnsMenu columns={columns} isVisible={hidden.isVisible} onToggle={hidden.toggle} onReset={hidden.reset} />
+          <GridColumnsMenu columns={columns} isVisible={hidden.isVisible} onToggle={hidden.toggle} onReset={() => { hidden.reset(); layout.reset(); }} />
         </div>
       </div>
 
@@ -333,9 +364,9 @@ function ProductsBulkEditPage() {
         </div>
       ) : null}
 
-      {data.isLoading ? (
+      {data.firstLoading ? (
         <TableSkeleton rows={12} columns={6} />
-      ) : data.isError ? (
+      ) : data.error ? (
         <p role="alert" className="text-destructive">{errorMessage(data.error)}</p>
       ) : (
         <BulkGrid
@@ -344,6 +375,10 @@ function ProductsBulkEditPage() {
           collapsed={collapsed}
           onToggleCollapsed={(id) => setCollapsed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
           className="max-h-[calc(100dvh-12rem)]"
+          layout={layout}
+          hasMore={hasMore}
+          loadingMore={data.anyLoading}
+          onLoadMore={loadMore}
           empty={<p className="py-16 text-center text-muted-foreground">These products could not be found.</p>}
         />
       )}
@@ -362,9 +397,11 @@ function MediaEditor({ product, onClose, onChanged }: { product: ProductDetail; 
   const busy = attach.isPending || detach.isPending;
 
   return (
-    <div role="dialog" aria-label={`Media: ${product.title}`} className="fixed right-4 bottom-4 z-50 grid w-[440px] max-w-[92vw] gap-3 rounded-xl border border-border bg-card p-5 shadow-lg">
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-sm font-semibold text-foreground">Media: {product.title}</p>
+    <div role="dialog" aria-label={`Media: ${product.title}`} className="fixed right-4 bottom-4 z-50 grid w-[440px] max-w-[92vw] grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-border bg-card p-5 shadow-lg">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={product.title}>
+          Media: {product.title}
+        </p>
         <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
           <X />
         </Button>

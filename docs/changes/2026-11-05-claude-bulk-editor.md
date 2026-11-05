@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-05
 - **Agent:** claude
-- **Branch:** `feat/bulk-editor` (not merged yet)
+- **Branch:** `feat/bulk-editor` (merged in #230, 4964d7e)
 - **Area:** contracts, domain, web (API), admin, content-admin, docs
 - **Type:** feature
 - **Supersedes:** none

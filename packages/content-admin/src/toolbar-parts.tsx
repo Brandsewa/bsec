@@ -82,6 +82,7 @@ export function BulkBar({
   onSelectAllResults,
   onClear,
   note,
+  primary,
   children,
 }: {
   count: number;
@@ -92,29 +93,29 @@ export function BulkBar({
   onSelectAllResults: () => void;
   onClear: () => void;
   note?: string | undefined;
+  /** The main action (for example Edit): sits right after the count, before the "select all" link. */
+  primary?: ReactNode;
   children: ReactNode;
 }) {
   if (count === 0) return null;
+  // One row: count, main action, "select all N" link, then the other actions pushed left, "Clear selection" at the
+  // far right. It only wraps on narrow screens; the desktop bar never needs a second line.
   return (
-    <div className="grid gap-1 rounded-lg border border-border bg-muted px-3 py-2 text-xs" role="region" aria-label="Bulk actions">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-foreground">
-          {allResults ? `All ${total.toLocaleString("en-IN")} ${noun}s selected` : `${count} ${noun}${count === 1 ? "" : "s"} selected`}
-        </span>
-        <div className="flex flex-wrap items-center gap-1.5">{children}</div>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
-          Clear selection
-        </Button>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-border bg-muted px-3 py-2 text-xs" role="region" aria-label="Bulk actions">
+      <span className="font-medium whitespace-nowrap text-foreground">
+        {allResults ? `All ${total.toLocaleString("en-IN")} ${noun}s selected` : `${count} ${noun}${count === 1 ? "" : "s"} selected`}
+      </span>
+      {primary}
       {!allResults && pageFullySelected && total > count ? (
-        <p className="text-muted-foreground">
-          This page is selected.{" "}
-          <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={onSelectAllResults}>
-            Select all {total.toLocaleString("en-IN")} {noun}s
-          </button>
-        </p>
+        <button type="button" className="font-medium whitespace-nowrap text-primary underline-offset-2 hover:underline" onClick={onSelectAllResults}>
+          Select all {total.toLocaleString("en-IN")} {noun}s
+        </button>
       ) : null}
-      {note ? <p className="text-muted-foreground">{note}</p> : null}
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+      {note ? <span className="text-muted-foreground">{note}</span> : null}
+      <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
+        Clear selection
+      </Button>
     </div>
   );
 }

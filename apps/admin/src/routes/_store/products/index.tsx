@@ -405,10 +405,12 @@ export function ProductsPage() {
             onSelectAllResults={sel.selectAllResults}
             onClear={sel.clear}
             note={sel.allResults ? "Edit opens up to 250 matching products. Status changes and delete work on products you tick yourself. Export covers every matching product." : undefined}
+            primary={
+              <Button size="sm" disabled={bulk.busy} onClick={() => void editSelected()}>
+                <Pencil className="mr-1.5" /> Edit
+              </Button>
+            }
           >
-            <Button size="sm" disabled={bulk.busy} onClick={() => void editSelected()}>
-              <Pencil className="mr-1.5" /> Edit
-            </Button>
             <Button variant="outline" size="sm" disabled={bulk.busy || sel.allResults} onClick={() => void setStatus(sel.picked, "active")}>
               <FileCheck className="mr-1.5" /> Activate
             </Button>
