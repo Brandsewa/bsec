@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { schema } from "@bs/db";
+import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { primaryCategory } from "./helpers/primary-category.ts";
 import {
@@ -61,7 +61,7 @@ describe("bulk editor", () => {
     expect(got.items[0]).toMatchObject({ title: "Green Tea", hsn: "0902" });
     expect(got.items[0]?.variants[0]).toMatchObject({ price: 12500, weightGrams: 100 });
     expect(got.stock[v.id]).toBe(7);
-    const logs = await rt._db.db.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.tenantId, ctx.tenantId), eq(schema.auditLogs.targetId, p.id), eq(schema.auditLogs.action, "product.bulk_updated")));
+    const logs = await withTenant(rt._db.db, ctx.tenantId, (tx) => tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.tenantId, ctx.tenantId), eq(schema.auditLogs.targetId, p.id), eq(schema.auditLogs.action, "product.bulk_updated"))));
     expect(logs).toHaveLength(1);
   });
 
