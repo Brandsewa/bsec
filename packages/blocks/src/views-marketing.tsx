@@ -47,7 +47,7 @@ function NameChecker({ checker }: { checker: ReactNode }) {
 
 export function MkHeroView({ props, ctx }: BlockRenderArgs<MkHeroProps>) {
   return (
-    <section className="hero">
+    <section className={`hero${props.defaultPadding ? "" : " nopad"}`}>
       <div className="wrap hero-in solo">
         <div>
           {props.stamp ? <span className="stamp"><b />{props.stamp}</span> : null}
@@ -63,7 +63,7 @@ export function MkHeroView({ props, ctx }: BlockRenderArgs<MkHeroProps>) {
 
 export function MkIncludedView({ props }: BlockRenderArgs<MkIncludedProps>) {
   return (
-    <section className="strip" aria-label={props.label}>
+    <section className={`strip${props.defaultPadding ? "" : " nopad"}`} aria-label={props.label}>
       <div className="wrap strip-in">
         <span className="kick">{props.label}</span>
         <ul>
@@ -78,7 +78,7 @@ export function MkIncludedView({ props }: BlockRenderArgs<MkIncludedProps>) {
 
 export function MkStatementView({ props }: BlockRenderArgs<MkStatementProps>) {
   return (
-    <section className="sec statement">
+    <section className={`sec statement${props.defaultPadding ? "" : " nopad"}`}>
       <div className="wrap">
         <p className="rv">{props.text} {props.muted ? <span>{props.muted}</span> : null}</p>
       </div>
@@ -95,14 +95,14 @@ export function MkFeaturesView({ props, ctx }: BlockRenderArgs<MkFeaturesProps>)
     </svg>
   );
   return (
-    <section className={props.tone === "soft" ? "sec soft" : "sec"}>
+    <section className={`${props.tone === "soft" ? "sec soft" : "sec"}${props.defaultPadding ? "" : " nopad"}`}>
       <div className="wrap">
         <div className="head rv">
           {props.eyebrow ? <span className="kick">{props.eyebrow}</span> : null}
           <h2>{props.title}</h2>
           {props.intro ? <p>{props.intro}</p> : null}
         </div>
-        <div className={`joined bento rv${accordion ? " mkf-acc" : ""}`} style={{ "--mkf-pad": `${props.rowPadding}px` } as CSSProperties}>
+        <div className={`joined bento rv${accordion ? " mkf-acc" : ""}`} style={{ "--mkf-pad": `${props.rowPadding}px`, "--mkf-px": `${props.cardSidePadding}px` } as CSSProperties}>
           {props.items.map((item, i) => {
             const icon = item.icon ? <span className="cell-ic"><SvgIcon name={item.icon} px={22} /></span> : null;
             return (
@@ -133,7 +133,7 @@ export function MkFeaturesView({ props, ctx }: BlockRenderArgs<MkFeaturesProps>)
 
 export function MkStepsView({ props }: BlockRenderArgs<MkStepsProps>) {
   return (
-    <section className="steps" aria-label={props.label}>
+    <section className={`steps${props.defaultPadding ? "" : " nopad"}`} aria-label={props.label}>
       <div className="wrap">
         <ol>
           {props.items.map((item, i) => (
@@ -151,7 +151,7 @@ export function MkStepsView({ props }: BlockRenderArgs<MkStepsProps>) {
 
 export function MkBandView({ props }: BlockRenderArgs<MkBandProps>) {
   return (
-    <section className="band">
+    <section className={`band${props.defaultPadding ? "" : " nopad"}`}>
       <div className="wrap band-in">
         <h2 className="rv">{props.title}</h2>
         <ul className="stds rv">
@@ -187,7 +187,7 @@ export function MkFaqView({ props }: BlockRenderArgs<MkFaqProps>) {
 
 export function MkFinalCallView({ props, ctx }: BlockRenderArgs<MkFinalCallProps>) {
   return (
-    <section className="band cta">
+    <section className={`band cta${props.defaultPadding ? "" : " nopad"}`}>
       <div className="wrap">
         <h2>{props.title}</h2>
         {props.text ? <p>{props.text}</p> : null}
@@ -200,7 +200,7 @@ export function MkFinalCallView({ props, ctx }: BlockRenderArgs<MkFinalCallProps
 
 export function MkDocHeaderView({ props }: BlockRenderArgs<MkDocHeaderProps>) {
   return (
-    <header className="doc-head">
+    <header className={`doc-head${props.defaultPadding ? "" : " nopad"}`}>
       <div className="doc">
         {props.eyebrow ? <span className="kick">{props.eyebrow}</span> : null}
         <h1>{props.title}</h1>
@@ -322,7 +322,7 @@ export function MkPricingView({ props, ctx }: BlockRenderArgs<MkPricingProps>) {
   const plans = data && data.kind === "plans" ? data.plans : [];
   const inr = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
   return (
-    <section className="sec" id="pricing">
+    <section className={`sec${props.defaultPadding ? "" : " nopad"}`} id="pricing">
       <div className="wrap">
         <div className="head center">
           <span className="kick">Pricing</span>
