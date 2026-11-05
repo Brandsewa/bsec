@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-04
 - **Agent:** claude
-- **Branch:** `perf/request-overhead` (merged in #227)
+- **Branch:** `perf/request-overhead` (merged in #227, deployed)
 - **Area:** domain, db, web
 - **Type:** fix
 - **Supersedes:** none
@@ -52,4 +52,4 @@ The owner reported every store on the platform feeling slow after the multi-curr
 - [x] `progress.md`
 
 ## Definition of done
-- [ ] After merge: record PR and commit, remove in-flight line, delete branch and worktree
+- [x] After merge: PR recorded, in-flight line removed, branch deleted
