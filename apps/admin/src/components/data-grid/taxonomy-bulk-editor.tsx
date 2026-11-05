@@ -1,12 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Redo2, Save, Undo2, X } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, PageContainer, TableSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category, Collection, RichDescription } from "@bs/contracts";
 import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import PolicyRichEditor from "../policy-rich-editor.tsx";
-import { BulkGrid, CheckCell, GridColumnsMenu, PopoverCell, SelectCell, TextCell, emptyDash, type BulkColumn, type BulkRow } from "./bulk-grid.tsx";
+import { BulkGrid, CheckCell, GridColumnsMenu, PopoverCell, SelectCell, TextCell, emptyDash, useGridLayout, type BulkColumn, type BulkRow } from "./bulk-grid.tsx";
 import { useColumnVisibility } from "../data-table/use-table-state.ts";
 import { editKey, parseWhole, slugify, useEdits, type Edits } from "../../lib/bulk-edit.ts";
 import { errorMessage } from "../../lib/errors.ts";
@@ -159,8 +159,9 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
   });
 
   const err = (id: string, f: string) => errors[editKey(id, f)];
-  const text = (r: Rec, f: string, saved: string, o?: { align?: "right"; mono?: boolean }) => (
-    <TextCell col={f} row={r.id} value={ed.get(r.id, f, saved)} onChange={(v) => ed.set(r.id, f, v, saved)} dirty={ed.isDirty(r.id, f)} error={err(r.id, f)} {...o} />
+  /** Text opens a small box under the cell; numbers (right-aligned) edit in place. */
+  const text = (r: Rec, f: string, saved: string, o?: { align?: "right"; mono?: boolean; multiline?: boolean }) => (
+    <TextCell col={f} row={r.id} value={ed.get(r.id, f, saved)} onChange={(v) => ed.set(r.id, f, v, saved)} dirty={ed.isDirty(r.id, f)} error={err(r.id, f)} box={o?.align !== "right"} {...o} />
   );
   const check = (r: Rec, f: string, saved: boolean, label: string) => (
     <CheckCell label={label} checked={ed.get(r.id, f, saved)} onChange={(v) => ed.set(r.id, f, v, saved)} dirty={ed.isDirty(r.id, f)} />
@@ -185,7 +186,7 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
         </div>
       ),
     },
-    { id: "description", header: "Description", group: "General", width: 260, cell: (row) => text(row.rec, "description", row.rec.description ?? "") },
+    { id: "description", header: "Description", group: "General", width: 260, cell: (row) => text(row.rec, "description", row.rec.description ?? "", { multiline: true }) },
     {
       id: "descriptionJson",
       header: "Long description",
@@ -224,7 +225,7 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
       },
     },
     { id: "seoTitle", header: "SEO title", group: "SEO", width: 220, cell: (row) => text(row.rec, "seoTitle", seo(row.rec).title ?? "") },
-    { id: "seoDescription", header: "Meta description", group: "SEO", width: 260, cell: (row) => text(row.rec, "seoDescription", seo(row.rec).description ?? "") },
+    { id: "seoDescription", header: "Meta description", group: "SEO", width: 260, cell: (row) => text(row.rec, "seoDescription", seo(row.rec).description ?? "", { multiline: true }) },
     { id: "slug", header: "URL handle", group: "SEO", width: 200, cell: (row) => text(row.rec, "slug", row.rec.slug, { mono: true }) },
     ...(isCat
       ? ([
@@ -261,8 +262,13 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
   ];
 
   const hidden = useColumnVisibility(`${kind}-bulk`, columns);
-  const shown = columns.filter((c) => c.locked || hidden.isVisible(c.id));
-  const rows: TRow[] = recs.map((rec) => ({ id: rec.id, rec }));
+  const layout = useGridLayout(`${kind}-bulk`);
+  const shown = layout.arrange(columns.filter((c) => c.locked || hidden.isVisible(c.id)));
+  // The lists come back whole, but only a screenful of rows is drawn; the rest mount as the user scrolls down.
+  const [shownCount, setShownCount] = useState(25);
+  const hasMore = recs.length > shownCount;
+  const loadMore = useCallback(() => setShownCount((n) => n + 25), []);
+  const rows: TRow[] = recs.slice(0, shownCount).map((rec) => ({ id: rec.id, rec }));
   const back = isCat ? "/categories" : "/collections";
 
   if (ids.length === 0) {
@@ -295,7 +301,7 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
           <Button variant="outline" size="icon" aria-label="Redo" disabled={!ed.canRedo} onClick={ed.redo}>
             <Redo2 />
           </Button>
-          <GridColumnsMenu columns={columns} isVisible={hidden.isVisible} onToggle={hidden.toggle} onReset={hidden.reset} />
+          <GridColumnsMenu columns={columns} isVisible={hidden.isVisible} onToggle={hidden.toggle} onReset={() => { hidden.reset(); layout.reset(); }} />
         </div>
       </div>
 
@@ -321,7 +327,7 @@ export function TaxonomyBulkEditor({ kind }: { kind: Kind }) {
       ) : list.isError ? (
         <p role="alert" className="text-destructive">{errorMessage(list.error)}</p>
       ) : (
-        <BulkGrid columns={shown} rows={rows} collapsed={new Set<string>()} onToggleCollapsed={() => undefined} className="max-h-[calc(100dvh-12rem)]" empty={<p className="py-16 text-center text-muted-foreground">These {nounPlural} could not be found.</p>} />
+        <BulkGrid columns={shown} rows={rows} collapsed={new Set<string>()} onToggleCollapsed={() => undefined} className="max-h-[calc(100dvh-12rem)]" layout={layout} hasMore={hasMore} loadingMore={false} onLoadMore={loadMore} empty={<p className="py-16 text-center text-muted-foreground">These {nounPlural} could not be found.</p>} />
       )}
 
       <MediaPickerDialog
