@@ -14,7 +14,11 @@ const line = z.string().min(1).max(200);
 const para = z.string().min(1).max(600);
 const iconItem = z.object({ icon: iconNameSchema.default("check"), label: line });
 
+/** Keep the section's own top and bottom padding. Off, the widget draws none, so a Section or Container around it sets the spacing. */
+const defaultPadding = z.boolean().default(true);
+
 export const MkHeroSchema = z.object({
+  defaultPadding,
   stamp: z.string().max(80).default(""),
   title: z.string().min(1).max(160),
   lead: z.string().max(600).default(""),
@@ -23,13 +27,16 @@ export const MkHeroSchema = z.object({
 });
 export type MkHeroProps = z.infer<typeof MkHeroSchema>;
 
-export const MkIncludedSchema = z.object({ label: line, items: z.array(iconItem).min(1).max(8) });
+export const MkIncludedSchema = z.object({ defaultPadding, label: line, items: z.array(iconItem).min(1).max(8) });
 export type MkIncludedProps = z.infer<typeof MkIncludedSchema>;
 
-export const MkStatementSchema = z.object({ text: para, muted: z.string().max(600).default("") });
+export const MkStatementSchema = z.object({ defaultPadding, text: para, muted: z.string().max(600).default("") });
 export type MkStatementProps = z.infer<typeof MkStatementSchema>;
 
 export const MkFeaturesSchema = z.object({
+  defaultPadding,
+  /** Space inside each card, left and right, in pixels (phones). */
+  cardSidePadding: z.number().int().min(0).max(64).default(16),
   eyebrow: z.string().max(80).default(""),
   title: line,
   intro: z.string().max(600).default(""),
@@ -49,12 +56,14 @@ export const MkFeaturesSchema = z.object({
 export type MkFeaturesProps = z.infer<typeof MkFeaturesSchema>;
 
 export const MkStepsSchema = z.object({
+  defaultPadding,
   label: line,
   items: z.array(z.object({ icon: iconNameSchema.default("check"), title: line, body: para })).min(1).max(6),
 });
 export type MkStepsProps = z.infer<typeof MkStepsSchema>;
 
 export const MkBandSchema = z.object({
+  defaultPadding,
   title: line,
   items: z.array(z.object({ name: z.string().min(1).max(40), note: z.string().max(120).default("") })).min(1).max(8),
 });
@@ -68,6 +77,7 @@ export const MkFaqSchema = z.object({
 export type MkFaqProps = z.infer<typeof MkFaqSchema>;
 
 export const MkFinalCallSchema = z.object({
+  defaultPadding,
   title: line,
   text: z.string().max(300).default(""),
   showPlansLink: z.boolean().default(true),
@@ -75,6 +85,7 @@ export const MkFinalCallSchema = z.object({
 export type MkFinalCallProps = z.infer<typeof MkFinalCallSchema>;
 
 export const MkDocHeaderSchema = z.object({
+  defaultPadding,
   eyebrow: z.string().max(80).default(""),
   title: z.string().min(1).max(200),
   intro: z.string().max(600).default(""),
@@ -97,6 +108,7 @@ export const MkValuesSchema = z.object({
 export type MkValuesProps = z.infer<typeof MkValuesSchema>;
 
 export const MkPricingSchema = z.object({
+  defaultPadding,
   heading: z.string().max(200).default("Plans you can read in one go."),
   description: z.string().max(400).default("Prices in rupees, plus GST. Every plan starts with a 14-day free trial."),
 });
@@ -203,6 +215,8 @@ export function websiteThemeCss(theme: MkThemeProps | null | undefined): { css: 
     if (t.radius) keep.push(/^--bs-radius$/);
     if (t.buttons) keep.push(/^--bs-btn-(radius|pad|fs|case)$/);
     if (t.icons) keep.push(/^--bs-icon-(size|weight|color-dark|color-light)$/);
+    // Page width and the Section / Container spacing: store layouts read these, so a Container on a website page is as wide as the theme says.
+    if (t.layout) keep.push(/^--bs-site-w-[dtm]$/, /^--bs-(sec|cnt)-[dtm]-/);
     const widgetVars = Object.entries(bs).filter(([k]) => keep.some((r) => r.test(k))).map(([k, v]) => `${k}:${v}`);
     if (widgetVars.length > 0) css.push(`.mk{${widgetVars.join(";")}}`);
     fontsHref = googleFontsHref(t);
@@ -343,15 +357,15 @@ const block = <T,>(type: BlockType, schema: z.ZodType<T>, defaultProps: T, rende
 });
 
 export const MARKETING_BLOCK_DEFINITIONS = {
-  MkHero: block("MkHero", MkHeroSchema, { stamp: "", title: "A clear headline for this page", lead: "One or two sentences on what this page offers.", showNameChecker: true, fine: "" }, V.MkHeroView),
-  MkIncluded: block("MkIncluded", MkIncludedSchema, { label: "Included on every plan", items: [{ icon: "check", label: "A point" }] }, V.MkIncludedView),
-  MkStatement: block("MkStatement", MkStatementSchema, { text: "A short statement.", muted: "" }, V.MkStatementView),
-  MkFeatures: block("MkFeatures", MkFeaturesSchema, { eyebrow: "", title: "What you get", intro: "", tone: "soft", items: [{ title: "A feature", body: "What it does for the store." }], mobileAccordion: true, iconPosition: "right", iconStyle: "plus", iconSize: 18, rowPadding: 14, singleOpen: false, openFirst: false }, V.MkFeaturesView),
-  MkSteps: block("MkSteps", MkStepsSchema, { label: "How it works", items: [{ icon: "check", title: "A step", body: "What happens in this step." }] }, V.MkStepsView),
-  MkBand: block("MkBand", MkBandSchema, { title: "A short line on a dark band.", items: [{ name: "Name", note: "A short note" }] }, V.MkBandView),
+  MkHero: block("MkHero", MkHeroSchema, { defaultPadding: true, stamp: "", title: "A clear headline for this page", lead: "One or two sentences on what this page offers.", showNameChecker: true, fine: "" }, V.MkHeroView),
+  MkIncluded: block("MkIncluded", MkIncludedSchema, { defaultPadding: true, label: "Included on every plan", items: [{ icon: "check", label: "A point" }] }, V.MkIncludedView),
+  MkStatement: block("MkStatement", MkStatementSchema, { defaultPadding: true, text: "A short statement.", muted: "" }, V.MkStatementView),
+  MkFeatures: block("MkFeatures", MkFeaturesSchema, { defaultPadding: true, cardSidePadding: 16, eyebrow: "", title: "What you get", intro: "", tone: "soft", items: [{ title: "A feature", body: "What it does for the store." }], mobileAccordion: true, iconPosition: "right", iconStyle: "plus", iconSize: 18, rowPadding: 14, singleOpen: false, openFirst: false }, V.MkFeaturesView),
+  MkSteps: block("MkSteps", MkStepsSchema, { defaultPadding: true, label: "How it works", items: [{ icon: "check", title: "A step", body: "What happens in this step." }] }, V.MkStepsView),
+  MkBand: block("MkBand", MkBandSchema, { defaultPadding: true, title: "A short line on a dark band.", items: [{ name: "Name", note: "A short note" }] }, V.MkBandView),
   MkFaq: block("MkFaq", MkFaqSchema, { eyebrow: "FAQ", title: "Straight answers.", items: [{ question: "A question?", answer: "A clear answer." }] }, V.MkFaqView),
-  MkFinalCall: block("MkFinalCall", MkFinalCallSchema, { title: "Open your store today.", text: "14-day free trial. No card needed to start.", showPlansLink: true }, V.MkFinalCallView),
-  MkDocHeader: block("MkDocHeader", MkDocHeaderSchema, { eyebrow: "", title: "Page title", intro: "" }, V.MkDocHeaderView),
+  MkFinalCall: block("MkFinalCall", MkFinalCallSchema, { defaultPadding: true, title: "Open your store today.", text: "14-day free trial. No card needed to start.", showPlansLink: true }, V.MkFinalCallView),
+  MkDocHeader: block("MkDocHeader", MkDocHeaderSchema, { defaultPadding: true, eyebrow: "", title: "Page title", intro: "" }, V.MkDocHeaderView),
   MkDocSection: block("MkDocSection", MkDocSectionSchema, { heading: "Section heading", body: "Write this section here.", checks: [], after: "" }, V.MkDocSectionView),
   MkValues: block("MkValues", MkValuesSchema, { heading: "", items: [{ icon: "check", text: "A short point." }] }, V.MkValuesView),
   MkHeader: block("MkHeader", MkHeaderSchema, MkHeaderSchema.parse({}), V.MkHeaderView),

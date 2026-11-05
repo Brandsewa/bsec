@@ -472,13 +472,13 @@
 /* Feature grid: icon above the heading; on phones each card folds to its title. */
 .mk .cell-ic{display:inline-flex;margin-bottom:12px;color:var(--ink)}
 .mk .cell-fold{display:none}
-.mk .cell-fold summary{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:var(--mkf-pad,14px) 0;cursor:pointer;list-style:none}
+.mk .cell-fold summary{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:var(--mkf-pad,14px) var(--mkf-px,16px);cursor:pointer;list-style:none}
 .mk .cell-fold summary::-webkit-details-marker{display:none}
 .mk .cell-fold.ind-left summary{justify-content:flex-start}
 .mk .cell-ttl{display:flex;align-items:center;gap:10px;min-width:0}
 .mk .cell-ttl .cell-ic{margin:0}
 .mk .cell-fold h3{margin:0}
-.mk .cell-fold>p{padding-bottom:var(--mkf-pad,14px);color:var(--mut)}
+.mk .cell-fold>p{padding:0 var(--mkf-px,16px) var(--mkf-pad,14px);color:var(--mut)}
 .mk .cell-ind{flex:none;transition:transform .2s}
 .mk .cell-fold[open] .ind-chevron{transform:rotate(180deg)}
 .mk .cell-fold[open] .ind-v{display:none}
@@ -488,3 +488,12 @@
   .mk .mkf-acc .cell-fold{display:block}
   .mk .mkf-acc .cell{padding-block:0}
 }
+
+/* "Keep default padding" off: the widget draws no top or bottom padding of its own, so a Section or Container sets it. */
+.mk .sec.nopad,.mk .doc-head.nopad,.mk .cta.nopad{padding-block:0}
+.mk .nopad .hero-in,.mk .nopad .band-in,.mk .nopad .strip-in{padding-block:0;min-height:0}
+.mk .steps.nopad li{padding-block:0}
+
+/* A store widget placed inside a Section or Container: the layout element owns the spacing (its own padding settings),
+   so the widget adds none of its own on top. The width follows the theme's page width through --bs-site-w-*. */
+.mk :is(.brxe-section,.brxe-container) .bsb[class*="bsb-py-"]:not(.brxe-section):not(.brxe-container){padding-block:0}

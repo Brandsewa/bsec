@@ -126,4 +126,26 @@ describe("website builder round two", () => {
     expect(css).toContain("--bs-h1-d:2.5rem");
     expect(css).toContain("--bs-font-heading");
   });
+  it("the page width and layout spacing reach store layouts on website pages", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ tokens: { layout: { desktop: { siteWidth: "1380px" } } } }));
+    expect(css).toContain("--bs-site-w-d:1380px");
+  });
+
+  it("every website widget can drop its own top and bottom padding", () => {
+    const html = (type: keyof typeof MARKETING_BLOCK_DEFINITIONS, defaultPadding: boolean) => {
+      const def = MARKETING_BLOCK_DEFINITIONS[type];
+      const block = { id: "b1", type, version: 1, props: { ...(def.defaultProps as object), defaultPadding } } as BlockInstance;
+      return renderToStaticMarkup(<>{renderBlockTree([block], {})}</>);
+    };
+    expect(MkFeaturesSchema.parse({ title: "t", items: [{ title: "a", body: "b" }] }).defaultPadding).toBe(true);
+    for (const type of ["MkHero", "MkStatement", "MkFeatures", "MkSteps", "MkBand", "MkFinalCall", "MkIncluded", "MkPricing", "MkDocHeader"] as const) {
+      expect(html(type, true), type).not.toContain("nopad");
+      expect(html(type, false), type).toContain("nopad");
+    }
+  });
+
+  it("feature cards get side padding on phones", () => {
+    const parsed = MkFeaturesSchema.parse({ title: "t", items: [{ title: "a", body: "b" }], cardSidePadding: 24 });
+    expect(parsed.cardSidePadding).toBe(24);
+  });
 });

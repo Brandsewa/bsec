@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-05
 - **Agent:** claude
-- **Branch:** `feat/website-builder-round2` (not merged yet)
+- **Branch:** `feat/website-builder-round2` (merged in #233, 67fb052)
 - **Area:** blocks, block-editor, domain, platform, web
 - **Type:** feature
 - **Supersedes:** none

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-05
 - **Agent:** claude
-- **Branch:** `feat/website-theme-settings` (not merged yet)
+- **Branch:** `feat/website-theme-settings` (merged in #232, ca07e7a)
 - **Area:** blocks, block-editor, web
 - **Type:** feature
 - **Supersedes:** the quick colour and font settings added in `2026-11-03-claude-website-batch-a.md` (still honoured when no theme tokens are set)
