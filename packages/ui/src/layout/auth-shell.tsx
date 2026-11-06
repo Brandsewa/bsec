@@ -4,6 +4,7 @@ import * as React from "react";
 import { ThemeToggle } from "../theme/index.ts";
 import { Card } from "../components/ui/card.tsx";
 import { cn } from "../lib/cn.ts";
+import { PlatformLogo } from "./platform-brand.tsx";
 
 export interface AuthShellProps {
   brand?: {
@@ -59,6 +60,8 @@ export function AuthShell({
               <div className="h-10 w-10 flex items-center justify-center">
                 {brandLogo}
               </div>
+            ) : variant !== "store" ? (
+              <PlatformLogo />
             ) : null}
             {brandName && variant !== "store" ? (
               <div className="text-xs font-semibold tracking-wider uppercase text-[var(--muted-foreground)]">

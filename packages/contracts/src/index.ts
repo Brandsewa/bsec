@@ -24,6 +24,7 @@ import {
   platformStorageContract,
   platformIntegrationsContract,
   platformSettingsContract,
+  platformBrandingContract,
 } from "./platform.ts";
 import { storefrontContract } from "./storefront.ts";
 import { platformNotificationsContract } from "./notifications.ts";
@@ -109,6 +110,7 @@ export const platformContract = {
   storage: platformStorageContract,
   integrations: platformIntegrationsContract,
   settings: platformSettingsContract,
+  branding: platformBrandingContract,
 };
 
 export type StoreContract = typeof storeContract;

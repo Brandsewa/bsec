@@ -52,6 +52,7 @@ import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { StorageSettings } from "./pages/StorageSettings.tsx";
+import { Branding } from "./pages/Branding.tsx";
 import { NotificationManager } from "./pages/NotificationManager.tsx";
 import { IntegrationsHub } from "./pages/integrations/IntegrationsHub.tsx";
 import { NotificationsHub } from "./pages/integrations/NotificationsHub.tsx";
@@ -609,6 +610,18 @@ const integrationsWhatsAppRoute = createRoute({
   ),
 });
 
+const brandingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/branding",
+  component: Branding,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
 const integrationsStorageRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/integrations/storage",
@@ -730,6 +743,7 @@ export const routeTree = rootRoute.addChildren([
     integrationsSmsRoute,
     integrationsWhatsAppRoute,
     integrationsStorageRoute,
+    brandingRoute,
     integrationsPaymentsRoute,
     integrationsAuthRoute,
     integrationsBillingRoute,

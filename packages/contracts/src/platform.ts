@@ -1669,3 +1669,39 @@ export const platformSettingsContract = {
     )
     .output(z.object({ ok: z.boolean(), requireStaffMfa: z.boolean() })),
 };
+
+const BrandAssetSchema = z.object({
+  url: z.string(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  alt: z.string().optional(),
+});
+const BrandLogoSetSchema = z.object({ full: BrandAssetSchema.nullable(), icon: BrandAssetSchema.nullable() });
+const BrandButtonSchema = z.object({ background: z.string(), text: z.string() });
+/** Platform brand tokens ("dark" and "light" name the surface the asset sits on). Validated server-side by parseBrandTokens. */
+export const PlatformBrandTokensSchema = z.object({
+  logo: z.object({ dark: BrandLogoSetSchema, light: BrandLogoSetSchema }),
+  favicon: BrandAssetSchema.nullable(),
+  color: z.object({ primary: z.string(), secondary: z.string() }),
+  button: z.object({ dark: BrandButtonSchema, light: BrandButtonSchema }),
+});
+
+/** Platform branding (Super Admin). Read: any staff. Update: platform_admin and above. */
+export const platformBrandingContract = {
+  get: oc.route({ method: "GET", path: "/platform/branding" }).output(
+    z.object({
+      tokens: PlatformBrandTokensSchema,
+      /** Built-in brand used before anything is saved ("Reset to defaults"). */
+      defaults: PlatformBrandTokensSchema,
+      css: z.string(),
+      version: z.number(),
+      explicit: z.boolean(),
+      updatedAt: z.string().nullable(),
+      updatedByEmail: z.string().nullable(),
+    }),
+  ),
+  update: oc
+    .route({ method: "POST", path: "/platform/branding" })
+    .input(PlatformBrandTokensSchema)
+    .output(z.object({ ok: z.boolean(), version: z.number() })),
+};

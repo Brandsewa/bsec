@@ -180,6 +180,8 @@ import {
   updatePlatformBillingSettings,
   testPlatformBillingConnection,
   getPlatformSettings,
+  getPlatformBrand,
+  updatePlatformBrand,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
@@ -1009,6 +1011,12 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return updatePlatformSettings(context.rt, staffUserId, input, context.meta);
     }),
+  },
+  branding: {
+    get: os.branding.get.use(requirePlatformStaff).handler(async ({ context }) => getPlatformBrand(context.rt, actor(context))),
+    update: os.branding.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) =>
+      updatePlatformBrand(context.rt, actor(context), input, context.meta),
+    ),
   },
 });
 

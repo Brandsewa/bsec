@@ -652,6 +652,13 @@
       "when": 1793755700000,
       "tag": "0098_market_price_fast_path",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1793755800000,
+      "tag": "0099_platform_branding",
+      "breakpoints": true
     }
   ]
 }
