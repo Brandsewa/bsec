@@ -11,6 +11,7 @@ export interface PlatformBrand {
     favicon: { url: string } | null;
     identity?: { name: string; tagline: string };
     font?: string;
+    logoSize?: { width: number | null; height: number | null };
   };
 }
 
@@ -66,12 +67,21 @@ export function usePlatformBrand(): PlatformBrand | null {
   );
 }
 
-/** The platform logo for the active theme (dark logo on dark surfaces). Renders nothing until a brand is saved. */
+/** True once a platform brand with a full (horizontal) logo is loaded: sign-in pages then show it instead of their own mark. */
+export function usePlatformLogoSet(): boolean {
+  const brand = usePlatformBrand();
+  return Boolean(brand && (brand.tokens.logo.dark.full || brand.tokens.logo.light.full));
+}
+
+/**
+ * The platform logo for the active theme (the dark asset on dark surfaces). `full` is the horizontal logo and never falls
+ * back to the icon. Size comes from Super Admin > Branding (`--brand-logo-w/h`); automatic sizes use a 40px height.
+ */
 export function PlatformLogo({ kind = "full", className }: { kind?: "full" | "icon"; className?: string | undefined }) {
   const brand = usePlatformBrand();
   if (!brand) return null;
   const { dark, light } = brand.tokens.logo;
-  const pick = (s: typeof dark) => (kind === "full" ? (s.full ?? s.icon) : (s.icon ?? s.full));
+  const pick = (s: typeof dark) => (kind === "full" ? s.full : s.icon);
   const d = pick(dark) ?? pick(light);
   const l = pick(light) ?? d;
   if (!d || !l) {
@@ -79,10 +89,12 @@ export function PlatformLogo({ kind = "full", className }: { kind?: "full" | "ic
     const name = brand.tokens.identity?.name;
     return name ? <span className={className ?? "text-lg font-semibold"}>{name}</span> : null;
   }
+  const style = kind === "full" ? ({ width: "var(--brand-logo-w, auto)", height: "var(--brand-logo-h, 40px)" } as const) : undefined;
+  const cls = className ?? (kind === "full" ? "max-w-full object-contain" : "size-8 object-contain");
   return (
     <>
-      <img src={l.url} alt={l.alt || "Logo"} className={`${className ?? "h-10 max-w-48 object-contain"} dark:hidden`} />
-      <img src={d.url} alt={d.alt || "Logo"} className={`hidden ${className ?? "h-10 max-w-48 object-contain"} dark:block`} />
+      <img src={l.url} alt={l.alt || "Logo"} style={style} className={`${cls} dark:hidden`} />
+      <img src={d.url} alt={d.alt || "Logo"} style={style} className={`hidden ${cls} dark:block`} />
     </>
   );
 }

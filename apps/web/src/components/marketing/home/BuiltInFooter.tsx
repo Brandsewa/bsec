@@ -1,3 +1,8 @@
+"use client";
+
+import { useContext } from "react";
+import { BrandLogoImg } from "@bs/blocks";
+import { SiteNavContext } from "./site-nav.tsx";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ADDRESS_LINE, SITE } from "../landing/site-info.ts";
@@ -20,12 +25,13 @@ function FootCol({ title, children }: { title: string; children: ReactNode }) {
 
 /** The built-in footer. The signup page is a client component, so it uses this one directly. */
 export function BuiltInFooter() {
+  const nav = useContext(SiteNavContext);
   return (
     <footer className="foot">
       <div className="wrap">
         <div className="foot-grid">
           <div className="foot-brand">
-            <Link className="logo" href="/" aria-label={`${SITE.product} home`}><i>B</i>{SITE.product}</Link>
+            <Link className="logo" href="/" aria-label={`${SITE.product} home`}><BrandLogoImg logo={nav?.brandLogo} name={SITE.product} fallback={<><i>B</i>{SITE.product}</>} /></Link>
             <p>{SITE.product} ({SITE.domain}) is a product of <a href={SITE.parentUrl} rel="noopener">{SITE.legalName}</a>.</p>
             <address>
               {ADDRESS_LINE}

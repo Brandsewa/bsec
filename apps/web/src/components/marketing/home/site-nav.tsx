@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, type ReactNode } from "react";
-import type { MkHeaderProps } from "@bs/blocks";
+import type { BrandLogoPair, MkHeaderProps } from "@bs/blocks";
 
 export interface SiteNavLink {
   label: string;
@@ -15,10 +15,12 @@ export interface SiteNav {
   header: MkHeaderProps | null;
   /** The announcement bar, drawn on the server. */
   announcement: ReactNode;
+  /** The saved platform logo (Super Admin > Branding), or null for the built-in mark. */
+  brandLogo: BrandLogoPair | null;
 }
 
 export const SiteNavContext = createContext<SiteNav | null>(null);
 
-export function SiteNavProvider({ links, header = null, announcement = null, children }: { links: SiteNavLink[] | null; header?: MkHeaderProps | null; announcement?: ReactNode; children: ReactNode }) {
-  return <SiteNavContext.Provider value={{ links, header, announcement }}>{children}</SiteNavContext.Provider>;
+export function SiteNavProvider({ links, header = null, announcement = null, brandLogo = null, children }: { links: SiteNavLink[] | null; header?: MkHeaderProps | null; announcement?: ReactNode; brandLogo?: BrandLogoPair | null; children: ReactNode }) {
+  return <SiteNavContext.Provider value={{ links, header, announcement, brandLogo }}>{children}</SiteNavContext.Provider>;
 }

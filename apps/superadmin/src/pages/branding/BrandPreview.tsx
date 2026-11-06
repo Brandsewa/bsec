@@ -11,6 +11,7 @@ export interface PreviewTokens {
   color: { primary: string; secondary: string };
   button: { dark: { background: string; text: string }; light: { background: string; text: string } };
   identity: { name: string; tagline: string };
+  logoSize: { width: number | null; height: number | null };
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -26,10 +27,11 @@ export function BrandPreview({ tokens, defaults, fontStack }: { tokens: PreviewT
   const primary = ok(tokens.color.primary, defaults.color.primary);
   const secondary = ok(tokens.color.secondary, defaults.color.secondary);
   const set = tokens.logo[theme];
-  const logo = set.full ?? set.icon ?? tokens.logo[dark ? "light" : "dark"].full;
+  // Full logos only: icons are never used as the brand mark.
+  const logo = set.full ?? tokens.logo[dark ? "light" : "dark"].full;
   const emailLogo = tokens.logo.light.full ?? tokens.logo.dark.full;
   const mark = logo ? (
-    <img src={logo.url} alt={logo.alt || "Logo"} className="h-6 max-w-28 object-contain" />
+    <img src={logo.url} alt={logo.alt || "Logo"} className="max-w-full object-contain object-left" style={{ width: tokens.logoSize.width ?? "auto", height: tokens.logoSize.height ?? 28 }} />
   ) : (
     <span className="text-sm font-semibold">{tokens.identity.name || "Your brand"}</span>
   );

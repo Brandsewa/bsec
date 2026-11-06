@@ -1,6 +1,7 @@
 export * from "./types.ts";
 export * from "./registry.ts";
 export * from "./marketing-blocks.ts";
+export * from "./brand-logo.tsx";
 export * from "./document.ts";
 export * from "./sanitize.ts";
 export * from "./render.ts";

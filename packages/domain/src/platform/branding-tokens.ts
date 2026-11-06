@@ -36,6 +36,8 @@ export interface PlatformBrandTokens {
   /** Empty strings mean "not set": consumers keep their built-in wording. */
   identity: { name: string; tagline: string };
   font: PlatformBrandFont;
+  /** Display size in px of the FULL logos on every surface (not icons). Null = automatic. */
+  logoSize: { width: number | null; height: number | null };
 }
 
 export const DEFAULT_BRAND: PlatformBrandTokens = {
@@ -48,6 +50,7 @@ export const DEFAULT_BRAND: PlatformBrandTokens = {
   },
   identity: { name: "", tagline: "" },
   font: "system",
+  logoSize: { width: null, height: null },
 };
 
 export interface BrandIssue {
@@ -151,6 +154,18 @@ export function parseBrandTokens(
     out.identity[k] = (identity[k] as string).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, max);
   }
 
+  const size = obj(r.logoSize);
+  for (const k of ["width", "height"] as const) {
+    if (size[k] === undefined) continue;
+    if (size[k] === null || size[k] === "") {
+      out.logoSize[k] = null;
+      continue;
+    }
+    const n = Number(size[k]);
+    if (Number.isFinite(n) && n >= 8 && n <= 600) out.logoSize[k] = Math.round(n);
+    else issues.push({ field: `logoSize.${k}`, message: "Use a size between 8 and 600 px." });
+  }
+
   if (r.font !== undefined) {
     if (typeof r.font === "string" && Object.prototype.hasOwnProperty.call(PLATFORM_BRAND_FONTS, r.font)) out.font = r.font as PlatformBrandFont;
     else issues.push({ field: "font", message: `Choose one of: ${Object.keys(PLATFORM_BRAND_FONTS).join(", ")}.` });
@@ -185,5 +200,18 @@ export function buildBrandCss(t: PlatformBrandTokens): string {
     `--brand-secondary:${t.color.secondary};--brand-secondary-foreground:${readableOn(t.color.secondary)};` +
     `--brand-button-bg:${t.button[theme].background};--brand-button-fg:${t.button[theme].text};`;
   const ramp = Object.entries(shadeRamp(t.color.primary)).map(([k, v]) => `--brand-primary-${k}:${v};`).join("");
-  return `:root{${vars("light")}${ramp}--brand-font:${PLATFORM_BRAND_FONTS[t.font]};}.dark{${vars("dark")}}`;
+  // Logo size: nothing is emitted while both are automatic, so each surface keeps its own default height.
+  const { width, height } = t.logoSize;
+  const size = width || height ? `--brand-logo-w:${width ? `${width}px` : "auto"};--brand-logo-h:${height ? `${height}px` : "auto"};` : "";
+  return `:root{${vars("light")}${ramp}${size}--brand-font:${PLATFORM_BRAND_FONTS[t.font]};}.dark{${vars("dark")}}`;
+}
+
+/**
+ * The full (horizontal) logo for each surface. Icons are never used here. "dark" is the asset for dark surfaces; when only
+ * one is set it serves both.
+ */
+export function brandLogoPair(t: PlatformBrandTokens): { dark: BrandAsset | null; light: BrandAsset | null } {
+  const dark = t.logo.dark.full ?? t.logo.light.full;
+  const light = t.logo.light.full ?? t.logo.dark.full;
+  return { dark, light };
 }

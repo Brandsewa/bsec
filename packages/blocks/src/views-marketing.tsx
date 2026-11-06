@@ -1,5 +1,6 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
+import { BrandLogoImg } from "./brand-logo.tsx";
 import { MK_HEADER_LINKS } from "./marketing-blocks.ts";
 import type { CSSProperties, ReactNode } from "react";
 import type { BlockRenderArgs } from "./types.ts";
@@ -266,7 +267,7 @@ export function MkHeaderView({ props, ctx }: BlockRenderArgs<MkHeaderProps>) {
   return (
     <header className="top">
       <div className={`wrap top-in lay-${props.layout}`}>
-        <span className="logo"><i>{props.brand.slice(0, 1)}</i>{props.brand}</span>
+        <span className="logo"><BrandLogoImg logo={props.brandLogo} name={props.brand} fallback={<><i>{props.brand.slice(0, 1)}</i>{props.brand}</>} /></span>
         <nav className="links" aria-label="Main">
           {links.map((l) => (<a key={l.href + l.label} href={l.href}>{l.label}</a>))}
         </nav>
@@ -288,7 +289,7 @@ export function MkFooterView({ props }: BlockRenderArgs<MkFooterProps>) {
       <div className="wrap">
         <div className="foot-grid">
           <div className="foot-brand">
-            <span className="logo"><i>{props.brand.slice(0, 1)}</i>{props.brand}</span>
+            <span className="logo"><BrandLogoImg logo={props.brandLogo} name={props.brand} fallback={<><i>{props.brand.slice(0, 1)}</i>{props.brand}</>} /></span>
             <Prose text={props.about} />
             <address><Prose text={props.contact} /></address>
           </div>

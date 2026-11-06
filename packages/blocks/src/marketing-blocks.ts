@@ -246,7 +246,17 @@ export type MkCompanyProps = z.infer<typeof MkCompanySchema>;
 const footerLink = z.object({ label: z.string().min(1).max(60), href: hrefSchema });
 const footerColumn = z.object({ title: z.string().min(1).max(40), links: z.array(footerLink).max(10) });
 
+/** Filled in on the server from Super Admin > Branding when the page is drawn; never edited or stored with the page. */
+const brandLogoSchema = z
+  .object({
+    dark: z.object({ url: z.string(), alt: z.string().optional() }).nullable(),
+    light: z.object({ url: z.string(), alt: z.string().optional() }).nullable(),
+  })
+  .nullable()
+  .default(null);
+
 export const MkHeaderSchema = z.object({
+  brandLogo: brandLogoSchema,
   brand: z.string().min(1).max(40).default("BCOM"),
   /** Links come from this menu (Storefront > Navigation); the built-in links show while it has none. */
   menuHandle: z.string().max(80).default("header"),
@@ -299,6 +309,7 @@ export const MK_FOOTER_COLUMNS: Array<{ title: string; links: Array<{ label: str
 ];
 
 export const MkFooterSchema = z.object({
+  brandLogo: brandLogoSchema,
   brand: z.string().min(1).max(40).default("BCOM"),
   /** Markdown: bold, italic and links. */
   about: z.string().max(400).default("BCOM (bcom.si) is a product of [Brand Sewa Digital Private Limited](https://brandsewa.com)."),

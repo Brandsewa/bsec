@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/branding-logo-placement` · brand logo on the website header/footer and sign-in pages, logo size control, Branding page layout; change record `docs/changes/2026-11-06-claude-branding-logo-placement.md` · 2026-11-06
 - claude · `feat/bulk-editor-polish` · bulk editor follow-ups: resizable and movable columns, click-to-edit text boxes, rows loaded as you scroll, one-row bulk bar; change record `docs/changes/2026-11-05-claude-bulk-editor-polish.md` · 2026-11-05
 - claude · `fix/billing-invoice-currency` · platform invoices carry their currency (USD, no GST for stores outside India), invoice PDF and lists follow it, Activate screen shows a payment-successful notice before opening the store; change record `docs/changes/2026-11-02-claude-billing-invoice-currency.md` · 2026-11-02
 - claude · `feat/order-fulfillment-tracking` · admin order page redesign, partial shipments (`orders.ship`), shopper tracking view; plan `docs/ORDER-TRACKING-PLAN.md`, change record `docs/changes/2026-10-29-claude-order-page-fulfilment-tracking.md` · 2026-10-29

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useContext, useEffect, useState } from "react";
+import { BrandLogoImg } from "@bs/blocks";
 import { useTheme } from "@bs/ui";
 import { CloseIcon, MenuIcon, MoonIcon, SunIcon } from "./icons.tsx";
 import { SiteNavContext } from "./site-nav.tsx";
@@ -55,7 +56,7 @@ export function HomeNav() {
           <MenuIcon />
         </button>
         <Link className="logo" href="/" aria-label={`${brand} home`}>
-          <i>{brand.slice(0, 1)}</i>{brand}
+          <BrandLogoImg logo={nav?.brandLogo} name={brand} fallback={<><i>{brand.slice(0, 1)}</i>{brand}</>} />
         </Link>
         <nav className="links" aria-label="Main">
           {links.map(({ label, href }) => (
@@ -72,7 +73,7 @@ export function HomeNav() {
     <div className="mdrawer-bg" data-open={open} onClick={() => setOpen(false)} aria-hidden="true" />
     <aside id="mk-menu" className="mdrawer" data-open={open} aria-label="Menu">
       <div className="mdrawer-top">
-        <Link className="logo" href="/" onClick={() => setOpen(false)}><i>{brand.slice(0, 1)}</i>{brand}</Link>
+        <Link className="logo" href="/" onClick={() => setOpen(false)}><BrandLogoImg logo={nav?.brandLogo} name={brand} fallback={<><i>{brand.slice(0, 1)}</i>{brand}</>} /></Link>
         <button type="button" className="iconbtn" aria-label="Close menu" onClick={() => setOpen(false)}><CloseIcon /></button>
       </div>
       <nav aria-label="Main">

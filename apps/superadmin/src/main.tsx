@@ -5,10 +5,14 @@ import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { PageSkeleton, ThemeProvider } from "@bs/ui";
+import { PageSkeleton, ThemeProvider, loadPlatformBrand } from "@bs/ui";
+import { webBase } from "./lib/config.ts";
 import { fetchPlatformMe, type PlatformUser } from "./lib/auth.ts";
 import { routeTree } from "./router.tsx";
 import "./index.css";
+
+// The saved platform brand, for the sign-in pages (nobody is logged in yet). A failure keeps the built-in look.
+void loadPlatformBrand(`${webBase()}/api/brand`);
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {

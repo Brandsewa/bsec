@@ -89,14 +89,14 @@ async function mkTemplate(): Promise<string> {
 
 const CASES: Record<string, Case> = {
   "settings.update": { role: "platform_owner", action: "platform_settings.update", input: async () => ({ requireStaffMfa: true }) },
-  "branding.update": { role: "platform_admin", action: "platform_branding.update", input: async () => ({ logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } }, identity: { name: "", tagline: "" }, font: "system" }) },
+  "branding.update": { role: "platform_admin", action: "platform_branding.update", input: async () => ({ logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } }, identity: { name: "", tagline: "" }, font: "system", logoSize: { width: null, height: null } }) },
   "branding.restore": {
     role: "platform_admin",
     action: "platform_branding.restore",
     input: async () => {
       // Restore needs a saved version to point at: save one first and restore that.
       const saved = (await proc("branding.update")(
-        { logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } }, identity: { name: "", tagline: "" }, font: "system" },
+        { logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } }, identity: { name: "", tagline: "" }, font: "system", logoSize: { width: null, height: null } },
         { context: ctxFor(owner.userId, owner.freshSessionAt) },
       )) as { version: number };
       return { version: saved.version };

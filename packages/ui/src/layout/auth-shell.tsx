@@ -4,7 +4,7 @@ import * as React from "react";
 import { ThemeToggle } from "../theme/index.ts";
 import { Card } from "../components/ui/card.tsx";
 import { cn } from "../lib/cn.ts";
-import { PlatformLogo } from "./platform-brand.tsx";
+import { PlatformLogo, usePlatformLogoSet } from "./platform-brand.tsx";
 
 export interface AuthShellProps {
   brand?: {
@@ -17,6 +17,8 @@ export interface AuthShellProps {
   children?: React.ReactNode;
   footer?: React.ReactNode;
   variant?: "platform" | "store" | "centered";
+  /** The title is the product name (not a page heading): the saved platform logo replaces it, leaving only a screen-reader heading. */
+  titleIsBrand?: boolean;
   aside?: React.ReactNode;
   className?: string;
 }
@@ -29,12 +31,15 @@ export function AuthShell({
   children,
   footer,
   variant = "platform",
+  titleIsBrand = false,
   aside,
   className,
 }: AuthShellProps) {
   const desc = description ?? subtitle;
   const brandName = brand?.name;
-  const brandLogo = brand?.logo;
+  // The saved platform logo replaces the old icon and name on staff sign-in pages (not on a store's customer pages).
+  const platformLogo = usePlatformLogoSet() && variant !== "store";
+  const brandLogo = platformLogo ? undefined : brand?.logo;
 
   return (
     <div
@@ -63,15 +68,15 @@ export function AuthShell({
             ) : variant !== "store" ? (
               <PlatformLogo />
             ) : null}
-            {brandName && variant !== "store" ? (
+            {brandName && variant !== "store" && !platformLogo ? (
               <div className="text-xs font-semibold tracking-wider uppercase text-[var(--muted-foreground)]">
                 {brandName}
               </div>
             ) : null}
-            <h1 className="text-xl font-bold tracking-tight text-[var(--foreground)]">
+            <h1 className={cn("text-xl font-bold tracking-tight text-[var(--foreground)]", titleIsBrand && platformLogo && "sr-only")}>
               {title}
             </h1>
-            {desc && variant !== "store" && (
+            {desc && variant !== "store" && !(titleIsBrand && platformLogo) && (
               <p className="text-xs text-[var(--muted-foreground)] text-balance">
                 {desc}
               </p>

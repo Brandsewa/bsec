@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies, headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import { evaluateStorefrontAccess, getPublicPlatformBrand, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
+import { evaluateStorefrontAccess, brandLogoPair, getPublicPlatformBrand, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
@@ -134,7 +134,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         </head>
         <body className="min-h-dvh antialiased">
           <WebThemeProvider always>
-            <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement}>{children}</SiteNavProvider>
+            <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement} brandLogo={brand?.explicit ? brandLogoPair(brand.tokens) : null}>{children}</SiteNavProvider>
           </WebThemeProvider>
         </body>
       </html>
