@@ -1,7 +1,8 @@
 "use client";
 
 import { useContext } from "react";
-import { BrandLogoImg } from "@bs/blocks";
+// Narrow path on purpose: the package barrel would pull every block into this client bundle (50 KB budget).
+import { BrandLogoImg } from "@bs/blocks/brand-logo";
 import { SiteNavContext } from "./site-nav.tsx";
 import type { ReactNode } from "react";
 import Link from "next/link";

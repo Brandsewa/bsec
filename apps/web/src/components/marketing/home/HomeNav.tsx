@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useContext, useEffect, useState } from "react";
-import { BrandLogoImg } from "@bs/blocks";
+// Narrow path on purpose: the package barrel would pull every block into this client bundle (50 KB budget).
+import { BrandLogoImg } from "@bs/blocks/brand-logo";
 import { useTheme } from "@bs/ui";
 import { CloseIcon, MenuIcon, MoonIcon, SunIcon } from "./icons.tsx";
 import { SiteNavContext } from "./site-nav.tsx";

@@ -26,6 +26,8 @@ Owner feedback after phase 3: the saved logo must show on the bcom.si header and
 - Ran: `pnpm typecheck` (17/17), `pnpm lint` (0 errors), `pnpm build`, `branding-tokens.test.ts` 14 pass.
 - NOT verified: any screen in a browser (header, footer, both sign-in pages, Branding page); the real-database platform suites run in CI only.
 
+- Bundle budget: the client header/footer import `BrandLogoImg` from `@bs/blocks/brand-logo` (new subpath export), not the barrel. The barrel pulled every block into `/blog` (187 KB vs the 50 KB budget; caught by `perf-budget-bundle.int.test.ts` in CI, passes after the fix, run locally against a fresh build).
+
 ## Docs updated
 - [x] This record; `progress.md` in-flight line
 - [ ] After merge: Branch line and in-flight line (per AGENTS.md section 5)
