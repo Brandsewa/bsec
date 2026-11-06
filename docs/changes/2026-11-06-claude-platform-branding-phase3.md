@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-06
 - **Agent:** claude
-- **Branch:** `feat/platform-branding-phase3`  (not merged yet)
+- **Branch:** `feat/platform-branding-phase3` (merged in #236, 30df371)
 - **Area:** db, domain, contracts, platform, superadmin, web, ui, docs
 - **Type:** feature
 - **Supersedes:** none
