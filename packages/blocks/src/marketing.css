@@ -46,6 +46,8 @@
 .mk .top{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
 .mk .top-in{display:flex;align-items:center;gap:32px;height:64px}
 .mk .logo{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:16px;letter-spacing:-.01em}
+.mk .logo-img{display:inline-flex;align-items:center}
+.mk .logo-img img{object-fit:contain;object-position:left center;max-width:100%}
 .mk .logo i{display:grid;place-items:center;width:24px;height:24px;border-radius:5px;background:var(--pri);color:var(--pri-ink);font:700 13px var(--sans)}
 .mk .links{display:flex;gap:24px;font-size:14px;font-weight:500;color:var(--mut)}
 .mk .links a:hover{color:var(--ink)}

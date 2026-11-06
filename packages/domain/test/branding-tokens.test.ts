@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BRAND, PLATFORM_BRAND_FONTS, buildBrandCss, parseBrandTokens, shadeRamp } from "../src/platform/branding-tokens.ts";
+import { DEFAULT_BRAND, PLATFORM_BRAND_FONTS, brandLogoPair, buildBrandCss, parseBrandTokens, shadeRamp } from "../src/platform/branding-tokens.ts";
 
 describe("parseBrandTokens", () => {
   it("accepts valid colours and normalises short hex", () => {
@@ -77,5 +77,24 @@ describe("phase 3 tokens", () => {
     expect(css).toContain("--brand-primary-50:");
     expect(css).toContain("--brand-primary-900:");
     expect(css).toContain(`--brand-font:${PLATFORM_BRAND_FONTS.mono}`);
+  });
+});
+
+describe("logo size and the full-logo pair", () => {
+  it("accepts 8 to 600 px or null, rejects the rest", () => {
+    expect(parseBrandTokens({ logoSize: { width: 180, height: null } }).tokens.logoSize).toEqual({ width: 180, height: null });
+    const bad = parseBrandTokens({ logoSize: { width: 2, height: 9999 } });
+    expect(bad.issues.map((i) => i.field).sort()).toEqual(["logoSize.height", "logoSize.width"]);
+  });
+  it("emits size variables only when a size is set, with auto for the other side", () => {
+    expect(buildBrandCss(DEFAULT_BRAND)).not.toContain("--brand-logo");
+    expect(buildBrandCss({ ...DEFAULT_BRAND, logoSize: { width: null, height: 48 } })).toContain("--brand-logo-w:auto;--brand-logo-h:48px;");
+  });
+  it("uses full logos only, one serving both surfaces when alone, never the icon", () => {
+    const asset = { url: "https://x.test/l.png", width: null, height: null, alt: "" };
+    const icon = { url: "https://x.test/i.png", width: null, height: null, alt: "" };
+    const t = { ...DEFAULT_BRAND, logo: { dark: { full: null, icon }, light: { full: asset, icon: null } } };
+    expect(brandLogoPair(t)).toEqual({ dark: asset, light: asset });
+    expect(brandLogoPair({ ...DEFAULT_BRAND, logo: { dark: { full: null, icon }, light: { full: null, icon } } })).toEqual({ dark: null, light: null });
   });
 });

@@ -1686,6 +1686,7 @@ export const PlatformBrandTokensSchema = z.object({
   button: z.object({ dark: BrandButtonSchema, light: BrandButtonSchema }),
   identity: z.object({ name: z.string(), tagline: z.string() }),
   font: z.enum(["system", "rounded", "serif", "mono"]),
+  logoSize: z.object({ width: z.number().nullable(), height: z.number().nullable() }),
 });
 
 /** Platform branding (Super Admin). Read: any staff. Update: platform_admin and above. */

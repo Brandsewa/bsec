@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./brand-logo": "./src/brand-logo.tsx",
     "./blocks.css": "./src/blocks.css",
     "./marketing.css": "./src/marketing.css",
     "./media-image": "./src/media-image.ts",

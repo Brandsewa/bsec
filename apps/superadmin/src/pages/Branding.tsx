@@ -19,6 +19,7 @@ interface Tokens {
   button: { dark: { background: string; text: string }; light: { background: string; text: string } };
   identity: { name: string; tagline: string };
   font: "system" | "rounded" | "serif" | "mono";
+  logoSize: { width: number | null; height: number | null };
 }
 
 // Mirrors PLATFORM_BRAND_FONTS in packages/domain (the server is authoritative); used for the preview only.
@@ -57,13 +58,13 @@ function Contrast({ fg, bg }: { fg: string; bg: string }) {
   return <Badge variant={ok ? "secondary" : "destructive"}>{ratio.toFixed(1)}:1 {ok ? "AA pass" : "AA fail"}</Badge>;
 }
 
-function AssetTile({ label, surface, value, onPick, onClear, disabled }: { label: string; surface: "dark" | "light" | "neutral"; value: Asset; onPick: () => void; onClear: () => void; disabled: boolean }) {
+function AssetTile({ label, surface, shape = "wide", value, onPick, onClear, disabled }: { label: string; surface: "dark" | "light" | "neutral"; shape?: "wide" | "square"; value: Asset; onPick: () => void; onClear: () => void; disabled: boolean }) {
   const bg = surface === "dark" ? "bg-neutral-900" : surface === "light" ? "bg-white" : "bg-muted";
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      <div className={`flex h-24 items-center justify-center rounded-lg border border-border ${bg}`}>
-        {value ? <img src={value.url} alt={value.alt || label} className="max-h-16 max-w-[80%] object-contain" /> : <span className="text-xs text-muted-foreground">Not set</span>}
+      <div className={`flex items-center justify-center rounded-lg border border-border ${shape === "square" ? "aspect-square" : "h-28"} ${bg}`}>
+        {value ? <img src={value.url} alt={value.alt || label} className={shape === "square" ? "max-h-[70%] max-w-[70%] object-contain" : "max-h-20 max-w-[85%] object-contain"} /> : <span className="text-xs text-muted-foreground">Not set</span>}
       </div>
       <div className="flex gap-2">
         <Button type="button" size="sm" variant="outline" onClick={onPick} disabled={disabled} className="gap-1.5">
@@ -94,7 +95,11 @@ export function Branding() {
 
   const allHex = [current.color.primary, current.color.secondary, current.button.dark.background, current.button.dark.text, current.button.light.background, current.button.light.text].every((c) => HEX.test(c));
   const buttonsReadable = (["dark", "light"] as const).every((t) => contrastRatio(current.button[t].text, current.button[t].background) >= 4.5);
-  const valid = allHex && buttonsReadable;
+  const sizeOk = (["width", "height"] as const).every((k) => {
+    const v = current.logoSize[k];
+    return v === null || (v >= 8 && v <= 600);
+  });
+  const valid = allHex && buttonsReadable && sizeOk;
 
   const update = (fn: (t: Tokens) => void) => {
     const next = structuredClone(current);
@@ -131,8 +136,9 @@ export function Branding() {
     }
   };
 
-  const tile = (key: string, label: string, surface: "dark" | "light" | "neutral", value: Asset) => (
+  const tile = (key: string, label: string, surface: "dark" | "light" | "neutral", value: Asset, shape: "wide" | "square" = "wide") => (
     <AssetTile
+      shape={shape}
       label={label}
       surface={surface}
       value={value}
@@ -173,7 +179,7 @@ export function Branding() {
         }
       />
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <div className="grid gap-4">
         <Card>
           <CardHeader>
@@ -183,11 +189,37 @@ export function Branding() {
           <CardContent className="grid gap-6">
             <div className="grid gap-4 sm:grid-cols-2">
               {tile("logo.dark.full", "Dark · Logo", "dark", current.logo.dark.full)}
-              {tile("logo.dark.icon", "Dark · Icon", "dark", current.logo.dark.icon)}
               {tile("logo.light.full", "Light · Logo", "light", current.logo.light.full)}
-              {tile("logo.light.icon", "Light · Icon", "light", current.logo.light.icon)}
             </div>
-            <div className="max-w-xs">{tile("favicon", "Favicon", "neutral", current.favicon)}</div>
+            <div className="grid grid-cols-3 gap-4">
+              {tile("logo.dark.icon", "Dark · Icon", "dark", current.logo.dark.icon, "square")}
+              {tile("logo.light.icon", "Light · Icon", "light", current.logo.light.icon, "square")}
+              {tile("favicon", "Favicon", "neutral", current.favicon, "square")}
+            </div>
+            <div className="grid gap-2">
+              <Label>Logo size</Label>
+              <p className="text-xs text-muted-foreground">Applies to the two logos above on the website, sign-in pages and dashboards, not to icons. Leave blank for automatic.</p>
+              <div className="grid max-w-sm grid-cols-2 gap-3">
+                {(["width", "height"] as const).map((k) => (
+                  <div key={k} className="grid gap-1.5">
+                    <Label htmlFor={`logo-${k}`} className="text-xs capitalize text-muted-foreground">
+                      {k} (px)
+                    </Label>
+                    <Input
+                      id={`logo-${k}`}
+                      type="number"
+                      min={8}
+                      max={600}
+                      inputMode="numeric"
+                      placeholder="Auto"
+                      disabled={!canEdit}
+                      value={current.logoSize[k] ?? ""}
+                      onChange={(e) => update((t) => void (t.logoSize[k] = e.target.value === "" ? null : Number(e.target.value)))}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
