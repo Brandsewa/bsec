@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-06
 - **Agent:** claude
-- **Branch:** `feat/branding-logo-placement`  (not merged yet)
+- **Branch:** `feat/branding-logo-placement` (merged in #238, da17146)
 - **Area:** domain, contracts, blocks, web, ui, superadmin, docs
 - **Type:** feature
 - **Supersedes:** none
@@ -30,4 +30,4 @@ Owner feedback after phase 3: the saved logo must show on the bcom.si header and
 
 ## Docs updated
 - [x] This record; `progress.md` in-flight line
-- [ ] After merge: Branch line and in-flight line (per AGENTS.md section 5)
+- [x] After merge: Branch line and in-flight line
