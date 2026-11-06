@@ -141,8 +141,8 @@ function BrandMark({ tokens }: { tokens: NonNullable<ReturnType<typeof useBrand>
   }
   return (
     <div className="flex items-center">
-      <img src={light.url} alt={light.alt || "Platform logo"} className="h-7 max-w-40 object-contain dark:hidden" />
-      <img src={dark.url} alt={dark.alt || "Platform logo"} className="hidden h-7 max-w-40 object-contain dark:block" />
+      <img src={light.url} alt={light.alt || "Platform logo"} className="h-5 max-w-28 object-contain object-left dark:hidden" />
+      <img src={dark.url} alt={dark.alt || "Platform logo"} className="hidden h-5 max-w-28 object-contain object-left dark:block" />
     </div>
   );
 }

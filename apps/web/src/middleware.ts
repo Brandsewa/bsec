@@ -50,7 +50,11 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
-    pathname.startsWith("/api/rpc/admin/")
+    pathname.startsWith("/api/rpc/admin/") ||
+    // The platform brand (logos, colours, share image, manifest) is public and not about any store: the dashboards' sign-in
+    // pages read it from the platform root host, which the gate would otherwise answer "Store Not Found".
+    pathname === "/api/brand" ||
+    pathname.startsWith("/api/brand/")
   ) {
     return NextResponse.next();
   }
