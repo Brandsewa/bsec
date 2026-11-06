@@ -44,6 +44,7 @@ const INPUTS: Record<string, () => unknown> = {
   "audit.exportCsv": () => ({}),
   "settings.get": () => undefined,
   "branding.get": () => undefined,
+  "branding.history": () => undefined,
   "email.get": () => undefined,
   "email.recentDeliveries": () => ({}),
   "notifications.matrix": () => undefined,

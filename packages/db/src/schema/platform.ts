@@ -209,3 +209,12 @@ export const platformBranding = pgTable("platform_branding", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/** Append-only brand history (migration 0100). Platform-level: no tenant column. */
+export const platformBrandingVersions = pgTable("platform_branding_versions", {
+  version: integer("version").primaryKey(),
+  tokens: jsonb("tokens").notNull(),
+  action: text("action").notNull().default("update"),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});

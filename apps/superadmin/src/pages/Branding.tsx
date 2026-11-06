@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, RotateCcw, Trash2 } from "lucide-react";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, PageContainer, PageHeader, PageSkeleton, SimpleSelect, toast } from "@bs/ui";
 import { MediaPickerDialog } from "@bs/content-admin/media/media-picker-dialog.tsx";
 import type { MediaItem } from "@bs/contracts";
 import { client } from "../lib/orpc.ts";
 import { messageOf } from "../lib/errors.ts";
 import { useHasRole } from "../lib/user-context.tsx";
 import { contrastRatio } from "../lib/contrast.ts";
+import { BrandPreview } from "./branding/BrandPreview.tsx";
+import { BrandHistory } from "./branding/BrandHistory.tsx";
 
 type Asset = { url: string; width?: number | null | undefined; height?: number | null | undefined; alt?: string | undefined } | null;
 interface Tokens {
@@ -15,8 +17,17 @@ interface Tokens {
   favicon: Asset;
   color: { primary: string; secondary: string };
   button: { dark: { background: string; text: string }; light: { background: string; text: string } };
+  identity: { name: string; tagline: string };
+  font: "system" | "rounded" | "serif" | "mono";
 }
 
+// Mirrors PLATFORM_BRAND_FONTS in packages/domain (the server is authoritative); used for the preview only.
+const FONT_OPTIONS = [
+  { value: "system", label: "System sans (default)", stack: "ui-sans-serif,system-ui,sans-serif" },
+  { value: "rounded", label: "Rounded", stack: "ui-rounded,Quicksand,Nunito,system-ui,sans-serif" },
+  { value: "serif", label: "Serif", stack: "ui-serif,Georgia,serif" },
+  { value: "mono", label: "Monospace", stack: "ui-monospace,Menlo,Consolas,monospace" },
+] as const;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -147,6 +158,7 @@ export function Branding() {
         aside={
           canEdit ? (
             <div className="flex items-center gap-2">
+              <BrandHistory canEdit={canEdit} currentVersion={data.version} />
               <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setDraft(structuredClone(data.defaults) as Tokens)}>
                 <RotateCcw className="size-3.5" /> Reset to defaults
               </Button>
@@ -161,6 +173,7 @@ export function Branding() {
         }
       />
 
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="grid gap-4">
         <Card>
           <CardHeader>
@@ -175,6 +188,27 @@ export function Branding() {
               {tile("logo.light.icon", "Light · Icon", "light", current.logo.light.icon)}
             </div>
             <div className="max-w-xs">{tile("favicon", "Favicon", "neutral", current.favicon)}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Identity</CardTitle>
+            <CardDescription>Used as the text logo when no logo is set. Leave blank to keep the built-in wording.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="brand-name">Name</Label>
+              <Input id="brand-name" value={current.identity.name} maxLength={60} disabled={!canEdit} onChange={(e) => update((t) => void (t.identity.name = e.target.value))} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="brand-font">Font</Label>
+              <SimpleSelect id="brand-font" value={current.font} options={FONT_OPTIONS} onChange={(v) => update((t) => void (t.font = v as Tokens["font"]))} />
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="brand-tagline">Tagline</Label>
+              <Input id="brand-tagline" value={current.identity.tagline} maxLength={140} disabled={!canEdit} onChange={(e) => update((t) => void (t.identity.tagline = e.target.value))} />
+            </div>
           </CardContent>
         </Card>
 
@@ -219,6 +253,10 @@ export function Branding() {
             Version {data.version} · saved {new Date(data.updatedAt).toLocaleString()} {data.updatedByEmail ? `by ${data.updatedByEmail}` : ""}
           </p>
         ) : null}
+      </div>
+      <div className="lg:sticky lg:top-4">
+        <BrandPreview tokens={current} defaults={data.defaults as Tokens} fontStack={FONT_OPTIONS.find((f) => f.value === current.font)?.stack ?? FONT_OPTIONS[0].stack} />
+      </div>
       </div>
 
       <MediaPickerDialog open={target !== null} onOpenChange={(o) => !o && setTarget(null)} accept={["image"]} multiple={false} max={1} onSelect={onPicked} title="Choose brand image" />

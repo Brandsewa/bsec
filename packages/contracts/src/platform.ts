@@ -1684,6 +1684,8 @@ export const PlatformBrandTokensSchema = z.object({
   favicon: BrandAssetSchema.nullable(),
   color: z.object({ primary: z.string(), secondary: z.string() }),
   button: z.object({ dark: BrandButtonSchema, light: BrandButtonSchema }),
+  identity: z.object({ name: z.string(), tagline: z.string() }),
+  font: z.enum(["system", "rounded", "serif", "mono"]),
 });
 
 /** Platform branding (Super Admin). Read: any staff. Update: platform_admin and above. */
@@ -1703,5 +1705,20 @@ export const platformBrandingContract = {
   update: oc
     .route({ method: "POST", path: "/platform/branding" })
     .input(PlatformBrandTokensSchema)
+    .output(z.object({ ok: z.boolean(), version: z.number() })),
+  history: oc.route({ method: "GET", path: "/platform/branding/history" }).output(
+    z.array(
+      z.object({
+        version: z.number(),
+        action: z.string(),
+        createdAt: z.string(),
+        updatedByEmail: z.string().nullable(),
+        tokens: PlatformBrandTokensSchema,
+      }),
+    ),
+  ),
+  restore: oc
+    .route({ method: "POST", path: "/platform/branding/restore" })
+    .input(z.object({ version: z.number().int().positive() }))
     .output(z.object({ ok: z.boolean(), version: z.number() })),
 };

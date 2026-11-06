@@ -659,6 +659,13 @@
       "when": 1793755800000,
       "tag": "0099_platform_branding",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1793842200000,
+      "tag": "0100_platform_branding_versions",
+      "breakpoints": true
     }
   ]
 }

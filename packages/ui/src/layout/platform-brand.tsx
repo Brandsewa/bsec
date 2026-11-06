@@ -9,6 +9,8 @@ export interface PlatformBrand {
   tokens: {
     logo: Record<"dark" | "light", { full: { url: string; alt?: string | undefined } | null; icon: { url: string; alt?: string | undefined } | null }>;
     favicon: { url: string } | null;
+    identity?: { name: string; tagline: string };
+    font?: string;
   };
 }
 
@@ -27,7 +29,7 @@ export function setPlatformBrand(brand: PlatformBrand | null): void {
     }
     // css is built server-side from validated hex values only.
     style.textContent = current
-      ? `${current.css}:root,.dark{--primary:var(--brand-primary);--primary-foreground:var(--brand-primary-foreground);--ring:var(--brand-primary);}`
+      ? `${current.css}:root,.dark{--primary:var(--brand-primary);--primary-foreground:var(--brand-primary-foreground);--ring:var(--brand-primary);}${current.tokens.font && current.tokens.font !== "system" ? "body{font-family:var(--brand-font)}" : ""}`
       : "";
     const fav = current?.tokens.favicon?.url;
     if (fav) {
@@ -72,7 +74,11 @@ export function PlatformLogo({ kind = "full", className }: { kind?: "full" | "ic
   const pick = (s: typeof dark) => (kind === "full" ? (s.full ?? s.icon) : (s.icon ?? s.full));
   const d = pick(dark) ?? pick(light);
   const l = pick(light) ?? d;
-  if (!d || !l) return null;
+  if (!d || !l) {
+    // No logo uploaded: fall back to the brand name as a text wordmark, if one is set.
+    const name = brand.tokens.identity?.name;
+    return name ? <span className={className ?? "text-lg font-semibold"}>{name}</span> : null;
+  }
   return (
     <>
       <img src={l.url} alt={l.alt || "Logo"} className={`${className ?? "h-10 max-w-48 object-contain"} dark:hidden`} />
