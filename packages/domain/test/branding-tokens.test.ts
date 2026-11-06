@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BRAND, buildBrandCss, parseBrandTokens } from "../src/platform/branding-tokens.ts";
+import { DEFAULT_BRAND, PLATFORM_BRAND_FONTS, buildBrandCss, parseBrandTokens, shadeRamp } from "../src/platform/branding-tokens.ts";
 
 describe("parseBrandTokens", () => {
   it("accepts valid colours and normalises short hex", () => {
@@ -42,5 +42,40 @@ describe("emailBaseFromBrand", () => {
     expect(e.accent).toBe("#112233");
     expect(e.buttonBackground).toBe("#112233");
     expect(emailBaseFromBrand(parseBrandTokens({ favicon: { url: "/media/f.png" }, logo: { light: { full: { url: "/media/l.png" } } } }).tokens).logoUrl).toBeNull();
+  });
+});
+
+describe("phase 3 tokens", () => {
+  it("cleans identity text and caps its length", () => {
+    const { tokens, issues } = parseBrandTokens({ identity: { name: "  <b>Acme</b>  Co ", tagline: "x".repeat(300) } });
+    expect(issues).toEqual([]);
+    expect(tokens.identity.name).toBe("Acme Co");
+    expect(tokens.identity.tagline).toHaveLength(140);
+  });
+  it("accepts only enumerated fonts", () => {
+    expect(parseBrandTokens({ font: "serif" }).tokens.font).toBe("serif");
+    const bad = parseBrandTokens({ font: "url(javascript:x)" });
+    expect(bad.issues[0]?.field).toBe("font");
+    expect(bad.tokens.font).toBe("system");
+  });
+  it("keeps old rows (no identity or font) valid with defaults", () => {
+    const { tokens, issues } = parseBrandTokens({ color: { primary: "#123456" } });
+    expect(issues).toEqual([]);
+    expect(tokens.identity).toEqual({ name: "", tagline: "" });
+    expect(tokens.font).toBe("system");
+  });
+  it("derives a ramp that keeps the colour at 500, lightens below and darkens above", () => {
+    const r = shadeRamp("#1f6f4a");
+    expect(r[500]).toBe("#1f6f4a");
+    expect(r[50]).not.toBe(r[500]);
+    expect(parseInt(r[50].slice(1), 16)).toBeGreaterThan(parseInt(r[500].slice(1), 16));
+    expect(parseInt(r[900].slice(1), 16)).toBeLessThan(parseInt(r[500].slice(1), 16));
+    expect(Object.keys(r)).toHaveLength(10);
+  });
+  it("emits the ramp and the font variable in css", () => {
+    const css = buildBrandCss({ ...DEFAULT_BRAND, font: "mono" });
+    expect(css).toContain("--brand-primary-50:");
+    expect(css).toContain("--brand-primary-900:");
+    expect(css).toContain(`--brand-font:${PLATFORM_BRAND_FONTS.mono}`);
   });
 });

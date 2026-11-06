@@ -1,6 +1,6 @@
 # Platform Branding plan
 
-Status: proposed (2026-11-05, Claude). Owner: unassigned. Not started.
+Status: phases 1 and 2 merged (#235, 2026-11-05); phase 3 built on `feat/platform-branding-phase3` (2026-11-06, Claude). Not built: invoices/PDFs (no platform-brand PDF exists to wire), Super Admin sign-in pages.
 
 A new **Branding** item in the Super Admin sidebar. It is the single source of truth for the BCom platform's own identity (logos, favicon, colours, buttons). Every platform touch point reads from it, so changing it once updates the marketing website, both dashboards, auth pages and platform emails.
 

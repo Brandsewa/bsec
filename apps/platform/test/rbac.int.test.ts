@@ -143,6 +143,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "branding.get": "platform_support",
   "settings.update": "platform_owner",
   "branding.update": "platform_admin",
+  "branding.history": "platform_support",
+  "branding.restore": "platform_admin",
 };
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
@@ -196,7 +198,8 @@ const INPUT: Record<string, unknown> = {
   "features.restore": { featureKey: "k" },
   "plans.decideRequest": { id: U, decision: "declined" },
   "settings.update": { requireStaffMfa: true },
-  "branding.update": { logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } } },
+  "branding.restore": { version: 1 },
+  "branding.update": { logo: { dark: { full: null, icon: null }, light: { full: null, icon: null } }, favicon: null, color: { primary: "#1f6f4a", secondary: "#1c1f1d" }, button: { dark: { background: "#ffffff", text: "#1c1f1d" }, light: { background: "#1f6f4a", text: "#ffffff" } }, identity: { name: "", tagline: "" }, font: "system" },
   "staff.invite": { email: "i@x.test", role: "platform_support" },
   "staff.updateRole": { userId: U, role: "platform_admin" },
   "staff.deactivate": { userId: U },

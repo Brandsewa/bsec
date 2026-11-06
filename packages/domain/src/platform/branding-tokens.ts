@@ -18,12 +18,24 @@ export interface BrandButton {
   background: string;
   text: string;
 }
+/** Enumerated font stacks: no webfont loading, no merchant-supplied CSS (ADR-010). */
+export const PLATFORM_BRAND_FONTS = {
+  system: 'ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif',
+  rounded: 'ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",Quicksand,Nunito,system-ui,sans-serif',
+  serif: 'ui-serif,Georgia,Cambria,"Times New Roman",serif',
+  mono: 'ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace',
+} as const;
+export type PlatformBrandFont = keyof typeof PLATFORM_BRAND_FONTS;
+
 /** "dark" and "light" name the SURFACE the asset or button sits on (owner decision 2026-11-05). */
 export interface PlatformBrandTokens {
   logo: { dark: BrandLogoSet; light: BrandLogoSet };
   favicon: BrandAsset | null;
   color: { primary: string; secondary: string };
   button: { dark: BrandButton; light: BrandButton };
+  /** Empty strings mean "not set": consumers keep their built-in wording. */
+  identity: { name: string; tagline: string };
+  font: PlatformBrandFont;
 }
 
 export const DEFAULT_BRAND: PlatformBrandTokens = {
@@ -34,6 +46,8 @@ export const DEFAULT_BRAND: PlatformBrandTokens = {
     dark: { background: "#ffffff", text: "#1c1f1d" },
     light: { background: "#1f6f4a", text: "#ffffff" },
   },
+  identity: { name: "", tagline: "" },
+  font: "system",
 };
 
 export interface BrandIssue {
@@ -126,7 +140,42 @@ export function parseBrandTokens(
       btn.text = readableOn(btn.background);
     }
   }
+
+  const identity = obj(r.identity);
+  for (const [k, max] of [["name", 60], ["tagline", 140]] as const) {
+    if (identity[k] === undefined) continue;
+    if (typeof identity[k] !== "string") {
+      issues.push({ field: `identity.${k}`, message: "Use plain text." });
+      continue;
+    }
+    out.identity[k] = (identity[k] as string).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+  }
+
+  if (r.font !== undefined) {
+    if (typeof r.font === "string" && Object.prototype.hasOwnProperty.call(PLATFORM_BRAND_FONTS, r.font)) out.font = r.font as PlatformBrandFont;
+    else issues.push({ field: "font", message: `Choose one of: ${Object.keys(PLATFORM_BRAND_FONTS).join(", ")}.` });
+  }
   return { tokens: out, issues };
+}
+
+export const SHADE_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+
+function mix(a: [number, number, number], b: [number, number, number], t: number): string {
+  const c = a.map((v, i) => Math.round(v + ((b[i] ?? 0) - v) * t));
+  return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Ten-step ramp derived from one colour: tints toward white above 500, shades toward black below. 500 is the colour itself. */
+export function shadeRamp(color: string): Record<(typeof SHADE_STEPS)[number], string> {
+  const n = parseInt(color.slice(1), 16);
+  const rgb: [number, number, number] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const white: [number, number, number] = [255, 255, 255];
+  const black: [number, number, number] = [0, 0, 0];
+  const out = {} as Record<(typeof SHADE_STEPS)[number], string>;
+  for (const step of SHADE_STEPS) {
+    out[step] = step === 500 ? color : step < 500 ? mix(rgb, white, (500 - step) / 500 * 0.92) : mix(rgb, black, (step - 500) / 400 * 0.6);
+  }
+  return out;
 }
 
 /** CSS custom properties for `:root` (light surfaces) and `.dark`. Values are validated hex only, so the string is safe to inline. */
@@ -135,5 +184,6 @@ export function buildBrandCss(t: PlatformBrandTokens): string {
     `--brand-primary:${t.color.primary};--brand-primary-foreground:${readableOn(t.color.primary)};` +
     `--brand-secondary:${t.color.secondary};--brand-secondary-foreground:${readableOn(t.color.secondary)};` +
     `--brand-button-bg:${t.button[theme].background};--brand-button-fg:${t.button[theme].text};`;
-  return `:root{${vars("light")}}.dark{${vars("dark")}}`;
+  const ramp = Object.entries(shadeRamp(t.color.primary)).map(([k, v]) => `--brand-primary-${k}:${v};`).join("");
+  return `:root{${vars("light")}${ramp}--brand-font:${PLATFORM_BRAND_FONTS[t.font]};}.dark{${vars("dark")}}`;
 }

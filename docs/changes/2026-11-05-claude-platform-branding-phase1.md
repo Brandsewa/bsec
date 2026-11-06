@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-05
 - **Agent:** claude
-- **Branch:** `feat/platform-branding`  (not merged yet)
+- **Branch:** `feat/platform-branding` (merged in #235, 4c64e5f)
 - **Area:** db, domain, contracts, platform, superadmin, docs
 - **Type:** feature
 - **Supersedes:** none
@@ -24,9 +24,9 @@ Owner defaults (2026-11-05): "dark" = asset for dark surfaces; platform_admin ma
 - NOT verified: platform real-DB suites (rbac/audit; no Postgres here), any screen in a browser, Super Admin sign-in pages (pre-login, different API origin, not wired).
 
 ## Docs updated
-- [ ] `docs/ARCHITECTURE.md` (route, table, contract) - to do before merge
+- [x] `docs/ARCHITECTURE.md` (migration row)
 - [x] Plan `docs/PLATFORM-BRANDING-PLAN.md`
-- [ ] `progress.md` in-flight line
+- [x] `progress.md` in-flight line (removed after merge)
 
 ## Follow-ups and open questions
 Phase 2 (public brand endpoint, website, store admin, auth pages, email defaults) and phase 3 (history, OG, fonts).

@@ -68,6 +68,14 @@ export async function generateMetadata(): Promise<Metadata> {
         description: "Launch your online store in 10 minutes.",
         robots: { index: indexable, follow: indexable },
         ...(icon ? { icons: { icon } } : {}),
+        ...(brand?.explicit
+          ? {
+              manifest: "/api/brand/manifest",
+              openGraph: { title: brand.tokens.identity.name || "BCOM", description: brand.tokens.identity.tagline || "Launch your online store in 10 minutes.", images: [{ url: "/api/brand/og", width: 1200, height: 630 }] },
+              twitter: { card: "summary_large_image" as const, images: ["/api/brand/og"] },
+              other: { "theme-color": brand.tokens.color.primary },
+            }
+          : {}),
       };
     }
     const { rt } = server();
@@ -111,7 +119,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     const design = websiteThemeCss(chrome.theme);
     // Validated hex-only CSS built from the Super Admin brand; empty until a brand is saved.
     const brand = await getPublicPlatformBrand(server().rt).catch(() => null);
-    const brandCss = brand?.explicit ? brand.css : "";
+    const brandCss = brand?.explicit ? `${brand.css}${brand.tokens.font !== "system" ? "body{font-family:var(--brand-font)}" : ""}` : "";
     const navLinks = await platformSiteHeaderLinks(server().rt._db.db, chrome.header?.menuHandle ?? "header").catch(() => null);
     const announcement = chrome.announcement
       ? renderBlockTree([{ id: "site-announcement", type: "Banner", version: 1, props: chrome.announcement }], { renderBanner: ({ children }) => <BannerClient>{children}</BannerClient> })

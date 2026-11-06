@@ -182,6 +182,8 @@ import {
   getPlatformSettings,
   getPlatformBrand,
   updatePlatformBrand,
+  listPlatformBrandVersions,
+  restorePlatformBrand,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
@@ -1016,6 +1018,10 @@ export const platformRouter = os.router({
     get: os.branding.get.use(requirePlatformStaff).handler(async ({ context }) => getPlatformBrand(context.rt, actor(context))),
     update: os.branding.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) =>
       updatePlatformBrand(context.rt, actor(context), input, context.meta),
+    ),
+    history: os.branding.history.use(requirePlatformStaff).handler(async ({ context }) => listPlatformBrandVersions(context.rt, actor(context))),
+    restore: os.branding.restore.use(requireStaff("platform_admin")).handler(async ({ context, input }) =>
+      restorePlatformBrand(context.rt, actor(context), input.version, context.meta),
     ),
   },
 });
