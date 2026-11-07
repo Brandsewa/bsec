@@ -23,14 +23,23 @@ export interface OrderPricing {
   discountValue: number;
 }
 
-export function priceOrder(input: { subtotal: number; shipping: number; codFee: number; discount?: PricingDiscount | null | undefined }): OrderPricing {
+export function priceOrder(input: {
+  subtotal: number;
+  shipping: number;
+  codFee: number;
+  /** One discount (kept for callers that only ever have one). */
+  discount?: PricingDiscount | null | undefined;
+  /** Every applied discount: goods discounts add up (never below zero), any free-shipping one waives the shipping charge. */
+  discounts?: PricingDiscount[] | null | undefined;
+}): OrderPricing {
   const subtotal = Math.max(0, Math.round(input.subtotal));
   const shipping = Math.max(0, Math.round(input.shipping));
   const codFee = Math.max(0, Math.round(input.codFee));
-  const d = input.discount ?? null;
+  const all = [...(input.discounts ?? []), ...(input.discount ? [input.discount] : [])];
 
-  const freeShipping = d?.type === "free_shipping";
-  const discountTotal = d && !freeShipping ? Math.min(subtotal, Math.max(0, Math.round(d.discountAmount))) : 0;
+  const freeShipping = all.some((d) => d.type === "free_shipping");
+  const goods = all.filter((d) => d.type !== "free_shipping").reduce((sum, d) => sum + Math.max(0, Math.round(d.discountAmount)), 0);
+  const discountTotal = Math.min(subtotal, goods);
   const shippingDiscount = freeShipping ? shipping : 0;
   const shippingTotal = shipping - shippingDiscount;
 

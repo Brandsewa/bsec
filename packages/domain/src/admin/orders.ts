@@ -320,7 +320,21 @@ export async function getAdminOrderDetail(
       .where(eq(schema.orderNotes.orderId, input.id))
       .orderBy(desc(schema.orderNotes.createdAt));
 
+    const appliedDiscounts = await tx
+      .select()
+      .from(schema.orderDiscountApplications)
+      .where(and(eq(schema.orderDiscountApplications.tenantId, ctx.tenantId), eq(schema.orderDiscountApplications.orderId, input.id)))
+      .orderBy(asc(schema.orderDiscountApplications.createdAt));
+
     return {
+      discounts: appliedDiscounts.map((a) => ({
+        code: a.code,
+        title: a.title,
+        discountClass: a.discountClass,
+        type: a.type,
+        amount: Number(a.amount),
+        shippingAmount: Number(a.shippingAmount),
+      })),
       order: {
         id: order.id,
         number: order.number,

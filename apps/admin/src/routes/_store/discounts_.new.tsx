@@ -198,7 +198,7 @@ function CreateDiscountPage() {
                 <Field orientation="horizontal">
                   <Checkbox id="discount-combinable" checked={combinable} onCheckedChange={(c) => setCombinable(c)} />
                   <FieldLabel htmlFor="discount-combinable" className="font-normal">
-                    Can be combined with other discounts
+                    Can be combined with a free-shipping or order discount
                   </FieldLabel>
                 </Field>
                 <Field orientation="horizontal">

@@ -157,6 +157,17 @@ export async function createAdminDiscount(
       throw new Error("Failed to create discount");
     }
 
+    await auditDiscount(tx, ctx, "discount.create", created.id, {
+      code: created.code,
+      title: created.title,
+      type: created.type,
+      value: created.value,
+      minSubtotal: created.minSubtotal,
+      usageLimit: created.usageLimit,
+      perCustomerLimit: created.perCustomerLimit,
+      combinable: created.combinable,
+    });
+
     return {
       id: created.id,
       code: created.code,

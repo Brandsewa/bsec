@@ -112,11 +112,12 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
 
   const formattedSubtotal = money(cart.subtotal);
   // shipping is only known at checkout, so the estimate here is goods minus any goods discount
+  const goodsDiscount = (cart.discounts ?? []).find((d) => !d.freeShipping);
   const estimate = priceOrder({
     subtotal: cart.subtotal,
     shipping: 0,
     codFee: 0,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
   });
 
   return (
@@ -154,9 +155,9 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
               <span className="font-semibold text-foreground">{formattedSubtotal}</span>
             </div>
 
-            {estimate.discountTotal > 0 && cart.discount && (
+            {estimate.discountTotal > 0 && goodsDiscount && (
               <div className="flex justify-between items-center text-sm py-2" data-testid="discount-line">
-                <span className="text-muted-foreground">Discount ({cart.discount.code})</span>
+                <span className="text-muted-foreground">Discount ({goodsDiscount.automatic ? goodsDiscount.title : goodsDiscount.code})</span>
                 <span className="font-semibold text-emerald-700">−{money(estimate.discountTotal)}</span>
               </div>
             )}
@@ -164,7 +165,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
             <div className="flex justify-between items-center text-sm py-2 border-b border-border/60">
               <span className="text-muted-foreground">Shipping</span>
               <span className="text-xs text-muted-foreground">
-                {cart.discount?.freeShipping ? "Free with your code" : "Calculated at checkout"}
+                {(cart.discounts ?? []).some((d) => d.freeShipping) ? "Free with your offer" : "Calculated at checkout"}
               </span>
             </div>
 

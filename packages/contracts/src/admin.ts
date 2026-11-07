@@ -3797,6 +3797,19 @@ export const adminContract = {
             archivedBy: z.string().nullable().optional(),
             tags: z.array(z.string()).default([]),
           }),
+          /** What each discount did to this order (ADR-045): copied at checkout, so it survives later edits to the discount. */
+          discounts: z
+            .array(
+              z.object({
+                code: z.string().nullable(),
+                title: z.string(),
+                discountClass: z.string(),
+                type: z.string(),
+                amount: z.number(),
+                shippingAmount: z.number(),
+              }),
+            )
+            .default([]),
           items: z.array(
             z.object({
               id: z.string().uuid(),

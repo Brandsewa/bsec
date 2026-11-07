@@ -765,7 +765,7 @@ export function CheckoutForm({
             subtotal: cart.subtotal,
             shipping: currentShippingPaise,
             codFee: codFeePaise,
-            discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+            discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
           }).grandTotal,
         )})`}
       </button>

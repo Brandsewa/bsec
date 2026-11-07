@@ -136,3 +136,44 @@ export const discountRedemptions = tenantTable(
     }),
   ],
 );
+
+/**
+ * Order Discount Applications (ADR-045, docs/DISCOUNTS-PLAN.md phase 0).
+ * What each discount did to one order, copied at checkout: the code and title are snapshots, so invoices, refunds and
+ * reports read it from the order even after the discount is edited or archived. `amount` is the goods discount and
+ * `shipping_amount` the shipping charge a free-shipping discount waived, both in the order's minor units.
+ */
+export const orderDiscountApplications = tenantTable(
+  "order_discount_applications",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    discountId: uuid("discount_id").notNull(),
+    code: text("code"),
+    title: text("title").notNull(),
+    discountClass: text("discount_class").notNull().default("order"), // product, order, shipping
+    type: text("type").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull().default(0),
+    shippingAmount: bigint("shipping_amount", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("order_discount_applications_tenant_id_uniq").on(t.tenantId, t.id),
+    index("order_discount_applications_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("order_discount_applications_tenant_discount_idx").on(t.tenantId, t.discountId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.orderId,
+      target: orders,
+      name: "order_discount_applications_order_fk",
+      onDelete: "cascade",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.discountId,
+      target: discounts,
+      name: "order_discount_applications_discount_fk",
+      onDelete: "restrict",
+    }),
+  ],
+);

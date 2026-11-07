@@ -29,7 +29,7 @@ import type { TenantContext } from "../context.ts";
 import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
-import { redeemDiscount } from "./discounts.ts";
+import { recordOrderDiscountApplications, redeemDiscount } from "./discounts.ts";
 import { allocateDiscount, priceOrder } from "./pricing.ts";
 import { cartWeightGrams, getTenantShippingRates } from "./shipping-rates.ts";
 import { toCountryCode } from "./shipping-rules.ts";
@@ -326,7 +326,7 @@ export async function placeOrder(
       subtotal,
       shipping: shippingBase,
       codFee,
-      discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+      discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
     });
     const { shippingTotal, discountTotal } = pricing;
     const money = (n: number) => formatMoney(n, mkt.currency);
@@ -729,17 +729,34 @@ export async function placeOrder(
 
     // 7b. Redeem the code against its usage limit in the same transaction: if someone else just used the last
     // redemption this order (and its stock reservation) is rolled back and the shopper is told.
-    if (cart.discount) {
+    // Every applied discount is redeemed, and recorded on the order so invoices and reports read it from there.
+    const applied = cart.discounts ?? [];
+    for (const d of applied) {
+      const waivedShipping = d.freeShipping ? pricing.shippingDiscount : 0;
       const redeemed = await redeemDiscount(
         rt,
         ctx,
-        { discountId: cart.discount.discountId, orderId, ...(input.customerId ? { customerId: input.customerId } : {}), amount: pricing.discountValue },
+        { discountId: d.discountId, orderId, ...(effectiveCustomerId ? { customerId: effectiveCustomerId } : {}), amount: d.freeShipping ? waivedShipping : d.amount },
         tx,
       );
       if (!redeemed.success) {
-        throw new Error(`Bad Request: code ${cart.discount.code} is no longer available. Remove it to continue.`);
+        throw new Error(`Bad Request: ${redeemed.reason === "You have already used this code" ? "you have already used this code" : `code ${d.code} is no longer available`}. Remove it to continue.`);
       }
     }
+    await recordOrderDiscountApplications(
+      tx as unknown as Db,
+      tenantId,
+      orderId,
+      applied.map((d) => ({
+        discountId: d.discountId,
+        code: d.automatic ? null : d.code,
+        title: d.title,
+        type: d.type,
+        discountClass: d.freeShipping ? ("shipping" as const) : ("order" as const),
+        amount: d.freeShipping ? 0 : d.amount,
+        shippingAmount: d.freeShipping ? pricing.shippingDiscount : 0,
+      })),
+    );
 
     // 8. Payment Intent
     const intentId = randomUUID();
@@ -786,7 +803,7 @@ export async function placeOrder(
       type: "order.create",
       message:
         (isCod ? "Order placed via Cash on Delivery" : "Order placed awaiting payment") +
-        (cart.discount ? ` with code ${cart.discount.code}${pricing.shippingDiscount > 0 ? " (free shipping)" : ""}` : ""),
+        ((cart.discounts ?? []).length > 0 ? ` with ${(cart.discounts ?? []).map((d) => (d.automatic ? d.title : `code ${d.code}`)).join(" and ")}${pricing.shippingDiscount > 0 ? " (free shipping)" : ""}` : ""),
       actorType: "customer",
       data: {
         paymentMethod: input.paymentMethod,

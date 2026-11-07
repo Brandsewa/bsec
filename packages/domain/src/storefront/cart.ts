@@ -6,7 +6,7 @@ import type { TenantContext } from "../context.ts";
 import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
-import { evaluateDiscount } from "../orders/discounts.ts";
+import { evaluateCartDiscounts, evaluateDiscount } from "../orders/discounts.ts";
 import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 import { loadStatePriceMap } from "../apps/state-pricing.ts";
@@ -52,6 +52,8 @@ export interface CartDiscount {
   /** Goods discount in paise (0 for free shipping). */
   amount: number;
   freeShipping: boolean;
+  /** True when it applied by itself (no code typed). */
+  automatic: boolean;
 }
 
 export interface StorefrontCart {
@@ -65,8 +67,10 @@ export interface StorefrontCart {
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;
-  /** The applied code, if it is still valid for this cart. */
+  /** The main applied discount (a typed code wins over an automatic one), if any. Kept for screens that show one line. */
   discount?: CartDiscount | null | undefined;
+  /** Every discount applied to the cart: the typed code and/or automatic ones (ADR-045). */
+  discounts?: CartDiscount[] | undefined;
   /** Set when a code that was applied is no longer valid (expired, minimum no longer met...): the shopper must remove or fix it. */
   discountNotice?: string | null | undefined;
   lastActivityAt: string;
@@ -227,26 +231,29 @@ async function loadCartWithItems(
     };
   });
 
-  // The code on the cart is re-checked on every read, so a code that expires or whose minimum is no longer met
-  // never silently stays applied.
-  let discount: CartDiscount | null = null;
-  let discountNotice: string | null = null;
+  // The engine runs on every read (ADR-045): a typed code that expires or whose minimum is no longer met never silently
+  // stays applied, and automatic discounts appear without the shopper doing anything.
   const appliedCode = cartRecord.discountCodes?.[0];
-  if (appliedCode) {
-    const res = await evaluateDiscount(tx as unknown as Db, cartRecord.tenantId as string, { code: appliedCode, cartSubtotal: subtotal, cartTotalQty: itemCount, currency: cartRecord.currency ?? "INR" });
-    if (res.valid && res.discountId) {
-      discount = {
-        discountId: res.discountId,
-        code: res.code ?? appliedCode,
-        title: res.title ?? appliedCode,
-        type: res.type ?? "",
-        amount: res.discountAmount,
-        freeShipping: Boolean(res.freeShipping),
-      };
-    } else {
-      discountNotice = `Code ${appliedCode} can't be used: ${res.reason ?? "no longer valid"}`;
-    }
-  }
+  const evaluated = await evaluateCartDiscounts(tx as unknown as Db, cartRecord.tenantId as string, {
+    codes: appliedCode ? [appliedCode] : [],
+    cartSubtotal: subtotal,
+    cartTotalQty: itemCount,
+    currency: cartRecord.currency ?? "INR",
+    customerId: cartRecord.customerId ?? null,
+  });
+  const discounts: CartDiscount[] = evaluated.applications.map((a) => ({
+    discountId: a.discountId,
+    code: a.code ?? a.title,
+    title: a.title,
+    type: a.type,
+    amount: a.amount,
+    freeShipping: a.freeShipping,
+    automatic: a.automatic,
+  }));
+  const discount: CartDiscount | null = discounts.find((d) => !d.automatic) ?? discounts[0] ?? null;
+  const discountNotice: string | null = evaluated.rejections[0]
+    ? `Code ${appliedCode ?? evaluated.rejections[0].code} can't be used: ${evaluated.rejections[0].reason}`
+    : null;
 
   return {
     id: cartRecord.id,
@@ -258,6 +265,7 @@ async function loadCartWithItems(
     itemCount,
     subtotal,
     discount,
+    discounts,
     discountNotice,
     lastActivityAt:
       cartRecord.lastActivityAt instanceof Date
@@ -750,7 +758,7 @@ export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: 
     // evaluate against the cart as it is (without the old code)
     const current = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [] });
     if (current.items.length === 0) throw new Error("Bad Request: add something to your cart first");
-    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount, currency: current.currency ?? "INR" });
+    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount, currency: current.currency ?? "INR", customerId: cartRecord.customerId ?? undefined });
     if (!res.valid) throw new Error(`Bad Request: ${res.reason ?? "this code can't be used"}`);
 
     const [updated] = await tx

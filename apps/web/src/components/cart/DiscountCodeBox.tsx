@@ -39,7 +39,9 @@ export function DiscountCodeBox({ cart, onChange }: DiscountCodeBoxProps) {
     }
   }
 
-  const applied = cart.discount;
+  // A typed code can be removed; an automatic offer is shown but not removable.
+  const applied = (cart.discounts ?? []).find((d) => !d.automatic) ?? null;
+  const automatic = (cart.discounts ?? []).filter((d) => d.automatic);
 
   return (
     <div className="border-t border-border/60 pt-4" data-testid="discount-box">
@@ -80,6 +82,11 @@ export function DiscountCodeBox({ cart, onChange }: DiscountCodeBoxProps) {
             {busy ? "…" : "Apply"}
           </button>
         </form>
+      )}
+      {automatic.length > 0 && (
+        <p className="mt-2 text-xs text-emerald-800" data-testid="automatic-offer">
+          {automatic.map((d) => d.title).join(", ")} applied
+        </p>
       )}
       {cart.discountNotice && !applied && (
         <p className="mt-2 text-xs text-amber-700" role="alert">

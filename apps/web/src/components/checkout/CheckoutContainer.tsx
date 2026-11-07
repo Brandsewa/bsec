@@ -63,7 +63,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
   }).grandTotal;
   const totalLabel = money(total);
 
