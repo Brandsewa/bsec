@@ -460,3 +460,51 @@ export async function deleteAdminDiscount(
     return { success: true, archived: false };
   });
 }
+
+/**
+ * How a discount has performed. Money is the store's own currency: an order placed in another market's currency counts as
+ * a use but is left out of the money so two currencies are never added together. Cancelled orders are not counted.
+ */
+export async function getAdminDiscountStats(rt: Runtime, ctx: TenantContext, input: { id: string; days?: number | undefined }) {
+  assertPermission(ctx, "discounts.write");
+  const days = Math.min(Math.max(input.days ?? 30, 1), 365);
+  return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [exists] = await tx.select({ id: schema.discounts.id }).from(schema.discounts).where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, input.id))).limit(1);
+    if (!exists) throw new Error(`Discount not found: ${input.id}`);
+
+    const own = sql`(o.base_currency IS NULL OR o.currency = o.base_currency)`;
+    const totals = await tx.execute<{ uses: number; customers: number; given: string; revenue: string; other: number }>(sql`
+      SELECT count(*)::int AS uses,
+             count(DISTINCT r.customer_id)::int AS customers,
+             coalesce(sum(r.amount) FILTER (WHERE ${own}), 0)::bigint AS given,
+             coalesce(sum(o.grand_total) FILTER (WHERE ${own}), 0)::bigint AS revenue,
+             count(*) FILTER (WHERE NOT ${own})::int AS other
+        FROM discount_redemptions r
+        JOIN orders o ON o.tenant_id = r.tenant_id AND o.id = r.order_id
+       WHERE r.tenant_id = ${ctx.tenantId}::uuid AND r.discount_id = ${input.id}::uuid AND o.status <> 'cancelled';
+    `);
+    const t = totals.rows[0];
+    const daily = await tx.execute<{ day: string; uses: number; amount: string }>(sql`
+      SELECT to_char(date_trunc('day', r.created_at), 'YYYY-MM-DD') AS day,
+             count(*)::int AS uses,
+             coalesce(sum(r.amount) FILTER (WHERE ${own}), 0)::bigint AS amount
+        FROM discount_redemptions r
+        JOIN orders o ON o.tenant_id = r.tenant_id AND o.id = r.order_id
+       WHERE r.tenant_id = ${ctx.tenantId}::uuid AND r.discount_id = ${input.id}::uuid AND o.status <> 'cancelled'
+         AND r.created_at >= now() - (${days}::int * interval '1 day')
+       GROUP BY 1 ORDER BY 1;
+    `);
+    const uses = t?.uses ?? 0;
+    const ownUses = uses - (t?.other ?? 0);
+    const revenue = Number(t?.revenue ?? 0);
+    return {
+      uses,
+      customers: t?.customers ?? 0,
+      totalGivenAway: Number(t?.given ?? 0),
+      revenue,
+      averageOrderValue: ownUses > 0 ? Math.round(revenue / ownUses) : 0,
+      otherCurrencyUses: t?.other ?? 0,
+      byDay: daily.rows.map((r) => ({ date: r.day, uses: r.uses, amount: Number(r.amount) })),
+    };
+  });
+}

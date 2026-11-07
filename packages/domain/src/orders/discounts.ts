@@ -22,6 +22,8 @@ import {
   type EngineCustomer,
   type EngineDiscount,
   type EngineLine,
+  type EngineNudge,
+  nextOffer,
   type EngineRejection,
 } from "../discounts/engine.ts";
 import { collectionIdsByProduct } from "../discounts/scope.ts";
@@ -85,6 +87,8 @@ export interface CartDiscountsInput {
 export interface CartDiscountsResult {
   applications: EngineApplication[];
   rejections: EngineRejection[];
+  /** The nearest automatic offer more spending would unlock, if any. */
+  nudge: EngineNudge | null;
 }
 
 /** The store's own currency and its base market: the base market's, or the tenant's before markets exist. */
@@ -204,7 +208,7 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
   const lines: EngineLine[] = cartLines.map((l) => ({ ...l, collectionIds: memberships.get(l.productId) ?? [] }));
 
   const base = await baseOf(db, tenantId);
-  return evaluateDiscounts({
+  const engineInput = {
     discounts: engineRows,
     codes,
     cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: base.currency, marketId: input.marketId ?? base.marketId },
@@ -212,7 +216,8 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     customer,
     bulk,
     now: new Date(),
-  });
+  };
+  return { ...evaluateDiscounts(engineInput), nudge: lines.length > 0 ? nextOffer(engineInput) : null };
 }
 
 /**

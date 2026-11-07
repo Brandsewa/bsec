@@ -8,11 +8,13 @@ import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
 export interface CartItemRowProps {
   item: StorefrontCartItem;
+  /** What offers on chosen products (buy X get Y, a product discount, a bundle) take off this line. */
+  offerAmount?: number | undefined;
   onUpdateQuantity?: (itemId: string, quantity: number) => Promise<void> | void;
   onRemove?: (itemId: string) => Promise<void> | void;
 }
 
-export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowProps) {
+export function CartItemRow({ item, offerAmount = 0, onUpdateQuantity, onRemove }: CartItemRowProps) {
   const [updating, setUpdating] = useState(false);
   const money = useMoney();
   const { locale } = useMarket();
@@ -124,6 +126,11 @@ export function CartItemRow({ item, onUpdateQuantity, onRemove }: CartItemRowPro
 
         <div className="text-right">
           <p className="text-base font-bold text-foreground">{formattedLineTotal}</p>
+          {offerAmount > 0 ? (
+            <p className="text-xs font-medium text-emerald-700" data-testid="line-offer">
+              Offer applied: −{money(offerAmount)}
+            </p>
+          ) : null}
           <button
             type="button"
             disabled={updating}

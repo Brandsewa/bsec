@@ -165,6 +165,7 @@ import {
   createRuntime,
   deleteAdminDiscount,
   generateDiscountCodes,
+  getAdminDiscountStats,
   listDiscountCodes,
   deleteBrand,
   deleteCategory,
@@ -950,6 +951,7 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("discounts.get");
     expect(adminProcedures).toContain("discounts.update");
     expect(adminProcedures).toContain("discounts.delete");
+    expect(adminProcedures).toContain("discounts.stats");
     expect(adminProcedures).toContain("discounts.codes.generate");
     expect(adminProcedures).toContain("discounts.codes.list");
   });
@@ -1585,6 +1587,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         });
         return await deleteAdminDiscount(rt, ctx, { id: disc.id });
       }
+      case "discounts.stats":
+        return await getAdminDiscountStats(rt, ctx, { id: testDiscountA });
       case "discounts.codes.generate": {
         const list = await createAdminDiscount(rt, ctx, { title: `Code list ${Date.now()}`, type: "percent", value: 10, usesCodeList: true });
         return await generateDiscountCodes(rt, ctx, { id: list.id, count: 3, prefix: "ISO" });

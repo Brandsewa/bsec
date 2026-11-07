@@ -392,3 +392,52 @@ export function allocateApplications(lines: Array<{ id: string; lineTotal: numbe
   }
   return out;
 }
+
+/** The closest automatic offer a shopper has not reached yet: spend `remaining` more to get `benefit`. */
+export interface EngineNudge {
+  /** Minor units still to spend. */
+  remaining: number;
+  /** The subtotal at which the offer starts. */
+  threshold: number;
+  /** "10% off", "free shipping", "₹100 off". */
+  benefit: string;
+}
+
+/**
+ * The nearest automatic discount (or the next tier of one) that more spending would unlock. Only offers that apply by
+ * themselves count: a code the shopper has not typed is not something to nudge towards. The numbers are worked out here,
+ * on the server, so the cart never does pricing in the browser.
+ */
+export function nextOffer(input: EngineInput): EngineNudge | null {
+  const { cart } = input;
+  const label = (d: EngineDiscount, value: number): string =>
+    d.type === "free_shipping" ? "free shipping" : d.type === "percent" ? `${value}% off` : `${formatMoney(value, cart.currency)} off`;
+  let best: (EngineNudge & { value: number }) | null = null;
+  const consider = (threshold: number, benefit: string, value: number) => {
+    const remaining = threshold - cart.subtotal;
+    if (remaining <= 0) return;
+    if (!best || remaining < best.remaining || (remaining === best.remaining && value > best.value)) best = { remaining, threshold, benefit, value };
+  };
+
+  for (const d of input.discounts) {
+    if (d.code !== null || d.usesCodeList) continue;
+    if (!["percent", "fixed", "free_shipping"].includes(d.type)) continue;
+    const scope = parseDiscountAppliesTo(d.appliesTo);
+    if (!scope || scope.type !== "all") continue;
+    // An offer made for some customers needs a code, so there is nothing to nudge towards.
+    if (parseDiscountEligibility(d.customerEligibility)?.type !== "all") continue;
+    const rules = parseDiscountRules(d.rules);
+    if (rules.tierBy === "quantity") continue;
+    const reason = ineligibleReason(d, input, false);
+    if (reason !== null && !reason.startsWith("Minimum order subtotal")) continue;
+
+    if (rules.tiers) {
+      for (const tier of rules.tiers) consider(tier.threshold, label(d, tier.value), tier.value);
+    } else if (d.minSubtotal && d.minSubtotal > cart.subtotal) {
+      consider(d.minSubtotal, label(d, d.value), d.value);
+    }
+  }
+  if (!best) return null;
+  const { remaining, threshold, benefit } = best as EngineNudge & { value: number };
+  return { remaining, threshold, benefit };
+}

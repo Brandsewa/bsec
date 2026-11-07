@@ -86,6 +86,8 @@ export interface StorefrontCart {
   discount?: CartDiscount | null | undefined;
   /** Every discount applied to the cart: the typed code and/or automatic ones (ADR-045). */
   discounts?: CartDiscount[] | undefined;
+  /** The nearest automatic offer more spending would unlock ("Add 200.00 more to get 15% off"), worked out on the server. */
+  discountNudge?: { remaining: number; threshold: number; benefit: string } | null | undefined;
   /** Typed codes the engine turned down, with the reason (used when a shopper tries a code). */
   discountRejections?: Array<{ code: string; reason: string }> | undefined;
   /** Set when a code that was applied is no longer valid (expired, minimum no longer met...): the shopper must remove or fix it. */
@@ -302,6 +304,7 @@ async function loadCartWithItems(
     discount,
     discounts,
     discountRejections: evaluated.rejections,
+    discountNudge: evaluated.nudge,
     discountNotice,
     lastActivityAt:
       cartRecord.lastActivityAt instanceof Date

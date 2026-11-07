@@ -15,6 +15,7 @@ import type { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
 import { CodeListPanel, DiscountAudienceCard, audienceFromDiscount, audienceToApi, audienceValid, type AudienceState } from "../../components/discount/discount-audience.tsx";
+import { DiscountPerformanceCard } from "../../components/discount/discount-performance.tsx";
 import { DiscountKindCards, DiscountScopeCard, buildSetup, typeForKind, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/$id")({
@@ -242,6 +243,8 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
           <DiscountAudienceCard audience={audience} onChange={setAudience} hasCode={discount.usesCodeList || code.trim() !== ""} />
 
           {discount.usesCodeList ? <CodeListPanel discountId={discount.id} /> : null}
+
+          <DiscountPerformanceCard discountId={discount.id} />
 
           <Card>
             <CardHeader>

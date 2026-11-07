@@ -9,6 +9,7 @@ import {
   createAdminDiscount,
   createCollection,
   generateDiscountCodes,
+  getAdminDiscountStats,
   listDiscountCodes,
   removeCartDiscount,
   createMarket,
@@ -513,5 +514,45 @@ describe("generated single-use codes (phase 4)", () => {
     // a generated code cannot be reused as an ordinary discount code
     const some = (await listDiscountCodes(rtWeb, ctx, { id: listId, limit: 1 })).items[0]!.code;
     expect(await bad(createAdminDiscount(rtWeb, ctx, { code: some, title: "Clash", type: "percent", value: 5 }))).toMatch(/already one of your generated codes/);
+  });
+});
+
+describe("nudges and reporting (phase 5)", () => {
+  it("the cart says how much more unlocks the nearest automatic offer, and stops once it is reached", async () => {
+    await createAdminDiscount(rtWeb, ctx, { title: "Spend 500 get 15%", type: "percent", value: 15, minSubtotal: 50000 });
+    const one = await getOrCreateCart(rtWeb, ctx, await cartWith(1)); // 100.00
+    expect(one.discountNudge).toEqual({ remaining: 40000, threshold: 50000, benefit: "15% off" });
+    expect(one.discounts).toEqual([]);
+    const five = await getOrCreateCart(rtWeb, ctx, await cartWith(5)); // 500.00 reached
+    expect(five.discountNudge).toBeNull();
+    expect(five.discount).toMatchObject({ amount: 7500, automatic: true });
+    await clearAutomatic();
+  });
+
+  it("an empty cart has nothing to nudge", async () => {
+    await createAdminDiscount(rtWeb, ctx, { title: "Spend 500", type: "percent", value: 15, minSubtotal: 50000 });
+    const empty = await getOrCreateCart(rtWeb, ctx, `tok-eng-${++n}`);
+    expect(empty.discountNudge).toBeNull();
+    await clearAutomatic();
+  });
+
+  it("reports uses, what was given away and what the orders were worth", async () => {
+    const d = await createAdminDiscount(rtWeb, ctx, { code: "STATS10", title: "Stats", type: "percent", value: 10 });
+    for (const [phone, qty] of [["9300000001", 1], ["9300000002", 2]] as const) {
+      const token = await cartWith(qty);
+      await applyCartDiscount(rtWeb, ctx, { token, code: "STATS10" });
+      await placeOrder(rtWeb, ctx, buyer(token, phone));
+    }
+    const stats = await getAdminDiscountStats(rtWeb, ctx, { id: d.id });
+    // 10.00 + 20.00 given away; each order also pays 99.00 shipping: 189.00 + 279.00
+    expect(stats).toMatchObject({ uses: 2, customers: 2, totalGivenAway: 3000, revenue: 46800, averageOrderValue: 23400, otherCurrencyUses: 0 });
+    expect(stats.byDay).toHaveLength(1);
+    expect(stats.byDay[0]).toMatchObject({ uses: 2, amount: 3000 });
+  });
+
+  it("a discount nobody used reports zeros, and another store's discount is not found", async () => {
+    const d = await createAdminDiscount(rtWeb, ctx, { code: "NOBODY", title: "Unused", type: "percent", value: 5 });
+    expect(await getAdminDiscountStats(rtWeb, ctx, { id: d.id })).toMatchObject({ uses: 0, totalGivenAway: 0, revenue: 0, averageOrderValue: 0, byDay: [] });
+    expect(await errorOf(getAdminDiscountStats(rtWeb, ctx, { id: "00000000-0000-4000-8000-00000000dead" }))).toMatch(/not found/i);
   });
 });

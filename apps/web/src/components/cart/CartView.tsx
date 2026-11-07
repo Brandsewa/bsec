@@ -130,6 +130,8 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
         <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} money={money} />
       ) : null}
 
+      {cart.discountNudge ? <OfferNudge nudge={cart.discountNudge} subtotal={cart.subtotal} money={money} /> : null}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         {/* Cart items list */}
         <div className={`lg:col-span-8 flex flex-col ${options.summaryPosition === "left" ? "lg:order-2" : ""} ${loading ? "opacity-60 pointer-events-none" : ""}`}>
@@ -138,6 +140,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
               <CartItemRow
                 key={item.id}
                 item={item}
+                offerAmount={(cart.discounts ?? []).reduce((sum, d) => sum + (d.discountClass === "product" ? (d.lineAmounts?.[item.id] ?? 0) : 0), 0)}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemove={handleRemoveItem}
               />
@@ -243,6 +246,21 @@ function FreeShippingBar({ subtotal, thresholdPaise, money }: { subtotal: number
     <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="free-shipping-bar">
       <p className="text-sm font-medium text-foreground">
         {reached ? "You have unlocked free shipping" : `Add ${money(thresholdPaise - subtotal)} more for free shipping`}
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** "Add 200.00 more to get 15% off": the nearest automatic offer within reach. The amounts come from the server. */
+function OfferNudge({ nudge, subtotal, money }: { nudge: { remaining: number; threshold: number; benefit: string }; subtotal: number; money: (paise: number) => string }) {
+  const percent = Math.min(100, Math.max(0, Math.round((subtotal / nudge.threshold) * 100)));
+  return (
+    <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="offer-nudge">
+      <p className="text-sm font-medium text-foreground">
+        Add {money(nudge.remaining)} more to get {nudge.benefit}
       </p>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
         <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />

@@ -4922,6 +4922,23 @@ export const adminContract = {
       .input(z.object({ id: z.string().uuid() }))
       // `archived` is true when the discount had been used, so it was archived instead (order history keeps pointing at it).
       .output(z.object({ success: z.boolean(), archived: z.boolean().optional() })),
+    /** How a discount has performed: uses, what it gave away, what those orders were worth, by day. */
+    stats: oc
+      .route({ method: "GET", path: "/admin/discounts/{id}/stats" })
+      .input(z.object({ id: z.string().uuid(), days: z.number().int().min(1).max(365).default(30) }))
+      .output(
+        z.object({
+          /** Orders (not cancelled) that used the discount. */
+          uses: z.number(),
+          customers: z.number(),
+          /** In the store's own currency: orders in another market's currency are counted in `otherCurrencyUses` only. */
+          totalGivenAway: z.number(),
+          revenue: z.number(),
+          averageOrderValue: z.number(),
+          otherCurrencyUses: z.number(),
+          byDay: z.array(z.object({ date: z.string(), uses: z.number(), amount: z.number() })),
+        }),
+      ),
     /** The generated single-use codes of a discount made for a list of codes. */
     codes: {
       generate: oc

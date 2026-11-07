@@ -115,6 +115,19 @@ describe("cart page with a discount code", () => {
     expect(discounted).toContain("₹90"); // estimated total 100 - 10
   });
 
+  it("says how much more unlocks the nearest offer, with the amounts the server worked out", () => {
+    const html = renderToString(React.createElement(CartView, { cart: { ...base, discountNudge: { remaining: 40000, threshold: 50000, benefit: "15% off" } } }));
+    expect(html).toContain("Add ₹400 more to get 15% off");
+    expect(renderToString(React.createElement(CartView, { cart: base }))).not.toContain("offer-nudge");
+  });
+
+  it("shows what an offer on chosen products takes off a line", () => {
+    const productOffer = { discountId: "d-4", code: "SHIRTS20", title: "20% off shirts", type: "percent", amount: 3000, freeShipping: false, automatic: false, discountClass: "product" as const, lineAmounts: { "item-1": 3000 } };
+    const html = renderToString(React.createElement(CartView, { cart: { ...base, discount: productOffer, discounts: [productOffer] } }));
+    expect(html).toContain("Offer applied: −₹30");
+    expect(renderToString(React.createElement(CartView, { cart: withTen }))).not.toContain("line-offer");
+  });
+
   it("an automatic offer shows its name, takes money off, and cannot be removed like a code", () => {
     const html = renderToString(React.createElement(CartView, { cart: withAutomatic }));
     expect(html).toContain("Discount (Welcome 10%)");

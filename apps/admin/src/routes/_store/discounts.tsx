@@ -218,7 +218,7 @@ export function DiscountsPage() {
       header: "Discount code",
       cell: (d) => (
         <div className="flex items-center gap-2">
-          <Link to="/discounts/$id" params={{ id: d.id }} className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground hover:underline">{d.code ?? "AUTOMATIC"}</Link>
+          <Link to="/discounts/$id" params={{ id: d.id }} className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground hover:underline">{d.code ?? (d.usesCodeList ? "CODE LIST" : "AUTOMATIC")}</Link>
           {d.code ? (
             <Button
               variant="ghost"
@@ -427,7 +427,7 @@ export function DiscountsPage() {
                 </div>
                 <div className="grid min-w-0 flex-1 gap-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? "AUTOMATIC"}</span>
+                    <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? (d.usesCodeList ? "CODE LIST" : "AUTOMATIC")}</span>
                     <StatusBadge status={d.status} />
                   </div>
                   <p className="truncate text-foreground">{d.title}</p>

@@ -292,6 +292,7 @@ import {
   updateAdminDiscount,
   getAdminDiscount,
   deleteAdminDiscount,
+  getAdminDiscountStats,
   generateDiscountCodes,
   listDiscountCodes,
   checkAdminApiRateLimit,
@@ -3046,6 +3047,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteAdminDiscount(context.rt, context.tenantCtx, input);
+        }),
+      stats: os.admin.discounts.stats
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminDiscountStats(context.rt, context.tenantCtx, input);
         }),
       codes: {
         generate: os.admin.discounts.codes.generate
