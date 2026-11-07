@@ -33,7 +33,8 @@ Local, on Windows, against the shared test Postgres (`docker-compose.test-db.yml
 - `pnpm typecheck`: 17/17. `pnpm lint`: 17/17 (6 existing warnings, no errors). `pnpm build`: 6/6, the new `/discount/[code]` route is in the output. `pnpm docs:check`: ok.
 - `@bs/domain test:fast`: 72 files, 689 tests passed. `@bs/web test`: 33 files, 243 passed. `@bs/contracts`: 37 passed. `@bs/db`: 50 passed.
 - New tests: `discount-engine*.test.ts` (pure engine: stacking, scope, tiers, buy-x-get-y, bundles, audiences, generated codes, nudge), `discounts-engine.int.test.ts` (real database: automatic discounts, per-customer limit and rollback, scope and cap, tiers, free-shipping cap and markets, buy-x-get-y, bundles, new and tagged customers, five codes, shared link, generated codes including two orders racing for one code, nudge, stats, validation), cart and pricing additions, `isolation.int.test.ts` mapping for the new procedures.
-- See "Heavy suite" below for the full real-database runs.
+- **Heavy suite (real Postgres), run three times:** run 1 (before phase 1): 141 files, 2914 tests passed. Runs 2 (parallel) and 3 (serial, `--no-file-parallelism`, as CI does): 2948 and 2955 passed, with 2 failures each time in `finance-reconcile.int.test.ts` ("first reconcile run backfills all historical orders", "healthy replay writes zero new entries") and one Windows worker crash (exit code 3221226505, a different file each time, both pass when rerun). The reconcile tests pass alone and in most runs of the pair `finance-postings` then `finance-reconcile`, and fail intermittently; **on `origin/main` code in the same worktree the same pair failed 1 run in 8**, so it is an existing race in that test on this machine, not something the discount work touches (no finance file changed). The cause was not found. CI runs the heavy shards on Linux; the first CI run will show whether it happens there.
+- `@bs/platform` heavy: 8 files, 172 tests passed. `@bs/platform` fast: 5 passed. `@bs/web` heavy: 3 passed.
 
 ## NOT verified
 - **The admin screens were not looked at in a browser.** Typecheck, lint and build pass and the data behind them is tested, but the new forms (kind cards, pickers, tiers, audience, code panel, Performance card) have not been clicked through. The local dev stack was started from this worktree (web on 3000, admin on 5180, dev Postgres on 54330 migrated to 0103) but signing in needed the dev owner password, which was not entered; the storefront cart changes were also not seen in a browser.
@@ -60,4 +61,4 @@ Local, on Windows, against the shared test Postgres (`docker-compose.test-db.yml
 - After merge: set the Branch line above to the PR and commit, remove the "In flight" line, delete the branch and the `bsec-discounts` worktree (section 5 of AGENTS.md).
 
 ## Definition of done
-Not done: heavy-suite result and browser check are listed above as they stand; the change is unmerged.
+Not done: the admin screens have not been looked at in a browser, the finance-reconcile flake is unexplained, and the change is unmerged and unpushed. Everything else in section 7 of AGENTS.md is in place (docs, ADR, change record, "In flight" line).
