@@ -1,6 +1,6 @@
 # Discounts and offers upgrade plan
 
-- **Status:** approved by the owner 2026-11-07 (section 8). Build in progress; see `progress.md` "In flight".
+- **Status:** approved by the owner 2026-11-07 (section 8). Built on `feat/discounts-engine` (phases 0 to 5, section 9 lists what differs from this plan); not merged yet, see `progress.md` "In flight".
 - **Author:** Claude (2026-11-07)
 - **Area:** `packages/domain` (orders, storefront, admin), `packages/db` (marketing schema), `packages/contracts`, `apps/admin` discounts screens, `apps/web` cart, checkout and product page.
 - **Related:** ADR-040 (markets), AGENTS.md rules 1, 4, 6, 12, 14. A new ADR (section 5.1) is required before Phase 1.
@@ -173,3 +173,19 @@ Phase 0 and the ADR: Claude (money and tenancy core). Phases 1 to 5: one builder
 4. **Fixed amounts in other markets:** base currency only. A fixed-amount discount is refused on a cart in another currency with a clear reason; percent and free shipping work everywhere.
 5. **Sale items:** included by default; each discount has an "Exclude items already on sale" option.
 6. **Prepaid discount:** stays parked until online checkout is live.
+
+## 9. Implementation status (2026-11-07)
+
+Built on `feat/discounts-engine`, one commit per phase. Where the build differs from the plan above:
+
+| Phase | Built | Differs from the plan |
+|---|---|---|
+| 0 | Pure engine, automatic discounts, per-customer limit, audit row on create, base-currency rule, `order_discount_applications` shown on the admin order | D6: the engine supports a minimum item count (`min_qty`) but the admin form has no field for it yet. D5 was real (a fixed amount ignored the cart currency) and is fixed and tested |
+| 1 | Amount off chosen products or collections (manual and automated collections), percent cap, leave out sale items, once per order, per-line allocation, product-page coupon filtering, admin kind cards and scope pickers | none |
+| 2 | Tiers by amount or quantity (optionally counting only the chosen items), free shipping cap ("waive up to"), free shipping limited to markets | Free shipping is limited by **market**, not shipping zone: the cart knows its market, not its destination country |
+| 3 | Buy X get Y (quantity or spend trigger, free, percent or fixed price, uses per order, different buy and get items), free gift by spend, bundle price | **Not built: auto-adding the gift product to the cart.** The gift is free once the shopper adds it and the spend is met; the cart nudge is the place to prompt it. Bundles group the cheapest items first so left-over expensive items pay full price |
+| 4 | New, tagged and chosen customers, up to five codes per cart, generated single-use codes (admin panel, search, CSV export), shareable link | "New customer" means no order that was not cancelled, read from the orders. A tagged or chosen-customer code is accepted while browsing and enforced at checkout against the customer found from email or phone |
+| 5 | Cart nudge towards the next automatic offer (server-side numbers), per-line offer amounts, Performance card and `admin.discounts.stats`, "Code list" label | The nudge shows on the cart page only (not the mini cart or checkout). The discount name is not yet on the shopper's thank-you page or order emails (they show the discount total) |
+
+Still open: prepaid and payment-method discounts and COD fee waiver (online checkout is deferred by the owner), abandoned-cart codes (email delivery is not live), bank offers, gift cards and loyalty (out of scope).
+
