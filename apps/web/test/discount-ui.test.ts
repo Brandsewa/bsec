@@ -25,7 +25,8 @@ const cartAfterApply = {
   items: [],
   itemCount: 1,
   subtotal: 10000,
-  discount: { discountId: "d-1", code: "TEN", title: "10% off", type: "percent", amount: 1000, freeShipping: false },
+  discount: { discountId: "d-1", code: "TEN", title: "10% off", type: "percent", amount: 1000, freeShipping: false, automatic: false, discountClass: "order" },
+  discounts: [{ discountId: "d-1", code: "TEN", title: "10% off", type: "percent", amount: 1000, freeShipping: false, automatic: false, discountClass: "order" }],
   discountNotice: null,
   lastActivityAt: "2026-10-01T00:00:00.000Z",
   createdAt: "2026-10-01T00:00:00.000Z",
@@ -41,7 +42,7 @@ vi.mock("@bs/domain", async (importOriginal) => {
       if (input.code.toUpperCase() === "TEN") return cartAfterApply;
       throw new Error("Bad Request: Discount code not found");
     }),
-    removeCartDiscount: vi.fn(async () => ({ ...cartAfterApply, discount: null })),
+    removeCartDiscount: vi.fn(async () => ({ ...cartAfterApply, discount: null, discounts: [] })),
   };
 });
 
@@ -65,11 +66,15 @@ const item: StorefrontCartItem = {
   updatedAt: "2026-10-01T00:00:00.000Z",
 };
 
-const base: StorefrontCart = { ...(cartAfterApply as unknown as StorefrontCart), items: [item], discount: null };
-const withTen: StorefrontCart = { ...base, discount: cartAfterApply.discount };
-const withFreeShipping: StorefrontCart = {
+const base: StorefrontCart = { ...(cartAfterApply as unknown as StorefrontCart), items: [item], discount: null, discounts: [] };
+const withTen: StorefrontCart = { ...base, discount: cartAfterApply.discount, discounts: cartAfterApply.discounts } as StorefrontCart;
+const freeShippingCode = { discountId: "d-2", code: "SHIPFREE", title: "Free shipping", type: "free_shipping", amount: 0, freeShipping: true, automatic: false, discountClass: "shipping" as const };
+const withFreeShipping: StorefrontCart = { ...base, discount: freeShippingCode, discounts: [freeShippingCode] };
+// An offer that applied by itself: no code was typed.
+const withAutomatic: StorefrontCart = {
   ...base,
-  discount: { discountId: "d-2", code: "SHIPFREE", title: "Free shipping", type: "free_shipping", amount: 0, freeShipping: true },
+  discount: { discountId: "d-3", code: "Welcome 10%", title: "Welcome 10%", type: "percent", amount: 1000, freeShipping: false, automatic: true, discountClass: "order" },
+  discounts: [{ discountId: "d-3", code: "Welcome 10%", title: "Welcome 10%", type: "percent", amount: 1000, freeShipping: false, automatic: true, discountClass: "order" }],
 };
 
 describe("checkout order summary with a discount code", () => {
@@ -108,6 +113,16 @@ describe("cart page with a discount code", () => {
     const discounted = renderToString(React.createElement(CartView, { cart: withTen }));
     expect(discounted).toContain("Discount (TEN)");
     expect(discounted).toContain("₹90"); // estimated total 100 - 10
+  });
+
+  it("an automatic offer shows its name, takes money off, and cannot be removed like a code", () => {
+    const html = renderToString(React.createElement(CartView, { cart: withAutomatic }));
+    expect(html).toContain("Discount (Welcome 10%)");
+    expect(html).toContain("₹90");
+    const box = renderToString(React.createElement(DiscountCodeBox, { cart: withAutomatic, onChange: () => {} }));
+    expect(box).toContain("Welcome 10% applied");
+    expect(box).not.toContain("Remove");
+    expect(box).toContain('placeholder="Discount code"'); // a code can still be typed on top
   });
 
   it("a free-shipping code says so in the shipping row", () => {

@@ -29,7 +29,9 @@ async function assertDiscountSetup(
 ): Promise<void> {
   const { type, value, appliesTo, rules } = setup;
   // A tiered discount takes its value from the tier the cart reaches, so its own value is not used.
-  if (!rules.tiers) {
+  if (type === "buy_x_get_y" || type === "bundle") {
+    // their numbers live in the rules
+  } else if (!rules.tiers) {
     if (type === "percent" && (value < 1 || value > 100)) throw new Error("Bad Request: a percentage must be between 1 and 100");
     if (type === "fixed" && value < 1) throw new Error("Bad Request: enter an amount greater than zero");
   } else {
@@ -58,16 +60,42 @@ async function assertDiscountSetup(
   if (rules.oncePerOrder && !(type === "fixed" && appliesTo.type !== "all")) {
     throw new Error("Bad Request: 'once per order' only applies to a fixed amount on chosen products");
   }
-  if (appliesTo.type === "products") {
-    const ids = [...new Set(appliesTo.productIds)];
+  await assertScopeExists(tx, ctx, appliesTo);
+
+  if (type === "buy_x_get_y") {
+    const b = rules.bxgy;
+    if (!b) throw new Error("Bad Request: choose what to buy and what to get");
+    if (appliesTo.type !== "all") throw new Error("Bad Request: a buy-x-get-y offer chooses its items in the offer itself");
+    if (rules.tiers || rules.maxDiscount !== undefined || rules.oncePerOrder) throw new Error("Bad Request: those options do not apply to a buy-x-get-y offer");
+    if (b.get.effect === "percent" && (!b.get.value || b.get.value > 100)) throw new Error("Bad Request: the percentage off must be between 1 and 100");
+    if (b.get.effect === "fixed_price" && !b.get.value) throw new Error("Bad Request: enter the price the items cost");
+    await assertScopeExists(tx, ctx, b.buy.appliesTo);
+    await assertScopeExists(tx, ctx, b.get.appliesTo);
+  } else if (rules.bxgy) {
+    throw new Error("Bad Request: buy-x-get-y settings only apply to a buy-x-get-y offer");
+  }
+  if (type === "bundle") {
+    if (!rules.bundle) throw new Error("Bad Request: set how many items and the bundle price");
+    if (appliesTo.type !== "all") throw new Error("Bad Request: a bundle chooses its items in the offer itself");
+    if (rules.tiers || rules.maxDiscount !== undefined || rules.oncePerOrder) throw new Error("Bad Request: those options do not apply to a bundle");
+    await assertScopeExists(tx, ctx, rules.bundle.appliesTo);
+  } else if (rules.bundle) {
+    throw new Error("Bad Request: bundle settings only apply to a bundle");
+  }
+}
+
+/** Every product or collection a scope names must be this store's own. */
+async function assertScopeExists(tx: Tx, ctx: TenantContext, scope: DiscountAppliesTo): Promise<void> {
+  if (scope.type === "products") {
+    const ids = [...new Set(scope.productIds)];
     const [found] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.products)
       .where(and(eq(schema.products.tenantId, ctx.tenantId), inArray(schema.products.id, ids)));
     if ((found?.n ?? 0) !== ids.length) throw new Error("Bad Request: one of the chosen products no longer exists");
   }
-  if (appliesTo.type === "collections") {
-    const ids = [...new Set(appliesTo.collectionIds)];
+  if (scope.type === "collections") {
+    const ids = [...new Set(scope.collectionIds)];
     const [found] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(schema.collections)
@@ -180,7 +208,7 @@ export async function createAdminDiscount(
   input: {
     code?: string | undefined;
     title: string;
-    type: "percent" | "fixed" | "free_shipping" | "buy_x_get_y";
+    type: "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | "bundle";
     value: number;
     appliesTo?: DiscountAppliesTo | undefined;
     rules?: DiscountRules | undefined;
@@ -254,13 +282,19 @@ export async function getAdminDiscount(rt: Runtime, ctx: TenantContext, input: {
   return await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [d] = await tx.select().from(schema.discounts).where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, input.id))).limit(1);
     if (!d) throw new Error(`Discount not found: ${input.id}`);
-    const scope = parseDiscountAppliesTo(d.appliesTo);
-    const appliesToItems =
-      scope?.type === "products"
-        ? await tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(and(eq(schema.products.tenantId, ctx.tenantId), inArray(schema.products.id, scope.productIds)))
-        : scope?.type === "collections"
-          ? await tx.select({ id: schema.collections.id, title: schema.collections.title }).from(schema.collections).where(and(eq(schema.collections.tenantId, ctx.tenantId), inArray(schema.collections.id, scope.collectionIds)))
-          : [];
+    // Names of every product and collection the discount mentions (its scope, and the parts of a buy-x-get-y or bundle).
+    const rulesOf = parseDiscountRules(d.rules);
+    const scopes = [parseDiscountAppliesTo(d.appliesTo), rulesOf.bxgy?.buy.appliesTo, rulesOf.bxgy?.get.appliesTo, rulesOf.bundle?.appliesTo];
+    const productIds = [...new Set(scopes.flatMap((sc) => (sc?.type === "products" ? sc.productIds : [])))];
+    const collectionIds = [...new Set(scopes.flatMap((sc) => (sc?.type === "collections" ? sc.collectionIds : [])))];
+    const appliesToItems = [
+      ...(productIds.length > 0
+        ? await tx.select({ id: schema.products.id, title: schema.products.title }).from(schema.products).where(and(eq(schema.products.tenantId, ctx.tenantId), inArray(schema.products.id, productIds)))
+        : []),
+      ...(collectionIds.length > 0
+        ? await tx.select({ id: schema.collections.id, title: schema.collections.title }).from(schema.collections).where(and(eq(schema.collections.tenantId, ctx.tenantId), inArray(schema.collections.id, collectionIds)))
+        : []),
+    ];
     return {
       appliesToItems,
       id: d.id,
@@ -291,7 +325,7 @@ export async function updateAdminDiscount(
     id: string;
     title?: string | undefined;
     code?: string | null | undefined;
-    type?: "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | undefined;
+    type?: "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | "bundle" | undefined;
     value?: number | undefined;
     appliesTo?: DiscountAppliesTo | undefined;
     rules?: DiscountRules | undefined;

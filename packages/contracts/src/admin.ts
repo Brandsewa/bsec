@@ -4794,7 +4794,7 @@ export const adminContract = {
           .object({
             search: z.string().optional(),
             status: z.string().optional(),
-            type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+            type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]).optional(),
             sort: z.enum(["created_desc", "created_asc", "title_asc", "title_desc", "used_desc", "used_asc"]).default("created_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
@@ -4830,7 +4830,7 @@ export const adminContract = {
         z.object({
           code: z.string().min(1).optional(),
           title: z.string().min(1),
-          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]),
           value: z.number().int().min(0),
           appliesTo: DiscountAppliesTo.optional(),
           rules: DiscountRules.optional(),
@@ -4886,7 +4886,7 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           code: z.string().min(1).nullable().optional(),
-          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]).optional(),
           value: z.number().int().min(0).optional(),
           appliesTo: DiscountAppliesTo.optional(),
           rules: DiscountRules.optional(),

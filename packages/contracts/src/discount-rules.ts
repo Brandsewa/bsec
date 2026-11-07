@@ -35,6 +35,34 @@ export const DiscountRules = z.object({
   maxShipping: z.number().int().min(1).optional(),
   /** Free shipping only: the markets it works in. Empty or missing means every market. */
   markets: z.array(z.string().uuid()).max(50).optional(),
+  /** Buy X get Y (type `buy_x_get_y`): what to buy, what comes cheaper or free, and how often per order. */
+  bxgy: z
+    .object({
+      buy: z.object({
+        /** Buy a number of items, or spend an amount (minor units), from the buy scope. */
+        trigger: z.enum(["quantity", "amount"]),
+        value: z.number().int().min(1),
+        appliesTo: DiscountAppliesTo,
+      }),
+      get: z.object({
+        quantity: z.number().int().min(1).max(100),
+        appliesTo: DiscountAppliesTo,
+        /** free, a percentage off (`value` 1 to 100), or a fixed price per item (`value` in minor units). */
+        effect: z.enum(["free", "percent", "fixed_price"]),
+        value: z.number().int().min(1).optional(),
+      }),
+      /** How many times the offer may repeat in one order. Missing means as often as the cart allows for a quantity trigger, once for an amount trigger. */
+      maxUsesPerOrder: z.number().int().min(1).max(100).optional(),
+    })
+    .optional(),
+  /** Bundle price (type `bundle`): any `quantity` items from the scope together cost `price` (minor units). */
+  bundle: z
+    .object({
+      quantity: z.number().int().min(2).max(100),
+      price: z.number().int().min(1),
+      appliesTo: DiscountAppliesTo,
+    })
+    .optional(),
 });
 export type DiscountRules = z.infer<typeof DiscountRules>;
 

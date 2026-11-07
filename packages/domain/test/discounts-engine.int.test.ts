@@ -319,3 +319,65 @@ describe("tiers and shipping limits (phase 2)", () => {
     expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Ghost market", type: "free_shipping", value: 0, rules: { markets: ["00000000-0000-4000-8000-00000000dead"] } }))).toMatch(/no longer exists/);
   });
 });
+
+describe("buy X get Y and bundles (phase 3)", () => {
+  it("buy 2 get 1 free: the cheapest item is free on the order and on its line", async () => {
+    await createAdminDiscount(rtWeb, ctx, {
+      code: "B2G1",
+      title: "Buy 2 get 1 free",
+      type: "buy_x_get_y",
+      value: 0,
+      rules: { bxgy: { buy: { trigger: "quantity", value: 2, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "all" }, effect: "free" } } },
+    });
+    const token = await mixedCart(2, 1); // 2 pickles at 100.00 and a mug at 50.00
+    const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "b2g1" });
+    expect(cart.discount).toMatchObject({ code: "B2G1", amount: 5000, discountClass: "product" });
+
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9000000021"));
+    expect(placed).toMatchObject({ subtotal: 25000, discountTotal: 5000 });
+    const items = await rt._db.db.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, placed.orderId));
+    expect(items.map((i) => [i.sku, i.discountAmount]).sort()).toEqual([["ENG-1", 0], ["ENG-MUG", 5000]]);
+  });
+
+  it("is refused with a reason while the cart is short of the offer", async () => {
+    const token = await mixedCart(1, 1);
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token, code: "B2G1" }))).toMatch(/Add the items this offer needs/);
+  });
+
+  it("a bundle price: any 2 mugs for 70.00", async () => {
+    await createAdminDiscount(rtWeb, ctx, {
+      code: "MUGPAIR",
+      title: "2 mugs for 70",
+      type: "bundle",
+      value: 0,
+      rules: { bundle: { quantity: 2, price: 7000, appliesTo: { type: "products", productIds: [mugProductId] } } },
+    });
+    const token = await mixedCart(0, 3); // 3 mugs at 50.00: one pair for 70.00, one at full price
+    const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "mugpair" });
+    expect(cart.discount?.amount).toBe(3000);
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9000000022"));
+    expect(placed).toMatchObject({ subtotal: 15000, discountTotal: 3000 });
+  });
+
+  it("a free gift: the gift product is free once the rest of the cart reaches the amount", async () => {
+    await createAdminDiscount(rtWeb, ctx, {
+      title: "Free mug over 200",
+      type: "buy_x_get_y",
+      value: 0,
+      rules: { bxgy: { buy: { trigger: "amount", value: 20000, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProductId] }, effect: "free" } } },
+    });
+    const short = await getOrCreateCart(rtWeb, ctx, await mixedCart(1, 1)); // 100.00 of pickles + the mug
+    expect(short.discounts).toEqual([]);
+    const enough = await getOrCreateCart(rtWeb, ctx, await mixedCart(2, 1)); // 200.00 of pickles + the mug
+    expect(enough.discount).toMatchObject({ amount: 5000, automatic: true });
+    await clearAutomatic();
+  });
+
+  it("is checked on the server when it is saved", async () => {
+    const bad = (p: Promise<unknown>) => errorOf(p);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "No rules", type: "bundle", value: 0 }))).toMatch(/set how many items and the bundle price/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Percent without value", type: "buy_x_get_y", value: 0, rules: { bxgy: { buy: { trigger: "quantity", value: 1, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "all" }, effect: "percent" } } } }))).toMatch(/percentage off must be between 1 and 100/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Ghost get", type: "buy_x_get_y", value: 0, rules: { bxgy: { buy: { trigger: "quantity", value: 1, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "products", productIds: ["00000000-0000-4000-8000-00000000dead"] }, effect: "free" } } } }))).toMatch(/no longer exists/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Stray rules", type: "percent", value: 10, rules: { bundle: { quantity: 2, price: 100, appliesTo: { type: "all" } } } }))).toMatch(/only apply to a bundle/);
+  });
+});

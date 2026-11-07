@@ -1,15 +1,24 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Plus, Tag, Trash2, Truck, X } from "lucide-react";
+import { Gift, Layers, Package, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, Field, FieldDescription, FieldGroup, FieldLabel, Input, SimpleSelect } from "@bs/ui";
 import type { DiscountAppliesTo, DiscountRules } from "@bs/contracts/discount-rules";
 import { orpc } from "../../lib/orpc.ts";
 import { ProductPickerDialog, type PickedProduct } from "../product/product-picker-dialog.tsx";
+import { BundleCard, BxgyCard, bundleFromRules, bundleToRules, bundleValid, bxgyFromRules, bxgyToRules, bxgyValid, emptyBundle, emptyBxgy, type BundleState, type BxgyState } from "./discount-offer-forms.tsx";
 
 /** The three families of discount a merchant picks from (Shopify's classes): what the discount takes money off. */
-export type DiscountKind = "products" | "order" | "shipping";
+export type DiscountKind = "products" | "order" | "shipping" | "bxgy" | "bundle";
 
-export type DiscountType = "percent" | "fixed" | "free_shipping";
+export type DiscountType = "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | "bundle";
+
+/** The stored type a kind needs; a goods discount keeps the percent or fixed choice it already had. */
+export function typeForKind(kind: DiscountKind, current: DiscountType): DiscountType {
+  if (kind === "shipping") return "free_shipping";
+  if (kind === "bxgy") return "buy_x_get_y";
+  if (kind === "bundle") return "bundle";
+  return current === "fixed" ? "fixed" : "percent";
+}
 
 export interface TierRow {
   /** Whole currency units (spend) or an item count (quantity). */
@@ -35,6 +44,8 @@ export interface ScopeState {
   maxShipping: string;
   /** Free shipping: market ids; empty = every market. */
   markets: string[];
+  bxgy: BxgyState;
+  bundle: BundleState;
 }
 
 export const emptyScope: ScopeState = {
@@ -50,6 +61,8 @@ export const emptyScope: ScopeState = {
   countEligibleOnly: false,
   maxShipping: "",
   markets: [],
+  bxgy: emptyBxgy,
+  bundle: emptyBundle,
 };
 
 const toUnits = (minor: number) => String(minor / 100);
@@ -61,7 +74,9 @@ export function scopeFromDiscount(d: {
   appliesToItems?: Array<{ id: string; title: string }> | undefined;
   rules: DiscountRules;
 }): { kind: DiscountKind; scope: ScopeState } {
-  const kind: DiscountKind = d.type === "free_shipping" ? "shipping" : d.appliesTo.type === "all" ? "order" : "products";
+  const kind: DiscountKind =
+    d.type === "free_shipping" ? "shipping" : d.type === "buy_x_get_y" ? "bxgy" : d.type === "bundle" ? "bundle" : d.appliesTo.type === "all" ? "order" : "products";
+  const names = new Map((d.appliesToItems ?? []).map((i) => [i.id, i.title]));
   const tierBy = d.rules.tierBy ?? "subtotal";
   return {
     kind,
@@ -83,6 +98,8 @@ export function scopeFromDiscount(d: {
       countEligibleOnly: d.rules.countEligibleOnly ?? false,
       maxShipping: d.rules.maxShipping ? toUnits(d.rules.maxShipping) : "",
       markets: d.rules.markets ?? [],
+      bxgy: d.rules.bxgy ? bxgyFromRules(d.rules.bxgy, names) : emptyBxgy,
+      bundle: d.rules.bundle ? bundleFromRules(d.rules.bundle, names) : emptyBundle,
     },
   };
 }
@@ -94,6 +111,8 @@ const positive = (raw: string) => {
 
 /** True when the scope fields describe a valid discount of this kind. */
 export function scopeValid(kind: DiscountKind, type: DiscountType, scope: ScopeState): boolean {
+  if (kind === "bxgy") return bxgyValid(scope.bxgy);
+  if (kind === "bundle") return bundleValid(scope.bundle);
   if (kind === "products") {
     if (scope.target === "products" ? scope.products.length === 0 : scope.collectionIds.length === 0) return false;
   }
@@ -122,6 +141,12 @@ export function buildSetup(kind: DiscountKind, type: DiscountType, scope: ScopeS
         ? { type: "products", productIds: scope.products.map((p) => p.id) }
         : { type: "collections", collectionIds: scope.collectionIds };
   const rules: DiscountRules = {};
+  if (kind === "bxgy" || kind === "bundle") {
+    if (kind === "bxgy") rules.bxgy = bxgyToRules(scope.bxgy);
+    else rules.bundle = bundleToRules(scope.bundle);
+    if (scope.excludeOnSale) rules.excludeOnSale = true;
+    return { appliesTo: { type: "all" }, rules };
+  }
   if (kind === "shipping") {
     if (scope.maxShipping.trim() !== "") rules.maxShipping = Math.round(Number(scope.maxShipping) * 100);
     if (scope.markets.length > 0) rules.markets = scope.markets;
@@ -144,6 +169,8 @@ export function buildSetup(kind: DiscountKind, type: DiscountType, scope: ScopeS
 const KINDS: Array<{ kind: DiscountKind; title: string; text: string; icon: typeof Package }> = [
   { kind: "products", title: "Amount off products", text: "A percentage or amount off chosen products or collections.", icon: Package },
   { kind: "order", title: "Amount off order", text: "A percentage or amount off the whole order.", icon: Tag },
+  { kind: "bxgy", title: "Buy X get Y", text: "Buy some items, get others free or cheaper. Works for free gifts too.", icon: Gift },
+  { kind: "bundle", title: "Bundle price", text: "Any group of items together for one fixed price.", icon: Layers },
   { kind: "shipping", title: "Free shipping", text: "Waive the shipping charge on an order.", icon: Truck },
 ];
 
@@ -156,7 +183,7 @@ export function DiscountKindCards({ kind, onChange }: { kind: DiscountKind; onCh
         <CardDescription>What should the discount take money off?</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Discount type">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Discount type">
           {KINDS.map(({ kind: k, title, text, icon: Icon }) => (
             <button
               key={k}
@@ -270,6 +297,23 @@ export function DiscountScopeCard({
   const collections = useQuery({ ...orpc.admin.collections.list.queryOptions({ input: {} }), enabled: kind === "products" && scope.target === "collections" });
   const set = (patch: Partial<ScopeState>) => onChange({ ...scope, ...patch });
 
+  if (kind === "bxgy" || kind === "bundle") {
+    return (
+      <>
+        {kind === "bxgy" ? <BxgyCard sym={sym} value={scope.bxgy} onChange={(bxgy) => set({ bxgy })} /> : <BundleCard sym={sym} value={scope.bundle} onChange={(bundle) => set({ bundle })} />}
+        <Card>
+          <CardContent className="pt-6">
+            <Field orientation="horizontal">
+              <Checkbox id="discount-sale" checked={scope.excludeOnSale} onCheckedChange={(c) => set({ excludeOnSale: c === true })} />
+              <FieldLabel htmlFor="discount-sale" className="font-normal">
+                Leave out items that are already on sale
+              </FieldLabel>
+            </Field>
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
   if (kind === "shipping") {
     return (
       <Card>

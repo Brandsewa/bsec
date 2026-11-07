@@ -14,7 +14,7 @@ import { orpc } from "../../lib/orpc.ts";
 import type { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
-import { DiscountKindCards, DiscountScopeCard, buildSetup, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
+import { DiscountKindCards, DiscountScopeCard, buildSetup, typeForKind, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/$id")({
   pendingComponent: () => <PageSkeleton />,
@@ -25,6 +25,8 @@ const typeLabel = (sym: string): Record<DiscountType, string> => ({
   percent: "Percentage off",
   fixed: `Fixed amount off (${sym})`,
   free_shipping: "Free shipping",
+  buy_x_get_y: "Buy X get Y",
+  bundle: "Bundle price",
 });
 
 /** "" → undefined, otherwise a whole number (or NaN if it isn't one). */
@@ -71,7 +73,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
   const sym = currencySymbol(storeCurrency);
   const labels = typeLabel(sym);
 
-  const initialType = (discount.type === "buy_x_get_y" ? "percent" : discount.type) as DiscountType;
+  const initialType = discount.type as DiscountType;
   const [code, setCode] = useState(discount.code ?? "");
   const [title, setTitle] = useState(discount.title);
   const [type, setType] = useState<DiscountType>(initialType);
@@ -110,12 +112,11 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
 
   function pickKind(k: DiscountKind) {
     setKind(k);
-    if (k === "shipping") setType("free_shipping");
-    else if (type === "free_shipping") setType("percent");
+    setType(typeForKind(k, type));
   }
 
   const numValue = Number(value);
-  const valueOk = type === "free_shipping" || scope.tiersOn || (Number.isFinite(numValue) && numValue > 0 && (type !== "percent" || numValue <= 100));
+  const valueOk = type === "free_shipping" || type === "buy_x_get_y" || type === "bundle" || scope.tiersOn || (Number.isFinite(numValue) && numValue > 0 && (type !== "percent" || numValue <= 100));
   const intsOk = [minSubtotal, usageLimit, perCustomerLimit].every((r) => {
     const n = optionalInt(r);
     return n === undefined || (Number.isInteger(n) && n >= 0);
@@ -134,7 +135,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
       title: title.trim(),
       type,
       // percent is a whole percentage; fixed is entered in rupees and stored in paise
-      value: type === "free_shipping" ? 0 : type === "fixed" ? Math.round(numValue * 100) : Math.round(numValue),
+      value: type === "free_shipping" || type === "buy_x_get_y" || type === "bundle" ? 0 : type === "fixed" ? Math.round(numValue * 100) : Math.round(numValue),
       ...buildSetup(kind, type, scope),
       minSubtotal: min ? min * 100 : 0,
       usageLimit: total ? total : null,
@@ -192,6 +193,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
             </CardHeader>
             <CardContent>
               <FieldGroup>
+                {kind === "bxgy" || kind === "bundle" ? null : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field>
                     <div className="flex items-center gap-1.5">
@@ -221,6 +223,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                     />
                   </Field>
                 </div>
+                )}
                 <Field>
                   <FieldLabel htmlFor="discount-min">Minimum order value ({sym}, optional)</FieldLabel>
                   <Input id="discount-min" type="number" min={0} step="1" value={minSubtotal} onChange={(e) => setMinSubtotal(e.target.value)} placeholder="No minimum" />
@@ -298,14 +301,20 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                     : `On ${scope.collectionIds.length} chosen collection${scope.collectionIds.length === 1 ? "" : "s"}`
                   : kind === "order"
                     ? "On the whole order"
-                    : "On the shipping charge"}
+                    : kind === "shipping"
+                      ? "On the shipping charge"
+                      : "Chosen in the offer"}
               </p>
               <p className="text-muted-foreground">
                 {type === "free_shipping"
                   ? "Free shipping"
-                  : type === "percent"
-                    ? `${value || 0}% off`
-                    : `${sym}${value || 0} off`}
+                  : type === "buy_x_get_y"
+                    ? "Buy X get Y"
+                    : type === "bundle"
+                      ? "Bundle price"
+                      : type === "percent"
+                        ? `${value || 0}% off`
+                        : `${sym}${value || 0} off`}
                 {minSubtotal ? ` on orders over ${sym}${minSubtotal}` : ""}
                 {usageLimit ? `, first ${usageLimit} uses` : ""}.
               </p>

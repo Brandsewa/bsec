@@ -165,7 +165,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
             <div className="flex justify-between items-center text-sm py-2 border-b border-border/60">
               <span className="text-muted-foreground">Shipping</span>
               <span className="text-xs text-muted-foreground">
-                {(cart.discounts ?? []).some((d) => d.freeShipping) ? "Free with your offer" : "Calculated at checkout"}
+                {(cart.discounts ?? []).some((d) => d.freeShipping) ? ((cart.discounts ?? []).some((d) => d.freeShipping && !d.automatic) ? "Free with your code" : "Free with your offer") : "Calculated at checkout"}
               </span>
             </div>
 

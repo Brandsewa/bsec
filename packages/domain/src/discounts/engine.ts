@@ -8,6 +8,10 @@
  */
 import { formatMoney } from "@bs/contracts/money";
 import { parseDiscountAppliesTo, parseDiscountRules, type DiscountAppliesTo, type DiscountRules } from "@bs/contracts/discount-rules";
+import { bundleDiscount, bxgyDiscount } from "./bxgy.ts";
+import { splitProportionally } from "./split.ts";
+
+export { splitProportionally };
 
 /** A discount row, reduced to what the rules need. */
 export interface EngineDiscount {
@@ -101,23 +105,9 @@ export interface EngineResult {
 
 const normalise = (c: string) => c.trim().toUpperCase();
 
-/** Splits `total` over `weights` in proportion; the last non-zero weight takes the rounding remainder. */
-export function splitProportionally(weights: number[], total: number): number[] {
-  const sum = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0 || sum <= 0) return weights.map(() => 0);
-  const lastIdx = weights.reduce((acc, w, i) => (w > 0 ? i : acc), -1);
-  let given = 0;
-  return weights.map((w, i) => {
-    if (w <= 0) return 0;
-    if (i === lastIdx) return total - given;
-    const share = Math.floor((w * total) / sum);
-    given += share;
-    return share;
-  });
-}
-
 export function discountClassOf(d: Pick<EngineDiscount, "type" | "appliesTo">): DiscountClass {
   if (d.type === "free_shipping") return "shipping";
+  if (d.type === "buy_x_get_y" || d.type === "bundle") return "product";
   const scope = parseDiscountAppliesTo(d.appliesTo);
   return scope && scope.type !== "all" ? "product" : "order";
 }
@@ -161,13 +151,16 @@ export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" 
   if (d.perCustomerLimit !== null && (i.customerUses[d.id] ?? 0) >= d.perCustomerLimit) return "You have already used this code";
 
   // Rules the checkout cannot apply yet are refused with a clear reason rather than guessed at.
-  if (d.type !== "percent" && d.type !== "fixed" && d.type !== "free_shipping") return "This code can't be used at checkout yet";
+  if (!["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"].includes(d.type)) return "This code can't be used at checkout yet";
+  const rules0 = parseDiscountRules(d.rules);
+  if ((d.type === "buy_x_get_y" && !rules0.bxgy) || (d.type === "bundle" && !rules0.bundle)) return "This code can't be used at checkout yet";
   const scope = parseDiscountAppliesTo(d.appliesTo);
   if (!scope) return "This code can't be used at checkout yet";
   if (d.type === "free_shipping" && scope.type !== "all") return "This code can't be used at checkout yet";
 
   // A fixed amount is a number in the store's own currency: it is not converted for other markets.
-  if (d.type === "fixed" && cart.currency !== cart.baseCurrency) {
+  const fixedMoney = d.type === "fixed" || d.type === "bundle" || (d.type === "buy_x_get_y" && rules0.bxgy?.get.effect === "fixed_price");
+  if (fixedMoney && cart.currency !== cart.baseCurrency) {
     return `This code only works on orders in ${cart.baseCurrency}`;
   }
   const rules = parseDiscountRules(d.rules);
@@ -176,6 +169,9 @@ export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" 
 
   if (d.type === "free_shipping" && rules.markets && rules.markets.length > 0 && (cart.marketId === null || !rules.markets.includes(cart.marketId))) {
     return "This code isn't available in your region";
+  }
+  if ((d.type === "buy_x_get_y" || d.type === "bundle") && cart.lines.length > 0 && computeAmount(d, cart.lines, new Map()).amount === 0) {
+    return "Add the items this offer needs to your cart";
   }
   if (rules.tiers && activeValue(d, rules, cart.lines, eligible) === null) {
     const lowest = [...rules.tiers].sort((a, b) => a.threshold - b.threshold)[0];
@@ -196,6 +192,11 @@ export function computeAmount(d: EngineDiscount, lines: EngineLine[], remaining:
   if (d.type === "free_shipping") return { amount: 0 };
   const scope = parseDiscountAppliesTo(d.appliesTo) ?? { type: "all" as const };
   const rules = parseDiscountRules(d.rules);
+  if (d.type === "buy_x_get_y" || d.type === "bundle") {
+    const pick = (sc: DiscountAppliesTo, ls: EngineLine[]) => eligibleLines(sc, rules, ls);
+    const r = d.type === "buy_x_get_y" ? (rules.bxgy ? bxgyDiscount(rules.bxgy, lines, pick) : null) : rules.bundle ? bundleDiscount(rules.bundle, lines, pick) : null;
+    return r ? { amount: r.amount, lineAmounts: r.lineAmounts } : { amount: 0, lineAmounts: {} };
+  }
   const eligible = eligibleLines(scope, rules, lines);
   const room = (l: EngineLine) => Math.max(0, remaining.get(l.id) ?? l.lineTotal);
   const base = eligible.reduce((sum, l) => sum + room(l), 0);
