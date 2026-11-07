@@ -205,8 +205,20 @@ export async function placeOrder(
       }
     }
 
-    // 1. Fetch cart
-    const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
+    // 1. Fetch cart. Who is ordering decides whether a code made for some customers (new, tagged, chosen) is theirs, so they
+    // are looked up first, the same way they are found again below. A guest who matches nobody is a stranger here.
+    let probeCustomerId = input.customerId ?? null;
+    const probeEmail = input.email?.trim().toLowerCase();
+    const probePhone = input.phone?.trim() ? input.phone.trim().replace(/\D/g, "") : null;
+    if (!probeCustomerId && probeEmail) {
+      const [byEmail] = await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.tenantId, tenantId), eq(customers.email, probeEmail))).limit(1);
+      probeCustomerId = byEmail?.id ?? null;
+    }
+    if (!probeCustomerId && probePhone) {
+      const [byPhone] = await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.tenantId, tenantId), eq(customers.phone, probePhone))).limit(1);
+      probeCustomerId = byPhone?.id ?? null;
+    }
+    const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx, undefined, { customerId: probeCustomerId, strict: true });
     if (!cart || cart.items.length === 0) {
       throw new Error("Cannot place order with empty cart");
     }
@@ -737,11 +749,11 @@ export async function placeOrder(
       const redeemed = await redeemDiscount(
         rt,
         ctx,
-        { discountId: d.discountId, orderId, ...(effectiveCustomerId ? { customerId: effectiveCustomerId } : {}), amount: d.freeShipping ? waivedShipping : d.amount },
+        { discountId: d.discountId, orderId, ...(d.bulkCodeId ? { bulkCodeId: d.bulkCodeId } : {}), ...(effectiveCustomerId ? { customerId: effectiveCustomerId } : {}), amount: d.freeShipping ? waivedShipping : d.amount },
         tx,
       );
       if (!redeemed.success) {
-        throw new Error(`Bad Request: ${redeemed.reason === "You have already used this code" ? "you have already used this code" : `code ${d.code} is no longer available`}. Remove it to continue.`);
+        throw new Error(`Bad Request: ${redeemed.reason === "You have already used this code" ? "you have already used this code" : redeemed.reason === "This code has already been used" ? `code ${d.code} has already been used` : `code ${d.code} is no longer available`}. Remove it to continue.`);
       }
     }
     await recordOrderDiscountApplications(

@@ -292,6 +292,8 @@ import {
   updateAdminDiscount,
   getAdminDiscount,
   deleteAdminDiscount,
+  generateDiscountCodes,
+  listDiscountCodes,
   checkAdminApiRateLimit,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -3045,6 +3047,22 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteAdminDiscount(context.rt, context.tenantCtx, input);
         }),
+      codes: {
+        generate: os.admin.discounts.codes.generate
+          .use(requireAdmin)
+          .use(requirePermission("discounts.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return generateDiscountCodes(context.rt, context.tenantCtx, input);
+          }),
+        list: os.admin.discounts.codes.list
+          .use(requireAdmin)
+          .use(requirePermission("discounts.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listDiscountCodes(context.rt, context.tenantCtx, input);
+          }),
+      },
     },
     shipping: {
       get: os.admin.shipping.get

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { parseDiscountAppliesTo, parseDiscountRules, type DiscountAppliesTo, type DiscountRules } from "@bs/contracts/discount-rules";
+import { parseDiscountAppliesTo, parseDiscountEligibility, parseDiscountRules, type DiscountAppliesTo, type DiscountEligibility, type DiscountRules } from "@bs/contracts/discount-rules";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -25,9 +25,21 @@ async function auditDiscount(tx: Tx, ctx: TenantContext, action: string, id: str
 async function assertDiscountSetup(
   tx: Tx,
   ctx: TenantContext,
-  setup: { type: string; value: number; appliesTo: DiscountAppliesTo; rules: DiscountRules },
+  setup: { type: string; value: number; appliesTo: DiscountAppliesTo; rules: DiscountRules; eligibility: DiscountEligibility; hasCode: boolean; usesCodeList: boolean },
 ): Promise<void> {
-  const { type, value, appliesTo, rules } = setup;
+  const { type, value, appliesTo, rules, eligibility, hasCode, usesCodeList } = setup;
+  if (usesCodeList && hasCode) throw new Error("Bad Request: a discount with a list of codes has no single code");
+  if (eligibility.type !== "all" && !hasCode && !usesCodeList) {
+    throw new Error("Bad Request: a discount for some customers needs a code, so only they can use it");
+  }
+  if (eligibility.type === "customers") {
+    const ids = [...new Set(eligibility.customerIds)];
+    const [found] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.tenantId, ctx.tenantId), inArray(schema.customers.id, ids)));
+    if ((found?.n ?? 0) !== ids.length) throw new Error("Bad Request: one of the chosen customers no longer exists");
+  }
   // A tiered discount takes its value from the tier the cart reaches, so its own value is not used.
   if (type === "buy_x_get_y" || type === "bundle") {
     // their numbers live in the rules
@@ -167,6 +179,7 @@ export async function listAdminDiscounts(
         type: schema.discounts.type,
         value: schema.discounts.value,
         appliesTo: schema.discounts.appliesTo,
+        usesCodeList: schema.discounts.usesCodeList,
         usageLimit: schema.discounts.usageLimit,
         usedCount: schema.discounts.usedCount,
         status: schema.discounts.status,
@@ -189,6 +202,7 @@ export async function listAdminDiscounts(
         type: r.type,
         value: r.value,
         appliesTo: parseDiscountAppliesTo(r.appliesTo) ?? ({ type: "all" } as DiscountAppliesTo),
+        usesCodeList: r.usesCodeList,
         usageLimit: r.usageLimit,
         usedCount: r.usedCount,
         status: r.status,
@@ -212,6 +226,8 @@ export async function createAdminDiscount(
     value: number;
     appliesTo?: DiscountAppliesTo | undefined;
     rules?: DiscountRules | undefined;
+    customerEligibility?: DiscountEligibility | undefined;
+    usesCodeList?: boolean | undefined;
     minSubtotal?: number | undefined;
     usageLimit?: number | undefined;
     perCustomerLimit?: number | undefined;
@@ -227,7 +243,12 @@ export async function createAdminDiscount(
   return await withTenant(db, ctx.tenantId, async (tx) => {
     const appliesTo: DiscountAppliesTo = input.appliesTo ?? { type: "all" };
     const rules: DiscountRules = input.rules ?? {};
-    await assertDiscountSetup(tx, ctx, { type: input.type, value: input.value, appliesTo, rules });
+    const eligibility: DiscountEligibility = input.customerEligibility ?? { type: "all" };
+    await assertDiscountSetup(tx, ctx, { type: input.type, value: input.value, appliesTo, rules, eligibility, hasCode: Boolean(input.code), usesCodeList: input.usesCodeList === true });
+    if (input.code) {
+      const [clash] = await tx.select({ id: schema.discountCodes.id }).from(schema.discountCodes).where(and(eq(schema.discountCodes.tenantId, ctx.tenantId), eq(schema.discountCodes.code, input.code.toUpperCase()))).limit(1);
+      if (clash) throw new Error("Bad Request: that code is already one of your generated codes");
+    }
     const [created] = await tx
       .insert(schema.discounts)
       .values({
@@ -238,6 +259,8 @@ export async function createAdminDiscount(
         value: input.value,
         appliesTo,
         rules,
+        customerEligibility: eligibility,
+        usesCodeList: input.usesCodeList === true,
         minSubtotal: input.minSubtotal ?? 0,
         usageLimit: input.usageLimit ?? null,
         perCustomerLimit: input.perCustomerLimit ?? null,
@@ -260,6 +283,8 @@ export async function createAdminDiscount(
       value: created.value,
       appliesTo,
       rules,
+      customerEligibility: eligibility,
+      usesCodeList: created.usesCodeList,
       minSubtotal: created.minSubtotal,
       usageLimit: created.usageLimit,
       perCustomerLimit: created.perCustomerLimit,
@@ -295,6 +320,14 @@ export async function getAdminDiscount(rt: Runtime, ctx: TenantContext, input: {
         ? await tx.select({ id: schema.collections.id, title: schema.collections.title }).from(schema.collections).where(and(eq(schema.collections.tenantId, ctx.tenantId), inArray(schema.collections.id, collectionIds)))
         : []),
     ];
+    const audience = parseDiscountEligibility(d.customerEligibility);
+    const eligibleCustomers =
+      audience?.type === "customers"
+        ? await tx
+            .select({ id: schema.customers.id, name: schema.customers.name, email: schema.customers.email })
+            .from(schema.customers)
+            .where(and(eq(schema.customers.tenantId, ctx.tenantId), inArray(schema.customers.id, audience.customerIds)))
+        : [];
     return {
       appliesToItems,
       id: d.id,
@@ -304,6 +337,9 @@ export async function getAdminDiscount(rt: Runtime, ctx: TenantContext, input: {
       value: d.value,
       appliesTo: parseDiscountAppliesTo(d.appliesTo) ?? ({ type: "all" } as DiscountAppliesTo),
       rules: parseDiscountRules(d.rules),
+      customerEligibility: parseDiscountEligibility(d.customerEligibility) ?? ({ type: "all" } as DiscountEligibility),
+      eligibleCustomers,
+      usesCodeList: d.usesCodeList,
       minSubtotal: d.minSubtotal ?? 0,
       usageLimit: d.usageLimit,
       perCustomerLimit: d.perCustomerLimit,
@@ -329,6 +365,7 @@ export async function updateAdminDiscount(
     value?: number | undefined;
     appliesTo?: DiscountAppliesTo | undefined;
     rules?: DiscountRules | undefined;
+    customerEligibility?: DiscountEligibility | undefined;
     minSubtotal?: number | undefined;
     perCustomerLimit?: number | null | undefined;
     combinable?: boolean | undefined;
@@ -344,7 +381,7 @@ export async function updateAdminDiscount(
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
     const { id, ...changes } = input;
-    if (input.type !== undefined || input.value !== undefined || input.appliesTo !== undefined || input.rules !== undefined) {
+    if (input.type !== undefined || input.value !== undefined || input.appliesTo !== undefined || input.rules !== undefined || input.customerEligibility !== undefined || input.code !== undefined) {
       // The rules are checked on the discount as it will be after the change.
       const [current] = await tx.select().from(schema.discounts).where(and(eq(schema.discounts.tenantId, ctx.tenantId), eq(schema.discounts.id, id))).limit(1);
       if (!current) throw new Error(`Discount not found: ${id}`);
@@ -353,6 +390,9 @@ export async function updateAdminDiscount(
         value: input.value ?? current.value,
         appliesTo: input.appliesTo ?? parseDiscountAppliesTo(current.appliesTo) ?? { type: "all" },
         rules: input.rules ?? parseDiscountRules(current.rules),
+        eligibility: input.customerEligibility ?? parseDiscountEligibility(current.customerEligibility) ?? { type: "all" },
+        hasCode: input.code !== undefined ? Boolean(input.code) : current.code !== null,
+        usesCodeList: current.usesCodeList,
       });
     }
     const [updated] = await tx
@@ -364,6 +404,7 @@ export async function updateAdminDiscount(
         ...(input.value !== undefined ? { value: input.value } : {}),
         ...(input.appliesTo !== undefined ? { appliesTo: input.appliesTo } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
+        ...(input.customerEligibility !== undefined ? { customerEligibility: input.customerEligibility } : {}),
         ...(input.minSubtotal !== undefined ? { minSubtotal: input.minSubtotal } : {}),
         ...(input.perCustomerLimit !== undefined ? { perCustomerLimit: input.perCustomerLimit } : {}),
         ...(input.combinable !== undefined ? { combinable: input.combinable } : {}),

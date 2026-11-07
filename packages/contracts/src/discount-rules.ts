@@ -77,3 +77,21 @@ export function parseDiscountAppliesTo(raw: unknown): DiscountAppliesTo | null {
   const r = DiscountAppliesTo.safeParse(raw ?? { type: "all" });
   return r.success ? r.data : null;
 }
+
+/**
+ * Who a discount is for (ADR-045). Stored in `discounts.customer_eligibility`; a row written before this existed holds
+ * `{"type":"all"}`. Anything but `all` needs a code: an automatic offer cannot tell who is shopping before they sign in.
+ */
+export const DiscountEligibility = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("all") }),
+  z.object({ type: z.literal("new_customers") }),
+  z.object({ type: z.literal("tags"), tags: z.array(z.string().trim().min(1).max(60)).min(1).max(20) }),
+  z.object({ type: z.literal("customers"), customerIds: z.array(z.string().uuid()).min(1).max(500) }),
+]);
+export type DiscountEligibility = z.infer<typeof DiscountEligibility>;
+
+/** null means a value this version does not understand: the engine refuses it rather than offering the discount to everyone. */
+export function parseDiscountEligibility(raw: unknown): DiscountEligibility | null {
+  const r = DiscountEligibility.safeParse(raw ?? { type: "all" });
+  return r.success ? r.data : null;
+}

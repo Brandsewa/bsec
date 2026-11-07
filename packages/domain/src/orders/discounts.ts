@@ -1,9 +1,12 @@
-import { eq, and, inArray, isNull, or, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
+  customers,
+  discountCodes,
   discounts,
   discountRedemptions,
   markets,
   orderDiscountApplications,
+  orders,
   tenants,
   withTenant,
   type Db,
@@ -12,8 +15,11 @@ import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { parseDiscountAppliesTo } from "@bs/contracts/discount-rules";
 import {
+  ANONYMOUS,
   evaluateDiscounts,
   type EngineApplication,
+  type EngineBulkCode,
+  type EngineCustomer,
   type EngineDiscount,
   type EngineLine,
   type EngineRejection,
@@ -43,6 +49,8 @@ export interface AppliedDiscountResult {
 
 export interface RedeemDiscountInput {
   discountId: string;
+  /** The generated code that was typed: it is marked used, once. */
+  bulkCodeId?: string | undefined;
   orderId: string;
   customerId?: string | undefined;
   amount: number; // in paise
@@ -68,8 +76,10 @@ export interface CartDiscountsInput {
   currency?: string | undefined;
   /** The market the cart is priced in; missing means the store's base market. */
   marketId?: string | null | undefined;
-  /** Known shopper, for per-customer limits. A guest is enforced again when the order is placed. */
+  /** Known shopper, for per-customer limits and audiences. A guest is enforced again when the order is placed. */
   customerId?: string | null | undefined;
+  /** At checkout: a guest who matches no customer is a stranger, so a code for tagged or chosen customers is refused. */
+  strict?: boolean | undefined;
 }
 
 export interface CartDiscountsResult {
@@ -95,6 +105,18 @@ async function baseOf(db: Db, tenantId: string): Promise<{ currency: string; mar
  */
 export async function evaluateCartDiscounts(db: Db, tenantId: string, input: CartDiscountsInput): Promise<CartDiscountsResult> {
   const codes = input.codes.map((c) => c.trim()).filter(Boolean);
+
+  // Codes from a generated list point at their discount; a used one is still returned so the shopper hears why.
+  const bulkRows =
+    codes.length > 0
+      ? await db
+          .select({ id: discountCodes.id, discountId: discountCodes.discountId, code: discountCodes.code, usedAt: discountCodes.usedAt })
+          .from(discountCodes)
+          .where(and(eq(discountCodes.tenantId, tenantId), inArray(discountCodes.code, codes)))
+      : [];
+  const bulk: Record<string, EngineBulkCode> = {};
+  for (const b of bulkRows) bulk[b.code.toUpperCase()] = { discountId: b.discountId, codeId: b.id, used: b.usedAt !== null };
+
   const rows = await db
     .select()
     .from(discounts)
@@ -103,11 +125,31 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
         eq(discounts.tenantId, tenantId),
         or(
           // Automatic discounts that can run, and any code the shopper typed (so a stopped code gets its reason).
-          and(isNull(discounts.code), eq(discounts.status, "active")),
+          and(isNull(discounts.code), eq(discounts.usesCodeList, false), eq(discounts.status, "active")),
           codes.length > 0 ? inArray(discounts.code, codes) : undefined,
+          bulkRows.length > 0 ? inArray(discounts.id, [...new Set(bulkRows.map((b) => b.discountId))]) : undefined,
         ),
       ),
     );
+
+  // Who is shopping: tags and order history decide whether a code made for some customers is theirs.
+  let customer: EngineCustomer = { ...ANONYMOUS, strict: input.strict === true };
+  if (input.customerId) {
+    const [c] = await db
+      .select({ id: customers.id, tags: customers.tags })
+      .from(customers)
+      .where(and(eq(customers.tenantId, tenantId), eq(customers.id, input.customerId)))
+      .limit(1);
+    if (c) {
+      // "New" means no order that was not cancelled: read from the orders themselves, not from the cached customer totals.
+      const [prior] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.tenantId, tenantId), eq(orders.customerId, c.id), ne(orders.status, "cancelled")))
+        .limit(1);
+      customer = { id: c.id, isNew: !prior, tags: c.tags, strict: input.strict === true };
+    }
+  }
 
   const customerUses: Record<string, number> = {};
   if (input.customerId && rows.length > 0) {
@@ -143,6 +185,8 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     status: d.status,
     appliesTo: d.appliesTo,
     rules: d.rules,
+    customerEligibility: d.customerEligibility,
+    usesCodeList: d.usesCodeList,
     createdAt: d.createdAt,
   }));
 
@@ -165,6 +209,8 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     codes,
     cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: base.currency, marketId: input.marketId ?? base.marketId },
     customerUses,
+    customer,
+    bulk,
     now: new Date(),
   });
 }
@@ -266,7 +312,20 @@ export async function redeemDiscount(
       return { success: false, reason: "Discount usage limit reached or discount not found" };
     }
 
-    // 3. Insert discount redemption audit row
+    // 3. A code from a generated list is single use: the guarded update is what makes it so, under the same row lock.
+    if (input.bulkCodeId) {
+      const used = await db.execute<{ id: string }>(sql`
+        UPDATE discount_codes
+           SET used_at = now(), used_order_id = ${input.orderId}::uuid
+         WHERE tenant_id = ${ctx.tenantId}::uuid
+           AND id = ${input.bulkCodeId}::uuid
+           AND used_at IS NULL
+        RETURNING id;
+      `);
+      if (!used.rows[0]) return { success: false, reason: "This code has already been used" };
+    }
+
+    // 4. Insert discount redemption audit row
     const [redemption] = await db
       .insert(discountRedemptions)
       .values({

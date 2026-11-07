@@ -680,6 +680,13 @@
       "when": 1794015000000,
       "tag": "0102_discount_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1794101400000,
+      "tag": "0103_discount_code_lists",
+      "breakpoints": true
     }
   ]
 }

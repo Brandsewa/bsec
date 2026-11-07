@@ -164,6 +164,8 @@ import {
   setPaymentProviderActive,
   createRuntime,
   deleteAdminDiscount,
+  generateDiscountCodes,
+  listDiscountCodes,
   deleteBrand,
   deleteCategory,
   deleteCollection,
@@ -948,6 +950,8 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("discounts.get");
     expect(adminProcedures).toContain("discounts.update");
     expect(adminProcedures).toContain("discounts.delete");
+    expect(adminProcedures).toContain("discounts.codes.generate");
+    expect(adminProcedures).toContain("discounts.codes.list");
   });
 
   it("dynamically discovers all registered platform procedures", () => {
@@ -1580,6 +1584,15 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           value: 100,
         });
         return await deleteAdminDiscount(rt, ctx, { id: disc.id });
+      }
+      case "discounts.codes.generate": {
+        const list = await createAdminDiscount(rt, ctx, { title: `Code list ${Date.now()}`, type: "percent", value: 10, usesCodeList: true });
+        return await generateDiscountCodes(rt, ctx, { id: list.id, count: 3, prefix: "ISO" });
+      }
+      case "discounts.codes.list": {
+        const list = await createAdminDiscount(rt, ctx, { title: `Code list ${Date.now()}`, type: "percent", value: 10, usesCodeList: true });
+        await generateDiscountCodes(rt, ctx, { id: list.id, count: 2 });
+        return await listDiscountCodes(rt, ctx, { id: list.id });
       }
       // --- M7 Shipping Settings Admin ---
       case "shipping.get":

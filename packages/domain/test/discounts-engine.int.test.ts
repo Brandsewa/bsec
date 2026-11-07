@@ -8,6 +8,9 @@ import {
   applyCartDiscount,
   createAdminDiscount,
   createCollection,
+  generateDiscountCodes,
+  listDiscountCodes,
+  removeCartDiscount,
   createMarket,
   getStorefrontCoupons,
   createProduct,
@@ -379,5 +382,136 @@ describe("buy X get Y and bundles (phase 3)", () => {
     expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Percent without value", type: "buy_x_get_y", value: 0, rules: { bxgy: { buy: { trigger: "quantity", value: 1, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "all" }, effect: "percent" } } } }))).toMatch(/percentage off must be between 1 and 100/);
     expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Ghost get", type: "buy_x_get_y", value: 0, rules: { bxgy: { buy: { trigger: "quantity", value: 1, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "products", productIds: ["00000000-0000-4000-8000-00000000dead"] }, effect: "free" } } } }))).toMatch(/no longer exists/);
     expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Stray rules", type: "percent", value: 10, rules: { bundle: { quantity: 2, price: 100, appliesTo: { type: "all" } } } }))).toMatch(/only apply to a bundle/);
+  });
+});
+
+describe("who a discount is for (phase 4)", () => {
+  it("a new-customer code works for a first order and is refused for the same customer's next one", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "WELCOME15", title: "Welcome", type: "percent", value: 15, customerEligibility: { type: "new_customers" } });
+    const first = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token: first, code: "welcome15" });
+    await expect(placeOrder(rtWeb, ctx, buyer(first, "9100000001"))).resolves.toMatchObject({ discountTotal: 1500 });
+
+    const again = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token: again, code: "welcome15" }); // a guest cannot be told apart while browsing
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(again, "9100000001")))).toMatch(/only for new customers/);
+
+    const stranger = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token: stranger, code: "welcome15" });
+    await expect(placeOrder(rtWeb, ctx, buyer(stranger, "9100000002"))).resolves.toMatchObject({ discountTotal: 1500 });
+  });
+
+  it("a code for tagged customers is refused for a customer without the tag and for a stranger", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "VIPONLY", title: "VIP", type: "percent", value: 20, customerEligibility: { type: "tags", tags: ["vip"] } });
+    // a customer from an earlier order (the guest record made at checkout)
+    const [known] = await rt._db.db.select({ id: schema.customers.id }).from(schema.customers).where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.phone, "9100000001")));
+    const withCode = async () => {
+      const t = await cartWith(1);
+      await applyCartDiscount(rtWeb, ctx, { token: t, code: "viponly" });
+      return t;
+    };
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(await withCode(), "9100000001")))).toMatch(/isn't available for your account/);
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(await withCode(), "9100000077")))).toMatch(/isn't available for your account/); // matches nobody
+
+    await rt._db.db.execute(sql`update customers set tags = ARRAY['vip']::text[] where id = ${known!.id}::uuid`);
+    await expect(placeOrder(rtWeb, ctx, buyer(await withCode(), "9100000001"))).resolves.toMatchObject({ discountTotal: 2000 });
+  });
+
+  it("only a code can be for some customers, and the customers must be the store's own", async () => {
+    const bad = (p: Promise<unknown>) => errorOf(p);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Auto for new", type: "percent", value: 10, customerEligibility: { type: "new_customers" } }))).toMatch(/needs a code/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { code: "GHOSTS", title: "Ghost customers", type: "percent", value: 10, customerEligibility: { type: "customers", customerIds: ["00000000-0000-4000-8000-00000000dead"] } }))).toMatch(/no longer exists/);
+  });
+});
+
+describe("several codes on one cart (phase 4)", () => {
+  it("stack when both allow it, one can be removed, and a code that cannot stack replaces them", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "STACKGOODS", title: "5% stack", type: "percent", value: 5, combinable: true });
+    await createAdminDiscount(rtWeb, ctx, { code: "STACKSHIP", title: "Ship stack", type: "free_shipping", value: 0, combinable: true });
+    await createAdminDiscount(rtWeb, ctx, { code: "LONER", title: "Loner 30%", type: "percent", value: 30 });
+    const token = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token, code: "stackgoods" });
+    const both = await applyCartDiscount(rtWeb, ctx, { token, code: "stackship" });
+    expect(both.discounts?.map((d) => d.code).sort()).toEqual(["STACKGOODS", "STACKSHIP"]);
+
+    const oneLeft = await removeCartDiscount(rtWeb, ctx, { token, code: "stackship" });
+    expect(oneLeft.discounts?.map((d) => d.code)).toEqual(["STACKGOODS"]);
+
+    await applyCartDiscount(rtWeb, ctx, { token, code: "stackship" });
+    const replaced = await applyCartDiscount(rtWeb, ctx, { token, code: "loner" }); // cannot sit beside them: it takes their place
+    expect(replaced.discounts?.map((d) => d.code)).toEqual(["LONER"]);
+    expect((await removeCartDiscount(rtWeb, ctx, { token })).discounts).toEqual([]);
+  });
+
+  it("allows at most five codes", async () => {
+    for (let i = 1; i <= 6; i++) await createAdminDiscount(rtWeb, ctx, { code: `MANY${i}`, title: `Many ${i}`, type: "percent", value: 1, combinable: true });
+    const token = await mixedCart(1, 1);
+    // goods codes cannot stack with each other, so each new one replaces: the limit is on what is stored, so fill the cart directly
+    await rt._db.db.execute(sql`update carts set discount_codes = ARRAY['MANY1','MANY2','MANY3','MANY4','MANY5']::text[] where token = ${token}`);
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token, code: "MANY6" }))).toMatch(/up to 5 codes/);
+  });
+
+  it("a shared link can leave a code on a cart that is still empty", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "LINKED", title: "Linked", type: "percent", value: 10 });
+    const empty = await getOrCreateCart(rtWeb, ctx, `tok-eng-${++n}`);
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token: empty.token, code: "linked" }))).toMatch(/add something to your cart first/);
+    await applyCartDiscount(rtWeb, ctx, { token: empty.token, code: "linked", allowEmpty: true });
+    await addToCart(rtWeb, ctx, { token: empty.token, variantId, quantity: 1 });
+    expect((await getOrCreateCart(rtWeb, ctx, empty.token)).discount).toMatchObject({ code: "LINKED", amount: 1000 });
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token: empty.token, code: "NOSUCHCODE", allowEmpty: true }))).toMatch(/not found/i);
+  });
+});
+
+describe("generated single-use codes (phase 4)", () => {
+  let listId: string;
+
+  it("generates unique codes, lists them, and the discount never applies by itself", async () => {
+    const created = await createAdminDiscount(rtWeb, ctx, { title: "Diwali influencers", type: "percent", value: 25, usesCodeList: true });
+    listId = created.id;
+    expect(await generateDiscountCodes(rtWeb, ctx, { id: listId, count: 20, prefix: "diwali-" })).toEqual({ created: 20 });
+    const listed = await listDiscountCodes(rtWeb, ctx, { id: listId, limit: 100 });
+    expect(listed).toMatchObject({ total: 20, codeCount: 20, usedCount: 0 });
+    expect(new Set(listed.items.map((i) => i.code)).size).toBe(20);
+    expect(listed.items.every((i) => /^DIWALI-[A-Z2-9]{8}$/.test(i.code))).toBe(true);
+    expect((await getOrCreateCart(rtWeb, ctx, await cartWith(1))).discounts?.some((d) => d.title === "Diwali influencers")).toBe(false);
+  });
+
+  it("a code works once, then is refused with its own message", async () => {
+    const [one, two] = (await listDiscountCodes(rtWeb, ctx, { id: listId, limit: 2 })).items;
+    const token = await cartWith(1);
+    const cart = await applyCartDiscount(rtWeb, ctx, { token, code: one!.code.toLowerCase() });
+    expect(cart.discount).toMatchObject({ code: one!.code, amount: 2500 });
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9200000001"));
+    expect(placed.discountTotal).toBe(2500);
+    expect((await listDiscountCodes(rtWeb, ctx, { id: listId, filter: "used" })).items.map((i) => i.code)).toEqual([one!.code]);
+
+    const again = await cartWith(1);
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token: again, code: one!.code }))).toMatch(/already been used/);
+    await expect(applyCartDiscount(rtWeb, ctx, { token: again, code: two!.code })).resolves.toMatchObject({ discount: { amount: 2500 } });
+  });
+
+  it("two orders racing for the same code: exactly one gets it", async () => {
+    const code = (await listDiscountCodes(rtWeb, ctx, { id: listId, filter: "unused", limit: 1 })).items[0]!.code;
+    const a = await cartWith(1);
+    const b = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token: a, code });
+    await applyCartDiscount(rtWeb, ctx, { token: b, code });
+    const results = await Promise.allSettled([placeOrder(rtWeb, ctx, buyer(a, "9200000011")), placeOrder(rtWeb, ctx, buyer(b, "9200000012"))]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const lost = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(String(lost.reason)).toMatch(/already been used|no longer available/);
+    expect((await listDiscountCodes(rtWeb, ctx, { id: listId, filter: "used" })).usedCount).toBe(2);
+  });
+
+  it("is checked on the server", async () => {
+    const bad = (p: Promise<unknown>) => errorOf(p);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { code: "BOTH", title: "Both", type: "percent", value: 10, usesCodeList: true }))).toMatch(/no single code/);
+    expect(await bad(generateDiscountCodes(rtWeb, ctx, { id: listId, count: 1, prefix: "bad prefix!" }))).toMatch(/prefix/);
+    expect(await bad(generateDiscountCodes(rtWeb, ctx, { id: listId, count: 20_000 }))).toMatch(/up to 10000 codes/);
+    const plain = await createAdminDiscount(rtWeb, ctx, { code: "PLAINONE", title: "Plain", type: "percent", value: 10 });
+    expect(await bad(generateDiscountCodes(rtWeb, ctx, { id: plain.id, count: 1 }))).toMatch(/does not use a list of codes/);
+    // a generated code cannot be reused as an ordinary discount code
+    const some = (await listDiscountCodes(rtWeb, ctx, { id: listId, limit: 1 })).items[0]!.code;
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { code: some, title: "Clash", type: "percent", value: 5 }))).toMatch(/already one of your generated codes/);
   });
 });

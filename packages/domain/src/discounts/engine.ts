@@ -7,7 +7,7 @@
  * (free shipping). Buy X get Y arrives with phase 3 and is refused until then.
  */
 import { formatMoney } from "@bs/contracts/money";
-import { parseDiscountAppliesTo, parseDiscountRules, type DiscountAppliesTo, type DiscountRules } from "@bs/contracts/discount-rules";
+import { parseDiscountAppliesTo, parseDiscountEligibility, parseDiscountRules, type DiscountAppliesTo, type DiscountRules } from "@bs/contracts/discount-rules";
 import { bundleDiscount, bxgyDiscount } from "./bxgy.ts";
 import { splitProportionally } from "./split.ts";
 
@@ -35,8 +35,38 @@ export interface EngineDiscount {
   appliesTo: unknown;
   /** Raw stored extras; the engine reads it with `parseDiscountRules`. */
   rules: unknown;
+  /** Raw stored audience; the engine reads it with `parseDiscountEligibility`. Missing means everyone. */
+  customerEligibility?: unknown;
+  /** The discount is redeemed through a list of single-use codes, so it never applies by itself. */
+  usesCodeList?: boolean;
   createdAt: Date;
 }
+
+/** What the engine knows about the shopper. */
+export interface EngineCustomer {
+  /** null for a guest who matches no customer. */
+  id: string | null;
+  /** Has not completed an order yet. */
+  isNew: boolean;
+  tags: string[];
+  /**
+   * True at checkout, when the shopper's details are known and a guest who matches no customer really is a stranger.
+   * False while browsing, when a guest might still be someone the audience includes: the code is not refused yet.
+   */
+  strict: boolean;
+}
+
+export const ANONYMOUS: EngineCustomer = { id: null, isNew: true, tags: [], strict: false };
+
+/** One code from a generated list: which discount it belongs to and whether it has been used. */
+export interface EngineBulkCode {
+  discountId: string;
+  codeId: string;
+  used: boolean;
+}
+
+/** At most this many codes on one cart (the same limit Shopify has). */
+export const MAX_CODES_PER_CART = 5;
 
 export interface EngineLine {
   id: string;
@@ -70,6 +100,9 @@ export interface EngineInput {
   cart: EngineCart;
   /** How many times this shopper already used each discount (discount id to count). Empty for an anonymous cart. */
   customerUses: Record<string, number>;
+  customer?: EngineCustomer;
+  /** Typed codes that belong to a generated list (upper-case code to its entry). */
+  bulk?: Record<string, EngineBulkCode>;
   now: Date;
 }
 
@@ -90,6 +123,8 @@ export interface EngineApplication {
   maxShipping?: number | null | undefined;
   /** True when it applied without a code. */
   automatic: boolean;
+  /** The generated code that was typed, so it can be marked used. */
+  bulkCodeId?: string | undefined;
 }
 
 export interface EngineRejection {
@@ -138,8 +173,9 @@ export function activeValue(d: Pick<EngineDiscount, "value">, rules: DiscountRul
 }
 
 /** Why a discount cannot be used on this cart, or null when it can. For a typed code the reason is shown; an automatic discount is just skipped. */
-export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" | "customerUses" | "now">): string | null {
+export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" | "customerUses" | "now" | "customer">, viaCode = d.code !== null): string | null {
   const { cart, now } = i;
+  const customer = i.customer ?? ANONYMOUS;
   if (d.status !== "active") return `Discount code is ${d.status}`;
   if (d.startsAt && d.startsAt > now) return "Discount is not yet active";
   if (d.endsAt && d.endsAt < now) return "Discount has expired";
@@ -149,6 +185,15 @@ export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" 
   if (d.minQty && cart.itemCount < d.minQty) return `Minimum order quantity of ${d.minQty} items required`;
   if (d.usageLimit !== null && d.usedCount >= d.usageLimit) return "Discount usage limit has been reached";
   if (d.perCustomerLimit !== null && (i.customerUses[d.id] ?? 0) >= d.perCustomerLimit) return "You have already used this code";
+
+  const audience = parseDiscountEligibility(d.customerEligibility);
+  if (!audience) return "This code can't be used at checkout yet";
+  if (audience.type !== "all") {
+    if (!viaCode) return "This offer needs a code";
+    if (audience.type === "new_customers" && !customer.isNew) return "This code is only for new customers";
+    if (audience.type === "tags" && (customer.id === null ? customer.strict : !customer.tags.some((t) => audience.tags.includes(t)))) return "This code isn't available for your account";
+    if (audience.type === "customers" && (customer.id === null ? customer.strict : !audience.customerIds.includes(customer.id))) return "This code isn't available for your account";
+  }
 
   // Rules the checkout cannot apply yet are refused with a clear reason rather than guessed at.
   if (!["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"].includes(d.type)) return "This code can't be used at checkout yet";
@@ -225,11 +270,12 @@ export function computeAmount(d: EngineDiscount, lines: EngineLine[], remaining:
   return { amount: total, lineAmounts };
 }
 
-function toApplication(d: EngineDiscount, cart: EngineCart, automatic: boolean): EngineApplication {
+function toApplication(d: EngineDiscount, cart: EngineCart, automatic: boolean, typedCode?: string, bulkCodeId?: string): EngineApplication {
   const { amount, lineAmounts } = computeAmount(d, cart.lines, new Map());
   return {
     discountId: d.id,
-    code: d.code,
+    code: typedCode ?? d.code,
+    ...(bulkCodeId ? { bulkCodeId } : {}),
     title: d.title,
     type: d.type,
     discountClass: discountClassOf(d),
@@ -253,24 +299,31 @@ export function evaluateDiscounts(input: EngineInput): EngineResult {
   const candidates: EngineApplication[] = [];
   const byId = new Map<string, EngineDiscount>();
 
-  const typed = [...new Set(input.codes.map(normalise).filter(Boolean))];
-  for (const code of typed) {
-    const d = input.discounts.find((x) => x.code !== null && normalise(x.code) === code);
+  const typed = [...new Set(input.codes.map(normalise).filter(Boolean))].slice(0, MAX_CODES_PER_CART);
+  const typedAt = new Map<string, number>(); // discount id to how early the shopper typed its code
+  typed.forEach((code, index) => {
+    const bulk = input.bulk?.[code];
+    const d = bulk ? input.discounts.find((x) => x.id === bulk.discountId) : input.discounts.find((x) => x.code !== null && normalise(x.code) === code);
     if (!d) {
       rejections.push({ code, reason: "Discount code not found" });
-      continue;
+      return;
     }
-    const reason = ineligibleReason(d, input);
+    if (bulk?.used) {
+      rejections.push({ code, reason: "This code has already been used" });
+      return;
+    }
+    const reason = ineligibleReason(d, input, true);
     if (reason) {
       rejections.push({ code, reason });
-      continue;
+      return;
     }
     byId.set(d.id, d);
-    candidates.push(toApplication(d, cart, false));
-  }
+    typedAt.set(d.id, index);
+    candidates.push(toApplication(d, cart, false, code, bulk?.codeId));
+  });
   for (const d of input.discounts) {
-    if (d.code !== null || byId.has(d.id)) continue;
-    if (ineligibleReason(d, input) !== null) continue;
+    if (d.code !== null || d.usesCodeList || byId.has(d.id)) continue;
+    if (ineligibleReason(d, input, false) !== null) continue;
     byId.set(d.id, d);
     candidates.push(toApplication(d, cart, true));
   }
@@ -278,6 +331,7 @@ export function evaluateDiscounts(input: EngineInput): EngineResult {
   const age = (a: EngineApplication) => byId.get(a.discountId)?.createdAt.getTime() ?? 0;
   candidates.sort((a, b) => {
     if (a.automatic !== b.automatic) return a.automatic ? 1 : -1; // typed codes first
+    if (!a.automatic) return (typedAt.get(a.discountId) ?? 0) - (typedAt.get(b.discountId) ?? 0); // earlier codes keep their place
     if (a.amount !== b.amount) return b.amount - a.amount;
     return age(a) - age(b) || a.discountId.localeCompare(b.discountId);
   });

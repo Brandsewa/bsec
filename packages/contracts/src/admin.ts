@@ -7,7 +7,7 @@ import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
-import { DiscountAppliesTo, DiscountRules } from "./discount-rules.ts";
+import { DiscountAppliesTo, DiscountEligibility, DiscountRules } from "./discount-rules.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -4812,6 +4812,8 @@ export const adminContract = {
               value: z.number(),
               /** What it applies to: the whole order, or chosen products / collections. */
               appliesTo: DiscountAppliesTo.default({ type: "all" }),
+              /** Redeemed through a generated list of single-use codes. */
+              usesCodeList: z.boolean().default(false),
               usageLimit: z.number().nullable(),
               usedCount: z.number(),
               status: z.string(),
@@ -4834,6 +4836,10 @@ export const adminContract = {
           value: z.number().int().min(0),
           appliesTo: DiscountAppliesTo.optional(),
           rules: DiscountRules.optional(),
+          /** Who it is for. Anything but everyone needs a code (or a code list). */
+          customerEligibility: DiscountEligibility.optional(),
+          /** Redeem through a generated list of single-use codes instead of one code. Set when it is created. */
+          usesCodeList: z.boolean().optional(),
           minSubtotal: z.number().int().min(0).optional(),
           usageLimit: z.number().int().min(1).optional(),
           perCustomerLimit: z.number().int().min(1).optional(),
@@ -4867,6 +4873,10 @@ export const adminContract = {
           /** Names of the chosen products or collections, for showing them on the edit screen. */
           appliesToItems: z.array(z.object({ id: z.string().uuid(), title: z.string() })).default([]),
           rules: DiscountRules.default({}),
+          customerEligibility: DiscountEligibility.default({ type: "all" }),
+          /** Names of the customers a "chosen customers" discount is for. */
+          eligibleCustomers: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string() })).default([]),
+          usesCodeList: z.boolean().default(false),
           minSubtotal: z.number(),
           usageLimit: z.number().nullable(),
           perCustomerLimit: z.number().nullable(),
@@ -4890,6 +4900,7 @@ export const adminContract = {
           value: z.number().int().min(0).optional(),
           appliesTo: DiscountAppliesTo.optional(),
           rules: DiscountRules.optional(),
+          customerEligibility: DiscountEligibility.optional(),
           minSubtotal: z.number().int().min(0).optional(),
           perCustomerLimit: z.number().int().min(1).nullable().optional(),
           combinable: z.boolean().optional(),
@@ -4911,6 +4922,41 @@ export const adminContract = {
       .input(z.object({ id: z.string().uuid() }))
       // `archived` is true when the discount had been used, so it was archived instead (order history keeps pointing at it).
       .output(z.object({ success: z.boolean(), archived: z.boolean().optional() })),
+    /** The generated single-use codes of a discount made for a list of codes. */
+    codes: {
+      generate: oc
+        .route({ method: "POST", path: "/admin/discounts/{id}/codes" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            count: z.number().int().min(1).max(5000),
+            prefix: z.string().max(12).optional(),
+            length: z.number().int().min(6).max(16).optional(),
+          }),
+        )
+        .output(z.object({ created: z.number() })),
+      list: oc
+        .route({ method: "GET", path: "/admin/discounts/{id}/codes" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            filter: z.enum(["all", "used", "unused"]).default("all"),
+            search: z.string().optional(),
+            limit: z.number().int().min(1).max(5000).default(100),
+            offset: z.number().int().min(0).default(0),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(z.object({ id: z.string().uuid(), code: z.string(), usedAt: z.string().nullable() })),
+            /** Codes matching the filter. */
+            total: z.number(),
+            /** All codes of the discount, and how many are used. */
+            codeCount: z.number(),
+            usedCount: z.number(),
+          }),
+        ),
+    },
   },
 
   // --- M7 Shipping Settings Admin ---

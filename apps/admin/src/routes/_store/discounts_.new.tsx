@@ -13,6 +13,7 @@ import { Input } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
+import { DiscountAudienceCard, audienceToApi, audienceValid, emptyAudience, type AudienceState } from "../../components/discount/discount-audience.tsx";
 import { DiscountKindCards, DiscountScopeCard, buildSetup, typeForKind, emptyScope, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/new")({
@@ -51,6 +52,8 @@ function CreateDiscountPage() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<DiscountType>("percent");
   const [kind, setKind] = useState<DiscountKind>("order");
+  const [audience, setAudience] = useState<AudienceState>(emptyAudience);
+  const [codeList, setCodeList] = useState(false);
   const [scope, setScope] = useState<ScopeState>(emptyScope);
   const [value, setValue] = useState("10");
   const [minSubtotal, setMinSubtotal] = useState("");
@@ -66,7 +69,9 @@ function CreateDiscountPage() {
       onSuccess: (res) => {
         toast.success(`Discount ${res.code ?? res.title} created.`);
         void queryClient.invalidateQueries({ queryKey: orpc.admin.discounts.list.key() });
-        void navigate({ to: "/discounts" });
+        // A list of single-use codes is made on the discount's own page, now that it exists.
+        if (codeList) void navigate({ to: "/discounts/$id", params: { id: res.id } });
+        else void navigate({ to: "/discounts" });
       },
     }),
   );
@@ -84,7 +89,7 @@ function CreateDiscountPage() {
     return n === undefined || (Number.isInteger(n) && n >= 0);
   });
   const datesOk = !startsAt || !endsAt || new Date(endsAt) > new Date(startsAt);
-  const ready = title.trim() !== "" && valueOk && intsOk && datesOk && scopeValid(kind, type, scope);
+  const ready = title.trim() !== "" && valueOk && intsOk && datesOk && scopeValid(kind, type, scope) && audienceValid(audience) && (audience.type === "all" || codeList || code.trim() !== "");
 
   function submit() {
     if (!ready) return;
@@ -92,7 +97,9 @@ function CreateDiscountPage() {
     const total = optionalInt(usageLimit);
     const per = optionalInt(perCustomerLimit);
     create.mutate({
-      ...(code.trim() ? { code: code.trim() } : {}),
+      ...(!codeList && code.trim() ? { code: code.trim() } : {}),
+      ...(codeList ? { usesCodeList: true } : {}),
+      customerEligibility: audienceToApi(audience),
       title: title.trim(),
       type,
       // percent is a whole percentage; fixed is entered in rupees and stored in paise
@@ -102,7 +109,7 @@ function CreateDiscountPage() {
       ...(total ? { usageLimit: total } : {}),
       ...(per ? { perCustomerLimit: per } : {}),
       combinable,
-      showOnStorefront: code.trim() ? showOnStorefront : false,
+      showOnStorefront: !codeList && code.trim() ? showOnStorefront : false,
       ...(toIso(startsAt) ? { startsAt: toIso(startsAt) as string } : {}),
       ...(toIso(endsAt) ? { endsAt: toIso(endsAt) as string } : {}),
     });
@@ -129,6 +136,7 @@ function CreateDiscountPage() {
             </CardHeader>
             <CardContent>
               <FieldGroup>
+                {codeList ? null : (
                 <Field>
                   <FieldLabel htmlFor="discount-code">Discount code</FieldLabel>
                   <Input
@@ -138,6 +146,13 @@ function CreateDiscountPage() {
                     onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ""))}
                     placeholder="e.g. SUMMER50"
                   />
+                </Field>
+                )}
+                <Field orientation="horizontal">
+                  <Checkbox id="discount-code-list" checked={codeList} onCheckedChange={(c) => setCodeList(c === true)} />
+                  <FieldLabel htmlFor="discount-code-list" className="font-normal">
+                    Make a list of single-use codes instead (for influencers or campaigns)
+                  </FieldLabel>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="discount-title">Title</FieldLabel>
@@ -194,6 +209,8 @@ function CreateDiscountPage() {
           </Card>
 
           <DiscountScopeCard kind={kind} type={type} sym={sym} scope={scope} onChange={setScope} />
+
+          <DiscountAudienceCard audience={audience} onChange={setAudience} hasCode={codeList || code.trim() !== ""} />
 
           <Card>
             <CardHeader>

@@ -14,6 +14,7 @@ import { orpc } from "../../lib/orpc.ts";
 import type { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
+import { CodeListPanel, DiscountAudienceCard, audienceFromDiscount, audienceToApi, audienceValid, type AudienceState } from "../../components/discount/discount-audience.tsx";
 import { DiscountKindCards, DiscountScopeCard, buildSetup, typeForKind, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/$id")({
@@ -79,6 +80,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
   const [type, setType] = useState<DiscountType>(initialType);
   const initialScope = scopeFromDiscount(discount);
   const [kind, setKind] = useState<DiscountKind>(initialScope.kind);
+  const [audience, setAudience] = useState<AudienceState>(audienceFromDiscount(discount));
   const [scope, setScope] = useState<ScopeState>(initialScope.scope);
   const [value, setValue] = useState(String(initialType === "fixed" ? discount.value / 100 : discount.value));
   const [minSubtotal, setMinSubtotal] = useState(discount.minSubtotal ? String(discount.minSubtotal / 100) : "");
@@ -122,7 +124,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
     return n === undefined || (Number.isInteger(n) && n >= 0);
   });
   const datesOk = !startsAt || !endsAt || new Date(endsAt) > new Date(startsAt);
-  const ready = title.trim() !== "" && valueOk && intsOk && datesOk && scopeValid(kind, type, scope);
+  const ready = title.trim() !== "" && valueOk && intsOk && datesOk && scopeValid(kind, type, scope) && audienceValid(audience) && (audience.type === "all" || discount.usesCodeList || code.trim() !== "");
 
   function submit() {
     if (!ready) return;
@@ -131,7 +133,8 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
     const per = optionalInt(perCustomerLimit);
     create.mutate({
       id: discount.id,
-      code: code.trim() ? code.trim() : null,
+      ...(discount.usesCodeList ? {} : { code: code.trim() ? code.trim() : null }),
+      customerEligibility: audienceToApi(audience),
       title: title.trim(),
       type,
       // percent is a whole percentage; fixed is entered in rupees and stored in paise
@@ -141,7 +144,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
       usageLimit: total ? total : null,
       perCustomerLimit: per ? per : null,
       combinable,
-      showOnStorefront: code.trim() ? showOnStorefront : false,
+      showOnStorefront: !discount.usesCodeList && code.trim() ? showOnStorefront : false,
       startsAt: toIso(startsAt) ?? null,
       endsAt: toIso(endsAt) ?? null,
     });
@@ -168,6 +171,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
             </CardHeader>
             <CardContent>
               <FieldGroup>
+                {discount.usesCodeList ? null : (
                 <Field>
                   <FieldLabel htmlFor="discount-code">Discount code</FieldLabel>
                   <Input
@@ -178,6 +182,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                     placeholder="e.g. SUMMER50"
                   />
                 </Field>
+                )}
                 <Field>
                   <FieldLabel htmlFor="discount-title">Title</FieldLabel>
                   <Input id="discount-title" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Summer flat 20% off" />
@@ -233,6 +238,10 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
           </Card>
 
           <DiscountScopeCard kind={kind} type={type} sym={sym} scope={scope} onChange={setScope} />
+
+          <DiscountAudienceCard audience={audience} onChange={setAudience} hasCode={discount.usesCodeList || code.trim() !== ""} />
+
+          {discount.usesCodeList ? <CodeListPanel discountId={discount.id} /> : null}
 
           <Card>
             <CardHeader>
