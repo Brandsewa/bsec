@@ -183,7 +183,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} locale={marketLocale} />
   );
   // Coupon cards: the discounts the store chose to show (Discount > Show on the storefront).
-  const coupons = await getCachedStorefrontCoupons(tenantId).catch(() => []);
+  const coupons = await getCachedStorefrontCoupons(tenantId, product.id).catch(() => []);
   const couponCards = (o: ProductCouponsOptions) => (
     <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );

@@ -30,7 +30,8 @@ import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { recordOrderDiscountApplications, redeemDiscount } from "./discounts.ts";
-import { allocateDiscount, priceOrder } from "./pricing.ts";
+import { priceOrder } from "./pricing.ts";
+import { allocateApplications } from "../discounts/engine.ts";
 import { cartWeightGrams, getTenantShippingRates } from "./shipping-rates.ts";
 import { toCountryCode } from "./shipping-rules.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
@@ -333,7 +334,7 @@ export async function placeOrder(
 
     // Merchant-entered tax of the market (ADR-040): added on top for tax-exclusive prices, carved out for inclusive ones.
     // Per-line discounts are allocated first so tax is charged on what the shopper actually pays.
-    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    const lineDiscounts = allocateApplications(cart.items.map((it) => ({ id: it.id, lineTotal: it.lineTotal })), cart.discounts ?? []);
     let marketTax: TaxResult | null = null;
     if (mkt.taxCollect) {
       marketTax = computeTax({
@@ -752,7 +753,7 @@ export async function placeOrder(
         code: d.automatic ? null : d.code,
         title: d.title,
         type: d.type,
-        discountClass: d.freeShipping ? ("shipping" as const) : ("order" as const),
+        discountClass: d.discountClass,
         amount: d.freeShipping ? 0 : d.amount,
         shippingAmount: d.freeShipping ? pricing.shippingDiscount : 0,
       })),

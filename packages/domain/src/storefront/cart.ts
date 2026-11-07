@@ -6,7 +6,7 @@ import type { TenantContext } from "../context.ts";
 import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
-import { evaluateCartDiscounts, evaluateDiscount } from "../orders/discounts.ts";
+import { evaluateCartDiscounts } from "../orders/discounts.ts";
 import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
 import { loadStatePriceMap } from "../apps/state-pricing.ts";
@@ -54,6 +54,10 @@ export interface CartDiscount {
   freeShipping: boolean;
   /** True when it applied by itself (no code typed). */
   automatic: boolean;
+  /** "product" discounts touch only some lines; "order" ones the whole order; "shipping" the delivery charge. */
+  discountClass: "product" | "order" | "shipping";
+  /** For a product discount: what it takes off each cart line (cart item id to amount). */
+  lineAmounts?: Record<string, number> | undefined;
 }
 
 export interface StorefrontCart {
@@ -71,6 +75,8 @@ export interface StorefrontCart {
   discount?: CartDiscount | null | undefined;
   /** Every discount applied to the cart: the typed code and/or automatic ones (ADR-045). */
   discounts?: CartDiscount[] | undefined;
+  /** Typed codes the engine turned down, with the reason (used when a shopper tries a code). */
+  discountRejections?: Array<{ code: string; reason: string }> | undefined;
   /** Set when a code that was applied is no longer valid (expired, minimum no longer met...): the shopper must remove or fix it. */
   discountNotice?: string | null | undefined;
   lastActivityAt: string;
@@ -134,6 +140,7 @@ async function loadCartWithItems(
         title: schema.variants.title,
         optionValues: schema.variants.optionValues,
         price: schema.variants.price,
+        compareAtPrice: schema.variants.compareAtPrice,
         preorderEnabled: schema.variants.preorderEnabled,
         preorderShipsOn: schema.variants.preorderShipsOn,
         preorderMessage: schema.variants.preorderMessage,
@@ -236,6 +243,15 @@ async function loadCartWithItems(
   const appliedCode = cartRecord.discountCodes?.[0];
   const evaluated = await evaluateCartDiscounts(tx as unknown as Db, cartRecord.tenantId as string, {
     codes: appliedCode ? [appliedCode] : [],
+    lines: items.map((it, i) => ({
+      id: it.id,
+      productId: it.product.id,
+      quantity: it.quantity,
+      unitPrice: it.unitPriceSnapshot,
+      lineTotal: it.lineTotal,
+      // A compare-at price above the selling price marks a sale item (base prices; market prices follow the same ratio).
+      onSale: rawItems[i]?.variant.compareAtPrice != null && Number(rawItems[i]?.variant.compareAtPrice) > Number(rawItems[i]?.variant.price),
+    })),
     cartSubtotal: subtotal,
     cartTotalQty: itemCount,
     currency: cartRecord.currency ?? "INR",
@@ -249,6 +265,8 @@ async function loadCartWithItems(
     amount: a.amount,
     freeShipping: a.freeShipping,
     automatic: a.automatic,
+    discountClass: a.discountClass,
+    ...(a.lineAmounts ? { lineAmounts: a.lineAmounts } : {}),
   }));
   const discount: CartDiscount | null = discounts.find((d) => !d.automatic) ?? discounts[0] ?? null;
   const discountNotice: string | null = evaluated.rejections[0]
@@ -266,6 +284,7 @@ async function loadCartWithItems(
     subtotal,
     discount,
     discounts,
+    discountRejections: evaluated.rejections,
     discountNotice,
     lastActivityAt:
       cartRecord.lastActivityAt instanceof Date
@@ -755,15 +774,19 @@ export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: 
     const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, input.token)).limit(1);
     if (!cartRecord) throw new Error("Not Found: cart not found");
 
-    // evaluate against the cart as it is (without the old code)
+    // Try the code on the cart as it is (replacing any old code): the engine says whether it applies and why not.
     const current = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [] });
     if (current.items.length === 0) throw new Error("Bad Request: add something to your cart first");
-    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount, currency: current.currency ?? "INR", customerId: cartRecord.customerId ?? undefined });
-    if (!res.valid) throw new Error(`Bad Request: ${res.reason ?? "this code can't be used"}`);
+    const trial = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [code] });
+    const typed = trial.discounts?.find((d) => !d.automatic);
+    if (!typed) {
+      const why = trial.discountRejections?.find((r) => r.code === code.toUpperCase());
+      throw new Error(`Bad Request: ${why?.reason ?? "this code can't be used"}`);
+    }
 
     const [updated] = await tx
       .update(schema.carts)
-      .set({ discountCodes: [res.code ?? code], lastActivityAt: new Date() })
+      .set({ discountCodes: [typed.code], lastActivityAt: new Date() })
       .where(eq(schema.carts.id, cartRecord.id))
       .returning();
     return loadCartWithItems(tx, updated ?? cartRecord);

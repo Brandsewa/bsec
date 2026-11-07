@@ -73,6 +73,8 @@ export const discounts = tenantTable(
     type: text("type").notNull(), // percent, fixed, free_shipping, buy_x_get_y
     value: integer("value").notNull(), // percent points (e.g. 20 for 20%) or paise (e.g. 5000 for ₹50)
     appliesTo: jsonb("applies_to").notNull().default(sql`'{"type":"all"}'::jsonb`),
+    /** Versioned extras (ADR-045): maxDiscount, excludeOnSale, oncePerOrder, later tiers and buy-x-get-y. Validated by `discountRulesSchema` in @bs/contracts. */
+    rules: jsonb("rules").notNull().default(sql`'{}'::jsonb`),
     minSubtotal: bigint("min_subtotal", { mode: "number" }).default(0),
     minQty: integer("min_qty").default(0),
     customerEligibility: jsonb("customer_eligibility").notNull().default(sql`'{"type":"all"}'::jsonb`),

@@ -13,13 +13,12 @@ import { Input } from "@bs/ui";
 import { orpc } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
+import { DiscountKindCards, DiscountScopeCard, buildSetup, emptyScope, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/new")({
   pendingComponent: () => <PageSkeleton />,
   component: CreateDiscountPage,
 });
-
-type DiscountType = "percent" | "fixed" | "free_shipping";
 
 const typeLabel = (sym: string): Record<DiscountType, string> => ({
   percent: "Percentage off",
@@ -49,6 +48,8 @@ function CreateDiscountPage() {
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [type, setType] = useState<DiscountType>("percent");
+  const [kind, setKind] = useState<DiscountKind>("order");
+  const [scope, setScope] = useState<ScopeState>(emptyScope);
   const [value, setValue] = useState("10");
   const [minSubtotal, setMinSubtotal] = useState("");
   const [usageLimit, setUsageLimit] = useState("");
@@ -68,6 +69,13 @@ function CreateDiscountPage() {
     }),
   );
 
+
+  function pickKind(k: DiscountKind) {
+    setKind(k);
+    if (k === "shipping") setType("free_shipping");
+    else if (type === "free_shipping") setType("percent");
+  }
+
   const numValue = Number(value);
   const valueOk = type === "free_shipping" || (Number.isFinite(numValue) && numValue > 0 && (type !== "percent" || numValue <= 100));
   const intsOk = [minSubtotal, usageLimit, perCustomerLimit].every((r) => {
@@ -75,7 +83,7 @@ function CreateDiscountPage() {
     return n === undefined || (Number.isInteger(n) && n >= 0);
   });
   const datesOk = !startsAt || !endsAt || new Date(endsAt) > new Date(startsAt);
-  const ready = title.trim() !== "" && valueOk && intsOk && datesOk;
+  const ready = title.trim() !== "" && valueOk && intsOk && datesOk && scopeValid(kind, type, scope);
 
   function submit() {
     if (!ready) return;
@@ -88,6 +96,7 @@ function CreateDiscountPage() {
       type,
       // percent is a whole percentage; fixed is entered in rupees and stored in paise
       value: type === "free_shipping" ? 0 : type === "fixed" ? Math.round(numValue * 100) : Math.round(numValue),
+      ...buildSetup(kind, type, scope),
       ...(min ? { minSubtotal: min * 100 } : {}),
       ...(total ? { usageLimit: total } : {}),
       ...(per ? { perCustomerLimit: per } : {}),
@@ -110,6 +119,8 @@ function CreateDiscountPage() {
         }}
       >
         <div className="grid gap-4">
+          <DiscountKindCards kind={kind} onChange={pickKind} />
+
           <Card>
             <CardHeader>
               <CardTitle>Discount</CardTitle>
@@ -154,7 +165,7 @@ function CreateDiscountPage() {
                       id="discount-type"
                       value={type}
                       onChange={(v) => setType(v as DiscountType)}
-                      options={(Object.keys(labels) as DiscountType[]).map((t) => ({ value: t, label: labels[t] }))}
+                      options={(kind === "shipping" ? (["free_shipping"] as DiscountType[]) : (["percent", "fixed"] as DiscountType[])).map((t) => ({ value: t, label: labels[t] }))}
                     />
                   </Field>
                   <Field>
@@ -178,6 +189,8 @@ function CreateDiscountPage() {
               </FieldGroup>
             </CardContent>
           </Card>
+
+          <DiscountScopeCard kind={kind} type={type} sym={sym} scope={scope} onChange={setScope} />
 
           <Card>
             <CardHeader>
@@ -239,6 +252,15 @@ function CreateDiscountPage() {
             </CardHeader>
             <CardContent className="grid gap-3">
               <p className="font-mono font-semibold text-foreground">{code || "Automatic discount"}</p>
+              <p className="text-muted-foreground">
+                {kind === "products"
+                  ? scope.target === "products"
+                    ? `On ${scope.products.length} chosen product${scope.products.length === 1 ? "" : "s"}`
+                    : `On ${scope.collectionIds.length} chosen collection${scope.collectionIds.length === 1 ? "" : "s"}`
+                  : kind === "order"
+                    ? "On the whole order"
+                    : "On the shipping charge"}
+              </p>
               <p className="text-muted-foreground">
                 {type === "free_shipping"
                   ? "Free shipping"

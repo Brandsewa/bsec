@@ -10,15 +10,19 @@ import {
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
+import { parseDiscountAppliesTo } from "@bs/contracts/discount-rules";
 import {
   evaluateDiscounts,
   type EngineApplication,
   type EngineDiscount,
+  type EngineLine,
   type EngineRejection,
 } from "../discounts/engine.ts";
+import { collectionIdsByProduct } from "../discounts/scope.ts";
 
 export interface ValidateDiscountInput {
   code: string;
+  lines?: CartDiscountLine[] | undefined;
   cartSubtotal: number; // in paise
   cartTotalQty: number;
   customerId?: string | undefined;
@@ -44,9 +48,21 @@ export interface RedeemDiscountInput {
   amount: number; // in paise
 }
 
+/** A cart line as the engine needs it (the loader adds collection membership). */
+export interface CartDiscountLine {
+  id: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  onSale: boolean;
+}
+
 export interface CartDiscountsInput {
   /** Codes the shopper typed (none for a plain cart: automatic discounts still apply). */
   codes: string[];
+  /** What is in the cart. Product-scoped discounts only touch matching lines. */
+  lines?: CartDiscountLine[] | undefined;
   cartSubtotal: number;
   cartTotalQty: number;
   currency?: string | undefined;
@@ -124,13 +140,27 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     endsAt: d.endsAt,
     status: d.status,
     appliesTo: d.appliesTo,
+    rules: d.rules,
     createdAt: d.createdAt,
   }));
+
+  // Collection membership is read only for the collections some discount in play asks about.
+  const wantedCollections = [
+    ...new Set(
+      engineRows.flatMap((d) => {
+        const scope = parseDiscountAppliesTo(d.appliesTo);
+        return scope?.type === "collections" ? scope.collectionIds : [];
+      }),
+    ),
+  ];
+  const cartLines = input.lines ?? [];
+  const memberships = await collectionIdsByProduct(db, tenantId, [...new Set(cartLines.map((l) => l.productId))], wantedCollections);
+  const lines: EngineLine[] = cartLines.map((l) => ({ ...l, collectionIds: memberships.get(l.productId) ?? [] }));
 
   return evaluateDiscounts({
     discounts: engineRows,
     codes,
-    cart: { subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: await baseCurrencyOf(db, tenantId) },
+    cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: await baseCurrencyOf(db, tenantId) },
     customerUses,
     now: new Date(),
   });
@@ -156,6 +186,7 @@ export async function evaluateDiscount(db: Db, tenantId: string, input: Validate
   const code = input.code.trim();
   const res = await evaluateCartDiscounts(db, tenantId, {
     codes: [code],
+    lines: input.lines,
     cartSubtotal: input.cartSubtotal,
     cartTotalQty: input.cartTotalQty,
     currency: input.currency,

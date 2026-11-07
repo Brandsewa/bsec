@@ -673,6 +673,13 @@
       "when": 1793928600000,
       "tag": "0101_order_discount_applications",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1794015000000,
+      "tag": "0102_discount_rules",
+      "breakpoints": true
     }
   ]
 }

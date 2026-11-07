@@ -7,6 +7,7 @@ import { financeContract } from "./finance.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
+import { DiscountAppliesTo, DiscountRules } from "./discount-rules.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -4809,6 +4810,8 @@ export const adminContract = {
               title: z.string(),
               type: z.string(),
               value: z.number(),
+              /** What it applies to: the whole order, or chosen products / collections. */
+              appliesTo: DiscountAppliesTo.default({ type: "all" }),
               usageLimit: z.number().nullable(),
               usedCount: z.number(),
               status: z.string(),
@@ -4829,6 +4832,8 @@ export const adminContract = {
           title: z.string().min(1),
           type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]),
           value: z.number().int().min(0),
+          appliesTo: DiscountAppliesTo.optional(),
+          rules: DiscountRules.optional(),
           minSubtotal: z.number().int().min(0).optional(),
           usageLimit: z.number().int().min(1).optional(),
           perCustomerLimit: z.number().int().min(1).optional(),
@@ -4858,6 +4863,10 @@ export const adminContract = {
           title: z.string(),
           type: z.string(),
           value: z.number(),
+          appliesTo: DiscountAppliesTo.default({ type: "all" }),
+          /** Names of the chosen products or collections, for showing them on the edit screen. */
+          appliesToItems: z.array(z.object({ id: z.string().uuid(), title: z.string() })).default([]),
+          rules: DiscountRules.default({}),
           minSubtotal: z.number(),
           usageLimit: z.number().nullable(),
           perCustomerLimit: z.number().nullable(),
@@ -4879,6 +4888,8 @@ export const adminContract = {
           code: z.string().min(1).nullable().optional(),
           type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
           value: z.number().int().min(0).optional(),
+          appliesTo: DiscountAppliesTo.optional(),
+          rules: DiscountRules.optional(),
           minSubtotal: z.number().int().min(0).optional(),
           perCustomerLimit: z.number().int().min(1).nullable().optional(),
           combinable: z.boolean().optional(),

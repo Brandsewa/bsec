@@ -3,10 +3,11 @@
  * checkout and draft orders all call it with the same facts, so the discount a shopper sees is the one they are charged.
  * All amounts are minor units (paise for INR).
  *
- * Phase 0 covers the order and shipping classes (percent, fixed, free shipping) and adds what was stored but never
- * enforced: automatic discounts, per-customer limits, the base-currency rule for fixed amounts, and stacking.
+ * Classes: `product` (a percent or fixed amount on matching cart lines), `order` (the whole order), `shipping`
+ * (free shipping). Buy X get Y arrives with phase 3 and is refused until then.
  */
 import { formatMoney } from "@bs/contracts/money";
+import { parseDiscountAppliesTo, parseDiscountRules, type DiscountAppliesTo, type DiscountRules } from "@bs/contracts/discount-rules";
 
 /** A discount row, reduced to what the rules need. */
 export interface EngineDiscount {
@@ -21,16 +22,32 @@ export interface EngineDiscount {
   usageLimit: number | null;
   usedCount: number;
   perCustomerLimit: number | null;
-  /** Opt in to being used together with a discount of the other class. */
+  /** Opt in to being used together with a discount of a different class. */
   combinable: boolean;
   startsAt: Date | null;
   endsAt: Date | null;
   status: string;
+  /** Raw stored scope; the engine reads it with `parseDiscountAppliesTo`. */
   appliesTo: unknown;
+  /** Raw stored extras; the engine reads it with `parseDiscountRules`. */
+  rules: unknown;
   createdAt: Date;
 }
 
+export interface EngineLine {
+  id: string;
+  productId: string;
+  /** Every collection the product belongs to (only the ones some discount asks about need to be filled in). */
+  collectionIds: string[];
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  /** Shows a compare-at price above its selling price. */
+  onSale: boolean;
+}
+
 export interface EngineCart {
+  lines: EngineLine[];
   /** Goods subtotal. */
   subtotal: number;
   itemCount: number;
@@ -50,7 +67,7 @@ export interface EngineInput {
   now: Date;
 }
 
-export type DiscountClass = "order" | "shipping";
+export type DiscountClass = "product" | "order" | "shipping";
 
 export interface EngineApplication {
   discountId: string;
@@ -58,8 +75,10 @@ export interface EngineApplication {
   title: string;
   type: string;
   discountClass: DiscountClass;
-  /** Goods discount (0 for free shipping). */
+  /** Goods discount in total (0 for free shipping). */
   amount: number;
+  /** For a product discount: how much it takes off each cart line (line id to amount). */
+  lineAmounts?: Record<string, number> | undefined;
   freeShipping: boolean;
   /** True when it applied without a code. */
   automatic: boolean;
@@ -78,8 +97,35 @@ export interface EngineResult {
 
 const normalise = (c: string) => c.trim().toUpperCase();
 
-export function discountClassOf(type: string): DiscountClass {
-  return type === "free_shipping" ? "shipping" : "order";
+/** Splits `total` over `weights` in proportion; the last non-zero weight takes the rounding remainder. */
+export function splitProportionally(weights: number[], total: number): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0 || sum <= 0) return weights.map(() => 0);
+  const lastIdx = weights.reduce((acc, w, i) => (w > 0 ? i : acc), -1);
+  let given = 0;
+  return weights.map((w, i) => {
+    if (w <= 0) return 0;
+    if (i === lastIdx) return total - given;
+    const share = Math.floor((w * total) / sum);
+    given += share;
+    return share;
+  });
+}
+
+export function discountClassOf(d: Pick<EngineDiscount, "type" | "appliesTo">): DiscountClass {
+  if (d.type === "free_shipping") return "shipping";
+  const scope = parseDiscountAppliesTo(d.appliesTo);
+  return scope && scope.type !== "all" ? "product" : "order";
+}
+
+/** The cart lines a scoped discount may touch (its products or collections, minus sale items when asked). */
+export function eligibleLines(scope: DiscountAppliesTo, rules: DiscountRules, lines: EngineLine[]): EngineLine[] {
+  return lines.filter((l) => {
+    if (rules.excludeOnSale && l.onSale) return false;
+    if (scope.type === "products") return scope.productIds.includes(l.productId);
+    if (scope.type === "collections") return l.collectionIds.some((c) => scope.collectionIds.includes(c));
+    return true;
+  });
 }
 
 /** Why a discount cannot be used on this cart, or null when it can. For a typed code the reason is shown; an automatic discount is just skipped. */
@@ -96,41 +142,76 @@ export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" 
   if (d.perCustomerLimit !== null && (i.customerUses[d.id] ?? 0) >= d.perCustomerLimit) return "You have already used this code";
 
   // Rules the checkout cannot apply yet are refused with a clear reason rather than guessed at.
-  const appliesTo = (d.appliesTo as { type?: string } | null)?.type ?? "all";
-  if (appliesTo !== "all") return "This code can't be used at checkout yet";
   if (d.type !== "percent" && d.type !== "fixed" && d.type !== "free_shipping") return "This code can't be used at checkout yet";
+  const scope = parseDiscountAppliesTo(d.appliesTo);
+  if (!scope) return "This code can't be used at checkout yet";
+  if (d.type === "free_shipping" && scope.type !== "all") return "This code can't be used at checkout yet";
 
   // A fixed amount is a number in the store's own currency: it is not converted for other markets.
   if (d.type === "fixed" && cart.currency !== cart.baseCurrency) {
     return `This code only works on orders in ${cart.baseCurrency}`;
   }
+  if (cart.lines.length > 0 && eligibleLines(scope, parseDiscountRules(d.rules), cart.lines).length === 0) {
+    return "This code doesn't apply to anything in your cart";
+  }
   return null;
 }
 
-/** The goods amount a discount takes off this cart (0 for free shipping). */
-export function goodsAmount(d: EngineDiscount, cart: EngineCart): number {
-  if (d.type === "percent") return Math.round((cart.subtotal * Math.min(100, Math.max(0, d.value))) / 100);
-  if (d.type === "fixed") return Math.min(cart.subtotal, Math.max(0, d.value));
-  return 0;
+/**
+ * What a discount takes off, given what each line still costs (`remaining`, after any product discount on it).
+ * Returns the total and, for a product discount, the share on each line.
+ */
+export function computeAmount(d: EngineDiscount, lines: EngineLine[], remaining: Map<string, number>): { amount: number; lineAmounts?: Record<string, number> } {
+  if (d.type === "free_shipping") return { amount: 0 };
+  const scope = parseDiscountAppliesTo(d.appliesTo) ?? { type: "all" as const };
+  const rules = parseDiscountRules(d.rules);
+  const eligible = eligibleLines(scope, rules, lines);
+  const room = (l: EngineLine) => Math.max(0, remaining.get(l.id) ?? l.lineTotal);
+  const base = eligible.reduce((sum, l) => sum + room(l), 0);
+
+  let total: number;
+  let perLine: number[] | null = null;
+  if (d.type === "percent") {
+    total = Math.round((base * Math.min(100, Math.max(0, d.value))) / 100);
+    if (rules.maxDiscount !== undefined) total = Math.min(total, rules.maxDiscount);
+  } else if (scope.type !== "all" && !rules.oncePerOrder) {
+    // A fixed amount on products comes off every item, never more than the line costs.
+    perLine = eligible.map((l) => Math.min(room(l), Math.max(0, d.value) * l.quantity));
+    total = perLine.reduce((a, b) => a + b, 0);
+  } else {
+    total = Math.min(base, Math.max(0, d.value));
+  }
+  total = Math.min(total, base);
+
+  if (scope.type === "all") return { amount: total };
+  const shares = perLine ?? splitProportionally(eligible.map(room), total);
+  const lineAmounts: Record<string, number> = {};
+  eligible.forEach((l, i) => {
+    if ((shares[i] ?? 0) > 0) lineAmounts[l.id] = shares[i] as number;
+  });
+  return { amount: total, lineAmounts };
 }
 
 function toApplication(d: EngineDiscount, cart: EngineCart, automatic: boolean): EngineApplication {
+  const { amount, lineAmounts } = computeAmount(d, cart.lines, new Map());
   return {
     discountId: d.id,
     code: d.code,
     title: d.title,
     type: d.type,
-    discountClass: discountClassOf(d.type),
-    amount: goodsAmount(d, cart),
+    discountClass: discountClassOf(d),
+    amount,
+    ...(lineAmounts ? { lineAmounts } : {}),
     freeShipping: d.type === "free_shipping",
     automatic,
   };
 }
 
 /**
- * Stacking (ADR-045): at most one goods discount and one shipping discount. The two together need both to opt in
- * (`combinable`). A code the shopper typed always beats an automatic discount; among the same kind the one worth more
- * wins (older first on a tie), so the result never depends on row order.
+ * Stacking (ADR-045). Candidates are taken in order: codes the shopper typed first, then the one worth most. A candidate
+ * is taken when its slot is free (one order discount, one shipping discount, and product discounts only on lines nobody
+ * else has) and, against a discount of a different class, both opted in (`combinable`). Because it is a fixed order, the
+ * result never depends on row order. A typed code that lost is told so instead of silently disappearing.
  */
 export function evaluateDiscounts(input: EngineInput): EngineResult {
   const { cart } = input;
@@ -161,36 +242,65 @@ export function evaluateDiscounts(input: EngineInput): EngineResult {
   }
 
   const age = (a: EngineApplication) => byId.get(a.discountId)?.createdAt.getTime() ?? 0;
-  const rank = (a: EngineApplication, b: EngineApplication) => {
+  candidates.sort((a, b) => {
     if (a.automatic !== b.automatic) return a.automatic ? 1 : -1; // typed codes first
     if (a.amount !== b.amount) return b.amount - a.amount;
     return age(a) - age(b) || a.discountId.localeCompare(b.discountId);
-  };
-  const best = (cls: DiscountClass) => candidates.filter((c) => c.discountClass === cls).sort(rank)[0];
+  });
   const combinable = (a: EngineApplication) => byId.get(a.discountId)?.combinable === true;
 
-  const goods = best("order");
-  const shipping = best("shipping");
-  const applications: EngineApplication[] = [];
-  if (goods && shipping) {
-    if (combinable(goods) && combinable(shipping)) {
-      applications.push(goods, shipping);
-    } else if (goods.automatic !== shipping.automatic) {
-      // Not allowed together: the typed code wins over an automatic discount.
-      applications.push(goods.automatic ? shipping : goods);
+  const accepted: EngineApplication[] = [];
+  for (const c of candidates) {
+    const sameClass = accepted.filter((a) => a.discountClass === c.discountClass);
+    let fits: boolean;
+    if (c.discountClass === "product") {
+      const taken = new Set(sameClass.flatMap((a) => Object.keys(a.lineAmounts ?? {})));
+      fits = Object.keys(c.lineAmounts ?? {}).every((id) => !taken.has(id));
     } else {
-      applications.push(goods);
+      fits = sameClass.length === 0;
     }
-  } else if (goods) {
-    applications.push(goods);
-  } else if (shipping) {
-    applications.push(shipping);
+    if (fits) fits = accepted.filter((a) => a.discountClass !== c.discountClass).every((a) => combinable(a) && combinable(c));
+    if (fits) accepted.push(c);
+    else if (!c.automatic && c.code) rejections.push({ code: normalise(c.code), reason: "This code can't be combined with the other discount on your order" });
   }
 
-  // A typed code that lost a stacking decision is told so, instead of silently disappearing.
-  for (const c of candidates) {
-    if (c.automatic || !c.code || applications.includes(c)) continue;
-    rejections.push({ code: normalise(c.code), reason: "This code can't be combined with the other discount on your order" });
+  // An order discount comes off what is left after product discounts, so the two never take more than a line costs.
+  const remaining = new Map<string, number>(cart.lines.map((l) => [l.id, l.lineTotal]));
+  for (const a of accepted) {
+    for (const [lineId, amt] of Object.entries(a.lineAmounts ?? {})) remaining.set(lineId, (remaining.get(lineId) ?? 0) - amt);
   }
+  const applications = accepted.map((a) => {
+    if (a.discountClass !== "order") return a;
+    const d = byId.get(a.discountId) as EngineDiscount;
+    return { ...a, amount: computeAmount(d, cart.lines, remaining).amount };
+  });
+
+  const order: DiscountClass[] = ["product", "order", "shipping"];
+  applications.sort((a, b) => order.indexOf(a.discountClass) - order.indexOf(b.discountClass));
   return { applications, rejections };
+}
+
+/**
+ * How much of the applied goods discounts lands on each cart line, in line order: product discounts on their own lines,
+ * then order discounts spread over what each line still costs. The tax and the order items are built from this.
+ */
+export function allocateApplications(lines: Array<{ id: string; lineTotal: number }>, applications: Array<Pick<EngineApplication, "discountClass" | "amount" | "lineAmounts">>): number[] {
+  const out = lines.map(() => 0);
+  const idx = new Map(lines.map((l, i) => [l.id, i]));
+  for (const a of applications) {
+    if (a.discountClass !== "product") continue;
+    for (const [lineId, amt] of Object.entries(a.lineAmounts ?? {})) {
+      const i = idx.get(lineId);
+      if (i !== undefined) out[i] = (out[i] ?? 0) + amt;
+    }
+  }
+  const orderTotal = applications.filter((a) => a.discountClass === "order").reduce((s, a) => s + a.amount, 0);
+  if (orderTotal > 0) {
+    const left = lines.map((l, i) => Math.max(0, l.lineTotal - (out[i] ?? 0)));
+    const shares = splitProportionally(left, Math.min(orderTotal, left.reduce((a, b) => a + b, 0)));
+    shares.forEach((s, i) => {
+      out[i] = (out[i] ?? 0) + s;
+    });
+  }
+  return out;
 }

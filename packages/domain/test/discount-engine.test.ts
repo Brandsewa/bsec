@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { evaluateDiscounts, type EngineDiscount, type EngineInput } from "../src/discounts/engine.ts";
+import {
+  allocateApplications,
+  evaluateDiscounts,
+  splitProportionally,
+  type EngineCart,
+  type EngineDiscount,
+  type EngineInput,
+  type EngineLine,
+} from "../src/discounts/engine.ts";
 
 const NOW = new Date("2026-11-07T10:00:00Z");
+
+// Scopes hold real uuids, so the tests use them too.
+const C_SHIRTS = "00000000-0000-4000-8000-0000000000c1";
+const C_HOME = "00000000-0000-4000-8000-0000000000c2";
+const P_SHIRT = "00000000-0000-4000-8000-0000000000a1";
+const P_MUG = "00000000-0000-4000-8000-0000000000a2";
 
 let seq = 0;
 function d(over: Partial<EngineDiscount> = {}): EngineDiscount {
@@ -22,16 +36,39 @@ function d(over: Partial<EngineDiscount> = {}): EngineDiscount {
     endsAt: null,
     status: "active",
     appliesTo: { type: "all" },
+    rules: {},
     createdAt: new Date(NOW.getTime() - seq * 1000),
     ...over,
   };
 }
 
+const line = (id: string, productId: string, lineTotal: number, over: Partial<EngineLine> = {}): EngineLine => ({
+  id,
+  productId,
+  collectionIds: [],
+  quantity: 1,
+  unitPrice: lineTotal,
+  lineTotal,
+  onSale: false,
+  ...over,
+});
+
+const cartOf = (lines: EngineLine[], over: Partial<EngineCart> = {}): EngineCart => ({
+  lines,
+  subtotal: lines.reduce((s, l) => s + l.lineTotal, 0),
+  itemCount: lines.reduce((s, l) => s + l.quantity, 0),
+  currency: "INR",
+  baseCurrency: "INR",
+  ...over,
+});
+/** Two items of one product, 2 x 500.00 = 1,000.00. */
+const TWO = cartOf([line("l1", "p1", 100000, { quantity: 2, unitPrice: 50000 })]);
+
 const run = (discounts: EngineDiscount[], over: Partial<EngineInput> = {}) =>
   evaluateDiscounts({
     discounts,
     codes: [],
-    cart: { subtotal: 100000, itemCount: 2, currency: "INR", baseCurrency: "INR" },
+    cart: TWO,
     customerUses: {},
     now: NOW,
     ...over,
@@ -74,9 +111,9 @@ describe("discount engine: typed codes", () => {
     expect(run([d({ code: "GONE", usageLimit: 3, usedCount: 3 })], { codes: ["gone"] }).rejections[0]?.reason).toMatch(/usage limit/);
   });
 
-  it("refuses product-scoped and buy-x-get-y rules it cannot apply yet, instead of guessing", () => {
-    expect(run([d({ code: "COL", appliesTo: { type: "collection" } })], { codes: ["col"] }).rejections[0]?.reason).toMatch(/can't be used at checkout yet/);
+  it("refuses buy-x-get-y and rules it does not understand, instead of guessing", () => {
     expect(run([d({ code: "BXGY", type: "buy_x_get_y" })], { codes: ["bxgy"] }).rejections[0]?.reason).toMatch(/can't be used at checkout yet/);
+    expect(run([d({ code: "ODD", appliesTo: { type: "customers" } })], { codes: ["odd"] }).rejections[0]?.reason).toMatch(/can't be used at checkout yet/);
   });
 });
 
@@ -107,7 +144,7 @@ describe("discount engine: fixed amounts and currency", () => {
   });
 
   it("refuses a fixed amount in another currency, but lets percent and free shipping through", () => {
-    const usd = { subtotal: 5000, itemCount: 1, currency: "USD", baseCurrency: "INR" };
+    const usd = cartOf([line("l1", "p1", 5000)], { currency: "USD" });
     expect(run([d({ code: "F", type: "fixed", value: 5000 })], { codes: ["f"], cart: usd }).rejections[0]?.reason).toBe("This code only works on orders in INR");
     expect(run([d({ code: "P", value: 10 })], { codes: ["p"], cart: usd }).applications[0]?.amount).toBe(500);
     expect(run([d({ code: "S", type: "free_shipping", value: 0 })], { codes: ["s"], cart: usd }).applications[0]?.freeShipping).toBe(true);
@@ -154,5 +191,101 @@ describe("discount engine: stacking", () => {
     const rows = [d({ value: 10 }), d({ value: 10 }), d({ value: 10 })];
     const first = run(rows).applications[0]?.discountId;
     expect(run([...rows].reverse()).applications[0]?.discountId).toBe(first);
+  });
+});
+
+describe("discount engine: product and collection scope", () => {
+  const cart = cartOf([
+    line("shirt", P_SHIRT, 200000, { quantity: 2, unitPrice: 100000, collectionIds: [C_SHIRTS] }),
+    line("mug", P_MUG, 50000, { collectionIds: [C_HOME] }),
+  ]);
+  const onShirts = (over: Partial<EngineDiscount> = {}) =>
+    d({ code: "SHIRTS", appliesTo: { type: "collections", collectionIds: [C_SHIRTS] }, ...over });
+
+  it("takes a percent off only the lines in the chosen collection", () => {
+    const r = run([onShirts({ value: 20 })], { codes: ["shirts"], cart });
+    expect(r.applications[0]).toMatchObject({ discountClass: "product", amount: 40000, lineAmounts: { shirt: 40000 } });
+  });
+
+  it("takes a percent off only the chosen products", () => {
+    const r = run([d({ code: "MUG", value: 10, appliesTo: { type: "products", productIds: [P_MUG] } })], { codes: ["mug"], cart });
+    expect(r.applications[0]).toMatchObject({ amount: 5000, lineAmounts: { mug: 5000 } });
+  });
+
+  it("takes a fixed amount off every item of the chosen products, never more than the line costs", () => {
+    const r = run([onShirts({ type: "fixed", value: 30000 })], { codes: ["shirts"], cart });
+    expect(r.applications[0]).toMatchObject({ amount: 60000, lineAmounts: { shirt: 60000 } }); // 2 items x 300.00
+    const big = run([onShirts({ type: "fixed", value: 900000 })], { codes: ["shirts"], cart });
+    expect(big.applications[0]?.amount).toBe(200000);
+  });
+
+  it("takes a fixed amount once for the order when asked", () => {
+    const r = run([onShirts({ type: "fixed", value: 30000, rules: { oncePerOrder: true } })], { codes: ["shirts"], cart });
+    expect(r.applications[0]?.amount).toBe(30000);
+  });
+
+  it("caps a percent discount at the most it may take off", () => {
+    const r = run([onShirts({ value: 50, rules: { maxDiscount: 25000 } })], { codes: ["shirts"], cart });
+    expect(r.applications[0]?.amount).toBe(25000);
+    const whole = run([d({ code: "UPTO", value: 50, rules: { maxDiscount: 30000 } })], { codes: ["upto"], cart });
+    expect(whole.applications[0]).toMatchObject({ discountClass: "order", amount: 30000 });
+  });
+
+  it("leaves out items already on sale when asked", () => {
+    const sale = cartOf([line("a", "p1", 100000, { onSale: true }), line("b", "p2", 100000)]);
+    expect(run([d({ code: "ALL", value: 10, rules: { excludeOnSale: true } })], { codes: ["all"], cart: sale }).applications[0]?.amount).toBe(10000);
+    expect(run([d({ code: "ALL", value: 10 })], { codes: ["all"], cart: sale }).applications[0]?.amount).toBe(20000);
+    const onlySale = cartOf([line("a", "p1", 100000, { onSale: true })]);
+    expect(run([d({ code: "ALL", value: 10, rules: { excludeOnSale: true } })], { codes: ["all"], cart: onlySale }).rejections[0]?.reason).toMatch(/doesn't apply to anything/);
+  });
+
+  it("says so when nothing in the cart matches, and skips it quietly when automatic", () => {
+    const other = cartOf([line("mug", P_MUG, 50000)]);
+    expect(run([onShirts()], { codes: ["shirts"], cart: other }).rejections[0]?.reason).toMatch(/doesn't apply to anything/);
+    expect(run([onShirts({ code: null })], { cart: other })).toEqual({ applications: [], rejections: [] });
+  });
+
+  it("lets product discounts on different lines stack, but not on the same line", () => {
+    const shirts = onShirts({ value: 10, code: null });
+    const mugs = d({ value: 50, appliesTo: { type: "products", productIds: [P_MUG] } });
+    expect(run([shirts, mugs], { cart }).applications.map((a) => a.amount).sort((x, y) => x - y)).toEqual([20000, 25000]);
+    const overlap = d({ value: 5, appliesTo: { type: "products", productIds: [P_SHIRT] } });
+    expect(run([shirts, overlap], { cart }).applications).toHaveLength(1);
+  });
+
+  it("takes an order discount off what is left after a product discount, when both opt in", () => {
+    const shirts = onShirts({ value: 50, code: null, combinable: true }); // 100000 off the shirts
+    const order = d({ value: 10, combinable: true }); // 10% of the remaining 150000
+    const r = run([shirts, order], { cart });
+    expect(r.applications.map((a) => [a.discountClass, a.amount])).toEqual([
+      ["product", 100000],
+      ["order", 15000],
+    ]);
+    // without opting in only one applies
+    expect(run([shirts, { ...order, combinable: false }], { cart }).applications).toHaveLength(1);
+  });
+});
+
+describe("allocating applied discounts over cart lines", () => {
+  it("puts a product discount on its own lines and spreads an order discount over what is left", () => {
+    const lines = [
+      { id: "a", lineTotal: 100000 },
+      { id: "b", lineTotal: 50000 },
+    ];
+    const out = allocateApplications(lines, [
+      { discountClass: "product", amount: 40000, lineAmounts: { a: 40000 } },
+      { discountClass: "order", amount: 11000 },
+    ]);
+    // left after the product discount: a 60000, b 50000 -> 11000 split 6:5
+    expect(out).toEqual([40000 + 6000, 5000]);
+    expect(out.reduce((x, y) => x + y, 0)).toBe(51000);
+  });
+
+  it("splitProportionally always adds back up", () => {
+    for (const total of [1, 7, 99, 1001]) {
+      const parts = splitProportionally([3333, 3333, 3334], total);
+      expect(parts.reduce((a, b) => a + b, 0)).toBe(total);
+    }
+    expect(splitProportionally([0, 0], 10)).toEqual([0, 0]);
   });
 });

@@ -7,7 +7,9 @@ import {
   adjustInventory,
   applyCartDiscount,
   createAdminDiscount,
+  createCollection,
   createMarket,
+  getStorefrontCoupons,
   createProduct,
   createRuntime,
   listInventoryLevels,
@@ -27,6 +29,10 @@ let rt: Runtime;
 let rtWeb: Runtime;
 let ctx: TenantContext;
 let variantId: string;
+let mugVariantId: string;
+let pickleProductId: string;
+let mugProductId: string;
+let picklesCollectionId: string;
 let n = 0;
 
 const errorOf = async (p: Promise<unknown>) => (await p.then(() => null, (e: Error) => e))?.message ?? null;
@@ -47,6 +53,14 @@ const buyer = (cartToken: string, phone = "9876543210") => ({
 async function cartWith(qty: number, marketId?: string) {
   const cart = await getOrCreateCart(rtWeb, ctx, `tok-eng-${++n}`, undefined, marketId);
   await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity: qty });
+  return cart.token;
+}
+
+/** A cart with `pickles` jars of the 100.00 pickle and `mugs` of the 50.00 mug. */
+async function mixedCart(pickles: number, mugs: number) {
+  const cart = await getOrCreateCart(rtWeb, ctx, `tok-eng-${++n}`);
+  if (pickles > 0) await addToCart(rtWeb, ctx, { token: cart.token, variantId, quantity: pickles });
+  if (mugs > 0) await addToCart(rtWeb, ctx, { token: cart.token, variantId: mugVariantId, quantity: mugs });
   return cart.token;
 }
 
@@ -72,6 +86,16 @@ beforeAll(async () => {
   const row = (await listInventoryLevels(rtWeb, ctx, {})).items[0]!;
   variantId = row.variantId;
   await adjustInventory(rtWeb, ctx, { variantId, locationId: row.locationId, quantityDelta: 200, reason: "received" });
+
+  await createProduct(rtWeb, ctx, { title: "Mug", status: "active", primaryCategoryId: await primaryCategory(rtWeb, ctx), variants: [{ sku: "ENG-MUG", title: "Default", price: 5000 }] });
+  const levels = (await listInventoryLevels(rtWeb, ctx, {})).items;
+  mugVariantId = levels.find((l) => l.variantId !== variantId)!.variantId;
+  await adjustInventory(rtWeb, ctx, { variantId: mugVariantId, locationId: row.locationId, quantityDelta: 200, reason: "received" });
+  const productOf = async (vid: string) => (await rt._db.db.select({ id: schema.variants.productId }).from(schema.variants).where(eq(schema.variants.id, vid)))[0]!.id;
+  pickleProductId = await productOf(variantId);
+  mugProductId = await productOf(mugVariantId);
+  const col = await createCollection(rtWeb, ctx, { title: "Pickles", type: "manual", productIds: [pickleProductId] });
+  picklesCollectionId = col.id;
 }, 240_000);
 
 afterAll(async () => {
@@ -183,5 +207,62 @@ describe("fixed amounts in another currency", () => {
     const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "PCT10" });
     expect(cart.discount).toMatchObject({ code: "PCT10", automatic: false });
     expect(cart.discount!.amount).toBeGreaterThan(0);
+  });
+});
+
+describe("discounts on chosen products and collections (phase 1)", () => {
+  it("a collection discount takes money off only that collection's lines, on the order and its items", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "PICKLES20", title: "20% off pickles", type: "percent", value: 20, appliesTo: { type: "collections", collectionIds: [picklesCollectionId] } });
+    const token = await mixedCart(1, 1); // pickle 10000 + mug 5000
+    const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "pickles20" });
+    expect(cart.discount).toMatchObject({ code: "PICKLES20", amount: 2000, discountClass: "product" });
+
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9000000001"));
+    expect(placed).toMatchObject({ subtotal: 15000, discountTotal: 2000 });
+    const items = await rt._db.db.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, placed.orderId));
+    expect(items.map((i) => [i.sku, i.discountAmount]).sort()).toEqual([["ENG-1", 2000], ["ENG-MUG", 0]]);
+    const apps = await rt._db.db.select().from(schema.orderDiscountApplications).where(eq(schema.orderDiscountApplications.orderId, placed.orderId));
+    expect(apps[0]).toMatchObject({ code: "PICKLES20", discountClass: "product", amount: 2000 });
+  });
+
+  it("a product discount with a cap never takes off more than the cap", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "UPTO50", title: "50% off the mug, up to 30", type: "percent", value: 50, appliesTo: { type: "products", productIds: [mugProductId] }, rules: { maxDiscount: 3000 } });
+    const token = await mixedCart(0, 4); // 4 mugs = 20000, 50% = 10000, capped at 3000
+    const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "UPTO50" });
+    expect(cart.discount?.amount).toBe(3000);
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9000000002"));
+    expect(placed.discountTotal).toBe(3000);
+  });
+
+  it("refuses a product discount when nothing in the cart matches, with a reason", async () => {
+    const token = await mixedCart(0, 1); // only a mug, the collection holds pickles
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token, code: "PICKLES20" }))).toMatch(/doesn't apply to anything in your cart/);
+  });
+
+  it("a product-scoped automatic discount appears with no code, only when it matches", async () => {
+    await createAdminDiscount(rtWeb, ctx, { title: "Mug deal", type: "fixed", value: 1000, appliesTo: { type: "products", productIds: [mugProductId] } });
+    const withMugs = await getOrCreateCart(rtWeb, ctx, await mixedCart(1, 3)); // fixed 10.00 per mug x 3
+    expect(withMugs.discount).toMatchObject({ title: "Mug deal", amount: 3000, automatic: true });
+    const noMug = await getOrCreateCart(rtWeb, ctx, await mixedCart(2, 0));
+    expect(noMug.discounts).toEqual([]);
+    await clearAutomatic();
+  });
+
+  it("is checked on the server whatever the form sent", async () => {
+    const bad = (p: Promise<unknown>) => errorOf(p);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Too much", type: "percent", value: 150 }))).toMatch(/between 1 and 100/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Ghost", type: "percent", value: 10, appliesTo: { type: "products", productIds: ["00000000-0000-4000-8000-00000000dead"] } }))).toMatch(/no longer exists/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Cap on fixed", type: "fixed", value: 500, rules: { maxDiscount: 100 } }))).toMatch(/only applies to a percentage/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Scoped shipping", type: "free_shipping", value: 0, appliesTo: { type: "products", productIds: [mugProductId] } }))).toMatch(/only a percentage or a fixed amount/);
+  });
+
+  it("a coupon shown on the storefront appears only on the products it applies to", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "SHOWPICKLE", title: "Pickle coupon", type: "percent", value: 15, showOnStorefront: true, appliesTo: { type: "collections", collectionIds: [picklesCollectionId] } });
+    await createAdminDiscount(rtWeb, ctx, { code: "SHOWALL", title: "Everything", type: "percent", value: 5, showOnStorefront: true });
+    const onPickle = (await getStorefrontCoupons(rtWeb, ctx, "INR", pickleProductId)).map((c) => c.code);
+    const onMug = (await getStorefrontCoupons(rtWeb, ctx, "INR", mugProductId)).map((c) => c.code);
+    expect(onPickle).toEqual(expect.arrayContaining(["SHOWPICKLE", "SHOWALL"]));
+    expect(onMug).toContain("SHOWALL");
+    expect(onMug).not.toContain("SHOWPICKLE");
   });
 });
