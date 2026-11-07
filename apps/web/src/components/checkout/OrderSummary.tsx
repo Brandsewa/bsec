@@ -1,7 +1,7 @@
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
 import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
@@ -23,7 +23,7 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
+    discounts: toPricingDiscounts(cart.discounts),
   });
   const totalPaise = pricing.grandTotal;
   const formattedTotal = money(totalPaise);

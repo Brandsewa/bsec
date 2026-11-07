@@ -54,6 +54,8 @@ export interface EngineCart {
   currency: string;
   /** The store's own currency; fixed amounts only make sense here. */
   baseCurrency: string;
+  /** The market the cart is priced in (the base market's id when none was chosen); null before markets exist. */
+  marketId: string | null;
 }
 
 export interface EngineInput {
@@ -80,6 +82,8 @@ export interface EngineApplication {
   /** For a product discount: how much it takes off each cart line (line id to amount). */
   lineAmounts?: Record<string, number> | undefined;
   freeShipping: boolean;
+  /** For free shipping: waive at most this much of the shipping charge. Missing means all of it. */
+  maxShipping?: number | null | undefined;
   /** True when it applied without a code. */
   automatic: boolean;
 }
@@ -128,6 +132,21 @@ export function eligibleLines(scope: DiscountAppliesTo, rules: DiscountRules, li
   });
 }
 
+/**
+ * The value a discount has on this cart: its own, or for a tiered one the highest tier the cart reaches (null when it
+ * reaches none, so the discount does not apply yet).
+ */
+export function activeValue(d: Pick<EngineDiscount, "value">, rules: DiscountRules, lines: EngineLine[], eligible: EngineLine[]): number | null {
+  if (!rules.tiers) return d.value;
+  const pool = rules.countEligibleOnly ? eligible : lines;
+  const basis = pool.reduce((sum, l) => sum + (rules.tierBy === "quantity" ? l.quantity : l.lineTotal), 0);
+  let reached: number | null = null;
+  for (const tier of [...rules.tiers].sort((a, b) => a.threshold - b.threshold)) {
+    if (basis >= tier.threshold) reached = tier.value;
+  }
+  return reached;
+}
+
 /** Why a discount cannot be used on this cart, or null when it can. For a typed code the reason is shown; an automatic discount is just skipped. */
 export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" | "customerUses" | "now">): string | null {
   const { cart, now } = i;
@@ -151,8 +170,20 @@ export function ineligibleReason(d: EngineDiscount, i: Pick<EngineInput, "cart" 
   if (d.type === "fixed" && cart.currency !== cart.baseCurrency) {
     return `This code only works on orders in ${cart.baseCurrency}`;
   }
-  if (cart.lines.length > 0 && eligibleLines(scope, parseDiscountRules(d.rules), cart.lines).length === 0) {
-    return "This code doesn't apply to anything in your cart";
+  const rules = parseDiscountRules(d.rules);
+  const eligible = eligibleLines(scope, rules, cart.lines);
+  if (cart.lines.length > 0 && eligible.length === 0) return "This code doesn't apply to anything in your cart";
+
+  if (d.type === "free_shipping" && rules.markets && rules.markets.length > 0 && (cart.marketId === null || !rules.markets.includes(cart.marketId))) {
+    return "This code isn't available in your region";
+  }
+  if (rules.tiers && activeValue(d, rules, cart.lines, eligible) === null) {
+    const lowest = [...rules.tiers].sort((a, b) => a.threshold - b.threshold)[0];
+    if (lowest) {
+      return rules.tierBy === "quantity"
+        ? `Minimum order quantity of ${lowest.threshold} items required`
+        : `Minimum order subtotal of ${formatMoney(lowest.threshold, cart.currency, { alwaysShowFraction: true })} required`;
+    }
   }
   return null;
 }
@@ -169,17 +200,18 @@ export function computeAmount(d: EngineDiscount, lines: EngineLine[], remaining:
   const room = (l: EngineLine) => Math.max(0, remaining.get(l.id) ?? l.lineTotal);
   const base = eligible.reduce((sum, l) => sum + room(l), 0);
 
+  const value = activeValue(d, rules, lines, eligible) ?? 0;
   let total: number;
   let perLine: number[] | null = null;
   if (d.type === "percent") {
-    total = Math.round((base * Math.min(100, Math.max(0, d.value))) / 100);
+    total = Math.round((base * Math.min(100, Math.max(0, value))) / 100);
     if (rules.maxDiscount !== undefined) total = Math.min(total, rules.maxDiscount);
   } else if (scope.type !== "all" && !rules.oncePerOrder) {
     // A fixed amount on products comes off every item, never more than the line costs.
-    perLine = eligible.map((l) => Math.min(room(l), Math.max(0, d.value) * l.quantity));
+    perLine = eligible.map((l) => Math.min(room(l), Math.max(0, value) * l.quantity));
     total = perLine.reduce((a, b) => a + b, 0);
   } else {
-    total = Math.min(base, Math.max(0, d.value));
+    total = Math.min(base, Math.max(0, value));
   }
   total = Math.min(total, base);
 
@@ -203,6 +235,7 @@ function toApplication(d: EngineDiscount, cart: EngineCart, automatic: boolean):
     amount,
     ...(lineAmounts ? { lineAmounts } : {}),
     freeShipping: d.type === "free_shipping",
+    ...(d.type === "free_shipping" ? { maxShipping: parseDiscountRules(d.rules).maxShipping ?? null } : {}),
     automatic,
   };
 }

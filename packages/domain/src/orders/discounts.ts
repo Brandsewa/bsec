@@ -66,6 +66,8 @@ export interface CartDiscountsInput {
   cartSubtotal: number;
   cartTotalQty: number;
   currency?: string | undefined;
+  /** The market the cart is priced in; missing means the store's base market. */
+  marketId?: string | null | undefined;
   /** Known shopper, for per-customer limits. A guest is enforced again when the order is placed. */
   customerId?: string | null | undefined;
 }
@@ -75,16 +77,16 @@ export interface CartDiscountsResult {
   rejections: EngineRejection[];
 }
 
-/** The store's own currency: the base market's, or the tenant's before markets exist. */
-async function baseCurrencyOf(db: Db, tenantId: string): Promise<string> {
+/** The store's own currency and its base market: the base market's, or the tenant's before markets exist. */
+async function baseOf(db: Db, tenantId: string): Promise<{ currency: string; marketId: string | null }> {
   const [base] = await db
-    .select({ currency: markets.currency })
+    .select({ id: markets.id, currency: markets.currency })
     .from(markets)
     .where(and(eq(markets.tenantId, tenantId), eq(markets.isBase, true)))
     .limit(1);
-  if (base) return base.currency;
+  if (base) return { currency: base.currency, marketId: base.id };
   const [t] = await db.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-  return (t?.currency ?? "INR").toUpperCase();
+  return { currency: (t?.currency ?? "INR").toUpperCase(), marketId: null };
 }
 
 /**
@@ -157,10 +159,11 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
   const memberships = await collectionIdsByProduct(db, tenantId, [...new Set(cartLines.map((l) => l.productId))], wantedCollections);
   const lines: EngineLine[] = cartLines.map((l) => ({ ...l, collectionIds: memberships.get(l.productId) ?? [] }));
 
+  const base = await baseOf(db, tenantId);
   return evaluateDiscounts({
     discounts: engineRows,
     codes,
-    cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: await baseCurrencyOf(db, tenantId) },
+    cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: base.currency, marketId: input.marketId ?? base.marketId },
     customerUses,
     now: new Date(),
   });

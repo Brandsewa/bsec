@@ -1,7 +1,7 @@
 "use client";
 
 import { payWithRazorpay } from "@/lib/razorpay-client.ts";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
@@ -765,7 +765,7 @@ export function CheckoutForm({
             subtotal: cart.subtotal,
             shipping: currentShippingPaise,
             codFee: codFeePaise,
-            discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
+            discounts: toPricingDiscounts(cart.discounts),
           }).grandTotal,
         )})`}
       </button>

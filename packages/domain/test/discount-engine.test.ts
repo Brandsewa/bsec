@@ -59,6 +59,7 @@ const cartOf = (lines: EngineLine[], over: Partial<EngineCart> = {}): EngineCart
   itemCount: lines.reduce((s, l) => s + l.quantity, 0),
   currency: "INR",
   baseCurrency: "INR",
+  marketId: null,
   ...over,
 });
 /** Two items of one product, 2 x 500.00 = 1,000.00. */

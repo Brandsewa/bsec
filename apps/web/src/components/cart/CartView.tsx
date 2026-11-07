@@ -6,7 +6,7 @@ import type { StorefrontCart } from "@bs/domain";
 import { CartItemRow } from "./CartItemRow.tsx";
 import { ShippingEstimator } from "./ShippingEstimator.tsx";
 import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import type { CartContentsOptions } from "@bs/blocks";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 
@@ -117,7 +117,7 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
     subtotal: cart.subtotal,
     shipping: 0,
     codFee: 0,
-    discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
+    discounts: toPricingDiscounts(cart.discounts),
   });
 
   return (

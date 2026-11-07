@@ -266,3 +266,56 @@ describe("discounts on chosen products and collections (phase 1)", () => {
     expect(onMug).not.toContain("SHOWPICKLE");
   });
 });
+
+describe("tiers and shipping limits (phase 2)", () => {
+  it("a tiered automatic discount gives the tier the cart reaches, at checkout", async () => {
+    await createAdminDiscount(rtWeb, ctx, {
+      title: "Spend more save more",
+      type: "percent",
+      value: 1,
+      rules: { tiers: [{ threshold: 10000, value: 10 }, { threshold: 25000, value: 20 }] },
+    });
+    const small = await getOrCreateCart(rtWeb, ctx, await cartWith(1)); // 100.00 -> first tier
+    expect(small.discount).toMatchObject({ amount: 1000, automatic: true });
+    const big = await cartWith(3); // 300.00 -> second tier
+    const placed = await placeOrder(rtWeb, ctx, buyer(big, "9000000011"));
+    expect(placed).toMatchObject({ subtotal: 30000, discountTotal: 6000 });
+    await clearAutomatic();
+  });
+
+  it("applies nothing below the first tier", async () => {
+    await createAdminDiscount(rtWeb, ctx, { title: "Needs 500", type: "percent", value: 1, rules: { tiers: [{ threshold: 50000, value: 10 }] } });
+    expect((await getOrCreateCart(rtWeb, ctx, await cartWith(1))).discounts).toEqual([]);
+    await clearAutomatic();
+  });
+
+  it("free shipping with a cap waives only that much of the store's shipping charge", async () => {
+    await createAdminDiscount(rtWeb, ctx, { code: "SHIPUPTO", title: "Shipping up to 50", type: "free_shipping", value: 0, rules: { maxShipping: 5000 } });
+    const token = await cartWith(1);
+    await applyCartDiscount(rtWeb, ctx, { token, code: "SHIPUPTO" });
+    const placed = await placeOrder(rtWeb, ctx, buyer(token, "9000000012"));
+    // shipping is 99.00 flat: 50.00 waived, 49.00 left to pay
+    expect(placed).toMatchObject({ subtotal: 10000, shippingTotal: 4900, grandTotal: 14900 });
+    const apps = await rt._db.db.select().from(schema.orderDiscountApplications).where(eq(schema.orderDiscountApplications.orderId, placed.orderId));
+    expect(apps[0]).toMatchObject({ discountClass: "shipping", shippingAmount: 5000 });
+  });
+
+  it("free shipping limited to the base market is refused on a cart in another market", async () => {
+    const [base] = await rt._db.db.select({ id: schema.markets.id }).from(schema.markets).where(and(eq(schema.markets.tenantId, ctx.tenantId), eq(schema.markets.isBase, true)));
+    await createAdminDiscount(rtWeb, ctx, { code: "HOMEONLY", title: "Home only", type: "free_shipping", value: 0, rules: { markets: [base!.id] } });
+    const home = await cartWith(1);
+    expect((await applyCartDiscount(rtWeb, ctx, { token: home, code: "HOMEONLY" })).discount).toMatchObject({ freeShipping: true });
+
+    const [us] = await rt._db.db.select({ id: schema.markets.id }).from(schema.markets).where(and(eq(schema.markets.tenantId, ctx.tenantId), eq(schema.markets.isBase, false)));
+    const abroad = await cartWith(1, us!.id);
+    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token: abroad, code: "HOMEONLY" }))).toMatch(/isn't available in your region/);
+  });
+
+  it("validates tiers and shipping limits on the server", async () => {
+    const bad = (p: Promise<unknown>) => errorOf(p);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Tiers backwards", type: "percent", value: 1, rules: { tiers: [{ threshold: 20000, value: 10 }, { threshold: 10000, value: 20 }] } }))).toMatch(/higher than the one before/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Tier over 100", type: "percent", value: 1, rules: { tiers: [{ threshold: 10000, value: 150 }] } }))).toMatch(/between 1 and 100/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Cap on a percent", type: "percent", value: 10, rules: { maxShipping: 100 } }))).toMatch(/only applies to free shipping/);
+    expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Ghost market", type: "free_shipping", value: 0, rules: { markets: ["00000000-0000-4000-8000-00000000dead"] } }))).toMatch(/no longer exists/);
+  });
+});

@@ -28,8 +28,29 @@ async function assertDiscountSetup(
   setup: { type: string; value: number; appliesTo: DiscountAppliesTo; rules: DiscountRules },
 ): Promise<void> {
   const { type, value, appliesTo, rules } = setup;
-  if (type === "percent" && (value < 1 || value > 100)) throw new Error("Bad Request: a percentage must be between 1 and 100");
-  if ((type === "fixed") && value < 1) throw new Error("Bad Request: enter an amount greater than zero");
+  // A tiered discount takes its value from the tier the cart reaches, so its own value is not used.
+  if (!rules.tiers) {
+    if (type === "percent" && (value < 1 || value > 100)) throw new Error("Bad Request: a percentage must be between 1 and 100");
+    if (type === "fixed" && value < 1) throw new Error("Bad Request: enter an amount greater than zero");
+  } else {
+    if (type !== "percent" && type !== "fixed") throw new Error("Bad Request: tiers only apply to a percentage or a fixed amount");
+    rules.tiers.forEach((tier, i) => {
+      const before = rules.tiers?.[i - 1];
+      if (before && tier.threshold <= before.threshold) throw new Error("Bad Request: each tier must start higher than the one before");
+      if (type === "percent" && tier.value > 100) throw new Error("Bad Request: a tier percentage must be between 1 and 100");
+    });
+  }
+  if ((rules.maxShipping !== undefined || (rules.markets && rules.markets.length > 0)) && type !== "free_shipping") {
+    throw new Error("Bad Request: a shipping limit only applies to free shipping");
+  }
+  if (rules.markets && rules.markets.length > 0) {
+    const ids = [...new Set(rules.markets)];
+    const [found] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.markets)
+      .where(and(eq(schema.markets.tenantId, ctx.tenantId), inArray(schema.markets.id, ids)));
+    if ((found?.n ?? 0) !== ids.length) throw new Error("Bad Request: one of the chosen markets no longer exists");
+  }
   if (appliesTo.type !== "all" && type !== "percent" && type !== "fixed") {
     throw new Error("Bad Request: only a percentage or a fixed amount can be limited to products or collections");
   }

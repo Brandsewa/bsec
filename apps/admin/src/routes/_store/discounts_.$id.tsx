@@ -14,7 +14,7 @@ import { orpc } from "../../lib/orpc.ts";
 import type { client } from "../../lib/orpc.ts";
 import { errorMessage } from "../../lib/errors.ts";
 import { SimpleSelect } from "@bs/ui";
-import { DiscountKindCards, DiscountScopeCard, buildSetup, emptyScope, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
+import { DiscountKindCards, DiscountScopeCard, buildSetup, scopeFromDiscount, scopeValid, type DiscountKind, type DiscountType, type ScopeState } from "../../components/discount/discount-scope.tsx";
 
 export const Route = createFileRoute("/_store/discounts_/$id")({
   pendingComponent: () => <PageSkeleton />,
@@ -115,7 +115,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
   }
 
   const numValue = Number(value);
-  const valueOk = type === "free_shipping" || (Number.isFinite(numValue) && numValue > 0 && (type !== "percent" || numValue <= 100));
+  const valueOk = type === "free_shipping" || scope.tiersOn || (Number.isFinite(numValue) && numValue > 0 && (type !== "percent" || numValue <= 100));
   const intsOk = [minSubtotal, usageLimit, perCustomerLimit].every((r) => {
     const n = optionalInt(r);
     return n === undefined || (Number.isInteger(n) && n >= 0);
@@ -215,7 +215,7 @@ function EditDiscountForm({ discount }: { discount: LoadedDiscount }) {
                       min={type === "percent" ? 1 : 0}
                       max={type === "percent" ? 100 : undefined}
                       step={type === "fixed" ? "0.01" : "1"}
-                      disabled={type === "free_shipping"}
+                      disabled={type === "free_shipping" || scope.tiersOn}
                       value={type === "free_shipping" ? "" : value}
                       onChange={(e) => setValue(e.target.value)}
                     />

@@ -30,7 +30,7 @@ import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { recordOrderDiscountApplications, redeemDiscount } from "./discounts.ts";
-import { priceOrder } from "./pricing.ts";
+import { priceOrder, toPricingDiscounts } from "./pricing.ts";
 import { allocateApplications } from "../discounts/engine.ts";
 import { cartWeightGrams, getTenantShippingRates } from "./shipping-rates.ts";
 import { toCountryCode } from "./shipping-rules.ts";
@@ -327,7 +327,7 @@ export async function placeOrder(
       subtotal,
       shipping: shippingBase,
       codFee,
-      discounts: (cart.discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount })),
+      discounts: toPricingDiscounts(cart.discounts),
     });
     const { shippingTotal, discountTotal } = pricing;
     const money = (n: number) => formatMoney(n, mkt.currency);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Tag, Truck, X } from "lucide-react";
+import { Package, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Checkbox, Field, FieldDescription, FieldGroup, FieldLabel, Input, SimpleSelect } from "@bs/ui";
 import type { DiscountAppliesTo, DiscountRules } from "@bs/contracts/discount-rules";
 import { orpc } from "../../lib/orpc.ts";
@@ -11,6 +11,13 @@ export type DiscountKind = "products" | "order" | "shipping";
 
 export type DiscountType = "percent" | "fixed" | "free_shipping";
 
+export interface TierRow {
+  /** Whole currency units (spend) or an item count (quantity). */
+  threshold: string;
+  /** A percentage, or whole currency units for a fixed amount. */
+  value: string;
+}
+
 export interface ScopeState {
   target: "products" | "collections";
   products: PickedProduct[];
@@ -19,9 +26,33 @@ export interface ScopeState {
   maxDiscount: string;
   excludeOnSale: boolean;
   oncePerOrder: boolean;
+  /** "Spend more, save more". */
+  tiersOn: boolean;
+  tierBy: "subtotal" | "quantity";
+  tiers: TierRow[];
+  countEligibleOnly: boolean;
+  /** Free shipping: whole currency units, "" = waive all of it. */
+  maxShipping: string;
+  /** Free shipping: market ids; empty = every market. */
+  markets: string[];
 }
 
-export const emptyScope: ScopeState = { target: "products", products: [], collectionIds: [], maxDiscount: "", excludeOnSale: false, oncePerOrder: false };
+export const emptyScope: ScopeState = {
+  target: "products",
+  products: [],
+  collectionIds: [],
+  maxDiscount: "",
+  excludeOnSale: false,
+  oncePerOrder: false,
+  tiersOn: false,
+  tierBy: "subtotal",
+  tiers: [{ threshold: "", value: "" }],
+  countEligibleOnly: false,
+  maxShipping: "",
+  markets: [],
+};
+
+const toUnits = (minor: number) => String(minor / 100);
 
 /** The kind and the scope fields a stored discount starts the edit form with. */
 export function scopeFromDiscount(d: {
@@ -31,27 +62,53 @@ export function scopeFromDiscount(d: {
   rules: DiscountRules;
 }): { kind: DiscountKind; scope: ScopeState } {
   const kind: DiscountKind = d.type === "free_shipping" ? "shipping" : d.appliesTo.type === "all" ? "order" : "products";
+  const tierBy = d.rules.tierBy ?? "subtotal";
   return {
     kind,
     scope: {
       target: d.appliesTo.type === "collections" ? "collections" : "products",
       products: d.appliesTo.type === "products" ? (d.appliesToItems ?? d.appliesTo.productIds.map((id) => ({ id, title: "Product" }))).map((p) => ({ id: p.id, title: p.title })) : [],
       collectionIds: d.appliesTo.type === "collections" ? d.appliesTo.collectionIds : [],
-      maxDiscount: d.rules.maxDiscount ? String(d.rules.maxDiscount / 100) : "",
+      maxDiscount: d.rules.maxDiscount ? toUnits(d.rules.maxDiscount) : "",
       excludeOnSale: d.rules.excludeOnSale ?? false,
       oncePerOrder: d.rules.oncePerOrder ?? false,
+      tiersOn: Boolean(d.rules.tiers?.length),
+      tierBy,
+      tiers: d.rules.tiers?.length
+        ? d.rules.tiers.map((t) => ({
+            threshold: tierBy === "subtotal" ? toUnits(t.threshold) : String(t.threshold),
+            value: d.type === "fixed" ? toUnits(t.value) : String(t.value),
+          }))
+        : [{ threshold: "", value: "" }],
+      countEligibleOnly: d.rules.countEligibleOnly ?? false,
+      maxShipping: d.rules.maxShipping ? toUnits(d.rules.maxShipping) : "",
+      markets: d.rules.markets ?? [],
     },
   };
 }
+
+const positive = (raw: string) => {
+  const n = Number(raw);
+  return raw.trim() !== "" && Number.isFinite(n) && n > 0;
+};
 
 /** True when the scope fields describe a valid discount of this kind. */
 export function scopeValid(kind: DiscountKind, type: DiscountType, scope: ScopeState): boolean {
   if (kind === "products") {
     if (scope.target === "products" ? scope.products.length === 0 : scope.collectionIds.length === 0) return false;
   }
-  if (scope.maxDiscount.trim() !== "" && type === "percent") {
-    const n = Number(scope.maxDiscount);
-    if (!Number.isFinite(n) || n <= 0) return false;
+  if (scope.maxDiscount.trim() !== "" && type === "percent" && !positive(scope.maxDiscount)) return false;
+  if (kind === "shipping") return scope.maxShipping.trim() === "" || positive(scope.maxShipping);
+  if (scope.tiersOn) {
+    if (scope.tiers.length === 0) return false;
+    let before = 0;
+    for (const t of scope.tiers) {
+      if (!positive(t.threshold) || !positive(t.value)) return false;
+      if (scope.tierBy === "quantity" && !Number.isInteger(Number(t.threshold))) return false;
+      if (type === "percent" && Number(t.value) > 100) return false;
+      if (Number(t.threshold) <= before) return false;
+      before = Number(t.threshold);
+    }
   }
   return true;
 }
@@ -65,9 +122,22 @@ export function buildSetup(kind: DiscountKind, type: DiscountType, scope: ScopeS
         ? { type: "products", productIds: scope.products.map((p) => p.id) }
         : { type: "collections", collectionIds: scope.collectionIds };
   const rules: DiscountRules = {};
+  if (kind === "shipping") {
+    if (scope.maxShipping.trim() !== "") rules.maxShipping = Math.round(Number(scope.maxShipping) * 100);
+    if (scope.markets.length > 0) rules.markets = scope.markets;
+    return { appliesTo, rules };
+  }
   if (type === "percent" && scope.maxDiscount.trim() !== "") rules.maxDiscount = Math.round(Number(scope.maxDiscount) * 100);
-  if (kind !== "shipping" && scope.excludeOnSale) rules.excludeOnSale = true;
+  if (scope.excludeOnSale) rules.excludeOnSale = true;
   if (kind === "products" && type === "fixed" && scope.oncePerOrder) rules.oncePerOrder = true;
+  if (scope.tiersOn) {
+    rules.tiers = scope.tiers.map((t) => ({
+      threshold: scope.tierBy === "subtotal" ? Math.round(Number(t.threshold) * 100) : Math.round(Number(t.threshold)),
+      value: type === "fixed" ? Math.round(Number(t.value) * 100) : Math.round(Number(t.value)),
+    }));
+    if (scope.tierBy === "quantity") rules.tierBy = "quantity";
+    if (kind === "products" && scope.countEligibleOnly) rules.countEligibleOnly = true;
+  }
   return { appliesTo, rules };
 }
 
@@ -108,7 +178,81 @@ export function DiscountKindCards({ kind, onChange }: { kind: DiscountKind; onCh
   );
 }
 
-/** Step two for product discounts and the extras for order ones: which items, the cap, sale items. */
+function ShippingOptions({ sym, scope, set }: { sym: string; scope: ScopeState; set: (patch: Partial<ScopeState>) => void }) {
+  const markets = useQuery(orpc.admin.markets.list.queryOptions({}));
+  const list = markets.data?.markets ?? [];
+  return (
+    <FieldGroup>
+      <Field>
+        <FieldLabel htmlFor="discount-max-ship">Most to waive ({sym}, optional)</FieldLabel>
+        <Input id="discount-max-ship" type="number" min={1} step="1" value={scope.maxShipping} onChange={(e) => set({ maxShipping: e.target.value })} placeholder="Waive all of it" />
+        <FieldDescription>For example, free shipping up to {sym}100: the customer pays any shipping above that.</FieldDescription>
+      </Field>
+      {list.length > 1 ? (
+        <Field>
+          <FieldLabel>Markets ({scope.markets.length === 0 ? "all" : scope.markets.length})</FieldLabel>
+          <ul className="grid gap-1">
+            {list.map((m) => (
+              <li key={m.id}>
+                <label className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/40">
+                  <Checkbox checked={scope.markets.includes(m.id)} onCheckedChange={(on) => set({ markets: on ? [...scope.markets, m.id] : scope.markets.filter((x) => x !== m.id) })} />
+                  <span className="truncate">{m.name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <FieldDescription>Tick none to offer it in every market.</FieldDescription>
+        </Field>
+      ) : null}
+    </FieldGroup>
+  );
+}
+
+function TierEditor({ type, sym, scope, set }: { type: DiscountType; sym: string; scope: ScopeState; set: (patch: Partial<ScopeState>) => void }) {
+  const setRow = (i: number, patch: Partial<TierRow>) => set({ tiers: scope.tiers.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+  const valueLabel = type === "percent" ? "Discount (%)" : `Discount (${sym})`;
+  return (
+    <div className="grid gap-3">
+      <Field>
+        <FieldLabel htmlFor="discount-tier-by">Tiers are based on</FieldLabel>
+        <SimpleSelect
+          id="discount-tier-by"
+          value={scope.tierBy}
+          onChange={(v) => set({ tierBy: v as ScopeState["tierBy"] })}
+          options={[
+            { value: "subtotal", label: "Amount spent" },
+            { value: "quantity", label: "Number of items" },
+          ]}
+        />
+      </Field>
+      <div className="grid gap-2">
+        {scope.tiers.map((t, i) => (
+          <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+            <Field>
+              <FieldLabel htmlFor={`tier-threshold-${i}`}>{scope.tierBy === "subtotal" ? `Spend at least (${sym})` : "Buy at least (items)"}</FieldLabel>
+              <Input id={`tier-threshold-${i}`} type="number" min={1} step="1" value={t.threshold} onChange={(e) => setRow(i, { threshold: e.target.value })} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`tier-value-${i}`}>{valueLabel}</FieldLabel>
+              <Input id={`tier-value-${i}`} type="number" min={1} max={type === "percent" ? 100 : undefined} step={type === "fixed" ? "0.01" : "1"} value={t.value} onChange={(e) => setRow(i, { value: e.target.value })} />
+            </Field>
+            <Button type="button" variant="ghost" size="icon" aria-label={`Remove tier ${i + 1}`} disabled={scope.tiers.length === 1} onClick={() => set({ tiers: scope.tiers.filter((_, j) => j !== i) })}>
+              <Trash2 className="size-4" aria-hidden />
+            </Button>
+          </div>
+        ))}
+        <div>
+          <Button type="button" variant="outline" size="sm" disabled={scope.tiers.length >= 10} onClick={() => set({ tiers: [...scope.tiers, { threshold: "", value: "" }] })}>
+            <Plus className="size-4" aria-hidden /> Add a tier
+          </Button>
+        </div>
+      </div>
+      <FieldDescription>The highest tier the cart reaches applies. Each tier must start higher than the one before.</FieldDescription>
+    </div>
+  );
+}
+
+/** Step two: which items (product discounts), tiers, the cap and sale items for goods discounts; shipping limits for free shipping. */
 export function DiscountScopeCard({
   kind,
   type,
@@ -126,7 +270,18 @@ export function DiscountScopeCard({
   const collections = useQuery({ ...orpc.admin.collections.list.queryOptions({ input: {} }), enabled: kind === "products" && scope.target === "collections" });
   const set = (patch: Partial<ScopeState>) => onChange({ ...scope, ...patch });
 
-  if (kind === "shipping") return null;
+  if (kind === "shipping") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Shipping options</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ShippingOptions sym={sym} scope={scope} set={set} />
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader>
@@ -198,6 +353,22 @@ export function DiscountScopeCard({
                 </Field>
               )}
             </>
+          ) : null}
+
+          <Field orientation="horizontal">
+            <Checkbox id="discount-tiers" checked={scope.tiersOn} onCheckedChange={(c) => set({ tiersOn: c === true })} />
+            <FieldLabel htmlFor="discount-tiers" className="font-normal">
+              Spend more, save more (tiers instead of one value)
+            </FieldLabel>
+          </Field>
+          {scope.tiersOn ? <TierEditor type={type} sym={sym} scope={scope} set={set} /> : null}
+          {scope.tiersOn && kind === "products" ? (
+            <Field orientation="horizontal">
+              <Checkbox id="discount-tier-eligible" checked={scope.countEligibleOnly} onCheckedChange={(c) => set({ countEligibleOnly: c === true })} />
+              <FieldLabel htmlFor="discount-tier-eligible" className="font-normal">
+                Count only the chosen items towards a tier
+              </FieldLabel>
+            </Field>
           ) : null}
 
           {type === "percent" ? (

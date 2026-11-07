@@ -56,6 +56,8 @@ export interface CartDiscount {
   automatic: boolean;
   /** "product" discounts touch only some lines; "order" ones the whole order; "shipping" the delivery charge. */
   discountClass: "product" | "order" | "shipping";
+  /** For free shipping: waive at most this much of the shipping charge. */
+  maxShipping?: number | null | undefined;
   /** For a product discount: what it takes off each cart line (cart item id to amount). */
   lineAmounts?: Record<string, number> | undefined;
 }
@@ -255,6 +257,7 @@ async function loadCartWithItems(
     cartSubtotal: subtotal,
     cartTotalQty: itemCount,
     currency: cartRecord.currency ?? "INR",
+    marketId: cartRecord.marketId ?? null,
     customerId: cartRecord.customerId ?? null,
   });
   const discounts: CartDiscount[] = evaluated.applications.map((a) => ({
@@ -266,6 +269,7 @@ async function loadCartWithItems(
     freeShipping: a.freeShipping,
     automatic: a.automatic,
     discountClass: a.discountClass,
+    ...(a.freeShipping ? { maxShipping: a.maxShipping ?? null } : {}),
     ...(a.lineAmounts ? { lineAmounts: a.lineAmounts } : {}),
   }));
   const discount: CartDiscount | null = discounts.find((d) => !d.automatic) ?? discounts[0] ?? null;
