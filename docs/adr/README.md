@@ -51,5 +51,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [043](043-apps-framework.md) | Apps framework: first-party apps installed per store, managed from a Super Admin marketplace | Accepted |
 | [044](044-state-pricing.md) | State Pricing: per-variant prices by Indian state, detected automatically, locked on the cart | Accepted |
 
-**Next number: 045.**
+| [045](045-discount-engine.md) | Discount engine: classes, stacking and a pure evaluator | Accepted |
+
+**Next number: 046.**
 
