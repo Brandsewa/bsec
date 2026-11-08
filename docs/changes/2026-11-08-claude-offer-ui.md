@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-08
 - **Agent:** claude
-- **Branch:** `feat/offer-ui`
+- **Branch:** `feat/offer-ui` (merged in #247, 4fc90bb; deployed, all jobs of the main run passed)
 - **Area:** `apps/web` (cart page, mini cart, checkout summary, product page), `packages/domain` (storefront product offers)
 - **Type:** feat
 - **Supersedes:** none (follows `2026-11-08-claude-discount-auto-add.md`)
@@ -26,7 +26,13 @@ The owner saw that the free item is added correctly, but a shopper who raises th
 - See the PR for CI. The live check on the production store is recorded in the PR or the next record.
 
 ## NOT verified
-- Not looked at in a browser yet (done after deploy, on the live store, with the owner's go-ahead).
+- Nothing from this change is unchecked in a browser: see the live check below. Not done: placing an order.
+
+## Live check (production, brandsewa, 2026-11-08, owner's go-ahead)
+With the two test coupons active and the owner's cart holding 3 Dalle 200g (1 free): the product page showed the bars "Buy 2 Get 1 Free" and "Spend 2,000, get Dalle with Mutter/Mula free" (each "added to your cart automatically") and, under them, "Offer unlocked: TEST Buy 2 Dalle get 1 free" with the picture, FREE, 180 crossed out and "save 180". The side cart showed the same card above the free-shipping bar; the cart page showed it above the free-shipping bar with discount -180 and total 360; checkout showed the card, the row note "1 free with your offer" and Place Order 459. The first load after the deploy still showed the old cached page; it was right on the next load.
+
+## Found while checking
+- The side cart's "Total" shows the subtotal (540) and does not subtract the free item's discount (the cart page and checkout do); not changed here.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` section 22; no migration, env var or pipeline change

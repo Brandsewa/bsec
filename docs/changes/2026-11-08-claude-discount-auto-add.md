@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-08
 - **Agent:** claude
-- **Branch:** `feat/discount-auto-add`
+- **Branch:** `feat/discount-auto-add` (merged in #245, 9907c19; deployed, all jobs of the main run passed)
 - **Area:** `packages/domain` (cart, discounts, admin), `packages/db` (migration 0104), `packages/contracts`, `apps/web` (cart row), `apps/admin` (offer form)
 - **Type:** feat
 - **Supersedes:** none (follow-up to `2026-11-07-claude-discounts-engine.md`, which listed this as not built)
@@ -28,10 +28,11 @@ The owner tried buy-x-get-y on the live store: the coupon could be created, but 
 ## Verification
 - New real-database tests `discounts-autoadd.int.test.ts` (12): third item, quantity changes, checkout charges one unit free and reserves three, removal, offer turned on or off while a cart is open, `autoAdd: false`, a code that adds the item, spend gift appears and disappears, gift free at checkout, shopper already has the gift product, gift out of stock, validation.
 - Existing discount, cart, checkout and isolation suites rerun: 1876 passed.
-- See the PR for CI. The live check on the production store is recorded below once done.
+- CI on the PR passed (all heavy shards).
+- **Live check on the production store (brandsewa, 2026-11-08, with the owner's go-ahead):** created two automatic coupons in admin (the new form worked): "TEST Buy 2 Dalle get 1 free" (buy 2 of any product, get 1 free) and "TEST Free Dalle over 2000" (spend 2,000, get Dalle free). Coupon 1: the owner's open cart of 2 Dalle 200g became 3 on opening the cart page, "Includes 1 free item added for you", discount -180, estimated total 360; checkout showed subtotal 540, discount -180, shipping 99, total 459; minus took the line to 1 (free item gone), plus brought it back to 3. Coupon 2 (coupon 1 switched off for the test, both claim the same product line): adding 7 of the 400g (2,072) made the cart 2,612 and a free 200g Dalle appeared, discount -180, total 2,432 on cart and checkout; removing the 400g line removed the gift. No order was placed. Both coupons are left active.
 
 ## NOT verified
-- The admin form checkbox and the cart row text were checked by typecheck and lint only until the live check below.
+- Placing a real order with a free item on the live store (checkout page totals were checked, no order was placed). The checkout charge of a free unit is covered by the real-database tests.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (section 22, migration 0104), `docs/DISCOUNTS-PLAN.md` section 9

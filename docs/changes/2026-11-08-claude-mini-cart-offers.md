@@ -24,3 +24,7 @@ The owner asked for the mini cart's offer notice to be one line ("Offer unlocked
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` section 22; no migration, env var or pipeline change
+
+## Live check (2026-11-08, merged in #250, 7cff636)
+- Production store, desktop: the side cart shows one green dashed box with "Offer unlocked: Buy 2 Dalle get 1 free" on one line and the free-shipping bar under it; no "You got ... free" text.
+- Not seen live: the dropdown arrow (only one automatic offer was live); covered by `mini-cart.test.ts` and `discounts-autoadd.int.test.ts`. Phone size not checked.

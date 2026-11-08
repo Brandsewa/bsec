@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-08
 - **Agent:** claude
-- **Branch:** `feat/cart-redesign`
+- **Branch:** `feat/cart-redesign` (merged in #248, ac9e470; deployed, all jobs of the main run passed)
 - **Area:** `apps/web` (cart page, mini cart, checkout summary, product page), `packages/domain` (storefront coupons and product offers)
 - **Type:** feat
 - **Supersedes:** none (reworks the UI of `2026-11-08-claude-offer-ui.md`)
@@ -25,10 +25,11 @@ After seeing the first version live the owner asked for: offers shown as the exi
 
 ## Verification
 - typecheck and lint 17/17; web tests (new `free-items-ui.test.tsx`, updated mini cart and cart tests) and the domain tests for coupons and offers pass; build ok; product page JS 47.51 KB of 50 (budget test passes).
-- Live check on the production store after deploy: see below if done.
+- **Live check (production, brandsewa, 2026-11-08, owner's go-ahead), desktop and a 375 px phone:** product page showed "Available offers" with the offer as a coupon card ("Buy 2 Get 1 Free", "Applied automatically") and the unlocked card under it. Cart page: paid line "200g, 180 x 2" 360, the free line below ("0 x 1", FREE, "Offer unlocked: ... save 180"), the free-shipping card at the top of the order summary column, no estimator, no trust lines, estimated total 360. Side cart: compact lines, free line, one-line note above the shipping bar, no reassurance row, Total 360. Checkout: "200g x 2, 180 each" 360, free line below with a small badge and FREE, total 459. Phone: no horizontal overflow on checkout; cart, product page and side cart read cleanly. Right after the deploy the site answered 503 for under a minute while the containers swapped.
+- Seen: on a phone the offer name in the free-line badge is cut with an ellipsis when long.
 
 ## NOT verified
-- Not looked at in a browser yet, including a phone-size screen (done after deploy, with the owner's go-ahead).
+- Placing an order (checkout totals were read, no order was placed).
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` section 22 (showing the offer); no migration, env var or pipeline change

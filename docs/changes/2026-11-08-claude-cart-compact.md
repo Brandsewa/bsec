@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-08
 - **Agent:** claude
-- **Branch:** `feat/cart-compact`
+- **Branch:** `feat/cart-compact` (merged in #249, a2a9c1c; deployed, all jobs of the main run passed)
 - **Area:** `apps/web` (cart page, mini cart, checkout summary, product page)
 - **Type:** feat
 - **Supersedes:** none (refines `2026-11-08-claude-cart-redesign.md`)
@@ -18,10 +18,10 @@ The owner reviewed the live cart redesign and asked for: the "Offer unlocked" ca
 
 ## Verification
 - typecheck and lint 17/17; web tests 248 passed (two updated for the new layout); build ok; product page JS 47.53 KB of 50.
-- Live check on the production store after deploy: see below.
+- **Live check (production, brandsewa, 2026-11-08, owner's go-ahead):** product page: the "Offer unlocked: Buy 2 Dalle get 1 free" card at the top of the buy box above the title, then the title, and "Available offers" below Add to cart. Cart page and side cart: three columns (picture with a small x; "200g x 180 x 2" under the name; stepper over 360), the free line below with a green "Offer" tag after the name and FREE; the 375 px phone cart reads the same with no cut-off. Checkout: the free row shows the name with an "Offer" tag, "200g x 1" and FREE, no saving badge; Place Order 459. No order placed.
 
 ## NOT verified
-- Until the live check below, not looked at in a browser.
+- Placing an order (checkout totals were read, no order was placed). Phone view was checked for the cart page only.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` section 22; no migration, env var or pipeline change
