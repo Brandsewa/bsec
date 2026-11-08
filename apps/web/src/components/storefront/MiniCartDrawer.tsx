@@ -131,23 +131,34 @@ export function MiniCartDrawer({
               {rows.map((row) => {
                 const { item, qty } = row;
                 const weight = weightLabel(item);
+                const detail = `${weight ? `${weight} × ` : ""}${money(row.free ? 0 : item.unitPriceSnapshot)} × ${qty}`;
                 return (
-                  <li key={row.key} className={`flex gap-3 px-4 py-2.5 ${row.free ? "bg-emerald-500/5 pl-6" : ""}`}>
-                    <Link href={`/products/${item.product.slug}`} onClick={onClose} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted" aria-label={item.product.title} tabIndex={-1}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? "") : ""} className="h-full w-full object-cover" />
-                    </Link>
-                    <div className="min-w-0 flex-1">
-                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="line-clamp-1 text-sm font-semibold leading-snug transition-opacity hover:opacity-70" style={HEADING_FONT}>
-                        {item.product.title}
+                  <li key={row.key} className={`flex items-start gap-3 px-4 py-2.5 ${row.free ? "bg-emerald-500/5" : ""}`}>
+                    <div className="relative shrink-0">
+                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="block h-12 w-12 overflow-hidden rounded-lg bg-muted" aria-label={item.product.title} tabIndex={-1}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? "") : ""} className="h-full w-full object-cover" />
                       </Link>
-                      {weight ? <p className="text-xs leading-snug text-muted-foreground">{weight}</p> : null}
-                      <p className="text-xs text-muted-foreground">
-                        {money(row.free ? 0 : item.unitPriceSnapshot)} × {qty}
-                        {row.free ? <span className="ml-1.5 rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">FREE</span> : null}
-                      </p>
                       {row.free ? null : (
-                        <div className="mt-1.5 inline-flex items-center rounded-md border border-border">
+                        <button type="button" disabled={busy} onClick={() => void change("DELETE", { itemId: item.id })} className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground disabled:opacity-50" aria-label={`Remove ${item.product.title}`}>
+                          <svg aria-hidden className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <Link href={`/products/${item.product.slug}`} onClick={onClose} className="truncate text-sm font-semibold leading-snug transition-opacity hover:opacity-70" style={HEADING_FONT}>
+                          {item.product.title}
+                        </Link>
+                        {row.free ? <span className="shrink-0 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Offer</span> : null}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {row.free ? null : (
+                        <div className="inline-flex items-center rounded-md border border-border">
                           <button
                             type="button"
                             disabled={busy}
@@ -157,7 +168,7 @@ export function MiniCartDrawer({
                           >
                             −
                           </button>
-                          <span className="w-6 text-center text-xs font-medium" aria-live="polite">
+                          <span className="w-5 text-center text-xs font-medium" aria-live="polite">
                             {qty}
                           </span>
                           <button
@@ -171,18 +182,7 @@ export function MiniCartDrawer({
                           </button>
                         </div>
                       )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end justify-between">
-                      {row.free ? (
-                        <span className="h-5" />
-                      ) : (
-                        <button type="button" disabled={busy} onClick={() => void change("DELETE", { itemId: item.id })} className="-mr-1 h-5 w-5 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label={`Remove ${item.product.title}`}>
-                          <svg aria-hidden className="mx-auto h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                      <p className="text-sm font-bold">{money(row.free ? 0 : item.unitPriceSnapshot * qty)}</p>
+                      <p className={`text-sm font-bold ${row.free ? "text-emerald-700" : ""}`}>{row.free ? "FREE" : money(item.unitPriceSnapshot * qty)}</p>
                     </div>
                   </li>
                 );
