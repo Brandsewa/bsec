@@ -1,8 +1,9 @@
 import React from "react";
 import Link from "@/components/storefront/IntentLink.tsx";
-import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
+import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail, StorefrontProductOffer } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";
+import { ProductOfferBar } from "./ProductOfferBar.tsx";
 import { SvgIcon, normalizeElementOrder, type ProductDetailOptions } from "@bs/blocks";
 import { customFieldBody } from "./ProductCustomField.tsx";
 import { descriptionText } from "@/lib/description-text.ts";
@@ -58,6 +59,7 @@ export function ProductDetailSection({
   paymentImageUrl,
   customFields = [],
   coupons = [],
+  offers = [],
   currency = "INR",
   locale,
 }: {
@@ -66,6 +68,8 @@ export function ProductDetailSection({
   customFields?: StorefrontCustomField[] | undefined;
   /** Coupons the store shows (Discount > Show on the storefront). */
   coupons?: StorefrontCoupon[] | undefined;
+  /** Automatic buy-x-get-y offers on this product, for the promotion bar under Add to cart. */
+  offers?: StorefrontProductOffer[] | undefined;
   options?: ProductDetailOptions | undefined;
   /** Resolved URL of the theme's secure-payment picture (media library); the built-in badge is used when absent. */
   paymentImageUrl?: string | undefined;
@@ -115,6 +119,7 @@ export function ProductDetailSection({
     options: <VariantOptions style={options.variantStyle ?? "buttons"} />,
     price: <PriceBlock note={options.priceNote} />,
     actions: (
+      <>
       <PurchaseActions
         addToCartLabel={options.addToCartLabel}
         buyNowLabel={options.buyNowLabel}
@@ -125,6 +130,8 @@ export function ProductDetailSection({
         buyNowText={options.buyNowText}
         trustPoints={options.showTrustPoints ? options.trustPoints : undefined}
       />
+      {offers.length > 0 ? <div className="mt-3"><ProductOfferBar offers={offers} /></div> : null}
+      </>
     ),
     payment: options.showPaymentImage ? (
       // eslint-disable-next-line @next/next/no-img-element

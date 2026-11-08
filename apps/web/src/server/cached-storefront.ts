@@ -10,6 +10,8 @@ import {
   listStorefrontCategories,
   getStorefrontCustomFields,
   getStorefrontCoupons,
+  getStorefrontProductOffers,
+  type StorefrontProductOffer,
   getBlogMagazine,
   getBlogSidebar,
   type StorefrontCoupon,
@@ -141,6 +143,15 @@ export async function getCachedStorefrontCoupons(tenantId: string, productId?: s
   cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
   const { rt } = server();
   return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId), "INR", productId);
+}
+
+/** The automatic buy-x-get-y offers a shopper can earn on this product, for the promotion bar. Short-lived like the coupons. */
+export async function getCachedProductOffers(tenantId: string, productId: string): Promise<StorefrontProductOffer[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return getStorefrontProductOffers(rt, createStorefrontTenantContext(tenantId), "INR", productId);
 }
 
 /** The custom fields to show for one product (ADR-034), refreshed with the product and with field changes. */
