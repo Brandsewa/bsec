@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCart } from "@bs/domain";
+import { FreeItemsCard } from "./FreeItemsCard.tsx";
 import { CartItemRow } from "./CartItemRow.tsx";
 import { ShippingEstimator } from "./ShippingEstimator.tsx";
 import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
@@ -125,6 +126,8 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
       <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-6">
         {options.heading ?? "Shopping Cart"} ({cart.itemCount} {cart.itemCount === 1 ? "item" : "items"})
       </h1>
+
+      <FreeItemsCard cart={cart} className="mb-4" />
 
       {options.showFreeShippingBar && freeShippingThresholdPaise ? (
         <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} money={money} />

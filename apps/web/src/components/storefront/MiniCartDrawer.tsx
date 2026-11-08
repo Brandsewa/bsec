@@ -10,6 +10,9 @@ import { LiteSvgIcon } from "@bs/blocks/svg-icon-lite";
 import { useMiniCartConfig } from "./MiniCartConfig.tsx";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 
+// Loaded when a free item is in the cart, not with the page: the product page JavaScript budget has no room for it.
+const FreeItemsCard = React.lazy(() => import("../cart/FreeItemsCard.tsx").then((m) => ({ default: m.FreeItemsCard })));
+
 const HEADING_FONT = { fontFamily: "var(--bs-font-heading, inherit)" } as const;
 
 /**
@@ -176,6 +179,11 @@ export function MiniCartDrawer({
             </ul>
 
             <div className="border-t border-border bg-background px-6 pb-4 pt-5">
+              {cart && items.some((i) => (i.autoFreeQty ?? 0) > 0) ? (
+                <React.Suspense fallback={null}>
+                  <FreeItemsCard cart={cart} className="mb-3" />
+                </React.Suspense>
+              ) : null}
               {copy.showFreeShippingBar && threshold ? (
                 <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3" data-testid="mini-cart-shipping-bar">
                   <p className="text-sm font-medium">{reached ? "You have unlocked free shipping" : `Add ${money(threshold - subtotal)} more for free shipping`}</p>

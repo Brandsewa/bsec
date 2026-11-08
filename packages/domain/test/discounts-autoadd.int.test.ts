@@ -9,6 +9,7 @@ import {
   createAdminDiscount,
   createProduct,
   createRuntime,
+  getStorefrontProductOffers,
   listInventoryLevels,
   placeOrder,
   provisionTenant,
@@ -271,5 +272,36 @@ describe("a free gift when the cart is over an amount", () => {
         }),
       ),
     ).toMatch(/only a free offer can add items/);
+  });
+});
+
+describe("offers worded for the product page", () => {
+  it("lists the automatic offers a product can earn, worded for the shopper", async () => {
+    await clearDiscounts();
+    await createAdminDiscount(rtWeb, ctx, buy2get1());
+    await createAdminDiscount(rtWeb, ctx, {
+      title: "Free mug over 200",
+      type: "buy_x_get_y",
+      value: 0,
+      rules: { bxgy: { buy: { trigger: "amount", value: 20000, appliesTo: ALL }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProduct] }, effect: "free" } } },
+    });
+    const onPickle = await getStorefrontProductOffers(rtWeb, ctx, pickleProduct);
+    expect(onPickle.map((o) => o.headline)).toEqual(["Buy 2 Get 1 Free", expect.stringMatching(/Spend .*200.* get Mug free/)]);
+    expect(onPickle.every((o) => o.autoAdd)).toBe(true);
+    // the mug is not one of the items the first offer asks to buy, but the spend offer counts any item
+    const onMug = await getStorefrontProductOffers(rtWeb, ctx, mugProduct);
+    expect(onMug.map((o) => o.headline)).toEqual([expect.stringMatching(/Spend .*200.* get Mug free/)]);
+  });
+
+  it("leaves out offers that need a code, are switched off, or do not add items by themselves is still shown but flagged", async () => {
+    await clearDiscounts();
+    await createAdminDiscount(rtWeb, ctx, { ...buy2get1(), code: "NEEDSCODE" });
+    expect(await getStorefrontProductOffers(rtWeb, ctx, pickleProduct)).toEqual([]);
+    await createAdminDiscount(rtWeb, ctx, buy2get1({ autoAdd: false }));
+    const shown = await getStorefrontProductOffers(rtWeb, ctx, pickleProduct);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({ headline: "Buy 2 Get 1 Free", autoAdd: false });
+    await clearDiscounts();
+    expect(await getStorefrontProductOffers(rtWeb, ctx, pickleProduct)).toEqual([]);
   });
 });
