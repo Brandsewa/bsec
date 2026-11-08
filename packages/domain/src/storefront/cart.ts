@@ -6,7 +6,7 @@ import type { TenantContext } from "../context.ts";
 import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
-import { evaluateCartDiscounts } from "../orders/discounts.ts";
+import { evaluateCartDiscounts, hasAutoAddWork, planAutoAdds, type GiftTarget } from "../orders/discounts.ts";
 import { MAX_CODES_PER_CART } from "../discounts/engine.ts";
 import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
@@ -17,6 +17,8 @@ export interface StorefrontCartItem {
   cartId: string;
   variantId: string;
   quantity: number;
+  /** Of `quantity`, how many the store added by itself for a free-item offer (the shopper's own are the rest). */
+  autoFreeQty?: number | undefined;
   unitPriceSnapshot: number;
   lineTotal: number;
   properties: Record<string, unknown> | null;
@@ -216,6 +218,7 @@ async function loadCartWithItems(
       cartId: r.item.cartId,
       variantId: r.item.variantId,
       quantity: qty,
+      autoFreeQty: r.item.autoFreeQty,
       unitPriceSnapshot: unitPrice,
       lineTotal,
       properties: (r.item.properties as Record<string, unknown>) ?? null,
@@ -261,6 +264,7 @@ async function loadCartWithItems(
     lines: items.map((it, i) => ({
       id: it.id,
       productId: it.product.id,
+      variantId: it.variantId,
       quantity: it.quantity,
       unitPrice: it.unitPriceSnapshot,
       lineTotal: it.lineTotal,
@@ -390,6 +394,7 @@ export async function getOrCreateCart(
 ): Promise<StorefrontCart> {
   const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
     let cartRecord: typeof schema.carts.$inferSelect | undefined;
+    let existed = false;
 
     if (token) {
       const rows = await tx
@@ -398,6 +403,7 @@ export async function getOrCreateCart(
         .where(eq(schema.carts.token, token))
         .limit(1);
       cartRecord = rows[0];
+      existed = Boolean(cartRecord);
     }
 
     if (!cartRecord) {
@@ -428,6 +434,7 @@ export async function getOrCreateCart(
       cartRecord = await repriceCartToRegion(tx as unknown as Db, ctx.tenantId, cartRecord, ctx.priceRegion ?? null);
     }
 
+    if (existed) await syncAutoFreeLines(tx, ctx, cartRecord, shopper);
     return loadCartWithItems(tx, cartRecord, shopper);
   };
 
@@ -492,52 +499,8 @@ export async function addToCart(
       throw new Error("Cart not found");
     }
 
-    // 2. Verify variant belongs to a published, non-deleted product
-    const variantRows = await tx
-      .select({
-        variant: schema.variants,
-        product: schema.products,
-      })
-      .from(schema.variants)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.variants.tenantId),
-          eq(schema.products.id, schema.variants.productId),
-        ),
-      )
-      .where(
-        and(
-          eq(schema.variants.id, input.variantId),
-          inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
-          sql`${schema.products.deletedAt} IS NULL`,
-        ),
-      )
-      .limit(1);
-
-    const variantData = variantRows[0];
-    if (!variantData) {
-      throw new Error("Variant not found or product is not available");
-    }
-
-    if (variantData.product.priceOnRequest) {
-      throw new Error("This product is price on request and cannot be added to cart");
-    }
-
-    const cartMarketId = cartRecord.marketId ?? null;
-    if (!(await isProductVisibleInMarket(tx as unknown as Db, ctx.tenantId, cartMarketId, variantData.product.id))) {
-      throw new Error("Variant not found or product is not available");
-    }
-    let unitPriceSnapshot = Number(variantData.variant.price);
-    if (await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartMarketId)) {
-      const prices = await loadMarketPriceMap(tx as unknown as Db, ctx.tenantId, cartMarketId, [input.variantId]);
-      const marketPrice = prices.get(input.variantId);
-      if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
-      unitPriceSnapshot = marketPrice.price;
-    } else if (cartRecord.priceRegion) {
-      const sp = (await loadStatePriceMap(tx as unknown as Db, ctx.tenantId, cartRecord.priceRegion, [input.variantId])).get(input.variantId);
-      if (sp) unitPriceSnapshot = sp.price;
-    }
+    // 2. Verify the variant can be sold in this cart, and what it costs here
+    const { unitPriceSnapshot } = await resolveVariantForCart(tx, ctx, cartRecord, input.variantId);
 
     // 3. Upsert into cartItems: increment quantity if already exists
     await tx
@@ -567,8 +530,154 @@ export async function addToCart(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
+}
+
+type CartTx = Parameters<Parameters<typeof withTenant>[2]>[0];
+
+/** A variant a cart may hold: published, visible in the cart's market, priced there. Throws the shopper-facing reason when not. */
+async function resolveVariantForCart(tx: CartTx, ctx: TenantContext, cartRecord: typeof schema.carts.$inferSelect, variantId: string) {
+  const variantRows = await tx
+    .select({
+      variant: schema.variants,
+      product: schema.products,
+    })
+    .from(schema.variants)
+    .innerJoin(
+      schema.products,
+      and(
+        eq(schema.products.tenantId, schema.variants.tenantId),
+        eq(schema.products.id, schema.variants.productId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.variants.id, variantId),
+        inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
+        sql`${schema.products.deletedAt} IS NULL`,
+      ),
+    )
+    .limit(1);
+
+  const variantData = variantRows[0];
+  if (!variantData) {
+    throw new Error("Variant not found or product is not available");
+  }
+
+  if (variantData.product.priceOnRequest) {
+    throw new Error("This product is price on request and cannot be added to cart");
+  }
+
+  const cartMarketId = cartRecord.marketId ?? null;
+  if (!(await isProductVisibleInMarket(tx as unknown as Db, ctx.tenantId, cartMarketId, variantData.product.id))) {
+    throw new Error("Variant not found or product is not available");
+  }
+  let unitPriceSnapshot = Number(variantData.variant.price);
+  if (await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartMarketId)) {
+    const prices = await loadMarketPriceMap(tx as unknown as Db, ctx.tenantId, cartMarketId, [variantId]);
+    const marketPrice = prices.get(variantId);
+    if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
+    unitPriceSnapshot = marketPrice.price;
+  } else if (cartRecord.priceRegion) {
+    const sp = (await loadStatePriceMap(tx as unknown as Db, ctx.tenantId, cartRecord.priceRegion, [variantId])).get(variantId);
+    if (sp) unitPriceSnapshot = sp.price;
+  }
+  return { ...variantData, unitPriceSnapshot };
+}
+
+/**
+ * Keeps the free items of buy-x-get-y offers in the cart (ADR-045): when the shopper's own items earn a free item the store
+ * adds it, and takes it out when they no longer do. The shopper's own quantity of a line is `quantity - auto_free_qty`, so a
+ * quantity they change is read as a change to their own items and the free ones are worked out again from it. The offer's
+ * discount then makes those units free in the normal way. Called after every cart change and when an order is placed.
+ */
+export async function syncAutoFreeLines(tx: CartTx, ctx: TenantContext, cartRecord: typeof schema.carts.$inferSelect, shopper?: Shopper): Promise<void> {
+  if (!(await hasAutoAddWork(tx as unknown as Db, ctx.tenantId, cartRecord.id))) return;
+  const rows = await tx
+    .select({ item: schema.cartItems, productId: schema.variants.productId, price: schema.variants.price, compareAt: schema.variants.compareAtPrice })
+    .from(schema.cartItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+    .where(eq(schema.cartItems.cartId, cartRecord.id));
+
+  const own = rows
+    .map((r) => {
+      const quantity = Math.max(0, r.item.quantity - r.item.autoFreeQty);
+      const unitPrice = Number(r.item.unitPriceSnapshot);
+      return {
+        id: r.item.id,
+        productId: r.productId,
+        variantId: r.item.variantId,
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice * quantity,
+        onSale: r.compareAt != null && Number(r.compareAt) > Number(r.price),
+      };
+    })
+    .filter((l) => l.quantity > 0);
+
+  const resolveGift = async (productId: string): Promise<GiftTarget | null> => {
+    const variants = await tx
+      .select({ id: schema.variants.id, trackInventory: schema.variants.trackInventory, allowBackorder: schema.variants.allowBackorder })
+      .from(schema.variants)
+      .where(and(eq(schema.variants.tenantId, ctx.tenantId), eq(schema.variants.productId, productId)))
+      .orderBy(schema.variants.position, schema.variants.price);
+    for (const v of variants) {
+      try {
+        const r = await resolveVariantForCart(tx, ctx, cartRecord, v.id);
+        let available: number | null = null;
+        if (v.trackInventory && !v.allowBackorder) {
+          const [stock] = await tx
+            .select({ n: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)::int` })
+            .from(schema.inventoryLevels)
+            .where(and(eq(schema.inventoryLevels.tenantId, ctx.tenantId), eq(schema.inventoryLevels.variantId, v.id)));
+          available = stock?.n ?? 0;
+          if (available <= 0) continue; // out of stock: try the next variant, or give nothing
+        }
+        return { variantId: v.id, productId, unitPrice: r.unitPriceSnapshot, onSale: r.variant.compareAtPrice != null && Number(r.variant.compareAtPrice) > Number(r.variant.price), available };
+      } catch {
+        // not sellable here: try the next variant
+      }
+    }
+    return null;
+  };
+
+  const plan = own.length === 0
+    ? []
+    : await planAutoAdds(tx as unknown as Db, ctx.tenantId, {
+        codes: cartRecord.discountCodes ?? [],
+        lines: own,
+        cartSubtotal: own.reduce((sum, l) => sum + l.lineTotal, 0),
+        cartTotalQty: own.reduce((sum, l) => sum + l.quantity, 0),
+        currency: cartRecord.currency ?? "INR",
+        marketId: cartRecord.marketId ?? null,
+        customerId: shopper?.customerId ?? cartRecord.customerId ?? null,
+        strict: shopper?.strict === true,
+        resolveGift,
+      });
+  const wanted = new Map(plan.map((a) => [a.variantId, a.quantity]));
+
+  for (const r of rows) {
+    const want = wanted.get(r.item.variantId) ?? 0;
+    wanted.delete(r.item.variantId);
+    if (want === r.item.autoFreeQty) continue;
+    const mine = Math.max(0, r.item.quantity - r.item.autoFreeQty);
+    if (mine + want === 0) {
+      await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, r.item.id));
+    } else {
+      await tx
+        .update(schema.cartItems)
+        .set({ quantity: mine + want, autoFreeQty: want, updatedAt: sql`now()` })
+        .where(eq(schema.cartItems.id, r.item.id));
+    }
+  }
+  // Free items of a product the shopper has none of yet get a line of their own.
+  for (const [variantId, quantity] of wanted) {
+    if (quantity <= 0) continue;
+    const { unitPriceSnapshot } = await resolveVariantForCart(tx, ctx, cartRecord, variantId);
+    await tx.insert(schema.cartItems).values({ cartId: cartRecord.id, variantId, quantity, autoFreeQty: quantity, unitPriceSnapshot, tenantId: ctx.tenantId });
+  }
 }
 
 /**
@@ -603,10 +712,18 @@ export async function updateCartItemQuantity(
           ),
         );
     } else {
+      // The quantity shown includes the free items the store added. A number above them is read as the shopper's own plus the
+      // free ones; a number at or below them is read as the shopper's own, and the free ones are worked out again afterwards.
+      const [current] = await tx
+        .select({ free: schema.cartItems.autoFreeQty })
+        .from(schema.cartItems)
+        .where(and(eq(schema.cartItems.id, input.itemId), eq(schema.cartItems.cartId, cartRecord.id)))
+        .limit(1);
+      const free = current?.free ?? 0;
       await tx
         .update(schema.cartItems)
         .set({
-          quantity: input.quantity,
+          quantity: input.quantity > free ? input.quantity : input.quantity + free,
           updatedAt: sql`now()`,
         })
         .where(
@@ -624,6 +741,7 @@ export async function updateCartItemQuantity(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
 }
@@ -666,6 +784,7 @@ export async function removeCartItem(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
 }
@@ -814,6 +933,23 @@ export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: 
         trial = alone;
       }
     }
+    if (!appliedIn(trial) && !empty) {
+      // A buy-x-get-y code whose free item the store adds by itself cannot show as applied until the item is there: try it for real.
+      const needsItems = trial.discountRejections?.find((r) => r.code === wanted)?.reason === "Add the items this offer needs to your cart";
+      if (needsItems) {
+        const [withCode] = await tx
+          .update(schema.carts)
+          .set({ discountCodes: together, lastActivityAt: new Date() })
+          .where(eq(schema.carts.id, cartRecord.id))
+          .returning();
+        if (withCode) {
+          await syncAutoFreeLines(tx, ctx, withCode);
+          const real = await loadCartWithItems(tx, withCode);
+          if (appliedIn(real)) return real;
+        }
+        // not applied after all: nothing is kept, the error below undoes the attempt
+      }
+    }
     if (!appliedIn(trial)) {
       const why = trial.discountRejections?.find((r) => r.code === wanted);
       // A shared link can arrive before anything is in the cart: keep a code that exists, it is checked once there is something to check.
@@ -827,6 +963,7 @@ export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: 
       .set({ discountCodes: stored, lastActivityAt: new Date() })
       .where(eq(schema.carts.id, cartRecord.id))
       .returning();
+    await syncAutoFreeLines(tx, ctx, updated ?? cartRecord);
     return loadCartWithItems(tx, updated ?? cartRecord);
   });
 }
@@ -842,6 +979,7 @@ export async function removeCartDiscount(rt: Runtime, ctx: TenantContext, input:
       .set({ discountCodes: left, lastActivityAt: new Date() })
       .where(eq(schema.carts.id, cartRecord.id))
       .returning();
+    await syncAutoFreeLines(tx, ctx, updated ?? cartRecord);
     return loadCartWithItems(tx, updated ?? cartRecord);
   });
 }

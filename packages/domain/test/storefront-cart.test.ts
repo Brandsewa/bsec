@@ -11,7 +11,8 @@ vi.mock("../src/markets/lookup.ts", async (importOriginal) => ({
 // The discount engine has its own tests (discount-engine.test.ts, discounts-engine.int.test.ts); here a cart has none.
 vi.mock("../src/orders/discounts.ts", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  evaluateCartDiscounts: async () => ({ applications: [], rejections: [] }),
+  evaluateCartDiscounts: async () => ({ applications: [], rejections: [], nudge: null }),
+  hasAutoAddWork: async () => false,
 }));
 import { type Db, shippingZones, shippingRates, variants } from "@bs/db";
 import type { Runtime, TenantContext } from "../src/index.ts";

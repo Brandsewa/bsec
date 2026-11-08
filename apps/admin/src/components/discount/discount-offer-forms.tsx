@@ -113,9 +113,11 @@ export interface BxgyState {
   effectValue: string;
   /** "" = as often as the cart allows (quantity) or once (amount). */
   maxUses: string;
+  /** Add the free items to the cart by itself. Only for a free offer. */
+  autoAdd: boolean;
 }
 
-export const emptyBxgy: BxgyState = { trigger: "quantity", buyValue: "2", buyScope: emptyItemScope, getQuantity: "1", getScope: emptyItemScope, effect: "free", effectValue: "", maxUses: "" };
+export const emptyBxgy: BxgyState = { trigger: "quantity", buyValue: "2", buyScope: emptyItemScope, getQuantity: "1", getScope: emptyItemScope, effect: "free", effectValue: "", maxUses: "", autoAdd: true };
 
 const wholeAtLeast1 = (raw: string) => raw.trim() !== "" && Number.isInteger(Number(raw)) && Number(raw) >= 1;
 const positive = (raw: string) => raw.trim() !== "" && Number.isFinite(Number(raw)) && Number(raw) > 0;
@@ -138,6 +140,7 @@ export function bxgyToRules(b: BxgyState): NonNullable<DiscountRules["bxgy"]> {
       ...(b.effect === "percent" ? { value: Math.round(Number(b.effectValue)) } : b.effect === "fixed_price" ? { value: Math.round(Number(b.effectValue) * 100) } : {}),
     },
     ...(b.maxUses.trim() !== "" ? { maxUsesPerOrder: Math.round(Number(b.maxUses)) } : {}),
+    ...(b.effect === "free" ? { autoAdd: b.autoAdd } : {}),
   };
 }
 
@@ -151,6 +154,7 @@ export function bxgyFromRules(r: NonNullable<DiscountRules["bxgy"]>, names?: Map
     effect: r.get.effect,
     effectValue: r.get.value === undefined ? "" : r.get.effect === "fixed_price" ? String(r.get.value / 100) : String(r.get.value),
     maxUses: r.maxUsesPerOrder === undefined ? "" : String(r.maxUsesPerOrder),
+    autoAdd: r.autoAdd ?? r.get.effect === "free",
   };
 }
 
@@ -221,6 +225,14 @@ export function BxgyCard({ sym, value, onChange }: { sym: string; value: BxgySta
               </Field>
             ) : null}
             <ItemScopePicker idPrefix="bxgy-get-scope" label="Any items from" value={value.getScope} onChange={(getScope) => set({ getScope })} />
+            {value.effect === "free" ? (
+              <Field orientation="horizontal">
+                <Checkbox id="bxgy-auto-add" checked={value.autoAdd} onCheckedChange={(c) => set({ autoAdd: c === true })} />
+                <FieldLabel htmlFor="bxgy-auto-add" className="font-normal">
+                  Add the free items to the cart automatically
+                </FieldLabel>
+              </Field>
+            ) : null}
             <Field>
               <FieldLabel htmlFor="bxgy-max">Uses per order (optional)</FieldLabel>
               <Input id="bxgy-max" type="number" min={1} step="1" value={value.maxUses} onChange={(e) => set({ maxUses: e.target.value })} placeholder={value.trigger === "quantity" ? "As often as the cart allows" : "Once"} />
