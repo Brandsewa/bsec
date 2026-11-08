@@ -18,8 +18,13 @@ function CouponCard({ coupon }: { coupon: StorefrontCoupon }) {
       </div>
       {description ? <p className="text-[11px] leading-snug text-muted-foreground">{description}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-1.5">
-        <code className="min-w-0 break-all rounded bg-background px-1.5 py-0.5 text-xs font-bold text-foreground">{coupon.code}</code>
+        {coupon.automatic ? (
+          <span className="rounded bg-background px-1.5 py-0.5 text-[11px] font-semibold text-foreground">Applied automatically</span>
+        ) : (
+          <code className="min-w-0 break-all rounded bg-background px-1.5 py-0.5 text-xs font-bold text-foreground">{coupon.code}</code>
+        )}
         <span className="shrink-0">
+          {coupon.automatic ? null : (
           <CouponCopy code={coupon.code}>
             <svg className="bs-copy-icon h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -29,6 +34,7 @@ function CouponCard({ coupon }: { coupon: StorefrontCoupon }) {
               <path d="M5 13l4 4L19 7" />
             </svg>
           </CouponCopy>
+          )}
         </span>
       </div>
     </div>
@@ -61,14 +67,14 @@ export function CouponCards({
         {showViewAll ? (
           <CouponDrawer label={`${viewAllLabel || "View all"}${coupons.length > shown.length ? ` (${coupons.length})` : ""}`}>
             {coupons.map((c) => (
-              <CouponCard key={c.code} coupon={c} />
+              <CouponCard key={c.code || c.title} coupon={c} />
             ))}
           </CouponDrawer>
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2">
         {shown.map((c) => (
-          <CouponCard key={c.code} coupon={c} />
+          <CouponCard key={c.code || c.title} coupon={c} />
         ))}
       </div>
     </section>

@@ -8,6 +8,7 @@ import { collectionIdsByProduct } from "../discounts/scope.ts";
 
 /** What a shopper may see about a coupon: the code and what it gives, never usage counts or customer rules. */
 export interface StorefrontCoupon {
+  /** Empty for an offer that applies by itself (no code to type). */
   code: string;
   title: string;
   /** "20% off", "₹100 off", "Free shipping". */
@@ -15,6 +16,10 @@ export interface StorefrontCoupon {
   /** "On orders over ₹999", or an empty string. */
   condition: string;
   endsAt: string | null;
+  /** The offer applies by itself, so the card says so instead of showing a code. */
+  automatic?: boolean | undefined;
+  /** For the product it was fetched for: it is made for this product (or the whole store), so it is listed first. */
+  appliesHere?: boolean | undefined;
 }
 
 /**
@@ -47,14 +52,19 @@ export async function getStorefrontCoupons(rt: Runtime, ctx: TenantContext, curr
       return scope?.type === "collections" ? scope.collectionIds : [];
     });
     const inCollections = productId ? (await collectionIdsByProduct(tx, ctx.tenantId, [productId], [...new Set(wanted)])).get(productId) ?? [] : [];
-    const shown = rows.filter((d) => {
+    // Every coupon is listed; the ones made for this product (or for everything) come first, the rest follow in the full list.
+    const isHere = (d: (typeof rows)[number]) => {
       const scope = parseDiscountAppliesTo(d.appliesTo);
-      if (!scope) return false; // a scope this version does not understand is never advertised
-      if (scope.type === "all") return true;
-      if (!productId) return true; // listing for no particular product
+      if (!scope) return null; // a scope this version does not understand is never advertised
+      if (scope.type === "all" || !productId) return true;
       return scope.type === "products" ? scope.productIds.includes(productId) : scope.collectionIds.some((c) => inCollections.includes(c));
+    };
+    const shown = rows.flatMap((d) => {
+      const here = isHere(d);
+      return here === null ? [] : [{ d, here }];
     });
-    return shown.map((d) => {
+    shown.sort((x, y) => Number(y.here) - Number(x.here));
+    return shown.map(({ d, here }) => {
       const scope = parseDiscountAppliesTo(d.appliesTo);
       const cap = parseDiscountRules(d.rules).maxDiscount;
       const conditions = [
@@ -74,6 +84,7 @@ export async function getStorefrontCoupons(rt: Runtime, ctx: TenantContext, curr
                 : "Special offer",
         condition: conditions.join(". "),
         endsAt: d.endsAt ? d.endsAt.toISOString() : null,
+        appliesHere: here,
       };
     });
   });
