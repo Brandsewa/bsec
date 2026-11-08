@@ -15,14 +15,16 @@ export interface StorefrontProductOffer {
   headline: string;
   /** The free items are added to the cart by themselves. */
   autoAdd: boolean;
+  /** This product is one of the items to buy for the offer (the card is listed first for it). */
+  appliesHere: boolean;
+  endsAt: string | null;
 }
 
 const scopeIncludes = (scope: DiscountAppliesTo, productId: string, collections: string[]): boolean =>
   scope.type === "all" || (scope.type === "products" ? scope.productIds.includes(productId) : scope.collectionIds.some((c) => collections.includes(c)));
 
 /**
- * The automatic buy-x-get-y offers a shopper can earn on this product (it is one of the items to buy), worded for the product
- * page. Only offers that apply by themselves (no code, for everyone), are active now and not used up. Public data: never a
+ * The automatic buy-x-get-y offers of the store, worded for the product page, with a flag for the ones this product can earn. Only offers that apply by themselves (no code, for everyone), are active now and not used up. Public data: never a
  * usage count or an audience rule.
  */
 export async function getStorefrontProductOffers(rt: Runtime, ctx: TenantContext, productId: string, currency = "INR"): Promise<StorefrontProductOffer[]> {
@@ -63,7 +65,6 @@ export async function getStorefrontProductOffers(rt: Runtime, ctx: TenantContext
     }
 
     return offers
-      .filter(({ b }) => scopeIncludes(b.buy.appliesTo, productId, inCollections))
       .map(({ d, b }) => {
         const what = b.get.effect === "free" ? "Free" : b.get.effect === "percent" ? `at ${b.get.value ?? 0}% off` : `at ${formatMoney(b.get.value ?? 0, currency)}`;
         const gift = b.get.appliesTo.type === "products" ? titles.get(b.get.appliesTo.productIds[0] ?? "") : undefined;
@@ -71,7 +72,15 @@ export async function getStorefrontProductOffers(rt: Runtime, ctx: TenantContext
           b.buy.trigger === "amount"
             ? `Spend ${formatMoney(b.buy.value, currency)}, get ${gift ?? `${b.get.quantity} item${b.get.quantity === 1 ? "" : "s"}`} ${b.get.effect === "free" ? "free" : what}`
             : `Buy ${b.buy.value} Get ${b.get.quantity} ${what}`;
-        return { id: d.id, name: d.title, headline, autoAdd: b.get.effect === "free" && (b.autoAdd ?? true) };
-      });
+        return {
+          id: d.id,
+          name: d.title,
+          headline,
+          autoAdd: b.get.effect === "free" && (b.autoAdd ?? true),
+          appliesHere: scopeIncludes(b.buy.appliesTo, productId, inCollections),
+          endsAt: d.endsAt ? d.endsAt.toISOString() : null,
+        };
+      })
+      .sort((x, y) => Number(y.appliesHere) - Number(x.appliesHere));
   });
 }

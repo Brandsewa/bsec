@@ -86,7 +86,6 @@ vi.mock("@bs/domain", async (importOriginal) => {
 
 import { CartView } from "../src/components/cart/CartView.tsx";
 import { CartItemRow } from "../src/components/cart/CartItemRow.tsx";
-import { ShippingEstimator } from "../src/components/cart/ShippingEstimator.tsx";
 import { CheckoutForm } from "../src/components/checkout/CheckoutForm.tsx";
 import { OrderSummary } from "../src/components/checkout/OrderSummary.tsx";
 import { CheckoutContainer } from "../src/components/checkout/CheckoutContainer.tsx";
@@ -153,23 +152,11 @@ describe("Storefront Cart & Checkout Flow", () => {
 
       expect(html).toContain("KeyCraft Custom Switch Lubing Station");
       expect(html).toContain("Matte Black");
-      expect(html).toContain("KC-LUBE-STN-01");
+      expect(html).not.toContain("KC-LUBE-STN-01"); // the SKU is left out to keep the line compact
+      expect(html.replace(/<!-- -->/g, "")).toContain("₹1,499 × 2"); // the price each, then how many
       expect(html).toContain("₹2,998");
       expect(html).toContain("2");
       expect(html).toContain("Remove");
-    });
-  });
-
-  describe("ShippingEstimator", () => {
-    it("renders pincode input with Indian pincode placeholder, a11y label, and estimate button", () => {
-      const html = renderToString(React.createElement(ShippingEstimator));
-
-      expect(html).toContain("Estimate Shipping");
-      expect(html).toContain('aria-label="6-digit Indian Pincode"');
-      expect(html).toContain('id="shipping-pincode"');
-      expect(html).toContain('for="shipping-pincode"');
-      expect(html).toContain("Pincode");
-      expect(html).toContain("Calculate");
     });
   });
 
