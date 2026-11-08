@@ -3,7 +3,7 @@ import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail, StorefrontProductOffer } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";
-import { ProductOfferBar } from "./ProductOfferBar.tsx";
+import { OfferSlot } from "./OfferSlot.tsx";
 import { SvgIcon, normalizeElementOrder, type ProductDetailOptions } from "@bs/blocks";
 import { customFieldBody } from "./ProductCustomField.tsx";
 import { descriptionText } from "@/lib/description-text.ts";
@@ -102,6 +102,12 @@ export function ProductDetailSection({
 
   // The elements of the buy-box column, in the order the theme sets (the old fixed order when it sets none). Rating, title
   // and SKU that follow each other stay together as one block.
+  // Offers that apply by themselves are listed as the same cards as coupon codes; those made for this product come first, the
+  // others are in the "View all" drawer.
+  const cards: StorefrontCoupon[] = [
+    ...offers.map((o): StorefrontCoupon => ({ code: "", title: o.name, benefit: o.headline, condition: o.autoAdd ? "Free item is added to your cart" : "", endsAt: o.endsAt, automatic: true, appliesHere: o.appliesHere })),
+    ...coupons,
+  ].sort((a, b) => Number(b.appliesHere !== false) - Number(a.appliesHere !== false));
   const elements: Record<string, React.ReactNode> = {
     rating: options.showRating ? <RatingSummary average={product.ratingAvg} count={Number(product.ratingCount)} /> : null,
     title: (
@@ -130,7 +136,6 @@ export function ProductDetailSection({
         buyNowText={options.buyNowText}
         trustPoints={options.showTrustPoints ? options.trustPoints : undefined}
       />
-      {offers.length > 0 ? <div className="mt-3"><ProductOfferBar offers={offers} /></div> : null}
       </>
     ),
     payment: options.showPaymentImage ? (
@@ -186,8 +191,11 @@ export function ProductDetailSection({
         </div>
       ) : null,
     coupons:
-      options.showCoupons !== false && coupons.length > 0 ? (
-        <CouponCards inline coupons={coupons} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
+      options.showCoupons !== false && cards.length > 0 ? (
+        <>
+          <CouponCards inline coupons={cards} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
+          {offers.some((o) => o.autoAdd) ? <OfferSlot /> : null}
+        </>
       ) : null,
     tags:
       options.showTags && product.tags && product.tags.length > 0 ? (

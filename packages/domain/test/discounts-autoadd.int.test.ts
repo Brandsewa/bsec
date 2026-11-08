@@ -285,12 +285,13 @@ describe("offers worded for the product page", () => {
       value: 0,
       rules: { bxgy: { buy: { trigger: "amount", value: 20000, appliesTo: ALL }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProduct] }, effect: "free" } } },
     });
+    // Every automatic offer is listed; the ones this product can earn come first.
     const onPickle = await getStorefrontProductOffers(rtWeb, ctx, pickleProduct);
-    expect(onPickle.map((o) => o.headline)).toEqual(["Buy 2 Get 1 Free", expect.stringMatching(/Spend .*200.* get Mug free/)]);
+    expect(onPickle.map((o) => [o.headline, o.appliesHere])).toEqual([["Buy 2 Get 1 Free", true], [expect.stringMatching(/Spend .*200.* get Mug free/), true]]);
     expect(onPickle.every((o) => o.autoAdd)).toBe(true);
-    // the mug is not one of the items the first offer asks to buy, but the spend offer counts any item
+    // The mug is not one of the items the first offer asks to buy: it is still listed, after the offer that applies to the mug.
     const onMug = await getStorefrontProductOffers(rtWeb, ctx, mugProduct);
-    expect(onMug.map((o) => o.headline)).toEqual([expect.stringMatching(/Spend .*200.* get Mug free/)]);
+    expect(onMug.map((o) => [o.headline, o.appliesHere])).toEqual([[expect.stringMatching(/Spend .*200.* get Mug free/), true], ["Buy 2 Get 1 Free", false]]);
   });
 
   it("leaves out offers that need a code, are switched off, or do not add items by themselves is still shown but flagged", async () => {
