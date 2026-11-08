@@ -19,7 +19,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedProductCustomFields, getCachedStorefrontCoupons, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedProductCustomFields, getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 
@@ -175,7 +175,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks, marketId).catch(() => ({})) : {};
   const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} currency={marketCurrency} locale={marketLocale} />
+    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} offers={offers} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} currency={marketCurrency} locale={marketLocale} />
   );
   // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
   const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
@@ -184,6 +184,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   );
   // Coupon cards: the discounts the store chose to show (Discount > Show on the storefront).
   const coupons = await getCachedStorefrontCoupons(tenantId, product.id).catch(() => []);
+  // The promotion bar under Add to cart ("Buy 2 Get 1 Free").
+  const offers = await getCachedProductOffers(tenantId, product.id).catch(() => []);
   const couponCards = (o: ProductCouponsOptions) => (
     <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );

@@ -2,6 +2,7 @@ import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
+import { FreeItemsCard } from "@/components/cart/FreeItemsCard.tsx";
 import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
 import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
@@ -41,6 +42,8 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
     <div className="bs-panel p-4 sm:p-6">
       <h2 className="mb-2 hidden text-lg font-semibold tracking-tight text-foreground lg:block">Order Summary</h2>
 
+      <FreeItemsCard cart={cart} className="mb-3" />
+
       <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3 pt-1.5">
         {cart.items.map((item) => (
           <div key={item.id} className="flex items-center gap-2.5 py-2">
@@ -65,6 +68,11 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
               <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
               {item.variant.title && (
                 <p className="text-[11px] text-muted-foreground truncate">{item.variant.title}</p>
+              )}
+              {(item.autoFreeQty ?? 0) > 0 && (
+                <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                  {item.autoFreeQty === item.quantity ? "Free with your offer" : `${item.autoFreeQty} free with your offer`}
+                </p>
               )}
               {item.variant.preorderEnabled && (
                 <span className="inline-flex items-center rounded bg-amber-500/10 px-1 py-0.25 text-[9px] font-medium text-amber-700 dark:text-amber-400">
