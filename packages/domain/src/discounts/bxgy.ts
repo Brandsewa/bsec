@@ -95,3 +95,15 @@ export function bundleDiscount(bundle: Bundle, lines: EngineLine[], pick: LinePi
   }
   return toResult(parts);
 }
+
+/**
+ * How many times the buy part of an offer is met by the shopper's own items (not the free ones the store adds), and whether
+ * the buy and get parts are the same items. Used to work out how many free items to add to the cart.
+ */
+export function autoFreeSets(bxgy: Bxgy, lines: EngineLine[], pick: LinePicker): { sets: number; sameScope: boolean } {
+  const sameScope = JSON.stringify(bxgy.buy.appliesTo) === JSON.stringify(bxgy.get.appliesTo);
+  const limit = bxgy.maxUsesPerOrder ?? (bxgy.buy.trigger === "amount" ? 1 : 1000);
+  const buyLines = pick(bxgy.buy.appliesTo, lines);
+  const have = bxgy.buy.trigger === "quantity" ? buyLines.reduce((sum, l) => sum + l.quantity, 0) : buyLines.reduce((sum, l) => sum + l.lineTotal, 0);
+  return { sets: Math.min(Math.floor(have / bxgy.buy.value), limit), sameScope };
+}

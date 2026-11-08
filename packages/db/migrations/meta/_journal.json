@@ -687,6 +687,13 @@
       "when": 1794101400000,
       "tag": "0103_discount_code_lists",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1794187800000,
+      "tag": "0104_cart_auto_free_qty",
+      "breakpoints": true
     }
   ]
 }

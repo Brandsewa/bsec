@@ -331,7 +331,8 @@ describe("buy X get Y and bundles (phase 3)", () => {
       title: "Buy 2 get 1 free",
       type: "buy_x_get_y",
       value: 0,
-      rules: { bxgy: { buy: { trigger: "quantity", value: 2, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "all" }, effect: "free" } } },
+      // These tests are about the discount itself: adding the free items by itself is tested in discounts-autoadd.int.test.ts.
+      rules: { bxgy: { autoAdd: false, buy: { trigger: "quantity", value: 2, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "all" }, effect: "free" } } },
     });
     const token = await mixedCart(2, 1); // 2 pickles at 100.00 and a mug at 50.00
     const cart = await applyCartDiscount(rtWeb, ctx, { token, code: "b2g1" });
@@ -368,7 +369,7 @@ describe("buy X get Y and bundles (phase 3)", () => {
       title: "Free mug over 200",
       type: "buy_x_get_y",
       value: 0,
-      rules: { bxgy: { buy: { trigger: "amount", value: 20000, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProductId] }, effect: "free" } } },
+      rules: { bxgy: { autoAdd: false, buy: { trigger: "amount", value: 20000, appliesTo: { type: "all" } }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProductId] }, effect: "free" } } },
     });
     const short = await getOrCreateCart(rtWeb, ctx, await mixedCart(1, 1)); // 100.00 of pickles + the mug
     expect(short.discounts).toEqual([]);
