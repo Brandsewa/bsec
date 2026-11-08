@@ -1,5 +1,6 @@
-import { eq, and, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { eq, and, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
+  cartItems,
   customers,
   discountCodes,
   discounts,
@@ -13,7 +14,7 @@ import {
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { parseDiscountAppliesTo } from "@bs/contracts/discount-rules";
+import { bxgyAutoAdds, parseDiscountAppliesTo, parseDiscountRules } from "@bs/contracts/discount-rules";
 import {
   ANONYMOUS,
   evaluateDiscounts,
@@ -22,11 +23,14 @@ import {
   type EngineCustomer,
   type EngineDiscount,
   type EngineLine,
+  type EngineInput,
   type EngineNudge,
+  eligibleLines,
   nextOffer,
   type EngineRejection,
 } from "../discounts/engine.ts";
 import { collectionIdsByProduct } from "../discounts/scope.ts";
+import { autoFreeSets } from "../discounts/bxgy.ts";
 
 export interface ValidateDiscountInput {
   code: string;
@@ -62,6 +66,7 @@ export interface RedeemDiscountInput {
 export interface CartDiscountLine {
   id: string;
   productId: string;
+  variantId?: string | undefined;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -103,11 +108,18 @@ async function baseOf(db: Db, tenantId: string): Promise<{ currency: string; mar
   return { currency: (t?.currency ?? "INR").toUpperCase(), marketId: null };
 }
 
-/**
- * Everything that applies to a cart: the codes the shopper typed plus the store's automatic discounts, run through the
- * engine (ADR-045) on a connection already scoped to the tenant.
- */
-export async function evaluateCartDiscounts(db: Db, tenantId: string, input: CartDiscountsInput): Promise<CartDiscountsResult> {
+/** What the loader reads once per evaluation: the discounts in play, the shopper, and the store's currency. */
+interface EngineContext {
+  codes: string[];
+  rows: EngineDiscount[];
+  bulk: Record<string, EngineBulkCode>;
+  customer: EngineCustomer;
+  customerUses: Record<string, number>;
+  currency: string;
+  base: { currency: string; marketId: string | null };
+}
+
+async function loadEngineContext(db: Db, tenantId: string, input: CartDiscountsInput): Promise<EngineContext> {
   const codes = input.codes.map((c) => c.trim()).filter(Boolean);
 
   // Codes from a generated list point at their discount; a used one is still returned so the shopper hears why.
@@ -171,7 +183,6 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     for (const u of used) customerUses[u.discountId] = u.n;
   }
 
-  const currency = (input.currency ?? "INR").toUpperCase();
   const engineRows: EngineDiscount[] = rows.map((d) => ({
     id: d.id,
     code: d.code ?? null,
@@ -194,30 +205,168 @@ export async function evaluateCartDiscounts(db: Db, tenantId: string, input: Car
     createdAt: d.createdAt,
   }));
 
-  // Collection membership is read only for the collections some discount in play asks about.
+  return { codes, rows: engineRows, bulk, customer, customerUses, currency: (input.currency ?? "INR").toUpperCase(), base: await baseOf(db, tenantId) };
+}
+
+/** The engine's input for a set of cart lines. Collection membership is read only for the collections some discount in play asks about. */
+async function engineInputFor(db: Db, tenantId: string, c: EngineContext, cartLines: CartDiscountLine[], totals: { subtotal: number; itemCount: number }, marketId: string | null | undefined): Promise<EngineInput> {
   const wantedCollections = [
     ...new Set(
-      engineRows.flatMap((d) => {
-        const scope = parseDiscountAppliesTo(d.appliesTo);
-        return scope?.type === "collections" ? scope.collectionIds : [];
+      c.rows.flatMap((d) => {
+        const rules = parseDiscountRules(d.rules);
+        const scopes = [parseDiscountAppliesTo(d.appliesTo), rules.bxgy?.buy.appliesTo, rules.bxgy?.get.appliesTo, rules.bundle?.appliesTo];
+        return scopes.flatMap((sc) => (sc?.type === "collections" ? sc.collectionIds : []));
       }),
     ),
   ];
-  const cartLines = input.lines ?? [];
   const memberships = await collectionIdsByProduct(db, tenantId, [...new Set(cartLines.map((l) => l.productId))], wantedCollections);
   const lines: EngineLine[] = cartLines.map((l) => ({ ...l, collectionIds: memberships.get(l.productId) ?? [] }));
-
-  const base = await baseOf(db, tenantId);
-  const engineInput = {
-    discounts: engineRows,
-    codes,
-    cart: { lines, subtotal: input.cartSubtotal, itemCount: input.cartTotalQty, currency, baseCurrency: base.currency, marketId: input.marketId ?? base.marketId },
-    customerUses,
-    customer,
-    bulk,
+  return {
+    discounts: c.rows,
+    codes: c.codes,
+    cart: { lines, subtotal: totals.subtotal, itemCount: totals.itemCount, currency: c.currency, baseCurrency: c.base.currency, marketId: marketId ?? c.base.marketId },
+    customerUses: c.customerUses,
+    customer: c.customer,
+    bulk: c.bulk,
     now: new Date(),
   };
-  return { ...evaluateDiscounts(engineInput), nudge: lines.length > 0 ? nextOffer(engineInput) : null };
+}
+
+/**
+ * Everything that applies to a cart: the codes the shopper typed plus the store's automatic discounts, run through the
+ * engine (ADR-045) on a connection already scoped to the tenant.
+ */
+export async function evaluateCartDiscounts(db: Db, tenantId: string, input: CartDiscountsInput): Promise<CartDiscountsResult> {
+  const c = await loadEngineContext(db, tenantId, input);
+  const engineInput = await engineInputFor(db, tenantId, c, input.lines ?? [], { subtotal: input.cartSubtotal, itemCount: input.cartTotalQty }, input.marketId);
+  return { ...evaluateDiscounts(engineInput), nudge: engineInput.cart.lines.length > 0 ? nextOffer(engineInput) : null };
+}
+
+/**
+ * Whether a cart needs its free items looked at: the store has a buy-x-get-y offer that could be in play, or the cart already
+ * holds free items that may have to go. One cheap read, so carts of stores without such offers do no further work.
+ */
+export async function hasAutoAddWork(db: Db, tenantId: string, cartId: string): Promise<boolean> {
+  const [offer] = await db
+    .select({ id: discounts.id })
+    .from(discounts)
+    .where(and(eq(discounts.tenantId, tenantId), eq(discounts.type, "buy_x_get_y"), eq(discounts.status, "active")))
+    .limit(1);
+  if (offer) return true;
+  const [free] = await db
+    .select({ id: cartItems.id })
+    .from(cartItems)
+    .where(and(eq(cartItems.tenantId, tenantId), eq(cartItems.cartId, cartId), gt(cartItems.autoFreeQty, 0)))
+    .limit(1);
+  return Boolean(free);
+}
+
+/** A product the store can add as a free item: its variant, price and how many are in stock (null = no limit). */
+export interface GiftTarget {
+  variantId: string;
+  productId: string;
+  unitPrice: number;
+  onSale: boolean;
+  available: number | null;
+}
+
+/** Free items a cart should hold: this many units of this variant, because of this offer. */
+export interface AutoAdd {
+  discountId: string;
+  variantId: string;
+  quantity: number;
+}
+
+/**
+ * The free items a cart earns (buy X get Y with "add the free items automatically"). `lines` are only the shopper's own
+ * items; the answer is the units to add on top. An offer is kept only if the engine would really apply it to the cart
+ * with those items added, so stacking, limits and audiences are decided by the same rules as everything else.
+ */
+export async function planAutoAdds(
+  db: Db,
+  tenantId: string,
+  input: CartDiscountsInput & { resolveGift: (productId: string) => Promise<GiftTarget | null> },
+): Promise<AutoAdd[]> {
+  const c = await loadEngineContext(db, tenantId, input);
+  const bulkIds = new Set(Object.values(c.bulk).map((b) => b.discountId));
+  const typedCodes = new Set(c.codes.map((x) => x.toUpperCase()));
+  const candidates = c.rows.filter((d) => {
+    if (d.type !== "buy_x_get_y") return false;
+    const b = parseDiscountRules(d.rules).bxgy;
+    if (!b || !bxgyAutoAdds(b)) return false;
+    const automatic = d.code === null && !d.usesCodeList;
+    return automatic || (d.code !== null && typedCodes.has(d.code.toUpperCase())) || bulkIds.has(d.id);
+  });
+  if (candidates.length === 0) return [];
+
+  const realLines = input.lines ?? [];
+  const base = await engineInputFor(db, tenantId, c, realLines, { subtotal: input.cartSubtotal, itemCount: input.cartTotalQty }, input.marketId);
+
+  interface Want {
+    discountId: string;
+    target: GiftTarget;
+    quantity: number;
+  }
+  const wants: Want[] = [];
+  for (const d of candidates) {
+    const rules = parseDiscountRules(d.rules);
+    const b = rules.bxgy;
+    if (!b) continue;
+    const pick = (sc: Parameters<typeof eligibleLines>[0], ls: EngineLine[]) => eligibleLines(sc, rules, ls);
+    const { sets, sameScope } = autoFreeSets(b, base.cart.lines, pick);
+    if (sets < 1) continue;
+
+    let target: GiftTarget | null = null;
+    if (sameScope) {
+      // The free item is another one of what the shopper already chose: the cheapest of it, as it is the one that comes free.
+      const cheapest = [...pick(b.get.appliesTo, base.cart.lines)].filter((l) => l.variantId).sort((x, y) => x.unitPrice - y.unitPrice || x.id.localeCompare(y.id))[0];
+      if (cheapest?.variantId) target = { variantId: cheapest.variantId, productId: cheapest.productId, unitPrice: cheapest.unitPrice, onSale: cheapest.onSale, available: null };
+    } else if (b.get.appliesTo.type === "products") {
+      for (const productId of b.get.appliesTo.productIds) {
+        target = await input.resolveGift(productId);
+        if (target) break;
+      }
+    }
+    if (!target) continue;
+
+    let quantity = sets * b.get.quantity;
+    if (target.available !== null) {
+      const own = realLines.filter((l) => l.variantId === target?.variantId).reduce((sum, l) => sum + l.quantity, 0);
+      quantity = Math.min(quantity, Math.max(0, target.available - own));
+    }
+    if (quantity > 0) wants.push({ discountId: d.id, target, quantity });
+  }
+  if (wants.length === 0) return [];
+
+  // The cart with the free items in it: only offers the engine really applies to it keep their items.
+  const virtual: CartDiscountLine[] = wants.map((w) => ({
+    id: `auto:${w.discountId}`,
+    productId: w.target.productId,
+    variantId: w.target.variantId,
+    quantity: w.quantity,
+    unitPrice: w.target.unitPrice,
+    lineTotal: w.target.unitPrice * w.quantity,
+    onSale: w.target.onSale,
+  }));
+  const all = [...realLines, ...virtual];
+  const withFree = await engineInputFor(
+    db,
+    tenantId,
+    c,
+    all,
+    { subtotal: all.reduce((sum, l) => sum + l.lineTotal, 0), itemCount: all.reduce((sum, l) => sum + l.quantity, 0) },
+    input.marketId,
+  );
+  const applied = new Set(evaluateDiscounts(withFree).applications.map((a) => a.discountId));
+
+  const byVariant = new Map<string, AutoAdd>();
+  for (const w of wants) {
+    if (!applied.has(w.discountId)) continue;
+    const existing = byVariant.get(w.target.variantId);
+    if (existing) existing.quantity += w.quantity;
+    else byVariant.set(w.target.variantId, { discountId: w.discountId, variantId: w.target.variantId, quantity: w.quantity });
+  }
+  return [...byVariant.values()];
 }
 
 /**

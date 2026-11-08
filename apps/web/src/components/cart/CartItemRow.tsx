@@ -126,6 +126,11 @@ export function CartItemRow({ item, offerAmount = 0, onUpdateQuantity, onRemove 
 
         <div className="text-right">
           <p className="text-base font-bold text-foreground">{formattedLineTotal}</p>
+          {(item.autoFreeQty ?? 0) > 0 ? (
+            <p className="text-xs text-muted-foreground" data-testid="auto-free">
+              {item.autoFreeQty === item.quantity ? "Free item added for you" : `Includes ${item.autoFreeQty} free item${item.autoFreeQty === 1 ? "" : "s"} added for you`}
+            </p>
+          ) : null}
           {offerAmount > 0 ? (
             <p className="text-xs font-medium text-emerald-700" data-testid="line-offer">
               Offer applied: −{money(offerAmount)}

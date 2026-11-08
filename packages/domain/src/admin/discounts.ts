@@ -79,6 +79,7 @@ async function assertDiscountSetup(
     if (!b) throw new Error("Bad Request: choose what to buy and what to get");
     if (appliesTo.type !== "all") throw new Error("Bad Request: a buy-x-get-y offer chooses its items in the offer itself");
     if (rules.tiers || rules.maxDiscount !== undefined || rules.oncePerOrder) throw new Error("Bad Request: those options do not apply to a buy-x-get-y offer");
+    if (b.autoAdd === true && b.get.effect !== "free") throw new Error("Bad Request: only a free offer can add items to the cart by itself");
     if (b.get.effect === "percent" && (!b.get.value || b.get.value > 100)) throw new Error("Bad Request: the percentage off must be between 1 and 100");
     if (b.get.effect === "fixed_price" && !b.get.value) throw new Error("Bad Request: enter the price the items cost");
     await assertScopeExists(tx, ctx, b.buy.appliesTo);

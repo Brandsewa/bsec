@@ -51,6 +51,11 @@ export const DiscountRules = z.object({
         effect: z.enum(["free", "percent", "fixed_price"]),
         value: z.number().int().min(1).optional(),
       }),
+      /**
+       * Add the free items to the cart by itself once the buy condition is met (and take them out when it is not). Only for
+       * `free`; missing means on for a free offer. Works for the same items as the buy part, or for chosen products.
+       */
+      autoAdd: z.boolean().optional(),
       /** How many times the offer may repeat in one order. Missing means as often as the cart allows for a quantity trigger, once for an amount trigger. */
       maxUsesPerOrder: z.number().int().min(1).max(100).optional(),
     })
@@ -94,4 +99,9 @@ export type DiscountEligibility = z.infer<typeof DiscountEligibility>;
 export function parseDiscountEligibility(raw: unknown): DiscountEligibility | null {
   const r = DiscountEligibility.safeParse(raw ?? { type: "all" });
   return r.success ? r.data : null;
+}
+
+/** Whether a buy-x-get-y offer adds its free items to the cart by itself. */
+export function bxgyAutoAdds(b: NonNullable<DiscountRules["bxgy"]>): boolean {
+  return b.get.effect === "free" && (b.autoAdd ?? true);
 }

@@ -71,6 +71,8 @@ export const MAX_CODES_PER_CART = 5;
 export interface EngineLine {
   id: string;
   productId: string;
+  /** The variant, when the caller knows it (used to add free items of the same variant). */
+  variantId?: string | undefined;
   /** Every collection the product belongs to (only the ones some discount asks about need to be filled in). */
   collectionIds: string[];
   quantity: number;

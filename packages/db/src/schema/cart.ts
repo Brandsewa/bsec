@@ -60,6 +60,8 @@ export const cartItems = tenantTable(
     cartId: uuid("cart_id").notNull(),
     variantId: uuid("variant_id").notNull(),
     quantity: integer("quantity").notNull().default(1),
+    /** Units of this line the store added by itself for a buy-x-get-y offer (the shopper's own are quantity minus this). */
+    autoFreeQty: integer("auto_free_qty").notNull().default(0),
     unitPriceSnapshot: bigint("unit_price_snapshot", { mode: "number" }).notNull(),
     properties: jsonb("properties"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
