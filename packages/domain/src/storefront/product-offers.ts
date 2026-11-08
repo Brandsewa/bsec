@@ -1,10 +1,10 @@
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { formatMoney } from "@bs/contracts/money";
 import { parseDiscountEligibility, parseDiscountRules, type DiscountAppliesTo } from "@bs/contracts/discount-rules";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
 import { collectionIdsByProduct } from "../discounts/scope.ts";
+import { offerHeadline } from "../discounts/describe.ts";
 
 /** An automatic buy-x-get-y offer worth telling the shopper about on a product page. */
 export interface StorefrontProductOffer {
@@ -66,12 +66,8 @@ export async function getStorefrontProductOffers(rt: Runtime, ctx: TenantContext
 
     return offers
       .map(({ d, b }) => {
-        const what = b.get.effect === "free" ? "Free" : b.get.effect === "percent" ? `at ${b.get.value ?? 0}% off` : `at ${formatMoney(b.get.value ?? 0, currency)}`;
         const gift = b.get.appliesTo.type === "products" ? titles.get(b.get.appliesTo.productIds[0] ?? "") : undefined;
-        const headline =
-          b.buy.trigger === "amount"
-            ? `Spend ${formatMoney(b.buy.value, currency)}, get ${gift ?? `${b.get.quantity} item${b.get.quantity === 1 ? "" : "s"}`} ${b.get.effect === "free" ? "free" : what}`
-            : `Buy ${b.buy.value} Get ${b.get.quantity} ${what}`;
+        const headline = offerHeadline(d, currency, gift);
         return {
           id: d.id,
           name: d.title,

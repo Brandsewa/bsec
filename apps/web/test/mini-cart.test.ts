@@ -55,6 +55,20 @@ describe("mini cart", () => {
     expect(html).not.toContain("View cart"); // the page link is gone from the drawer
   });
 
+  it("shows the earned offer on one line, the others behind an arrow, in the same box as the free-shipping bar", () => {
+    const offers = [
+      { id: "o1", name: "Buy 2 Pickle get 1 free", headline: "Buy 2 Get 1 Free", unlocked: true },
+      { id: "o2", name: "Mug gift", headline: "Spend ₹2,000, get Mug free", unlocked: false },
+    ];
+    const html = render(React.createElement(MiniCartDrawer, { open: true, onClose: () => {}, cart: { ...cart, availableOffers: offers } as unknown as StorefrontCart, onCartChange: () => {}, freeShippingThresholdPaise: 299900 }));
+    expect(html).toContain("Offer unlocked: Buy 2 Pickle get 1 free");
+    expect(html).not.toContain("You got");
+    expect(html).toContain("Spend ₹2,000, get Mug free"); // inside the dropdown
+    expect(html).toContain("mini-cart-more-offers");
+    expect(html.indexOf("mini-cart-offers")).toBeLessThan(html.indexOf("mini-cart-offer\""));
+    expect(html.indexOf("mini-cart-offer\"")).toBeLessThan(html.indexOf("mini-cart-shipping-bar"));
+  });
+
   it("says free shipping is unlocked once the threshold is reached, and hides the bar when the store has no free-shipping amount", () => {
     expect(render(drawer(50000))).toContain("You have unlocked free shipping");
     expect(render(drawer(null))).not.toContain("mini-cart-shipping-bar");
