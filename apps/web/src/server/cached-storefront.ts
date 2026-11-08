@@ -135,12 +135,12 @@ export async function getCachedStorefrontCollection(
 }
 
 /** The coupons the store shows on product pages. Short-lived: a discount edit shows within a minute. */
-export async function getCachedStorefrontCoupons(tenantId: string): Promise<StorefrontCoupon[]> {
+export async function getCachedStorefrontCoupons(tenantId: string, productId?: string): Promise<StorefrontCoupon[]> {
   "use cache";
   cacheTag(tenantTag(tenantId, "product"));
   cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
   const { rt } = server();
-  return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId));
+  return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId), "INR", productId);
 }
 
 /** The custom fields to show for one product (ADR-034), refreshed with the product and with field changes. */

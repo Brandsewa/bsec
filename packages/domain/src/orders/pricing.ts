@@ -7,6 +7,13 @@ export interface PricingDiscount {
   type: string;
   /** For goods discounts: the amount off. Ignored for free shipping. */
   discountAmount: number;
+  /** For free shipping: waive at most this much of the shipping charge. Missing means all of it. */
+  maxShipping?: number | null | undefined;
+}
+
+/** What `priceOrder` takes, from the discounts a cart carries. The one place the cart shape is turned into pricing input. */
+export function toPricingDiscounts(discounts: ReadonlyArray<{ type: string; amount: number; maxShipping?: number | null | undefined }> | null | undefined): PricingDiscount[] {
+  return (discounts ?? []).map((d) => ({ type: d.type, discountAmount: d.amount, maxShipping: d.maxShipping ?? null }));
 }
 
 export interface OrderPricing {
@@ -23,15 +30,26 @@ export interface OrderPricing {
   discountValue: number;
 }
 
-export function priceOrder(input: { subtotal: number; shipping: number; codFee: number; discount?: PricingDiscount | null | undefined }): OrderPricing {
+export function priceOrder(input: {
+  subtotal: number;
+  shipping: number;
+  codFee: number;
+  /** One discount (kept for callers that only ever have one). */
+  discount?: PricingDiscount | null | undefined;
+  /** Every applied discount: goods discounts add up (never below zero), any free-shipping one waives the shipping charge. */
+  discounts?: PricingDiscount[] | null | undefined;
+}): OrderPricing {
   const subtotal = Math.max(0, Math.round(input.subtotal));
   const shipping = Math.max(0, Math.round(input.shipping));
   const codFee = Math.max(0, Math.round(input.codFee));
-  const d = input.discount ?? null;
+  const all = [...(input.discounts ?? []), ...(input.discount ? [input.discount] : [])];
 
-  const freeShipping = d?.type === "free_shipping";
-  const discountTotal = d && !freeShipping ? Math.min(subtotal, Math.max(0, Math.round(d.discountAmount))) : 0;
-  const shippingDiscount = freeShipping ? shipping : 0;
+  const waivers = all.filter((d) => d.type === "free_shipping");
+  const freeShipping = waivers.length > 0;
+  const goods = all.filter((d) => d.type !== "free_shipping").reduce((sum, d) => sum + Math.max(0, Math.round(d.discountAmount)), 0);
+  const discountTotal = Math.min(subtotal, goods);
+  // A cap ("free shipping up to 100") waives only that much; the best waiver among those present counts.
+  const shippingDiscount = freeShipping ? Math.max(...waivers.map((d) => (d.maxShipping != null ? Math.min(shipping, Math.max(0, Math.round(d.maxShipping))) : shipping))) : 0;
   const shippingTotal = shipping - shippingDiscount;
 
   return {

@@ -3,7 +3,7 @@
 import React, { useCallback, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import { CheckoutForm, type CheckoutCountryPicker, type CheckoutDisplay, type CheckoutRegion, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
@@ -63,7 +63,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: toPricingDiscounts(cart.discounts),
   }).grandTotal;
   const totalLabel = money(total);
 

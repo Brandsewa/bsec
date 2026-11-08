@@ -1,7 +1,7 @@
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
 import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
@@ -18,11 +18,12 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
   const money = useMoney();
   const { locale } = useMarket();
   const formattedSubtotal = money(cart.subtotal);
+  const goodsDiscount = (cart.discounts ?? []).find((d) => !d.freeShipping);
   const pricing = priceOrder({
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: toPricingDiscounts(cart.discounts),
   });
   const totalPaise = pricing.grandTotal;
   const formattedTotal = money(totalPaise);
@@ -87,9 +88,9 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
           <span>Shipping</span>
           <span className="font-semibold text-foreground">{formattedShipping}</span>
         </div>
-        {pricing.discountTotal > 0 && cart.discount && (
+        {pricing.discountTotal > 0 && goodsDiscount && (
           <div className="flex justify-between text-muted-foreground" data-testid="discount-line">
-            <span>Discount ({cart.discount.code})</span>
+            <span>Discount ({goodsDiscount.automatic ? goodsDiscount.title : goodsDiscount.code})</span>
             <span className="font-semibold text-emerald-700">−{money(pricing.discountTotal)}</span>
           </div>
         )}

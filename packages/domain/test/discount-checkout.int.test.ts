@@ -131,10 +131,9 @@ describe("discount codes at checkout", () => {
     expect((await getOrCreateCart(rtWeb, ctx, token)).discount).toBeNull();
   });
 
-  it("buy-X-get-Y can be created by a merchant but is refused at checkout, honestly", async () => {
-    await createAdminDiscount(rtWeb, ctx, { code: "BXGY", title: "Buy 2 get 1", type: "buy_x_get_y", value: 1 });
-    const token = await cartWith(3);
-    expect(await errorOf(applyCartDiscount(rtWeb, ctx, { token, code: "BXGY" }))).toMatch(/can't be used at checkout yet/);
+  it("a buy-X-get-Y offer cannot be saved without saying what to buy and what to get", async () => {
+    // Buy-x-get-y works now (discounts-engine.int.test.ts); a bare one that could never apply is refused when it is saved.
+    expect(await errorOf(createAdminDiscount(rtWeb, ctx, { code: "BXGY", title: "Buy 2 get 1", type: "buy_x_get_y", value: 1 }))).toMatch(/choose what to buy and what to get/);
   });
 
   it("a code can be removed again, and applying a new one replaces the old one", async () => {

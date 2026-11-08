@@ -73,9 +73,13 @@ export const discounts = tenantTable(
     type: text("type").notNull(), // percent, fixed, free_shipping, buy_x_get_y
     value: integer("value").notNull(), // percent points (e.g. 20 for 20%) or paise (e.g. 5000 for ₹50)
     appliesTo: jsonb("applies_to").notNull().default(sql`'{"type":"all"}'::jsonb`),
+    /** Versioned extras (ADR-045): maxDiscount, excludeOnSale, oncePerOrder, later tiers and buy-x-get-y. Validated by `discountRulesSchema` in @bs/contracts. */
+    rules: jsonb("rules").notNull().default(sql`'{}'::jsonb`),
     minSubtotal: bigint("min_subtotal", { mode: "number" }).default(0),
     minQty: integer("min_qty").default(0),
     customerEligibility: jsonb("customer_eligibility").notNull().default(sql`'{"type":"all"}'::jsonb`),
+    /** Redeemed through a generated list of single-use codes (`discount_codes`) instead of one shared code or by itself. */
+    usesCodeList: boolean("uses_code_list").notNull().default(false),
     usageLimit: integer("usage_limit"),
     perCustomerLimit: integer("per_customer_limit"),
     usedCount: integer("used_count").notNull().default(0),
@@ -133,6 +137,76 @@ export const discountRedemptions = tenantTable(
       target: customers,
       name: "discount_redemptions_customer_fk",
       onDelete: "set null",
+    }),
+  ],
+);
+
+/**
+ * Order Discount Applications (ADR-045, docs/DISCOUNTS-PLAN.md phase 0).
+ * What each discount did to one order, copied at checkout: the code and title are snapshots, so invoices, refunds and
+ * reports read it from the order even after the discount is edited or archived. `amount` is the goods discount and
+ * `shipping_amount` the shipping charge a free-shipping discount waived, both in the order's minor units.
+ */
+export const orderDiscountApplications = tenantTable(
+  "order_discount_applications",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    discountId: uuid("discount_id").notNull(),
+    code: text("code"),
+    title: text("title").notNull(),
+    discountClass: text("discount_class").notNull().default("order"), // product, order, shipping
+    type: text("type").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull().default(0),
+    shippingAmount: bigint("shipping_amount", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("order_discount_applications_tenant_id_uniq").on(t.tenantId, t.id),
+    index("order_discount_applications_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("order_discount_applications_tenant_discount_idx").on(t.tenantId, t.discountId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.orderId,
+      target: orders,
+      name: "order_discount_applications_order_fk",
+      onDelete: "cascade",
+    }),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.discountId,
+      target: discounts,
+      name: "order_discount_applications_discount_fk",
+      onDelete: "restrict",
+    }),
+  ],
+);
+
+/**
+ * Discount Codes (ADR-045, docs/DISCOUNTS-PLAN.md phase 4).
+ * A generated list of single-use codes that all redeem one discount (influencer, CRM or retention campaigns). A code is
+ * used once: `used_at` is set in the order transaction with a guarded update. `used_order_id` is informational.
+ */
+export const discountCodes = tenantTable(
+  "discount_codes",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    discountId: uuid("discount_id").notNull(),
+    code: citext("code").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    usedOrderId: uuid("used_order_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("discount_codes_tenant_code_uniq").on(t.tenantId, t.code),
+    unique("discount_codes_tenant_id_uniq").on(t.tenantId, t.id),
+    index("discount_codes_tenant_discount_idx").on(t.tenantId, t.discountId),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.discountId,
+      target: discounts,
+      name: "discount_codes_discount_fk",
+      onDelete: "cascade",
     }),
   ],
 );
