@@ -192,10 +192,7 @@ export function ProductDetailSection({
       ) : null,
     coupons:
       options.showCoupons !== false && cards.length > 0 ? (
-        <>
-          <CouponCards inline coupons={cards} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
-          {offers.some((o) => o.autoAdd) ? <OfferSlot /> : null}
-        </>
+        <CouponCards inline coupons={cards} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
       ) : null,
     tags:
       options.showTags && product.tags && product.tags.length > 0 ? (
@@ -249,7 +246,11 @@ export function ProductDetailSection({
         {gallery}
 
         <ProductBuyProvider product={product}>
-          <div className={`flex flex-col gap-5 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>{orderedNodes}</div>
+          <div className={`flex flex-col gap-5 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>
+            {/* Once the offer is earned, the "Offer unlocked" card shows right at the top, above the title. */}
+            {offers.some((o) => o.autoAdd) ? <OfferSlot /> : null}
+            {orderedNodes}
+          </div>
         </ProductBuyProvider>
       </div>
       {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}

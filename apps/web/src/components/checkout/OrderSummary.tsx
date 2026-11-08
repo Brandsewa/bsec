@@ -53,17 +53,14 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
                 <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? item.product.title) : ""} loading="lazy" className="h-full w-full rounded-lg object-cover" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
+                  {row.free ? <span className="shrink-0 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Offer</span> : null}
+                </div>
                 <p className="text-[11px] text-muted-foreground truncate">
                   {weight ? `${weight} × ${qty}` : `× ${qty}`}
                   {row.free ? "" : ` · ${money(item.unitPriceSnapshot)} each`}
                 </p>
-                {row.free ? (
-                  <span className="mt-0.5 inline-flex max-w-full items-center rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
-                    <span className="truncate">Offer unlocked</span>
-                    <span className="ml-1 shrink-0">· save {money(row.saved)}</span>
-                  </span>
-                ) : null}
                 {item.variant.preorderEnabled && !row.free && (
                   <span className="inline-flex items-center rounded bg-amber-500/10 px-1 py-0.25 text-[9px] font-medium text-amber-700 dark:text-amber-400">
                     Pre-order

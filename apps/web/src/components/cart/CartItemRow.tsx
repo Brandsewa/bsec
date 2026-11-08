@@ -18,7 +18,10 @@ export interface CartItemRowProps {
   onRemove?: (itemId: string) => Promise<void> | void;
 }
 
-/** One line of the cart: picture, name, weight, "price × quantity", the stepper and the line's price. Compact on a phone. */
+/**
+ * One line of the cart in three columns: the picture with a small x to remove it; the name over "weight × price × quantity";
+ * the quantity buttons over the line's price. The same shape on a phone and on a desktop.
+ */
 export function CartItemRow({ item, qty, offerAmount = 0, onUpdateQuantity, onRemove }: CartItemRowProps) {
   const [updating, setUpdating] = useState(false);
   const money = useMoney();
@@ -38,18 +41,29 @@ export function CartItemRow({ item, qty, offerAmount = 0, onUpdateQuantity, onRe
   };
 
   return (
-    <div className="flex items-start gap-3 border-b border-border/60 py-3 sm:gap-4 sm:py-4">
-      <Link href={`/products/${item.product.slug}`} className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20" tabIndex={-1} aria-label={item.product.title}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? item.product.title) : ""} loading="lazy" className="h-full w-full object-cover" />
-      </Link>
+    <div className="flex items-start gap-3 border-b border-border/60 py-3">
+      <div className="relative shrink-0">
+        <Link href={`/products/${item.product.slug}`} className="block h-16 w-16 overflow-hidden rounded-lg bg-muted" tabIndex={-1} aria-label={item.product.title}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? item.product.title) : ""} loading="lazy" className="h-full w-full object-cover" />
+        </Link>
+        <button
+          type="button"
+          disabled={updating}
+          onClick={() => void run(() => onRemove?.(item.id))}
+          aria-label={`Remove ${item.product.title}`}
+          className="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <svg aria-hidden className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
 
       <div className="min-w-0 flex-1">
-        <Link href={`/products/${item.product.slug}`} className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors hover:text-primary sm:text-base">
+        <Link href={`/products/${item.product.slug}`} className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors hover:text-primary">
           {item.product.title}
         </Link>
-        {weight ? <p className="text-xs text-muted-foreground">{weight}</p> : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {weight ? `${weight} × ` : ""}
           {money(item.unitPriceSnapshot)} × {shown}
         </p>
         {item.variant.preorderEnabled && (
@@ -60,41 +74,36 @@ export function CartItemRow({ item, qty, offerAmount = 0, onUpdateQuantity, onRe
               : "Ships soon"}
           </p>
         )}
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex items-center overflow-hidden rounded-lg border border-border bg-background">
-            <button
-              type="button"
-              disabled={updating || shown <= 1}
-              onClick={() => void run(() => onUpdateQuantity?.(item.id, item.quantity - 1))}
-              aria-label="Decrease quantity"
-              className="h-8 w-8 text-sm text-foreground/80 transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              -
-            </button>
-            <span className="w-8 text-center text-sm font-medium">{shown}</span>
-            <button
-              type="button"
-              disabled={updating}
-              onClick={() => void run(() => onUpdateQuantity?.(item.id, item.quantity + 1))}
-              aria-label="Increase quantity"
-              className="h-8 w-8 text-sm text-foreground/80 transition-colors hover:bg-muted disabled:opacity-40"
-            >
-              +
-            </button>
-          </div>
-          <button type="button" disabled={updating} onClick={() => void run(() => onRemove?.(item.id))} className="text-xs text-destructive transition-opacity hover:opacity-70">
-            Remove
-          </button>
-        </div>
-      </div>
-
-      <div className="shrink-0 text-right">
-        <p className="text-sm font-bold text-foreground sm:text-base">{money(lineTotal)}</p>
         {offerAmount > 0 ? (
-          <p className="text-xs font-medium text-emerald-700" data-testid="line-offer">
+          <p className="mt-0.5 text-xs font-medium text-emerald-700" data-testid="line-offer">
             Offer applied: −{money(offerAmount)}
           </p>
         ) : null}
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex items-center overflow-hidden rounded-lg border border-border bg-background">
+          <button
+            type="button"
+            disabled={updating || shown <= 1}
+            onClick={() => void run(() => onUpdateQuantity?.(item.id, item.quantity - 1))}
+            aria-label="Decrease quantity"
+            className="h-7 w-7 text-sm text-foreground/80 transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            -
+          </button>
+          <span className="w-6 text-center text-sm font-medium">{shown}</span>
+          <button
+            type="button"
+            disabled={updating}
+            onClick={() => void run(() => onUpdateQuantity?.(item.id, item.quantity + 1))}
+            aria-label="Increase quantity"
+            className="h-7 w-7 text-sm text-foreground/80 transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+        <p className="text-sm font-bold text-foreground">{money(lineTotal)}</p>
       </div>
     </div>
   );

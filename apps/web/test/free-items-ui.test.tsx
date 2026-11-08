@@ -76,12 +76,14 @@ describe("the cart shown as lines", () => {
 describe("the cart page", () => {
   const html = renderToString(React.createElement(CartView, { cart: unlocked, freeShippingThresholdPaise: 99900, options: { showFreeShippingBar: true } as never }));
 
-  it("shows price x quantity for the paid line and the free line below it, not a card above", () => {
-    expect(html).toContain("₹180 × 2");
-    expect(html).toContain("₹0 × 1");
-    expect(html).toContain("Offer unlocked: Buy 2 Get 1 Free");
-    expect(html).toContain("save ₹180");
-    expect(html.indexOf("₹180 × 2")).toBeLessThan(html.indexOf("free-item-row"));
+  it("reads weight x price x quantity, with a remove x on the picture, and the free line below with a green Offer tag and FREE", () => {
+    expect(html).toContain("200g × ₹180 × 2");
+    expect(html).toContain("200g × ₹0 × 1");
+    expect(html).toContain('aria-label="Remove Dalle with Mutter/Mula"'); // the small x on the thumbnail
+    expect(html).not.toContain(">Remove<"); // no text button any more
+    expect(html).toMatch(/>Offer<\/span>/);
+    expect(html).toContain("FREE");
+    expect(html.indexOf("200g × ₹180 × 2")).toBeLessThan(html.indexOf("free-item-row"));
     expect(html).not.toContain("free-items-card");
   });
 
@@ -100,18 +102,18 @@ describe("the cart page", () => {
 describe("checkout", () => {
   const html = renderToString(React.createElement(OrderSummary, { cart: unlocked, shippingPaise: 0 }));
 
-  it("shows each line with its weight and quantity, and the free line below the item, with a small saving badge", () => {
+  it("shows each line with its weight and quantity, and the free line below the item with a green Offer tag after its name and FREE", () => {
     expect(html).toContain("200g × 2");
     expect(html).toContain("200g × 1");
-    expect(html).toContain("Offer unlocked");
-    expect(html).toContain("save ₹180");
+    expect(html).toMatch(/Dalle with Mutter\/Mula<\/p><span[^>]*>Offer<\/span>/); // the tag sits on the name's row
     expect(html).toContain("FREE");
+    expect(html).not.toContain("save ₹180"); // the price already says FREE
     expect(html.indexOf("200g × 2")).toBeLessThan(html.indexOf("200g × 1"));
     expect(html).not.toContain("free-items-card");
   });
 
   it("shows nothing about an offer for a plain cart", () => {
-    expect(renderToString(React.createElement(OrderSummary, { cart: plain, shippingPaise: 0 }))).not.toContain("Offer unlocked");
+    expect(renderToString(React.createElement(OrderSummary, { cart: plain, shippingPaise: 0 }))).not.toContain(">Offer<");
   });
 });
 
