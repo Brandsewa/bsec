@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/mini-offers` · mini cart offers box: one line, others behind an arrow, same colours as the free-shipping bar; change record `docs/changes/2026-11-08-claude-mini-cart-offers.md` · 2026-11-08
 - claude · `feat/cart-compact` · three-column cart lines, Offer tag on the free line, unlocked card above the product title; change record `docs/changes/2026-11-08-claude-cart-compact.md` · 2026-11-08
 - claude · `feat/cart-redesign` · cart, mini cart and checkout lines (price x quantity, free item as its own line), offers as coupon cards on the product page, estimator and trust lines removed; change record `docs/changes/2026-11-08-claude-cart-redesign.md` · 2026-11-08
 - claude · `feat/offer-ui` · free-item offer shown to the shopper: Offer unlocked card in cart, mini cart and checkout, promotion bar and unlocked card on the product page; change record `docs/changes/2026-11-08-claude-offer-ui.md` · 2026-11-08

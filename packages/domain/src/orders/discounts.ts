@@ -8,13 +8,14 @@ import {
   markets,
   orderDiscountApplications,
   orders,
+  products,
   tenants,
   withTenant,
   type Db,
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { bxgyAutoAdds, parseDiscountAppliesTo, parseDiscountRules } from "@bs/contracts/discount-rules";
+import { bxgyAutoAdds, parseDiscountAppliesTo, parseDiscountEligibility, parseDiscountRules } from "@bs/contracts/discount-rules";
 import {
   ANONYMOUS,
   evaluateDiscounts,
@@ -31,6 +32,7 @@ import {
 } from "../discounts/engine.ts";
 import { collectionIdsByProduct } from "../discounts/scope.ts";
 import { autoFreeSets } from "../discounts/bxgy.ts";
+import { offerHeadline } from "../discounts/describe.ts";
 
 export interface ValidateDiscountInput {
   code: string;
@@ -89,9 +91,22 @@ export interface CartDiscountsInput {
   strict?: boolean | undefined;
 }
 
+/** An automatic offer of the store as the cart's offers box lists it. */
+export interface CartOffer {
+  id: string;
+  /** What the merchant called it. */
+  name: string;
+  /** In a few words: "Spend ₹2,000, get Dalle free". */
+  headline: string;
+  /** It applies to this cart now. */
+  unlocked: boolean;
+}
+
 export interface CartDiscountsResult {
   applications: EngineApplication[];
   rejections: EngineRejection[];
+  /** Every automatic offer that is live for everyone, the ones already earned first (empty for an empty cart). */
+  offers: CartOffer[];
   /** The nearest automatic offer more spending would unlock, if any. */
   nudge: EngineNudge | null;
 }
@@ -239,7 +254,41 @@ async function engineInputFor(db: Db, tenantId: string, c: EngineContext, cartLi
 export async function evaluateCartDiscounts(db: Db, tenantId: string, input: CartDiscountsInput): Promise<CartDiscountsResult> {
   const c = await loadEngineContext(db, tenantId, input);
   const engineInput = await engineInputFor(db, tenantId, c, input.lines ?? [], { subtotal: input.cartSubtotal, itemCount: input.cartTotalQty }, input.marketId);
-  return { ...evaluateDiscounts(engineInput), nudge: engineInput.cart.lines.length > 0 ? nextOffer(engineInput) : null };
+  const result = evaluateDiscounts(engineInput);
+  return { ...result, nudge: engineInput.cart.lines.length > 0 ? nextOffer(engineInput) : null, offers: engineInput.cart.lines.length > 0 ? await cartOffers(db, tenantId, c, result.applications) : [] };
+}
+
+/** The store's automatic offers that are live now for everyone, worded for the cart; those already applied come first. */
+async function cartOffers(db: Db, tenantId: string, c: EngineContext, applications: EngineApplication[]): Promise<CartOffer[]> {
+  const now = new Date();
+  const live = c.rows.filter(
+    (d) =>
+      d.code === null &&
+      !d.usesCodeList &&
+      d.status === "active" &&
+      (!d.startsAt || d.startsAt <= now) &&
+      (!d.endsAt || d.endsAt > now) &&
+      (d.usageLimit === null || d.usedCount < d.usageLimit) &&
+      parseDiscountEligibility(d.customerEligibility)?.type === "all",
+  );
+  if (live.length === 0) return [];
+  // The free product's name, for "spend X, get <gift> free".
+  const giftIds = live.flatMap((d) => {
+    const b = parseDiscountRules(d.rules).bxgy;
+    return b && b.buy.trigger === "amount" && b.get.appliesTo.type === "products" ? b.get.appliesTo.productIds.slice(0, 1) : [];
+  });
+  const titles = new Map<string, string>();
+  if (giftIds.length > 0) {
+    for (const p of await db.select({ id: products.id, title: products.title }).from(products).where(and(eq(products.tenantId, tenantId), inArray(products.id, giftIds)))) titles.set(p.id, p.title);
+  }
+  const applied = new Set(applications.map((a) => a.discountId));
+  return live
+    .map((d) => {
+      const b = parseDiscountRules(d.rules).bxgy;
+      const gift = b && b.get.appliesTo.type === "products" ? titles.get(b.get.appliesTo.productIds[0] ?? "") : undefined;
+      return { id: d.id, name: d.title, headline: offerHeadline(d, c.currency, gift), unlocked: applied.has(d.id) };
+    })
+    .sort((x, y) => Number(y.unlocked) - Number(x.unlocked));
 }
 
 /**

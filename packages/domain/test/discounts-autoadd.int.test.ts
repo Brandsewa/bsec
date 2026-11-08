@@ -306,3 +306,24 @@ describe("offers worded for the product page", () => {
     expect(await getStorefrontProductOffers(rtWeb, ctx, pickleProduct)).toEqual([]);
   });
 });
+
+describe("the offers list of the cart", () => {
+  it("lists every automatic offer, the earned one first, with the free gift named", async () => {
+    await clearDiscounts();
+    const earned = await createAdminDiscount(rtWeb, ctx, buy2get1());
+    await createAdminDiscount(rtWeb, ctx, {
+      title: "Free mug over 200",
+      type: "buy_x_get_y",
+      value: 0,
+      rules: { bxgy: { buy: { trigger: "amount", value: 90000000, appliesTo: ALL }, get: { quantity: 1, appliesTo: { type: "products", productIds: [mugProduct] }, effect: "free" } } },
+    });
+    await createAdminDiscount(rtWeb, ctx, { ...buy2get1(), title: "Needs a code", code: "HIDDEN1" });
+    const token = await newCart();
+    const empty = await getOrCreateCart(rtWeb, ctx, token);
+    expect(empty.availableOffers).toEqual([]);
+    const cart = await addToCart(rtWeb, ctx, { token, variantId: pickleVariant, quantity: 2 });
+    expect(cart.availableOffers?.map((o) => [o.id, o.unlocked])).toEqual([[earned.id, true], [expect.any(String), false]]);
+    expect(cart.availableOffers?.[0]?.name).toBe(earned.title);
+    expect(cart.availableOffers?.[1]?.headline).toMatch(/get Mug free/);
+  });
+});
