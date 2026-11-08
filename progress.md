@@ -3,7 +3,6 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `feat/discount-auto-add` · free items of buy-x-get-y offers are added to the cart by themselves (third item, spend gift); change record `docs/changes/2026-11-08-claude-discount-auto-add.md` · 2026-11-08
 - claude · `feat/discounts-engine` · discounts and offers upgrade, all phases (0-5): engine, automatic discounts, product/BXGY/order/shipping types, tiers, codes; plan `docs/DISCOUNTS-PLAN.md`, ADR-045 · 2026-11-07
 - claude · `fix/brand-endpoint-marketing-host` · /api/brand was blocked by the storefront gate on bcom.si (sign-in pages never got the brand); smaller Super Admin sidebar logo; change record `docs/changes/2026-11-06-claude-brand-endpoint-gate-fix.md` · 2026-11-06
 - claude · `feat/bulk-editor-polish` · bulk editor follow-ups: resizable and movable columns, click-to-edit text boxes, rows loaded as you scroll, one-row bulk bar; change record `docs/changes/2026-11-05-claude-bulk-editor-polish.md` · 2026-11-05
