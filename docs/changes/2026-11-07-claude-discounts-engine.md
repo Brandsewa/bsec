@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-07
 - **Agent:** claude
-- **Branch:** `feat/discounts-engine` (not merged, not pushed)
+- **Branch:** `feat/discounts-engine` (merged in #243, 596e815; deployed to production, all jobs of the main run passed)
 - **Area:** `packages/domain` (discounts, orders, storefront, admin), `packages/db`, `packages/contracts`, `apps/web` (cart, checkout, `/discount/<code>`), `apps/admin` (discounts screens), docs
 - **Type:** feat
 - **Supersedes:** none (follows the plan record `2026-11-07-claude-discounts-plan.md`)
@@ -39,7 +39,7 @@ Local, on Windows, against the shared test Postgres (`docker-compose.test-db.yml
 ## NOT verified
 - **The admin screens were not looked at in a browser.** Typecheck, lint and build pass and the data behind them is tested, but the new forms (kind cards, pickers, tiers, audience, code panel, Performance card) have not been clicked through. The local dev stack was started from this worktree (web on 3000, admin on 5180, dev Postgres on 54330 migrated to 0103) but signing in needed the dev owner password, which was not entered; the storefront cart changes were also not seen in a browser.
 - The e2e suite (`e2e/`, CI on `main` only) was not run; no selector it uses was changed.
-- Nothing was pushed, so CI has not run.
+- CI on the PR passed (all heavy shards on Linux, no finance-reconcile failure there).
 - Product-page JS budget: the product page only gained a server-side filter; no client code was added to it. The budget check was not run.
 
 ## Not built (plan sections 4 and 8)
