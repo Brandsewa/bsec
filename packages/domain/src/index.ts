@@ -94,6 +94,7 @@ export * from "./admin/quotes.ts";
 export * from "./admin/abandoned-checkouts.ts";
 export * from "./admin/customers.ts";
 export * from "./admin/discounts.ts";
+export * from "./storefront/product-offers.ts";
 export * from "./admin/discount-codes.ts";
 export * from "./admin/me.ts";
 export * from "./admin/support-access.ts";
