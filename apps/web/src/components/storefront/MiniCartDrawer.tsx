@@ -94,7 +94,37 @@ export function MiniCartDrawer({
   // What they pay for the goods: the subtotal less the offers (a free item is in the subtotal at its normal price).
   const total = priceOrder({ subtotal, shipping: 0, codFee: 0, discounts: toPricingDiscounts(cart?.discounts) }).grandTotal;
   const rows = cart ? cartRows(cart) : [];
-  const freeRows = rows.filter((r) => r.free);
+  // The offers box: one line for the offer earned ("Offer unlocked: Buy 2 Dalle get 1 free"); any others sit behind a small arrow.
+  const offers = cart?.availableOffers ?? [];
+  const lead = offers.find((o) => o.unlocked);
+  const more = offers.filter((o) => o !== lead);
+  const offersBox =
+    lead || more.length > 0 ? (
+      <details className="group">
+        <summary className={`flex list-none items-center gap-2 px-3 py-2.5 font-semibold text-emerald-700 [&::-webkit-details-marker]:hidden ${more.length > 0 ? "cursor-pointer" : ""}`} onClick={more.length > 0 ? undefined : (e) => e.preventDefault()}>
+          <span className="min-w-0 flex-1 truncate" data-testid="mini-cart-offer">
+            {lead ? `Offer unlocked: ${lead.name}` : `${more.length} offer${more.length === 1 ? "" : "s"} available`}
+          </span>
+          {more.length > 0 ? (
+            <svg aria-hidden className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          ) : null}
+        </summary>
+        {more.length > 0 ? (
+          <ul className="grid gap-1.5 border-t border-dashed border-emerald-600/30 px-3 py-2 text-emerald-800" data-testid="mini-cart-more-offers">
+            {more.map((o) => (
+              <li key={o.id} className="flex items-start gap-1.5">
+                <span aria-hidden className="mt-px text-emerald-600">
+                  {o.unlocked ? "✓" : "•"}
+                </span>
+                <span>{o.unlocked ? `Unlocked: ${o.name}` : o.headline}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </details>
+    ) : null;
   const threshold = freeShippingThresholdPaise && freeShippingThresholdPaise > 0 ? freeShippingThresholdPaise : null;
   const reached = threshold !== null && subtotal >= threshold;
   const percent = threshold ? Math.min(100, Math.round((subtotal / threshold) * 100)) : 0;
@@ -190,21 +220,21 @@ export function MiniCartDrawer({
             </ul>
 
             <div className="border-t border-border bg-background px-6 pb-4 pt-5">
-              {freeRows.length > 0 ? (
-                <p className="mb-3 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-700" data-testid="mini-cart-offer">
-                  Offer unlocked{freeRows[0]?.offer ? `: ${freeRows[0].offer}` : ""}. You got {freeRows.map((r) => r.item.product.title).join(", ")} free.
-                </p>
-              ) : null}
-              {copy.showFreeShippingBar && threshold ? (
-                <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3" data-testid="mini-cart-shipping-bar">
-                  <p className="text-sm font-medium">{reached ? "You have unlocked free shipping" : `Add ${money(threshold - subtotal)} more for free shipping`}</p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Progress to free shipping">
-                    <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${percent}%` }} />
-                  </div>
+              {offersBox || (copy.showFreeShippingBar && threshold) ? (
+                <div className="mb-4 rounded-xl border border-dashed border-emerald-600/40 bg-emerald-500/5 text-xs" data-testid="mini-cart-offers">
+                  {offersBox}
+                  {copy.showFreeShippingBar && threshold ? (
+                    <div className={`px-3 py-2.5 ${offersBox ? "border-t border-dashed border-emerald-600/30" : ""}`} data-testid="mini-cart-shipping-bar">
+                      <p className="text-xs font-semibold text-emerald-700">{reached ? "You have unlocked free shipping" : `Add ${money(threshold - subtotal)} more for free shipping`}</p>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-emerald-600/15" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Progress to free shipping">
+                        <div className="h-full rounded-full bg-emerald-600 transition-all duration-300" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
-              <div className={`flex items-baseline justify-between ${copy.showFreeShippingBar && threshold ? "mt-5" : ""}`}>
+              <div className="flex items-baseline justify-between">
                 <span className="text-xl font-bold" style={HEADING_FONT}>
                   Total
                 </span>
