@@ -38,18 +38,20 @@ const cart = {
 const drawer = (threshold: number | null) => React.createElement(MiniCartDrawer, { open: true, onClose: () => {}, cart, onCartChange: () => {}, freeShippingThresholdPaise: threshold });
 
 describe("mini cart", () => {
-  it("shows the items, the free-shipping progress, the total, both buttons and the reassurance row", () => {
+  it("shows the items as price x quantity, the free-shipping progress, the total and both buttons, without a reassurance row", () => {
     const html = render(drawer(299900));
     expect(html).toContain("Your Cart");
     expect(html).toMatch(/data-testid="mini-cart-count">2</); // the count sits in a dark circle
     expect(html).toContain("Orange Marmalade");
     expect(html).toContain("100g");
+    expect(html).toContain("₹450 × 2"); // the price and how many, so the quantity is plain
     expect(html).toContain("Add ₹2,099 more for free shipping"); // 2999 - 900
     expect(html).toContain('aria-valuenow="30"');
     expect(html).toContain("₹900");
     expect(html).toContain("Proceed to Checkout");
     expect(html).toContain("Continue Shopping");
-    expect(html).toContain("100% Secure Payments");
+    expect(html).not.toContain("100% Secure Payments"); // the row was taken out to give the drawer room
+    expect(html).not.toContain("mini-cart-trust");
     expect(html).not.toContain("View cart"); // the page link is gone from the drawer
   });
 

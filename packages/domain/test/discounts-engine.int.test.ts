@@ -260,14 +260,16 @@ describe("discounts on chosen products and collections (phase 1)", () => {
     expect(await bad(createAdminDiscount(rtWeb, ctx, { title: "Scoped shipping", type: "free_shipping", value: 0, appliesTo: { type: "products", productIds: [mugProductId] } }))).toMatch(/only a percentage or a fixed amount/);
   });
 
-  it("a coupon shown on the storefront appears only on the products it applies to", async () => {
+  it("a coupon shown on the storefront is listed on every product, the ones made for the product first", async () => {
     await createAdminDiscount(rtWeb, ctx, { code: "SHOWPICKLE", title: "Pickle coupon", type: "percent", value: 15, showOnStorefront: true, appliesTo: { type: "collections", collectionIds: [picklesCollectionId] } });
     await createAdminDiscount(rtWeb, ctx, { code: "SHOWALL", title: "Everything", type: "percent", value: 5, showOnStorefront: true });
-    const onPickle = (await getStorefrontCoupons(rtWeb, ctx, "INR", pickleProductId)).map((c) => c.code);
-    const onMug = (await getStorefrontCoupons(rtWeb, ctx, "INR", mugProductId)).map((c) => c.code);
-    expect(onPickle).toEqual(expect.arrayContaining(["SHOWPICKLE", "SHOWALL"]));
-    expect(onMug).toContain("SHOWALL");
-    expect(onMug).not.toContain("SHOWPICKLE");
+    const onPickle = await getStorefrontCoupons(rtWeb, ctx, "INR", pickleProductId);
+    const onMug = await getStorefrontCoupons(rtWeb, ctx, "INR", mugProductId);
+    // every coupon is listed; the ones made for the product (or for everything) come first
+    expect(onPickle.map((c) => [c.code, c.appliesHere])).toEqual(expect.arrayContaining([["SHOWPICKLE", true], ["SHOWALL", true]]));
+    expect(onMug.map((c) => c.code)).toEqual(expect.arrayContaining(["SHOWALL", "SHOWPICKLE"]));
+    expect(onMug.find((c) => c.code === "SHOWPICKLE")?.appliesHere).toBe(false);
+    expect(onMug.findIndex((c) => c.code === "SHOWALL")).toBeLessThan(onMug.findIndex((c) => c.code === "SHOWPICKLE"));
   });
 });
 

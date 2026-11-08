@@ -5,13 +5,10 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import type { StorefrontCart } from "@bs/domain";
-// Subpath import: the package barrel would put every block into the browser bundle.
-import { LiteSvgIcon } from "@bs/blocks/svg-icon-lite";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
+import { cartRows, weightLabel } from "../cart/cart-rows.ts";
 import { useMiniCartConfig } from "./MiniCartConfig.tsx";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
-
-// Loaded when a free item is in the cart, not with the page: the product page JavaScript budget has no room for it.
-const FreeItemsCard = React.lazy(() => import("../cart/FreeItemsCard.tsx").then((m) => ({ default: m.FreeItemsCard })));
 
 const HEADING_FONT = { fontFamily: "var(--bs-font-heading, inherit)" } as const;
 
@@ -94,10 +91,13 @@ export function MiniCartDrawer({
   if (!open) return null;
   const items = cart?.items ?? [];
   const subtotal = cart?.subtotal ?? 0;
+  // What they pay for the goods: the subtotal less the offers (a free item is in the subtotal at its normal price).
+  const total = priceOrder({ subtotal, shipping: 0, codFee: 0, discounts: toPricingDiscounts(cart?.discounts) }).grandTotal;
+  const rows = cart ? cartRows(cart) : [];
+  const freeRows = rows.filter((r) => r.free);
   const threshold = freeShippingThresholdPaise && freeShippingThresholdPaise > 0 ? freeShippingThresholdPaise : null;
   const reached = threshold !== null && subtotal >= threshold;
   const percent = threshold ? Math.min(100, Math.round((subtotal / threshold) * 100)) : 0;
-  const trust = copy.showTrustRow ? copy.trustItems : [];
 
   // Drawn on <body>: inside the header it would share the header's stacking layer and could never rise above the bottom bar.
   const tree = (
@@ -128,50 +128,61 @@ export function MiniCartDrawer({
         ) : (
           <>
             <ul className="flex-1 divide-y divide-border overflow-y-auto" aria-busy={busy}>
-              {items.map((item) => {
-                const variantLabel = item.variant.title && item.variant.title !== "Default" ? item.variant.title : null;
+              {rows.map((row) => {
+                const { item, qty } = row;
+                const weight = weightLabel(item);
                 return (
-                  <li key={item.id} className="flex gap-3 px-4 py-3">
-                    <Link href={`/products/${item.product.slug}`} onClick={onClose} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted" aria-label={item.product.title} tabIndex={-1}>
+                  <li key={row.key} className={`flex gap-3 px-4 py-2.5 ${row.free ? "bg-emerald-500/5 pl-6" : ""}`}>
+                    <Link href={`/products/${item.product.slug}`} onClick={onClose} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted" aria-label={item.product.title} tabIndex={-1}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? "") : ""} className="h-full w-full object-cover" />
                     </Link>
                     <div className="min-w-0 flex-1">
-                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="line-clamp-2 text-sm font-semibold leading-snug hover:opacity-70 transition-opacity" style={HEADING_FONT}>
+                      <Link href={`/products/${item.product.slug}`} onClick={onClose} className="line-clamp-1 text-sm font-semibold leading-snug transition-opacity hover:opacity-70" style={HEADING_FONT}>
                         {item.product.title}
                       </Link>
-                      {variantLabel ? <p className="text-xs leading-snug text-muted-foreground">{variantLabel}</p> : null}
-                      <p className="mt-1 text-sm font-bold">{money(item.lineTotal)}</p>
+                      {weight ? <p className="text-xs leading-snug text-muted-foreground">{weight}</p> : null}
+                      <p className="text-xs text-muted-foreground">
+                        {money(row.free ? 0 : item.unitPriceSnapshot)} × {qty}
+                        {row.free ? <span className="ml-1.5 rounded-full bg-emerald-600/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">FREE</span> : null}
+                      </p>
+                      {row.free ? null : (
+                        <div className="mt-1.5 inline-flex items-center rounded-md border border-border">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => (qty <= 1 ? void change("DELETE", { itemId: item.id }) : void change("PATCH", { itemId: item.id, quantity: item.quantity - 1 }))}
+                            className="h-6 w-6 text-base leading-none text-muted-foreground hover:text-foreground disabled:opacity-50"
+                            aria-label={`Decrease quantity of ${item.product.title}`}
+                          >
+                            −
+                          </button>
+                          <span className="w-6 text-center text-xs font-medium" aria-live="polite">
+                            {qty}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void change("PATCH", { itemId: item.id, quantity: item.quantity + 1 })}
+                            className="h-6 w-6 text-base leading-none text-muted-foreground hover:text-foreground disabled:opacity-50"
+                            aria-label={`Increase quantity of ${item.product.title}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <button type="button" disabled={busy} onClick={() => void change("DELETE", { itemId: item.id })} className="-mr-1 h-6 w-6 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label={`Remove ${item.product.title}`}>
-                        <svg aria-hidden className="mx-auto h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                      <div className="inline-flex items-center rounded-md border border-border">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => (item.quantity <= 1 ? void change("DELETE", { itemId: item.id }) : void change("PATCH", { itemId: item.id, quantity: item.quantity - 1 }))}
-                          className="h-7 w-7 text-base leading-none text-muted-foreground hover:text-foreground disabled:opacity-50"
-                          aria-label={`Decrease quantity of ${item.product.title}`}
-                        >
-                          −
+                    <div className="flex shrink-0 flex-col items-end justify-between">
+                      {row.free ? (
+                        <span className="h-5" />
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => void change("DELETE", { itemId: item.id })} className="-mr-1 h-5 w-5 rounded-full text-muted-foreground hover:text-foreground disabled:opacity-50" aria-label={`Remove ${item.product.title}`}>
+                          <svg aria-hidden className="mx-auto h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
-                        <span className="w-6 text-center text-xs font-medium" aria-live="polite">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void change("PATCH", { itemId: item.id, quantity: item.quantity + 1 })}
-                          className="h-7 w-7 text-base leading-none text-muted-foreground hover:text-foreground disabled:opacity-50"
-                          aria-label={`Increase quantity of ${item.product.title}`}
-                        >
-                          +
-                        </button>
-                      </div>
+                      )}
+                      <p className="text-sm font-bold">{money(row.free ? 0 : item.unitPriceSnapshot * qty)}</p>
                     </div>
                   </li>
                 );
@@ -179,10 +190,10 @@ export function MiniCartDrawer({
             </ul>
 
             <div className="border-t border-border bg-background px-6 pb-4 pt-5">
-              {cart && items.some((i) => (i.autoFreeQty ?? 0) > 0) ? (
-                <React.Suspense fallback={null}>
-                  <FreeItemsCard cart={cart} className="mb-3" />
-                </React.Suspense>
+              {freeRows.length > 0 ? (
+                <p className="mb-3 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-700" data-testid="mini-cart-offer">
+                  Offer unlocked{freeRows[0]?.offer ? `: ${freeRows[0].offer}` : ""}. You got {freeRows.map((r) => r.item.product.title).join(", ")} free.
+                </p>
               ) : null}
               {copy.showFreeShippingBar && threshold ? (
                 <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3" data-testid="mini-cart-shipping-bar">
@@ -197,7 +208,7 @@ export function MiniCartDrawer({
                 <span className="text-xl font-bold" style={HEADING_FONT}>
                   Total
                 </span>
-                <span className="text-3xl font-extrabold tracking-tight">{money(subtotal)}</span>
+                <span className="text-3xl font-extrabold tracking-tight">{money(total)}</span>
               </div>
               {copy.totalNote ? <p className="mt-1 text-sm text-muted-foreground">{copy.totalNote}</p> : null}
 
@@ -213,18 +224,6 @@ export function MiniCartDrawer({
                 </button>
               </div>
 
-              {trust.length > 0 ? (
-                <ul className="mt-4 grid gap-2 border-t border-border pt-4" style={{ gridTemplateColumns: `repeat(${trust.length}, minmax(0, 1fr))` }} data-testid="mini-cart-trust">
-                  {trust.map((t, i) => (
-                    <li key={i} className="flex flex-col items-center gap-1.5 text-center text-xs font-medium leading-snug text-muted-foreground">
-                      <span className="text-emerald-600">
-                        <LiteSvgIcon name={t.icon} px={20} />
-                      </span>
-                      {t.text}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           </>
         )}

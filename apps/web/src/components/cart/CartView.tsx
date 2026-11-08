@@ -3,9 +3,9 @@
 import React, { useState } from "react";
 import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontCart } from "@bs/domain";
-import { FreeItemsCard } from "./FreeItemsCard.tsx";
 import { CartItemRow } from "./CartItemRow.tsx";
-import { ShippingEstimator } from "./ShippingEstimator.tsx";
+import { FreeItemRow } from "./FreeItemRow.tsx";
+import { cartRows } from "./cart-rows.ts";
 import { DiscountCodeBox } from "./DiscountCodeBox.tsx";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import type { CartContentsOptions } from "@bs/blocks";
@@ -127,32 +127,35 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
         {options.heading ?? "Shopping Cart"} ({cart.itemCount} {cart.itemCount === 1 ? "item" : "items"})
       </h1>
 
-      <FreeItemsCard cart={cart} className="mb-4" />
-
-      {options.showFreeShippingBar && freeShippingThresholdPaise ? (
-        <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} money={money} />
-      ) : null}
-
-      {cart.discountNudge ? <OfferNudge nudge={cart.discountNudge} subtotal={cart.subtotal} money={money} /> : null}
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         {/* Cart items list */}
         <div className={`lg:col-span-8 flex flex-col ${options.summaryPosition === "left" ? "lg:order-2" : ""} ${loading ? "opacity-60 pointer-events-none" : ""}`}>
-          <div className="divide-y divide-border">
-            {cart.items.map((item) => (
-              <CartItemRow
-                key={item.id}
-                item={item}
-                offerAmount={(cart.discounts ?? []).reduce((sum, d) => sum + (d.discountClass === "product" ? (d.lineAmounts?.[item.id] ?? 0) : 0), 0)}
-                onUpdateQuantity={handleUpdateQuantity}
-                onRemove={handleRemoveItem}
-              />
-            ))}
+          <div>
+            {cartRows(cart).map((row) =>
+              row.free ? (
+                <FreeItemRow key={row.key} row={row} />
+              ) : (
+                <CartItemRow
+                  key={row.key}
+                  item={row.item}
+                  qty={row.qty}
+                  offerAmount={(row.item.autoFreeQty ?? 0) > 0 ? 0 : (cart.discounts ?? []).reduce((sum, d) => sum + (d.discountClass === "product" ? (d.lineAmounts?.[row.item.id] ?? 0) : 0), 0)}
+                  onUpdateQuantity={handleUpdateQuantity}
+                  onRemove={handleRemoveItem}
+                />
+              ),
+            )}
           </div>
         </div>
 
         {/* Order summary sidebar */}
-        <div className={`lg:col-span-4 flex flex-col gap-6 ${options.summaryPosition === "left" ? "lg:order-1" : ""} ${options.stickySummary ? "lg:sticky lg:top-24" : ""}`}>
+        <div className={`lg:col-span-4 flex flex-col gap-4 ${options.summaryPosition === "left" ? "lg:order-1" : ""} ${options.stickySummary ? "lg:sticky lg:top-24" : ""}`}>
+          {options.showFreeShippingBar && freeShippingThresholdPaise ? (
+            <FreeShippingBar subtotal={cart.subtotal} thresholdPaise={freeShippingThresholdPaise} money={money} />
+          ) : null}
+
+          {cart.discountNudge ? <OfferNudge nudge={cart.discountNudge} subtotal={cart.subtotal} money={money} /> : null}
+
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="text-lg font-bold text-foreground mb-4">Order Summary</h2>
 
@@ -197,19 +200,6 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
               {options.checkoutLabel ?? "Proceed to Checkout"}
             </Link>
 
-            {options.showTrustPoints && options.trustPoints && options.trustPoints.length > 0 ? (
-              <ul className="mt-4 flex flex-col gap-1.5 text-xs text-muted-foreground">
-                {options.trustPoints.map((point) => (
-                  <li key={point} className="inline-flex items-center gap-1.5">
-                    <svg className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z" clipRule="evenodd" />
-                    </svg>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
             {options.showContinueShopping !== false ? (
               <div className="mt-4 text-center">
                 <Link href="/" className="text-xs text-primary hover:opacity-70 transition-opacity">
@@ -218,9 +208,6 @@ export function CartView({ cart: initialCart, options = DEFAULT_CART_CONTENTS_OP
               </div>
             ) : null}
           </div>
-
-          {/* Shipping estimator box */}
-          {options.showShippingEstimator ? <ShippingEstimator /> : null}
         </div>
       </div>
 
@@ -246,7 +233,7 @@ function FreeShippingBar({ subtotal, thresholdPaise, money }: { subtotal: number
   const reached = subtotal >= thresholdPaise;
   const percent = Math.min(100, Math.round((subtotal / thresholdPaise) * 100));
   return (
-    <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="free-shipping-bar">
+    <div className="rounded-xl border border-border bg-surface/60 p-4" data-testid="free-shipping-bar">
       <p className="text-sm font-medium text-foreground">
         {reached ? "You have unlocked free shipping" : `Add ${money(thresholdPaise - subtotal)} more for free shipping`}
       </p>
@@ -261,7 +248,7 @@ function FreeShippingBar({ subtotal, thresholdPaise, money }: { subtotal: number
 function OfferNudge({ nudge, subtotal, money }: { nudge: { remaining: number; threshold: number; benefit: string }; subtotal: number; money: (paise: number) => string }) {
   const percent = Math.min(100, Math.max(0, Math.round((subtotal / nudge.threshold) * 100)));
   return (
-    <div className="mb-8 rounded-xl border border-border bg-surface/60 p-4" data-testid="offer-nudge">
+    <div className="rounded-xl border border-border bg-surface/60 p-4" data-testid="offer-nudge">
       <p className="text-sm font-medium text-foreground">
         Add {money(nudge.remaining)} more to get {nudge.benefit}
       </p>
