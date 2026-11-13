@@ -15,14 +15,14 @@
   },
   "dependencies": {
     "@bs/db": "workspace:*",
-    "better-auth": "1.7.14",
+    "better-auth": "1.7.19",
     "drizzle-orm": "0.45.4"
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
     "@types/node": "24.19.0",
-    "eslint": "10.13.0",
+    "eslint": "10.14.0",
     "typescript": "6.0.3",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   }
 }
