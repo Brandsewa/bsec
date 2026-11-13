@@ -23,7 +23,7 @@
     "@orpc/openapi": "1.16.1",
     "@orpc/server": "1.16.1",
     "@sentry/nextjs": "11.9.0",
-    "hono": "4.13.14",
+    "hono": "4.13.16",
     "maxmind": "5.0.6",
     "next": "16.4.3",
     "react": "19.3.1",
