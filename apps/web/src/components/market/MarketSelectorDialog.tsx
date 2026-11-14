@@ -53,7 +53,7 @@ export default function MarketSelectorDialog({ onClose }: { onClose: () => void 
           {visible.map((r) => {
             const here = r.market.handle === currentHandle;
             return (
-              <li key={r.code}>
+              <li key={r.code} style={{ contentVisibility: "auto", containIntrinsicSize: "auto 36px" }}>
                 <a
                   href={`/api/storefront/market/select?handle=${encodeURIComponent(r.market.handle)}&next=%2F`}
                   aria-current={here ? "true" : undefined}

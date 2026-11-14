@@ -22,6 +22,7 @@ import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
 import { MobileMenu, NavDropdownCloser } from "./views-mobile-menu-client.tsx";
 import { BgVideo } from "./views-bg-video-client.tsx";
+import { ShowcaseTabsPreview } from "./views-showcase-tabs-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
 
@@ -1220,18 +1221,41 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
   );
 }
 
-/** Footer colours picked in the editor: the text colour also feeds the muted text, titles and divider lines, so a dark background with light text reads everywhere. */
+/** Black or white, whichever reads better on a #rrggbb background (WCAG relative luminance). */
+function readableOn(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#111111";
+  const n = parseInt(m[1] ?? "000000", 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return lum > 0.179 ? "#111111" : "#ffffff";
+}
+
+/**
+ * Footer colours picked in the editor. The text colour also feeds the muted text, titles and divider lines, so a dark
+ * background with light text reads everywhere; with only a background set, the text colour is chosen for contrast. The
+ * newsletter field and button are drawn from the same two colours (field tinted from the text colour, button inverted), so
+ * they stay visible on any background instead of keeping the theme's colours.
+ */
 function footerColors(bg: string | undefined, fg: string | undefined): CSSProperties | undefined {
   if (!bg && !fg) return undefined;
+  const text = fg ?? (bg ? readableOn(bg) : undefined);
   const base = bg ?? "transparent";
   return {
     ...(bg ? { background: bg } : null),
-    ...(fg
+    ...(text
       ? {
-          color: fg,
-          "--t": fg,
-          "--m": `color-mix(in srgb, ${fg} 75%, ${base})`,
-          "--b": `color-mix(in srgb, ${fg} 25%, ${base})`,
+          color: text,
+          "--t": text,
+          "--m": `color-mix(in srgb, ${text} 75%, ${base})`,
+          "--b": `color-mix(in srgb, ${text} 25%, ${base})`,
+          "--ft-input-bg": `color-mix(in srgb, ${text} 8%, ${base})`,
+          "--bs-btn-bg": text,
+          "--bs-btn-fg": bg ?? readableOn(text),
+          "--bs-btn-bd": text,
         }
       : null),
   } as CSSProperties;
@@ -1648,5 +1672,7 @@ export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>):
   );
 
   const behavior = { tabs: hasTabs, autoplay: props.autoplay, interval: props.interval, loop: props.loop, pauseOnHover: props.pauseOnHover };
-  return ctx?.renderProductShowcase ? <>{ctx.renderProductShowcase({ options: behavior, children: markup })}</> : markup;
+  if (ctx?.renderProductShowcase) return <>{ctx.renderProductShowcase({ options: behavior, children: markup })}</>;
+  // No host (the editor preview): still let the tabs switch, so every tab can be checked while editing.
+  return hasTabs ? <ShowcaseTabsPreview>{markup}</ShowcaseTabsPreview> : markup;
 }

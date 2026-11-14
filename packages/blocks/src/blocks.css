@@ -465,6 +465,8 @@
 .bsb-site-footer-news form { display: flex; gap: 0.5rem; }
 .bsb-site-footer-news form .bsb-input { min-width: 0; flex: 1 1 auto; }
 .bsb-site-footer-news form .bsb-btn { flex: none; }
+.bsb-site-footer-news form .bsb-input { background: var(--ft-input-bg, var(--bg)); }
+.bsb-site-footer-news form .bsb-input::placeholder { color: var(--m); opacity: 1; }
 @media (min-width: 768px) { .bsb-site-footer-grid { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); } }
 .bsb-site-footer-title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--m); margin: 0; }
 .bsb-site-footer-links { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.5rem; font-size: 0.875rem; }

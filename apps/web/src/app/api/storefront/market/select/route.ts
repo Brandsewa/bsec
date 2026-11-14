@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { evaluateStorefrontAccess, listStorefrontMarkets } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { publicUrl } from "@/lib/request-origin.ts";
 import { MARKET_COOKIE } from "@/lib/market-constants.ts";
 
 /**
@@ -17,14 +18,12 @@ export async function GET(req: Request) {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost";
   const { rt } = server();
   const access = await evaluateStorefrontAccess(rt, host, { headers: req.headers });
-  if (!access.tenantId) return NextResponse.redirect(new URL("/", `${req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || url.protocol.replace(":", "")}://${host}`), 302);
+  if (!access.tenantId) return NextResponse.redirect(publicUrl(req.headers, "/"), 302);
 
   const markets = await listStorefrontMarkets(rt, access.tenantId);
   const market = markets.find((m) => m.handle === handle);
   const target = market ? `${market.pathPrefix ?? ""}${next}` : next;
-  // Redirect on the address the shopper used, not the one this server listens on (0.0.0.0:3000 in development, an internal host behind a proxy).
-  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || url.protocol.replace(":", "");
-  const res = NextResponse.redirect(new URL(target, `${proto}://${host}`), 302);
+  const res = NextResponse.redirect(publicUrl(req.headers, target), 302);
   if (market) {
     res.cookies.set({ name: MARKET_COOKIE, value: market.handle, path: "/", sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 });
   }

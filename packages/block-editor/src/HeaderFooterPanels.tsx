@@ -5,6 +5,7 @@ import { Dropdown, type DropdownOption } from "./Dropdown.tsx";
 import { MenuSelect } from "./MenuField.tsx";
 import { Picker } from "./MediaField.tsx";
 import { useFrameEdit } from "./context.tsx";
+import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 
 /**
  * The Header and Footer tabs of the editor's left rail. They edit the theme's header and footer blocks from any page
@@ -70,6 +71,21 @@ function LayoutPreview({ layout }: { layout: string }) {
       {layout === "logoRight" && (<>{icons(8)}{nav(30)}{logo(94)}</>)}
       {layout === "center" && (<>{logo(51, 7)}{nav(38, 22)}{icons(100, 6)}</>)}
     </svg>
+  );
+}
+
+/** A round colour swatch with its hex and a way to clear it. */
+function ColorRow({ label, value, onChange, empty }: { label: string; value: string | undefined; onChange: (hex: string | undefined) => void; empty: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <ColorPickerSwatch label={label} value={value} onChange={(hex) => onChange(hex || undefined)} />
+      <span style={{ fontSize: 12, fontFamily: "ui-monospace, monospace", color: value ? "#18181b" : "#71717a" }}>{value ?? empty}</span>
+      {value ? (
+        <button type="button" onClick={() => onChange(undefined)} style={{ marginLeft: "auto", fontSize: 11, border: 0, background: "none", color: "#52525b", textDecoration: "underline", cursor: "pointer" }}>
+          Clear
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -372,8 +388,11 @@ export function FooterPanel() {
         <Field title="Copyright line" hint="Empty writes it automatically.">
           <Text name="hf-footer-copy" value={asStr(p["copyright"])} max={200} onChange={(v) => f.set({ copyright: v || undefined })} />
         </Field>
-        <Field title="Background">
-          <Dropdown ariaLabel="Footer background" value={asStr(p["tone"], "surface")} options={TONES} onChange={(v) => f.set({ tone: v })} />
+        <Field title="Background colour" hint="Empty keeps the theme's soft background. With a colour set and no text colour, the text turns light or dark to stay readable.">
+          <ColorRow label="Footer background colour" value={asStr(p["bgColor"]) || undefined} onChange={(v) => f.set({ bgColor: v })} empty="Theme colour" />
+        </Field>
+        <Field title="Text colour" hint="Also colours the titles, links, lines, and the newsletter field and button, so the sign-up stays visible.">
+          <ColorRow label="Footer text colour" value={asStr(p["textColor"]) || undefined} onChange={(v) => f.set({ textColor: v })} empty="Automatic" />
         </Field>
       </Group>
     </div>
