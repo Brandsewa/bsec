@@ -1,46 +1,43 @@
-# Bug fix and updates session log
+# Storefront bug fixes and footer colour update (session 2026-11-14)
 
 - **Date:** 2026-11-14
 - **Agent:** claude
-- **Branch:** `docs/go-live-hardening-plan` (not merged yet; the real fix branch is set when work starts)
-- **Area:** docs
+- **Branch:** `fix/storefront-fixes-2026-11-14` (not merged yet)
+- **Area:** web, blocks, block-editor
 - **Type:** fix
 - **Supersedes:** none
 
 ## Summary
-Running log for a bug fix and updates session. Opened 2026-11-14 and waiting for the owner's "start". No work has been done yet. Issues and updates below are filled in as the owner reports them and as they are fixed.
+Three owner-reported issues and one update. After paying on Stripe the shopper was sent to `https://0.0.0.0:3000/...` instead of the order page; the country pop-up opened late; the Product showcase tabs did nothing in the editor preview; and the footer's background presets are replaced by custom colours.
 
 ## What changed
-Nothing yet.
-
 ### Issues
-| # | Issue | Area | Status | Notes |
-|---|---|---|---|---|
-| 1 | After paying on Stripe Checkout the shopper lands on `https://0.0.0.0:3000/orders/.../thank-you` (page does not load) though the order is in the dashboard | web | Fixed, not committed | `apps/web/src/app/api/storefront/checkout/return/route.ts` built redirects from `req.url`, which behind the proxy is the bind address. Added `apps/web/src/lib/request-origin.ts` (`publicUrl` from forwarded host/proto) and used it in `checkout/return`, `checkout/abandon` (Stripe/PayPal cancel) and `market/select`. Provider success/cancel URLs were already built from forwarded host. |
-| 2 | Product Carousel widget: the "New arrivals" / "Featured" tab option does not work (switching tabs does nothing) | blocks / web | Noted, not started | Seen on the storefront home "Fresh from the Collection" block. Not investigated yet. |
-| 3 | Manual multi-currency "Choose your country" popup opens with a visible delay after the button is clicked | web | Noted, not started | Popup lists all countries. Make it open fast, following recommended practice and best practices (e.g. render the list lazily or virtualised, prefetch data, avoid blocking the click). Not investigated yet. |
+1. **Stripe return went to `https://0.0.0.0:3000`.** `checkout/return`, `checkout/abandon` (Stripe and PayPal Cancel) and `market/select` built redirects from `req.url`, which behind the proxy is the server's bind address. New `apps/web/src/lib/request-origin.ts` (`publicOrigin`, `publicUrl`) builds the origin from the forwarded host and protocol; the three routes use it. The provider success and cancel URLs were already built from the forwarded host.
+2. **Product showcase tabs did nothing in the editor preview.** With no storefront host mounted the tab buttons were plain markup. `packages/blocks/src/views-showcase-tabs-client.tsx` (`ShowcaseTabsPreview`) now switches tabs there (event delegation, no state). The storefront's own `ProductShowcaseClient` was checked with a throwaway DOM test and switches tabs correctly. Note: a "Featured" tab falls back to the newest products when no product is marked featured, so both tabs can look identical on a store with no featured products (existing behaviour in `themes/block-data.ts`, left as is).
+3. **Country pop-up opened late.** The pop-up is a separate chunk that was fetched on the click. `FooterMarketSelector.tsx` now prefetches it when the browser is idle and on hover, focus or touch; rows use `content-visibility: auto` so the long list paints fast.
 
-### Updates
-| # | Update | Area | Status | Notes |
-|---|---|---|---|---|
-| 1 | Footer widget: remove the "Background" preset selector (Plain / Soft background / Brand colour / Dark background). Replace it with a custom background colour setting plus a text colour setting. Also make sure the newsletter form fields (email input, Subscribe button) stay visible on any chosen colour | blocks / block-editor | Noted, not started | Block schema change, so bump the block version (ADR-009) and keep old preset values rendering. Not investigated yet. |
+### Update
+4. **Footer background presets replaced by custom colours.** The footer panel (`HeaderFooterPanels.tsx`) and the footer block's settings (`config.tsx`) lose the Plain / Soft / Brand / Dark selector and gain a background colour and a text colour (the schema already had `bgColor` and `textColor`). Only a background set: the text turns black or white for contrast. The newsletter field and Subscribe button are drawn from the same two colours (`footerColors` in `views.tsx`, `.bsb-site-footer-news` rules in `blocks.css`) so they stay visible on any background. No schema change, so no block version bump: old footers keep their saved `tone` and look the same until a colour is chosen. The header's background selector is untouched.
 
 ## Decisions and trade-offs
-None yet.
+- Kept `tone` in the footer schema so saved footers render unchanged (expand/migrate/contract); it is simply no longer editable.
+- Tab preview is a tiny client wrapper instead of making the preview mount the storefront host.
 
 ## Verification
-- Ran: `pnpm --filter @bs/web typecheck` pass; `vitest test/cart-checkout.test.ts` 23 pass.
-- Exercised by hand: nothing (no real Stripe return driven).
-- NOT verified: the redirect behind the live proxy; lint, build and the full gate; no new test for `publicOrigin`.
+- Ran: `pnpm typecheck` pass; `pnpm lint` pass (warnings only); `pnpm build` pass; `pnpm docs:check` ok; `pnpm gate:quick` pass (pre-push hook); `@bs/blocks` 283 pass; `@bs/block-editor` 28 pass; `@bs/web` checkout, request-origin and production-bundle budget tests pass (budget test run after the build).
+- New tests: `apps/web/test/request-origin.test.ts`, `packages/blocks/test/footer-colours-and-showcase-preview.test.tsx`.
+- Exercised by hand: nothing. Docker was not running, so there was no live storefront, editor or Stripe return to drive.
+- NOT verified: the redirect behind the live proxy and a real Stripe payment; the footer panel and colour picker in the browser; the country pop-up speed; the carousel tabs in the editor.
 
 ## Docs updated
-- [ ] `docs/ARCHITECTURE.md` (sections: ...)
-- [ ] ADR (number ...) / not needed because ...
-- [ ] `DEPLOYMENT.md` / RUNBOOK / not needed
-- [ ] `progress.md` (status, known gaps, in-flight)
+- [ ] `docs/ARCHITECTURE.md`: not needed (no structure, route, table or env change)
+- [x] ADR: not needed (no architectural decision)
+- [x] `DEPLOYMENT.md` / RUNBOOK: not needed
+- [x] `progress.md`: not needed
 
 ## Follow-ups and open questions
-- Waiting for the owner to say "start" and list the issues and updates.
+- Owner to confirm the carousel issue was the editor preview. If the storefront tabs also fail on the live store, send the store and page and it will be traced against real data.
+- Merged at the owner's request when CI is green; watch the `main` deploy and retest a Stripe payment.
 
 ## Definition of done
-Confirm each item in `AGENTS.md` section 7 before handoff: gate passes, tests added, docs updated, no secrets or generated files in the diff.
+Gate (typecheck, lint, build, docs:check, affected tests) passes locally; tests added; no secrets or generated files in the diff.
