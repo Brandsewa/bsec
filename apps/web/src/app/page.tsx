@@ -14,7 +14,10 @@ import {
 } from "@bs/domain";
 import { renderBlockDocument, type BlockData } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontHomePage, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
+import { blocksHaveH1 } from "@/lib/has-h1.ts";
+import { themeChromeIdentity } from "@/lib/theme-brand.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
@@ -66,14 +69,18 @@ export async function generateMetadata(): Promise<Metadata> {
       host,
       prefix: marketCtx?.prefix,
     });
-    return {
-      title: { absolute: seoMeta.title },
-      description: seoMeta.description,
-      robots: seoMeta.robots,
-      openGraph: { ...seoMeta.openGraph, type: "website" },
-      twitter: { card: "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
-      alternates: seoMeta.alternates,
-    };
+    const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+    return withShareImage(
+      {
+        title: { absolute: seoMeta.title },
+        description: seoMeta.description,
+        robots: seoMeta.robots,
+        openGraph: { ...seoMeta.openGraph, type: "website" },
+        twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+        alternates: seoMeta.alternates,
+      },
+      assets?.shareImage,
+    );
   } catch {
     // Non-fatal fallback for static compilation / mock setups
   }
@@ -91,7 +98,8 @@ export default async function HomePage() {
   let storeName = "Store";
   let marketCurrency = "INR";
   let marketLocale = "en-IN";
-  const logoUrl: string | null = null;
+  let logoUrl: string | null = null;
+  let orgFacts: { legalName: string | null; email: string | null; telephone: string | null; sameAs: string[] } = { legalName: null, email: null, telephone: null, sameAs: [] };
   let isMarketing = false;
 
   try {
@@ -116,10 +124,22 @@ export default async function HomePage() {
       marketCurrency = marketCtx.currency;
       marketLocale = marketCtx.locale;
 
-      const [homeData, storeSettingsData] = await Promise.all([
+      const [homeData, storeSettingsData, brandAssets, chromeHeader, chromeFooter] = await Promise.all([
         getCachedStorefrontHomePage(access.tenantId, marketCtx.scope).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getCachedBrandAssets(access.tenantId).catch(() => null),
+        getCachedThemePage(access.tenantId, "header").catch(() => null),
+        getCachedThemePage(access.tenantId, "footer").catch(() => null),
       ]);
+      // Logo: Brand settings first, else the one set in the theme's header or footer. Profile links come from the footer's social icons.
+      const chrome = themeChromeIdentity(chromeHeader, chromeFooter);
+      logoUrl = brandAssets?.logoUrl ?? chrome.logoUrl;
+      orgFacts = {
+        legalName: storeSettingsData?.legalName ?? null,
+        email: storeSettingsData?.supportEmail ?? null,
+        telephone: storeSettingsData?.supportPhone ?? null,
+        sameAs: chrome.sameAs,
+      };
 
       // Set tenant home page cache tags for Next.js Cache Components (PLAN §11.6)
       try {
@@ -196,6 +216,7 @@ export default async function HomePage() {
     name: storeName,
     url: storeUrl,
     logoUrl,
+    ...orgFacts,
   });
 
   return (
@@ -208,6 +229,7 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
       />
+      {blocksHaveH1(blocksToRender) ? null : <h1 className="sr-only">{storeName}</h1>}
       <BlockRenderer
         blocks={blocksToRender}
         renderData={renderData}

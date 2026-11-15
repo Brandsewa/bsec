@@ -7,7 +7,7 @@ import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { siteChrome, siteStatus } from "@/server/site-settings.ts";
-import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
@@ -82,11 +82,20 @@ export async function generateMetadata(): Promise<Metadata> {
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     const isNoIndex = access.noindex ?? true;
     if (access.tenantId) {
-      const name = await getCachedStoreName(access.tenantId).catch(() => "Store");
+      const [name, assets] = await Promise.all([
+        getCachedStoreName(access.tenantId).catch(() => "Store"),
+        getCachedBrandAssets(access.tenantId).catch(() => null),
+      ]);
+      const share = assets?.shareImage;
+      const icons = assets?.faviconUrl || assets?.appleTouchIconUrl ? { icons: { ...(assets.faviconUrl ? { icon: assets.faviconUrl } : {}), ...(assets.appleTouchIconUrl ? { apple: assets.appleTouchIconUrl } : {}) } } : {};
       return {
         title: name,
         description: `Shop at ${name}.`,
         robots: isNoIndex ? { index: false, follow: false } : { index: true, follow: true },
+        ...icons,
+        // Pages that set their own openGraph replace this object: they add the share image back with withShareImage.
+        openGraph: { type: "website", siteName: name, ...(share ? { images: [{ url: share.url, ...(share.width ? { width: share.width } : {}), ...(share.height ? { height: share.height } : {}) }] } : {}) },
+        twitter: { card: share ? "summary_large_image" : "summary", ...(share ? { images: [share.url] } : {}) },
       };
     }
     return {

@@ -73,14 +73,14 @@ Code: `packages/domain/src/storefront/seo.ts` (schema, robots, sitemap, home met
 New defaults: allow the six search and user agents, `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`; block `CCBot` and `Bytespider` (bulk scrapers that send no traffic). Stores that already saved their own switches keep them. **Existing stores:** a store whose row was created with the old defaults (probably including ricwell) would keep blocking the five bots. Migration `0105_seo_reset_old_ai_crawler_defaults` (owner yes, 2026-11-15: "updates should also reflect on existing stores") sets `ai_crawlers` to NULL for every row that still equals the old default exactly, so those stores follow the new default from the next deploy. A row with any other content was edited by a merchant and is left alone. Limit: a merchant who deliberately saved exactly the old five blocks is indistinguishable and is reset too (they can block again in Settings > SEO). The `robots.txt` response is cached up to a day at the CDN, so the change shows within about 24 hours.
 The other Phase 1 fixes (price in schema, home and policy metadata, `llms.txt`, sitemap, breadcrumbs) are code, so every store gets them on deploy.
 
-## 4. Phase 2 (not built here, in priority order)
+## 4. Phase 2 (in priority order; items marked DONE are in branch `feat/seo-phase2`)
 
 1. After deploy, re-fetch ricwell's `robots.txt` and confirm the five bots are no longer blocked (migration 0105 does the reset, 3.1).
-2. Theme content fixes found on ricwell: an H1 on the home page and collections archive (the editor should warn when a page has none, or the theme should supply one), blog title brand duplicated, blog image alt text.
-3. Organization schema with logo, `sameAs`, contact point from Settings (the home page currently passes `logoUrl: null`); `seo_settings.organizationSchema` exists and is unused.
+2. **DONE (H1, blog title)** Theme content fixes found on ricwell: home and collections get a visually hidden H1 when no block supplies one; the blog title no longer repeats the store name. Not done: blog image alt text (merchant content), an editor warning for pages with no H1.
+3. **DONE** Organization schema: `@id`, logo (Brand settings, else the theme header or footer logo), legal name, contact point from Settings, `sameAs` from the footer's https social icons. `seo_settings.organizationSchema` is still unused.
 4. Merchant listings: `hasMerchantReturnPolicy` and `shippingDetails` generated from the store's real policy and shipping settings (needs structured fields, not free text); `review` list from approved reviews.
-5. Default `og:image` (store logo or `defaultOgImageMediaId` resolved to a URL) for home, listings and pages that have no image.
-6. Favicon and web manifest per store from the store logo.
+5. **DONE** Default `og:image` and `twitter:image`: SEO default image, else Brand social image, else Brand logo, on the layout and on home, collections, categories, pages and policies (Next replaces `openGraph` per page, so `withShareImage` re-adds it). Products and blog posts keep their own images.
+6. **Partly DONE** Favicon and apple touch icon from Brand settings in the page head. Not done: a web manifest per store.
 7. Image sitemap entries for products; `hreflang` alternates for markets (ADR-040) in the sitemap and `<head>`.
 8. **IndexNow**: a pg-boss job after publish (ADR-006) that pings Bing, Yandex and others when a product, page or post is published or changes.
 9. CollectionPage + ItemList schema on collection pages.
