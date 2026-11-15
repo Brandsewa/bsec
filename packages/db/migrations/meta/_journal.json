@@ -715,6 +715,48 @@
       "when": 1794740193825,
       "tag": "0107_seo_indexnow_watermark",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794743793825,
+      "tag": "0108_analytics_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1794747393825,
+      "tag": "0109_analytics_traffic_daily",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1794750993825,
+      "tag": "0110_privacy_consent_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794754593825,
+      "tag": "0111_order_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1794758193825,
+      "tag": "0112_conversion_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794761793825,
+      "tag": "0113_order_attribution",
+      "breakpoints": true
     }
   ]
 }

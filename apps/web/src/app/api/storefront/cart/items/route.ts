@@ -9,7 +9,11 @@ import {
   removeCartItem,
   checkStorefrontRateLimit,
   RateLimitExceededError,
+  recordAnalyticsEvent,
+  recordServerEvent,
+  getClientIp,
 } from "@bs/domain";
+import { toMajorUnits } from "@bs/contracts/money";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, getRequestHeaders, getCookieValue } from "../route.ts";
 
@@ -87,10 +91,51 @@ export async function POST(req: Request) {
       properties: parsed.data.properties,
     });
 
+    // Funnel event recorded on the server (ADR-047): no client JavaScript, and it never delays or fails the add to cart.
+    const analyticsSecret = process.env.BETTER_AUTH_SECRET;
+    if (analyticsSecret && (access.mode ?? "live") === "live") {
+      let path = "/";
+      try {
+        path = new URL(h.get("referer") ?? "").pathname;
+      } catch {
+        // no usable referer: keep "/"
+      }
+      void recordAnalyticsEvent(
+        rt,
+        access.tenantId,
+        {
+          type: "add_to_cart",
+          path,
+          ip: getClientIp(h),
+          userAgent: h.get("user-agent") ?? "",
+          country: h.get("cf-ray") ? h.get("cf-ipcountry") : null,
+          doNotTrack: h.get("sec-gpc") === "1" || h.get("dnt") === "1",
+        },
+        { secret: analyticsSecret },
+      ).catch(() => undefined);
+    }
+
+    // Meta Conversions API AddToCart (ADR-047, slice 5c): only for visitors who accepted marketing cookies and stores that saved a token.
+    // The id goes back to the browser so its pixel event and this one count once.
+    let analyticsEventId: string | null = null;
+    const added = cart.items.find((i) => i.variantId === parsed.data.variantId);
+    if (added && (access.mode ?? "live") === "live") {
+      const price = toMajorUnits(added.unitPriceSnapshot, cart.currency);
+      analyticsEventId = await recordServerEvent(rt, access.tenantId, {
+        name: "AddToCart",
+        eventId: `atc_${crypto.randomUUID()}`,
+        currency: cart.currency,
+        value: Math.round(price * parsed.data.quantity * 100) / 100,
+        items: [{ id: added.variant.sku?.trim() || added.variantId, quantity: parsed.data.quantity, price }],
+        req: { cookieHeader: h.get("cookie"), ip: getClientIp(h), userAgent: h.get("user-agent"), sourceUrl: h.get("referer") },
+      });
+    }
+
     const response = NextResponse.json({
       cart,
       itemCount: cart.itemCount,
       subtotal: cart.subtotal,
+      ...(analyticsEventId ? { analyticsEventId } : {}),
     });
 
     response.cookies.set({

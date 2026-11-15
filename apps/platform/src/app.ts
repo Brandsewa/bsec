@@ -122,6 +122,8 @@ import {
   scheduleMaintenance,
   updatePrivacyRequestStatus,
   updatePrivacySettings,
+  saveConversionCredentials,
+  clearConversionCredentials,
   updateStoreStatus,
   createPlatformSitePage,
   deletePage,
@@ -490,6 +492,8 @@ export const platformRouter = os.router({
     customerPrivacy: {
       getSettings: os.marketing.customerPrivacy.getSettings.use(siteRead).handler(({ context }) => getPrivacySettings(context.content.rt, context.content.ctx)),
       updateSettings: os.marketing.customerPrivacy.updateSettings.use(siteWrite).handler(({ context, input }) => updatePrivacySettings(context.content.rt, context.content.ctx, input)),
+      saveConversionCredentials: os.marketing.customerPrivacy.saveConversionCredentials.use(siteWrite).handler(({ context, input }) => saveConversionCredentials(context.content.rt, context.content.ctx, input)),
+      clearConversionCredentials: os.marketing.customerPrivacy.clearConversionCredentials.use(siteWrite).handler(({ context, input }) => clearConversionCredentials(context.content.rt, context.content.ctx, input.provider)),
       listRequests: os.marketing.customerPrivacy.listRequests.use(siteRead).handler(({ context, input }) => listPrivacyRequests(context.content.rt, context.content.ctx, input)),
       updateRequestStatus: os.marketing.customerPrivacy.updateRequestStatus.use(siteWrite).handler(({ context, input }) => updatePrivacyRequestStatus(context.content.rt, context.content.ctx, input)),
       exportCustomerData: os.marketing.customerPrivacy.exportCustomerData.use(siteWrite).handler(({ context, input }) => executePrivacyExport(context.content.rt, context.content.ctx, input.id)),

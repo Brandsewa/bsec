@@ -43,7 +43,9 @@ import {
   type TenantContext,
   listStorefrontMarkets,
   type StorefrontMarket,
+  getStorefrontConsentConfig,
 } from "@bs/domain";
+import type { PublicConsentConfig } from "@bs/contracts";
 import { renderBlockDocument, resolveDefaultPages, walkBlocks, type BlockInstance } from "@bs/blocks";
 import { server } from "./runtime.ts";
 
@@ -322,6 +324,14 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
   const { rt } = server();
   const settings = await getStoreSettings(rt, createStorefrontTenantContext(tenantId));
   return settings.storeName;
+}
+
+/** The cookie banner config (null when the store has no banner). Refreshed with the store shell when privacy settings are saved. */
+export async function getCachedConsentConfig(tenantId: string): Promise<PublicConsentConfig | null> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return getStorefrontConsentConfig(rt, tenantId);
 }
 
 /**

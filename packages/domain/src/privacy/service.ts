@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { eq, and, desc } from "drizzle-orm";
+import { encryptSecret } from "@bs/payments";
+import { conversionCredentialStatus, conversionStats, GA4_SECRET, META_SECRET } from "../analytics/conversions.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -8,11 +10,20 @@ import { deleteAdminCustomer } from "../admin/customers.ts";
 import { setMarketingConsent } from "../customers/consent.ts";
 import { sendTransactionalEmail } from "../system/email.ts";
 import { checkRateLimit, RateLimitExceededError } from "../system/rate-limit.ts";
+import {
+  ConsentSettings,
+  hasConsentIntegrations,
+  normalizeConsentSettings,
+  type PublicConsentConfig,
+} from "@bs/contracts";
 
 export interface PrivacySettingsView {
   privacyContactEmail: string | null;
   grievanceOfficerName: string | null;
   requestSlaDays: number;
+  consent: ConsentSettings;
+  conversionCredentials: { metaAccessTokenSet: boolean; ga4ApiSecretSet: boolean };
+  conversionStats: { sent: number; failed: number; pending: number; skipped: number };
   version: number;
 }
 
@@ -20,6 +31,7 @@ export interface UpdatePrivacySettingsInput {
   privacyContactEmail?: string | null | undefined;
   grievanceOfficerName?: string | null | undefined;
   requestSlaDays?: number | undefined;
+  consent?: ConsentSettings | undefined;
   expectedVersion?: number | undefined;
 }
 
@@ -64,6 +76,12 @@ export const TEST_LOCKED_COOKIE_INVENTORY: CookieInventoryItem[] = [
     name: "bs_customer_session",
     purpose: "Cryptographic session credential maintaining customer authentication.",
     duration: "Session / 14 days",
+    category: "strictly_necessary",
+  },
+  {
+    name: "bs_consent",
+    purpose: "Remembers your cookie choices so the cookie banner is not shown on every visit.",
+    duration: "180 days",
     category: "strictly_necessary",
   },
   {
@@ -124,9 +142,48 @@ export async function getPrivacySettings(
       privacyContactEmail: row.privacyContactEmail,
       grievanceOfficerName: row.grievanceOfficerName,
       requestSlaDays: row.requestSlaDays,
+      consent: normalizeConsentSettings(row.consentSettings),
       version: row.version,
     };
+  }).then(async (view) => ({
+    ...view,
+    conversionCredentials: await conversionCredentialStatus(db, ctx.tenantId),
+    conversionStats: await conversionStats(db, ctx.tenantId),
+  }));
+}
+
+/**
+ * What the storefront banner script needs, or null when the store has no banner. No permission check: this is public by design
+ * (it is the text and ids the visitor's browser receives) and contains nothing private. Reads one row in a tenant transaction.
+ */
+export async function getStorefrontConsentConfig(rt: Runtime, tenantId: string): Promise<PublicConsentConfig | null> {
+  const row = await withTenant(rt._db.db, tenantId, async (tx) => {
+    const [r] = await tx
+      .select({ consentSettings: schema.privacySettings.consentSettings })
+      .from(schema.privacySettings)
+      .where(eq(schema.privacySettings.tenantId, tenantId))
+      .limit(1);
+    return r ?? null;
   });
+  const c = normalizeConsentSettings(row?.consentSettings);
+  if (!c.enabled) return null;
+  const rev = createHash("sha256")
+    .update(JSON.stringify([c.title, c.message, c.integrations.ga4MeasurementId, c.integrations.metaPixelId]))
+    .digest("hex")
+    .slice(0, 8);
+  return {
+    v: 1,
+    rev,
+    position: c.position,
+    title: c.title,
+    message: c.message,
+    acceptLabel: c.acceptLabel,
+    rejectLabel: c.rejectLabel,
+    customizeLabel: c.customizeLabel,
+    policyPath: c.policyPath,
+    ga4: c.integrations.ga4MeasurementId,
+    pixel: c.integrations.metaPixelId,
+  };
 }
 
 /**
@@ -157,6 +214,17 @@ export async function updatePrivacySettings(
     const grievanceOfficerName =
       input.grievanceOfficerName !== undefined ? (input.grievanceOfficerName ? input.grievanceOfficerName.trim() : null) : current.grievanceOfficerName;
 
+    let consent = normalizeConsentSettings(current.consentSettings);
+    if (input.consent !== undefined) {
+      const parsed = ConsentSettings.safeParse(input.consent);
+      if (!parsed.success) throw new Error(`Bad Request: ${parsed.error.issues[0]?.message ?? "Invalid cookie banner settings"}`);
+      consent = parsed.data;
+    }
+    // Tracking ids may only exist while the banner is on, so nothing can load without the visitor being asked first.
+    if (hasConsentIntegrations(consent) && !consent.enabled) {
+      throw new Error("Bad Request: Turn the cookie banner on before adding a Google Analytics or Meta Pixel ID.");
+    }
+
     const nextVersion = current.version + 1;
     const now = new Date();
 
@@ -166,6 +234,7 @@ export async function updatePrivacySettings(
         privacyContactEmail,
         grievanceOfficerName,
         requestSlaDays: nextSlaDays,
+        consentSettings: consent,
         version: nextVersion,
         updatedAt: now,
       })
@@ -181,7 +250,7 @@ export async function updatePrivacySettings(
         targetId: current.id,
         diff: {
           before: current,
-          after: { privacyContactEmail, grievanceOfficerName, requestSlaDays: nextSlaDays, version: nextVersion },
+          after: { privacyContactEmail, grievanceOfficerName, requestSlaDays: nextSlaDays, consent, version: nextVersion },
         },
       });
     }
@@ -190,12 +259,93 @@ export async function updatePrivacySettings(
       privacyContactEmail,
       grievanceOfficerName,
       requestSlaDays: nextSlaDays,
+      consent,
       version: nextVersion,
     };
   });
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
-  return result;
+  return {
+    ...result,
+    conversionCredentials: await conversionCredentialStatus(db, ctx.tenantId),
+    conversionStats: await conversionStats(db, ctx.tenantId),
+  };
+}
+
+/**
+ * Saves the server-side conversion credentials (Meta access token, GA4 API secret), encrypted in tenant_secrets. Requires
+ * privacy.manage. Values are never returned, logged or put in the audit entry (AGENTS.md rule 7). Saving needs the matching
+ * id to be set already, so a credential can never exist for a platform the store is not using.
+ */
+export async function saveConversionCredentials(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { metaAccessToken?: string | undefined; ga4ApiSecret?: string | undefined },
+): Promise<PrivacySettingsView> {
+  assertPermission(ctx, "privacy.manage");
+  if (!input.metaAccessToken && !input.ga4ApiSecret) throw new Error("Bad Request: Enter an access token or an API secret.");
+  const current = await getPrivacySettings(rt, ctx);
+  if (input.metaAccessToken && !current.consent.integrations.metaPixelId) {
+    throw new Error("Bad Request: Save your Meta Pixel ID before adding the access token.");
+  }
+  if (input.ga4ApiSecret && !current.consent.integrations.ga4MeasurementId) {
+    throw new Error("Bad Request: Save your Google Analytics 4 ID before adding the API secret.");
+  }
+  const entries: Array<{ provider: string; keyName: string; value: string }> = [];
+  if (input.metaAccessToken) entries.push({ ...META_SECRET, value: input.metaAccessToken });
+  if (input.ga4ApiSecret) entries.push({ ...GA4_SECRET, value: input.ga4ApiSecret });
+  let encrypted: Array<{ provider: string; keyName: string; ciphertext: string; iv: string; keyVersion: number }>;
+  try {
+    encrypted = entries.map((e) => ({ provider: e.provider, keyName: e.keyName, ...encryptSecret(e.value) }));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Encryption key not set")) {
+      throw new Error("Precondition: credentials cannot be saved yet because the server has no encryption key. Ask the platform operator to set TENANT_SECRETS_KEY.", { cause: err });
+    }
+    throw err;
+  }
+  const updatedBy = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    for (const e of encrypted) {
+      await tx
+        .insert(schema.tenantSecrets)
+        .values({ tenantId: ctx.tenantId, provider: e.provider, keyName: e.keyName, ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy })
+        .onConflictDoUpdate({
+          target: [schema.tenantSecrets.tenantId, schema.tenantSecrets.provider, schema.tenantSecrets.keyName],
+          set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
+        });
+    }
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: updatedBy,
+      action: "conversion_credentials.saved",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { providers: { before: null, after: entries.map((e) => (e.provider === META_SECRET.provider ? "meta" : "ga4")) } },
+    });
+  });
+  return getPrivacySettings(rt, ctx);
+}
+
+/** Removes one platform's server-side credential. Requires privacy.manage. */
+export async function clearConversionCredentials(rt: Runtime, ctx: TenantContext, provider: "meta" | "ga4"): Promise<PrivacySettingsView> {
+  assertPermission(ctx, "privacy.manage");
+  const secret = provider === "meta" ? META_SECRET : GA4_SECRET;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    await tx
+      .delete(schema.tenantSecrets)
+      .where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, secret.provider)));
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "conversion_credentials.cleared",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { provider: { before: provider, after: null } },
+    });
+  });
+  return getPrivacySettings(rt, ctx);
 }
 
 /**
