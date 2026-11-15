@@ -221,7 +221,7 @@ export async function saveStripeCredentials(
     throw new Error("Bad Request: Stripe webhook signing secret should look like whsec_XXXX");
   }
   const mode = modeOfKey("stripe", input.secretKey);
-  // The publishable key (public by design) lets the checkout page mount Stripe's embedded form. It must belong to the same mode
+  // The publishable key (public by design) lets the checkout page show Stripe's card fields (Payment Element). It must belong to the same mode
   // as the secret key, or the form would open against a different Stripe environment than the one that created the session.
   if (input.publishableKey !== undefined) {
     if (!/^pk_(test|live)_[A-Za-z0-9]{10,}$/.test(input.publishableKey)) {

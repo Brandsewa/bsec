@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `feat/embedded-checkout` (not merged yet)
+- **Branch:** `feat/embedded-checkout` (merged in #263, 90ad236; the Stripe part is superseded by ADR-047)
 - **Area:** db, payments, domain, contracts, web, admin, platform, superadmin
 - **Type:** feature
 - **Supersedes:** none (builds the plan in `2026-11-15-claude-embedded-checkout-plan.md`)

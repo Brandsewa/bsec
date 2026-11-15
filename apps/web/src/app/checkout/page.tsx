@@ -64,7 +64,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
   }));
 
   const consent = await getStorefrontCheckoutConsent(rt, access.tenantId);
-  const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available, methods: options.methods };
+  const paymentOptions = { codEnabled: options.cod.enabled, codFeePaise: options.cod.feePaise, onlineAvailable: options.online.available, methods: options.methods, stripeElements: options.stripeElements };
   // A shopper who picked a country in another market arrives here with ?country=; it is honoured when this market sells to it.
   const requested = (wantedCountry ?? "").toUpperCase();
   const region = { countries: options.countries, defaultCountry: options.countries.includes(requested) ? requested : options.defaultCountry };

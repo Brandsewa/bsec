@@ -10,10 +10,11 @@ import { orderTokenHash, settleProviderPayment, startRazorpayPaymentByToken, typ
  * Stripe and PayPal at the storefront checkout (ADR-040 section 5, ADR-008).
  *
  * PayPal, and Stripe without a publishable key, use the provider's hosted page (a redirect), so no card or wallet data touches
- * our pages and no provider script is added to the storefront. Stripe with a publishable key saved uses Embedded Checkout: the
- * form is Stripe's own iframe mounted in our checkout page (card data still never touches our code), loaded only at checkout. The provider order is created after the shop order has committed, with the store's own
- * credentials from tenant_secrets (never environment keys): money goes to the merchant's own account. The shopper's
- * return and the signed webhook both end in `settleProviderPayment`, which is idempotent and checks amount and currency.
+ * our pages and no provider script is added to the storefront. Stripe with a publishable key saved uses the Payment Element
+ * (ADR-047): Stripe's own iframe fields sit in our checkout page (card data still never touches our code), Stripe.js is loaded
+ * only at checkout, and the payment is a PaymentIntent. The provider order is created after the shop order has committed, with
+ * the store's own credentials from tenant_secrets (never environment keys): money goes to the merchant's own account. The
+ * shopper's return and the signed webhook both end in `settleProviderPayment`, which is idempotent and checks amount and currency.
  */
 export type HostedProvider = "stripe" | "paypal";
 
@@ -49,18 +50,29 @@ async function orderIdForToken(db: Db, tenantId: string, token: string): Promise
   });
 }
 
-export interface StripeEmbeddedStart {
+export interface StripeElementsStart {
+  /** The PaymentIntent's client secret, which the checkout page confirms with the Payment Element. */
   clientSecret: string;
-  /** Public by design; the checkout page needs it to mount the form. */
+  /** Public by design; the checkout page needs it to start Stripe.js. */
   publishableKey: string;
   /** The Stripe.js release that matches the pinned API version (see STRIPE_JS_TRAIN). */
   jsUrl: string;
 }
 
-/** Either a page to redirect to, or (Stripe with a publishable key) a form to mount in the checkout page. */
+/**
+ * What the checkout page needs to show the Payment Element before the order exists, or null when the store has no publishable
+ * key (then Stripe uses the hosted page). Only public values leave the server.
+ */
+export async function getStripeElementsConfig(db: Db, tenantId: string): Promise<{ publishableKey: string; jsUrl: string } | null> {
+  if (!(await isHostedProviderReady(db, tenantId, "stripe"))) return null;
+  const creds = await getTenantPaymentSecrets(db, tenantId, "stripe");
+  return creds.keyId ? { publishableKey: creds.keyId, jsUrl: STRIPE_JS_URL } : null;
+}
+
+/** Either a page to redirect to, or (Stripe with a publishable key) a payment to confirm in the checkout page. */
 export interface HostedPaymentStart {
   checkoutUrl?: string;
-  stripeEmbedded?: StripeEmbeddedStart;
+  stripeElements?: StripeElementsStart;
 }
 
 /** Creates (or re-creates, idempotently) the provider order for a placed, unpaid shop order and returns the hosted payment URL. */
@@ -102,23 +114,24 @@ export async function startHostedPayment(
   let checkoutUrl: string | null;
   if (provider === "stripe") {
     const returnUrl = `${base}/api/storefront/checkout/return?provider=stripe&ot=${encodeURIComponent(opts.orderToken)}`;
-    // A saved publishable key means the merchant opted in to the embedded form.
+    // A saved publishable key means the merchant opted in to the Payment Element.
     if (creds.keyId && creds.keySecret) {
       const reader = new StripeProvider({ secretKey: creds.keySecret, fetchFn: deps.fetchFn });
-      // Reload or "Pay now" while the earlier form is still open: show the same session, so the shopper cannot end up with two.
-      if (intent.providerOrderId) {
-        const existing = await reader.retrieveSession(intent.providerOrderId).catch(() => null);
-        if (existing && existing.status === "open" && existing.clientSecret) {
-          return { stripeEmbedded: { clientSecret: existing.clientSecret, publishableKey: creds.keyId, jsUrl: STRIPE_JS_URL } };
+      let replacedPi = false;
+      // Reload or "Pay now" while an earlier payment is still open: show the same one, so the shopper cannot end up with two.
+      if (intent.providerOrderId?.startsWith("pi_")) {
+        const existing = await reader.retrievePaymentIntent(intent.providerOrderId).catch(() => null);
+        if (existing && existing.clientSecret) {
+          return { stripeElements: { clientSecret: existing.clientSecret, publishableKey: creds.keyId, jsUrl: STRIPE_JS_URL } };
         }
-        if (existing && existing.paymentStatus === "paid") throw new Error("Bad Request: this order is already paid");
+        if (existing && (existing.status === "succeeded" || existing.status === "processing")) throw new Error("Bad Request: this order is already paid");
+        replacedPi = true;
       }
-      // Sessions are single use and expire: a replacement needs its own idempotency key, or Stripe would hand back the old one.
+      // A cancelled PaymentIntent cannot be paid: its replacement needs its own idempotency key, or Stripe would hand back the old one.
       const stripe = new StripeProvider({
         secretKey: creds.keySecret,
-        uiMode: "embedded",
-        successUrl: returnUrl,
-        idempotencySalt: intent.providerOrderId ? Date.now().toString(36) : undefined,
+        uiMode: "elements",
+        idempotencySalt: replacedPi ? Date.now().toString(36) : undefined,
         fetchFn: deps.fetchFn,
       });
       const created = await stripe.createIntent({ tenantId }, forPayment);
@@ -129,7 +142,7 @@ export async function startHostedPayment(
           .set({ providerOrderId: created.providerOrderId, status: "created", updatedAt: new Date() })
           .where(and(eq(schema.paymentIntents.tenantId, tenantId), eq(schema.paymentIntents.id, intent.id))),
       );
-      return { stripeEmbedded: { clientSecret: created.clientSecret, publishableKey: creds.keyId, jsUrl: STRIPE_JS_URL } };
+      return { stripeElements: { clientSecret: created.clientSecret, publishableKey: creds.keyId, jsUrl: STRIPE_JS_URL } };
     }
     const stripe = new StripeProvider({
       secretKey: creds.keySecret,
@@ -192,6 +205,21 @@ export async function confirmHostedReturn(
   if (!intent || !intent.providerOrderId) throw new Error("Not Found: this order has no online payment to confirm");
   const creds = await getTenantPaymentSecrets(db, tenantId, provider);
 
+  if (provider === "stripe" && intent.providerOrderId.startsWith("pi_")) {
+    // Payment Element: read the PaymentIntent the shopper just confirmed, with the store's key.
+    const pi = await new StripeProvider({ secretKey: creds.keySecret, fetchFn: deps.fetchFn }).retrievePaymentIntent(intent.providerOrderId);
+    if (pi.orderId !== null && pi.orderId !== orderId) throw new Error("Bad Request: this payment does not belong to the order");
+    if (pi.status !== "succeeded") return "ignored";
+    return settleProviderPayment(db, tenantId, {
+      provider: "stripe",
+      providerOrderId: intent.providerOrderId,
+      providerPaymentId: intent.providerOrderId,
+      amount: pi.amountReceived,
+      currency: pi.currency,
+      source: "return",
+      jobs: rt._jobs,
+    });
+  }
   if (provider === "stripe") {
     const session = await new StripeProvider({ secretKey: creds.keySecret, fetchFn: deps.fetchFn }).retrieveSession(intent.providerOrderId);
     if (session.orderId !== null && session.orderId !== orderId) throw new Error("Bad Request: this payment does not belong to the order");
@@ -233,7 +261,7 @@ export async function storePayPalMode(db: Db, tenantId: string): Promise<"sandbo
 export type StartedPayment =
   | { kind: "razorpay"; razorpay: Awaited<ReturnType<typeof startRazorpayPaymentByToken>> }
   | { kind: "hosted"; checkoutUrl: string }
-  | { kind: "stripe_embedded"; stripe: StripeEmbeddedStart };
+  | { kind: "stripe_elements"; stripe: StripeElementsStart };
 
 /**
  * "Pay now" for an unpaid online order, whichever provider the order was placed with. The provider comes from the order's own
@@ -259,7 +287,7 @@ export async function startPaymentByToken(
   if (!intent) throw new Error("Not Found: this order has no online payment to complete");
   if (intent.provider === "stripe" || intent.provider === "paypal") {
     const started = await startHostedPayment(rt, tenantId, orderId, intent.provider, { baseUrl: opts.baseUrl, orderToken, storeName: opts.storeName });
-    if (started.stripeEmbedded) return { kind: "stripe_embedded", stripe: started.stripeEmbedded };
+    if (started.stripeElements) return { kind: "stripe_elements", stripe: started.stripeElements };
     if (!started.checkoutUrl) throw new Error("Bad Request: The payment provider did not return a payment page. Please try again.");
     return { kind: "hosted", checkoutUrl: started.checkoutUrl };
   }
