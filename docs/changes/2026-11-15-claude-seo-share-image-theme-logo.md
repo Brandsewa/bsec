@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `fix/seo-share-image-theme-logo` (not merged yet)
+- **Branch:** `fix/seo-share-image-theme-logo` (merged in #269, 2aa47d5)
 - **Area:** web
 - **Type:** fix
 - **Supersedes:** none (follows `2026-11-15-claude-seo-phase2.md`)
