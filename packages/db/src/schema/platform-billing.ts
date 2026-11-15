@@ -14,6 +14,11 @@ export const platformBillingSettings = pgTable("platform_billing_settings", {
   enabled: boolean("enabled").notNull().default(false),
   // PayPal bills stores outside India in USD; `provider` above is the national (INR) gateway only.
   paypalEnabled: boolean("paypal_enabled").notNull().default(false),
+  // The international (USD) gateway: 'paypal' or 'razorpay'. The other one is the backup while the flag below is on; the national
+  // backup is the other of razorpay and cashfree (docs/EMBEDDED-CHECKOUT-PLAN.md section 5.2).
+  internationalProvider: text("international_provider").notNull().default("paypal"),
+  nationalBackupEnabled: boolean("national_backup_enabled").notNull().default(true),
+  internationalBackupEnabled: boolean("international_backup_enabled").notNull().default(true),
   // Days a store keeps its plan after a failed payment before it is limited.
   graceDays: integer("grace_days").notNull().default(7),
   testKeyId: text("test_key_id"),
@@ -71,10 +76,12 @@ export const platformRazorpayPlans = pgTable(
     interval: text("interval").notNull(), // monthly | yearly
     mode: text("mode").notNull(), // test | live
     razorpayPlanId: text("razorpay_plan_id").notNull(),
+    // INR for Indian stores, USD for stores outside India. `amountPaise` is the minor unit of this currency (paise or cents).
+    currency: text("currency").notNull().default("INR"),
     amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
-  (t) => [unique("platform_razorpay_plans_uniq").on(t.planId, t.interval, t.mode, t.amountPaise)],
+  (t) => [unique("platform_razorpay_plans_uniq").on(t.planId, t.interval, t.mode, t.currency, t.amountPaise)],
 );
 
 /** Gapless platform invoice numbering per financial-year series (billing B4). Locked by the issuing transaction. */

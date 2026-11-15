@@ -1432,6 +1432,11 @@ export const PlatformBillingSettingsView = z.object({
   /** The national (INR) gateway. PayPal is the international gateway and is switched on by `paypalEnabled`. */
   provider: z.enum(["razorpay", "cashfree"]),
   paypalEnabled: z.boolean(),
+  /** The international (USD) primary gateway; the other of PayPal and Razorpay is its backup while `internationalBackupEnabled`. */
+  internationalProvider: z.enum(["paypal", "razorpay"]),
+  /** India: when the national primary cannot take a payment, the other national gateway is tried. */
+  nationalBackupEnabled: z.boolean(),
+  internationalBackupEnabled: z.boolean(),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
   graceDays: z.number().int(),
@@ -1479,6 +1484,9 @@ export const BillingPlansView = z.object({
       name: z.string(),
       monthly: BillingPlanIntervalView,
       yearly: BillingPlanIntervalView,
+      /** USD plans (`pricePaise` holds cents), used when Razorpay bills stores outside India. */
+      monthlyUsd: BillingPlanIntervalView,
+      yearlyUsd: BillingPlanIntervalView,
     }),
   ),
 });
@@ -1490,6 +1498,7 @@ export const platformIntegrationsContract = {
     .output(BillingPlansView),
   syncBillingPlans: oc
     .route({ method: "POST", path: "/platform/integrations/billing/plans/sync" })
+    .input(z.object({ currency: z.enum(["INR", "USD"]).optional() }).optional())
     .output(
       z.object({
         mode: z.enum(["test", "live"]),
@@ -1507,6 +1516,9 @@ export const platformIntegrationsContract = {
       z.object({
         provider: z.enum(["razorpay", "cashfree"]).optional(),
         paypalEnabled: z.boolean().optional(),
+        internationalProvider: z.enum(["paypal", "razorpay"]).optional(),
+        nationalBackupEnabled: z.boolean().optional(),
+        internationalBackupEnabled: z.boolean().optional(),
         trial: z.object({ enabled: z.boolean().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
         cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
         paypal: z.object({ test: PayPalKeysInput.optional(), live: PayPalKeysInput.optional() }).optional(),

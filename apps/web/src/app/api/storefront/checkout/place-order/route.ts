@@ -143,18 +143,19 @@ export async function POST(req: Request) {
     // the order still exists and its page offers "Pay now", so nothing is lost and the shopper is never double-charged.
     let razorpay: Awaited<ReturnType<typeof startRazorpayPayment>> | undefined;
     let checkoutUrl: string | undefined;
+    let stripe: { clientSecret: string; publishableKey: string; jsUrl: string } | undefined;
     if (paymentMethod === "razorpay") {
       razorpay = await startRazorpayPayment(rt, tenantCtx.tenantId, orderResult.orderId).catch(() => undefined);
     } else if (paymentMethod === "stripe" || paymentMethod === "paypal") {
       // Stripe and PayPal take the shopper to the provider's own page; the same order page offers "Pay now" if this fails.
       const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
       const storeName = (await getStoreSettings(rt, tenantCtx).catch(() => null))?.storeName;
-      checkoutUrl = (
-        await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined)
-      )?.checkoutUrl;
+      const started = await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined);
+      checkoutUrl = started?.checkoutUrl;
+      stripe = started?.stripeEmbedded;
     }
 
-    const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl }, { status: 200 });
+    const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl, stripe }, { status: 200 });
 
     if (paymentMethod !== "cod") {
       // Keep the cart token aside until the payment finishes: an abandoned payment restores the cart from it.

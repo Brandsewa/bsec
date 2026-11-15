@@ -3,7 +3,7 @@ import { schema, withTenant, QUEUE_NAMES } from "@bs/db";
 import { SaasNotConfiguredError, saasDb, type Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { cancelTenantSubscription, changeTenantPlan, reconcileCashfreeSubscription, resolveBillingProvider } from "../saas/billing.ts";
-import { loadPlatformBillingCredentials } from "../platform/billing-settings.ts";
+import { loadPlatformBillingCredentials, resolveBillingGateways, type BillingProviderId } from "../platform/billing-settings.ts";
 import { listPublicPlans, listPublicPlanCompare } from "../saas/signup.ts";
 import { resolveEffectiveQuota, DEFAULT_TIER_TABLE, type PlanQuotaKey } from "../system/quotas.ts";
 
@@ -290,7 +290,9 @@ export async function getPlanAndBilling(
   // Online payment is simply "not available" where the self-service database role is not configured (local dev, tests).
   let creds: Awaited<ReturnType<typeof loadPlatformBillingCredentials>> = null;
   try {
-    creds = await loadPlatformBillingCredentials(saasDb(rt), isGlobalMerchant ? "paypal" : undefined);
+    // The first gateway that can charge now: the region's primary, or its backup when the primary is off or has no keys.
+    const first = (await resolveBillingGateways(saasDb(rt), isGlobalMerchant ? "international" : "national"))[0];
+    creds = first ? await loadPlatformBillingCredentials(saasDb(rt), first) : null;
   } catch (e) {
     // Never let the payment side break the page: without credentials the page just says online payment is not available.
     if (!(e instanceof SaasNotConfiguredError)) console.error("[billing] could not load the platform billing credentials", e);
@@ -312,7 +314,7 @@ export async function getPlanAndBilling(
     usage,
     invoices,
     billing: {
-      provider: isGlobalMerchant ? "paypal" : (creds?.provider ?? "razorpay"),
+      provider: creds?.provider ?? (isGlobalMerchant ? "paypal" : "razorpay"),
       currency: isGlobalMerchant ? "USD" : "INR",
       available: Boolean(creds),
       testMode: creds?.mode !== "live",
@@ -627,8 +629,7 @@ async function firstPaymentCoupon(rt: Runtime, tenantId: string): Promise<{ perc
 const MIN_START_AHEAD_MS = 15 * 60 * 1000;
 
 /**
- * Starts a paid subscription for the store owner (billing B3). Razorpay returns a hosted page where the owner authorises
- * a card or UPI AutoPay; Cashfree returns a checkout session the admin app opens with Cashfree's script (ADR-037). The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
+ * Starts a paid subscription for the store owner (billing B3). Razorpay returns a subscription the admin app opens in Razorpay's checkout window (card, UPI AutoPay or e-mandate), with the hosted page as a fallback; Cashfree returns a checkout session the admin app opens with Cashfree's script (ADR-037). The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
  * The plan only changes after the payment webhook confirms the first charge.
  */
 export async function subscribeToPlan(
@@ -637,6 +638,7 @@ export async function subscribeToPlan(
   input: { planCode: string; interval: "monthly" | "yearly"; phone?: string | undefined; returnUrl?: string | undefined },
 ): Promise<{
   checkoutUrl: string | null;
+  razorpayCheckout: { keyId: string; subscriptionId: string } | null;
   checkoutSession: { gateway: "cashfree"; sessionId: string; mode: "test" | "live" } | null;
   firstChargeAt: string | null;
   testMode: boolean;
@@ -651,16 +653,15 @@ export async function subscribeToPlan(
     .limit(1);
   const isGlobalMerchant = Boolean(tenantRow?.country && tenantRow.country !== "IN");
 
-  const creds = await loadPlatformBillingCredentials(saasDb(rt), isGlobalMerchant ? "paypal" : undefined);
-  if (!creds) throw new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
+  // The region's gateways in order: primary first, then the backup when it is on (docs/EMBEDDED-CHECKOUT-PLAN.md section 5.2).
+  const gateways = await resolveBillingGateways(saasDb(rt), isGlobalMerchant ? "international" : "national");
+  if (gateways.length === 0) throw new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
 
   const [owner] = await db.select({ email: schema.users.email, name: schema.users.name, phone: schema.users.phone }).from(schema.users).where(eq(schema.users.id, userId)).limit(1);
   if (!owner) throw new Error("Not Found: owner account");
   // Cashfree needs a phone number for the mandate. A number given here is used for this payment only, not saved to the account.
   const phone = (input.phone ?? owner.phone ?? "").replace(/[\s()-]/g, "");
-  if (creds.provider === "cashfree" && !/^\+?[0-9]{10,13}$/.test(phone)) {
-    throw new Error("Bad Request: a phone number is required to set up automatic payment (10 digits).");
-  }
+  const phoneOk = /^\+?[0-9]{10,13}$/.test(phone);
 
   const [sub] = await db.select().from(schema.subscriptions).where(eq(schema.subscriptions.tenantId, ctx.tenantId)).orderBy(desc(schema.subscriptions.createdAt)).limit(1);
   if (sub?.status === "active" && sub.providerSubscriptionId) {
@@ -697,20 +698,42 @@ export async function subscribeToPlan(
     }
   }
 
-  const res = await changeTenantPlan(rt, {
-    tenantId: ctx.tenantId,
-    planCode: input.planCode,
-    interval: input.interval,
-    customerEmail: owner.email,
-    ...(owner.name ? { customerName: owner.name } : {}),
-    ...(creds.provider === "cashfree" ? { customerPhone: phone.replace(/^\+?91(?=[0-9]{10}$)/, "").replace(/^\+/, "") } : {}),
-    ...(safeReturnUrl(input.returnUrl) ? { returnUrl: safeReturnUrl(input.returnUrl) as string } : {}),
-    ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
-    // Nothing to wait for (no trial or free period left): the first cycle is paid now, when the mandate is authorised.
-    ...(startAtMs ? {} : { chargeFirstCycleNow: true }),
-    ...(firstPaymentPaise > 0 ? { firstPaymentPaise } : {}),
-    ...(creds.provider ? { provider: await resolveBillingProvider(saasDb(rt), creds.provider) } : {}),
-  });
+  // Try the primary gateway; if it cannot create the payment (off, no keys, its API refuses, no plan synced for it), try the
+  // backup. Only one gateway ever ends up holding the subscription: a failed attempt creates nothing on our side.
+  let res: Awaited<ReturnType<typeof changeTenantPlan>> | undefined;
+  let creds: NonNullable<Awaited<ReturnType<typeof loadPlatformBillingCredentials>>> | undefined;
+  let lastError: unknown;
+  for (const gateway of gateways) {
+    const candidate = await loadPlatformBillingCredentials(saasDb(rt), gateway);
+    if (!candidate) continue;
+    if (candidate.provider === "cashfree" && !phoneOk) {
+      lastError = new Error("Bad Request: a phone number is required to set up automatic payment (10 digits).");
+      continue;
+    }
+    try {
+      res = await changeTenantPlan(rt, {
+        tenantId: ctx.tenantId,
+        planCode: input.planCode,
+        interval: input.interval,
+        customerEmail: owner.email,
+        ...(owner.name ? { customerName: owner.name } : {}),
+        ...(candidate.provider === "cashfree" ? { customerPhone: phone.replace(/^\+?91(?=[0-9]{10}$)/, "").replace(/^\+/, "") } : {}),
+        ...(safeReturnUrl(input.returnUrl) ? { returnUrl: safeReturnUrl(input.returnUrl) as string } : {}),
+        ...(startAtMs ? { startAt: Math.floor(startAtMs / 1000) } : {}),
+        // Nothing to wait for (no trial or free period left): the first cycle is paid now, when the mandate is authorised.
+        ...(startAtMs ? {} : { chargeFirstCycleNow: true }),
+        ...(firstPaymentPaise > 0 ? { firstPaymentPaise } : {}),
+        provider: await resolveBillingProvider(saasDb(rt), candidate.provider as BillingProviderId),
+        currency: isGlobalMerchant ? "USD" : "INR",
+      });
+      creds = candidate;
+      break;
+    } catch (e) {
+      lastError = e;
+      console.error(`[billing] ${candidate.provider} could not start the subscription${gateways.length > 1 ? "; trying the backup gateway" : ""}`, e instanceof Error ? e.message : e);
+    }
+  }
+  if (!res || !creds) throw lastError instanceof Error ? lastError : new Error("Bad Request: online plan payment is not available yet. Request a plan change instead.");
 
   await withTenant(db, ctx.tenantId, async (tx) => {
     await tx.insert(schema.auditLogs).values({
@@ -726,6 +749,8 @@ export async function subscribeToPlan(
 
   return {
     checkoutUrl: res.shortUrl ?? null,
+    // Razorpay's checkout window opens on the page with the subscription id; the key id is public. The secret never leaves the server.
+    razorpayCheckout: creds.provider === "razorpay" && res.providerSubscriptionId ? { keyId: creds.keyId, subscriptionId: res.providerSubscriptionId } : null,
     checkoutSession: res.checkoutSession ? { gateway: "cashfree", ...res.checkoutSession } : null,
     firstChargeAt: startAtMs ? new Date(startAtMs).toISOString() : null, testMode: creds.mode !== "live",
   };
