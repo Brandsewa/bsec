@@ -67,7 +67,7 @@ export interface CheckoutPaymentOptions {
   onlineAvailable: boolean;
   /** What this market offers, in order (ADR-040). When absent the store has only COD and Razorpay, as before markets. */
   methods?: Array<"cod" | "razorpay" | "stripe" | "paypal"> | undefined;
-  /** Set when Stripe is offered and the store saved a publishable key: the card fields show inside this page (ADR-047). */
+  /** Set when Stripe is offered and the store saved a publishable key: the card fields show inside this page (ADR-048). */
   stripeElements?: StripeConfig | null | undefined;
 }
 

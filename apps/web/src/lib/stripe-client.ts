@@ -1,5 +1,5 @@
 /**
- * Browser side of Stripe's Payment Element (ADR-047). Stripe.js is loaded only when a shopper reaches a Stripe payment (never
+ * Browser side of Stripe's Payment Element (ADR-048). Stripe.js is loaded only when a shopper reaches a Stripe payment (never
  * on the product pages), and only from Stripe's own host. The release train in the URL comes from the server and matches the
  * pinned API version. Card details live in Stripe's own iframe; this code only sees "valid" or an error message.
  */

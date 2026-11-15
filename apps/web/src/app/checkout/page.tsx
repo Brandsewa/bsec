@@ -2,13 +2,14 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent } from "@bs/domain";
+import { buildBeginCheckoutEvent, getClientIp, recordServerEvent, getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 import { getMarketContext } from "@/server/market.ts";
+import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -88,9 +89,24 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
 
   const copy = (await getCachedDefaultPages(access.tenantId)).checkout;
 
+  // Meta Conversions API InitiateCheckout (ADR-047, slice 5c). One per cart (a refresh is the same event); the id also goes to the
+  // browser pixel so Meta counts it once. Recorded only for visitors who accepted marketing cookies, on stores that saved a token.
+  const checkoutEvent = buildBeginCheckoutEvent(cart);
+  const checkoutEventId = checkoutEvent
+    ? await recordServerEvent(rt, access.tenantId, {
+        name: "InitiateCheckout",
+        eventId: `ic_${cart.id}`,
+        currency: checkoutEvent.currency,
+        value: checkoutEvent.value,
+        items: checkoutEvent.items.map((i) => ({ id: i.id, quantity: i.quantity, price: i.price })),
+        req: { cookieHeader: h.get("cookie"), ip: getClientIp(h), userAgent: h.get("user-agent"), sourceUrl: h.get("referer") },
+      })
+    : null;
+
   return (
     // The heading is centred and the spacing kept tight; each step sits in a grey panel (.bs-panel).
     <div className="bs-skin">
+      <ShopEvent tenantId={access.tenantId} build={() => (checkoutEvent ? { ...checkoutEvent, eventId: checkoutEventId ?? undefined } : null)} />
       <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
       <h1 className="mb-4 text-center text-xl font-extrabold tracking-tight text-foreground sm:mb-6 sm:text-3xl">
         {copy.heading}

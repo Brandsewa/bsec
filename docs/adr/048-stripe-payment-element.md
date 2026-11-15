@@ -1,4 +1,4 @@
-# ADR-047: Stripe Payment Element inline at the store checkout
+# ADR-048: Stripe Payment Element inline at the store checkout
 
 - **Status:** Accepted (owner decision 2026-11-15: card fields inline in the checkout page, for conversion)
 - **Date:** 2026-11-15

@@ -19,7 +19,7 @@ import {
   type TenantContext,
 } from "../src/index.ts";
 
-// Stripe Payment Element at the store checkout (ADR-047): a saved publishable key opts the store in; a PaymentIntent is reused
+// Stripe Payment Element at the store checkout (ADR-048): a saved publishable key opts the store in; a PaymentIntent is reused
 // while it can still be paid, replaced when cancelled, and settled only from what Stripe itself reports for this order.
 let env: TestDb;
 let rtPlatform: Runtime;

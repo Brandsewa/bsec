@@ -52,8 +52,9 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [044](044-state-pricing.md) | State Pricing: per-variant prices by Indian state, detected automatically, locked on the cart | Accepted |
 
 | [045](045-discount-engine.md) | Discount engine: classes, stacking and a pure evaluator | Accepted |
-| [046](046-embedded-checkout-and-billing-gateway-order.md) | Embedded checkout and the gateway order for platform billing | Accepted (Stripe part superseded by 047) |
-| [047](047-stripe-payment-element.md) | Stripe Payment Element inline at the store checkout | Accepted |
+| [046](046-embedded-checkout-and-billing-gateway-order.md) | Embedded checkout and the gateway order for platform billing | Accepted (Stripe part superseded by 048) |
+| [047](047-first-party-analytics.md) | First-party merchant analytics, cookieless collector, orders as the source of truth | Accepted |
+| [048](048-stripe-payment-element.md) | Stripe Payment Element inline at the store checkout | Accepted |
 
-**Next number: 048.**
+**Next number: 049.**
 

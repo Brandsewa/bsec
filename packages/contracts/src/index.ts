@@ -33,6 +33,8 @@ export * from "./admin.ts";
 export * from "./markets.ts";
 export * from "./apps.ts";
 export * from "./finance.ts";
+export * from "./analytics.ts";
+export * from "./consent.ts";
 export * from "./blog.ts";
 export * from "./notifications.ts";
 export * from "./friendly-ids.ts";

@@ -11,7 +11,7 @@ import { orderTokenHash, settleProviderPayment, startRazorpayPaymentByToken, typ
  *
  * PayPal, and Stripe without a publishable key, use the provider's hosted page (a redirect), so no card or wallet data touches
  * our pages and no provider script is added to the storefront. Stripe with a publishable key saved uses the Payment Element
- * (ADR-047): Stripe's own iframe fields sit in our checkout page (card data still never touches our code), Stripe.js is loaded
+ * (ADR-048): Stripe's own iframe fields sit in our checkout page (card data still never touches our code), Stripe.js is loaded
  * only at checkout, and the payment is a PaymentIntent. The provider order is created after the shop order has committed, with
  * the store's own credentials from tenant_secrets (never environment keys): money goes to the merchant's own account. The
  * shopper's return and the signed webhook both end in `settleProviderPayment`, which is idempotent and checks amount and currency.

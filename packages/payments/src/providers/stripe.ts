@@ -20,7 +20,7 @@ import { sanitizePaymentPayload } from "./razorpay.ts";
  *
  * Two ways to take a card. Without a publishable key the store uses Stripe-hosted Checkout (a redirect to stripe.com).
  * With one it uses the Payment Element: Stripe's own iframe fields inside our checkout page, on a PaymentIntent
- * (ADR-047). Either way card data never touches our code. Talks to Stripe's REST API with `fetch` (no SDK dependency), with the API
+ * (ADR-048). Either way card data never touches our code. Talks to Stripe's REST API with `fetch` (no SDK dependency), with the API
  * version pinned so Stripe changes cannot alter behaviour under us. Amounts are the smallest currency unit (paise).
  * Per-store keys come from tenant_secrets, never from environment variables.
  */

@@ -134,6 +134,16 @@ export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "./comp
 export { ConfirmDialog, type ConfirmDialogProps } from "./components/confirm-dialog.tsx";
 export { SimpleSelect, type SimpleSelectProps, type SelectOption } from "./components/simple-select.tsx";
 export { DateRangePicker, type DateRangePickerProps } from "./components/date-range-picker.tsx";
+export {
+  ANALYTICS_PRESETS,
+  COMPARISON_LABELS,
+  autoGranularity,
+  comparisonRange,
+  type ComparisonMode,
+  type DatePreset,
+  type DayRange,
+  type Granularity,
+} from "./lib/date-presets.ts";
 export { DatePicker, type DatePickerProps } from "./components/date-picker.tsx";
 export { DateTimePicker, type DateTimePickerProps } from "./components/date-time-picker.tsx";
 export { ScrollTabs, type ScrollTabsProps } from "./components/scroll-tabs.tsx";

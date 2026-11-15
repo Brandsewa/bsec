@@ -11,6 +11,10 @@ import {
   RateLimitExceededError,
   registerCustomer,
   getClientIp,
+  getStorefrontConsentConfig,
+  conversionCredentialStatus,
+  decideOrderTracking,
+  resolveOrderAttribution,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
@@ -108,7 +112,30 @@ export async function POST(req: Request) {
       h.get("idempotency-key") ??
       (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
     const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
+    // Server-side conversion APIs (ADR-047): remember the visitor's choice and browser ids only when a platform will actually be used.
+    const tracking = await Promise.all([getStorefrontConsentConfig(rt, access.tenantId), conversionCredentialStatus(rt._db.db, access.tenantId)])
+      .then(([cfg, creds]) =>
+        decideOrderTracking(cfg, creds, {
+          cookieHeader: req.headers.get("cookie"),
+          ip: getClientIp(req.headers),
+          userAgent: req.headers.get("user-agent"),
+          sourceUrl: req.headers.get("referer"),
+        }),
+      )
+      .catch(() => null);
+    // Where the order came from, from the visitor's same-day cookieless page views (ADR-047, Phase 2).
+    const attributionSecret = process.env.BETTER_AUTH_SECRET;
+    const attribution = attributionSecret
+      ? await resolveOrderAttribution(
+          rt,
+          access.tenantId,
+          { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? "", doNotTrack: req.headers.get("sec-gpc") === "1" || req.headers.get("dnt") === "1" },
+          { secret: attributionSecret },
+        )
+      : null;
     const orderResult = await placeOrder(rt, tenantCtx, {
+      tracking,
+      attribution,
       cartToken: token,
       idempotencyKey,
       email: parsed.data.email,

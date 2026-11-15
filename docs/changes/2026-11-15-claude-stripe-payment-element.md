@@ -8,14 +8,14 @@
 - **Supersedes:** the Stripe Embedded Checkout part of `2026-11-15-claude-embedded-checkout-build.md` (ADR-046 point 2)
 
 ## Summary
-The owner saw the old redirect text on the checkout and asked for Stripe's card fields inside the Payment Method section, like Shopify, for conversion. Stripe with a publishable key now shows the Payment Element there (ADR-047); Place Order validates it, places the order, creates a PaymentIntent and confirms it on the page. Without a key, the hosted redirect is unchanged. Why it did not show before: the embedded path only switched on when the store saved a publishable key, and the panel opened after Place Order.
+The owner saw the old redirect text on the checkout and asked for Stripe's card fields inside the Payment Method section, like Shopify, for conversion. Stripe with a publishable key now shows the Payment Element there (ADR-048); Place Order validates it, places the order, creates a PaymentIntent and confirms it on the page. Without a key, the hosted redirect is unchanged. Why it did not show before: the embedded path only switched on when the store saved a publishable key, and the panel opened after Place Order.
 
 ## What changed
 - `StripeProvider`: `uiMode: "elements"` creates a PaymentIntent (automatic payment methods, order metadata, idempotency key `bsec-pi-<order>`); `retrievePaymentIntent`; `cancel` handles `pi_` ids; the webhook parser returns the PaymentIntent id for `payment_intent.*`. The Embedded Checkout session code is removed.
 - `online-checkout.ts`: `startHostedPayment` returns `stripeElements`, reuses a payable PaymentIntent, replaces a cancelled one under a new key, refuses a paid one; `confirmHostedReturn` settles from the PaymentIntent (amount, currency and order match); `getStripeElementsConfig` gives the checkout page the public key; `StartedPayment` kind `stripe_elements`. `getStorefrontCheckoutOptions` returns `stripeElements`.
 - `system/webhooks.ts`: `payment_intent.succeeded` settles the order.
 - Web: `stripe-client.ts` (Payment Element), `StripePaymentElement`, `StripePayOverlay` (Pay now), `CheckoutForm` (fields under the Stripe option, validate, place, confirm, retry and start-over), `PayNowButton`. `StripeEmbeddedOverlay` is deleted.
-- Docs: ADR-047, ARCHITECTURE checkout paragraph, DEPLOYMENT webhook events (add `payment_intent.succeeded`).
+- Docs: ADR-048, ARCHITECTURE checkout paragraph, DEPLOYMENT webhook events (add `payment_intent.succeeded`).
 - Cleanup of the merged `feat/embedded-checkout` branch and worktree; its change record Branch line updated.
 
 ## Decisions and trade-offs
@@ -29,7 +29,7 @@ The owner saw the old redirect text on the checkout and asked for Stripe's card 
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md`
-- [x] ADR-047 and `docs/adr/README.md`
+- [x] ADR-048 and `docs/adr/README.md`
 - [x] `DEPLOYMENT.md` (webhook events)
 - [x] `progress.md` In flight line
 
