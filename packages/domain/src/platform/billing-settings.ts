@@ -48,6 +48,12 @@ export interface PlatformBillingSettingsView {
   provider: "razorpay" | "cashfree";
   /** PayPal bills stores outside India in USD while this is true. */
   paypalEnabled: boolean;
+  /** The international (USD) primary gateway. The other of paypal and razorpay is its backup while `internationalBackupEnabled`. */
+  internationalProvider: "paypal" | "razorpay";
+  /** India: when the national primary cannot take a payment, the other national gateway is tried. */
+  nationalBackupEnabled: boolean;
+  /** Outside India: the same for the international pair. */
+  internationalBackupEnabled: boolean;
   mode: BillingMode;
   enabled: boolean;
   graceDays: number;
@@ -105,6 +111,9 @@ export interface UpdateBillingSettingsInput {
   trial?: { enabled?: boolean | undefined; days?: number | undefined } | undefined;
   provider?: "razorpay" | "cashfree" | undefined;
   paypalEnabled?: boolean | undefined;
+  internationalProvider?: "paypal" | "razorpay" | undefined;
+  nationalBackupEnabled?: boolean | undefined;
+  internationalBackupEnabled?: boolean | undefined;
   cashfree?: { test?: CashfreeKeysInput | undefined; live?: CashfreeKeysInput | undefined } | undefined;
   paypal?: { test?: PayPalKeysInput | undefined; live?: PayPalKeysInput | undefined } | undefined;
   invoice?: UpdateInvoiceProfileInput | undefined;
@@ -232,6 +241,35 @@ export async function loadPlatformBillingCredentials(db: Db, provider?: BillingP
   return null;
 }
 
+/**
+ * The gateways to try, in order, for a store in this region (docs/EMBEDDED-CHECKOUT-PLAN.md section 5.2): the primary first, then
+ * the backup when it is switched on. Only gateways that can charge right now are returned (switched on, keys saved for the
+ * active mode). The caller falls through to the next one when the primary cannot create the payment; a subscription that
+ * already exists is never moved, and a store is never charged by two gateways for one plan.
+ *   national (India, INR):          primary razorpay | cashfree, backup the other
+ *   international (outside, USD):   primary paypal | razorpay,   backup the other
+ */
+export async function resolveBillingGateways(db: Db, region: "national" | "international"): Promise<BillingProviderId[]> {
+  const row = await loadRow(db);
+  let order: BillingProviderId[];
+  let backup: boolean;
+  if (region === "national") {
+    const primary = activeProviderOf(row);
+    order = primary === "cashfree" ? ["cashfree", "razorpay"] : ["razorpay", "cashfree"];
+    backup = row?.nationalBackupEnabled ?? true;
+  } else {
+    const primary = row?.internationalProvider === "razorpay" ? "razorpay" : "paypal";
+    order = primary === "razorpay" ? ["razorpay", "paypal"] : ["paypal", "razorpay"];
+    backup = row?.internationalBackupEnabled ?? true;
+  }
+  const wanted = backup ? order : order.slice(0, 1);
+  const usable: BillingProviderId[] = [];
+  for (const g of wanted) {
+    if (await loadPlatformBillingCredentials(db, g)) usable.push(g);
+  }
+  return usable;
+}
+
 function trialPolicyOf(row: BillingRow | undefined): TrialPolicy {
   return { enabled: row?.trialEnabled ?? true, days: row?.trialDays ?? DEFAULT_TRIAL_DAYS };
 }
@@ -268,6 +306,9 @@ export async function getPlatformBillingSettings(rt: Runtime, staffUserId: strin
   return {
     provider: activeProviderOf(row),
     paypalEnabled: row?.paypalEnabled ?? false,
+    internationalProvider: row?.internationalProvider === "razorpay" ? "razorpay" : "paypal",
+    nationalBackupEnabled: row?.nationalBackupEnabled ?? true,
+    internationalBackupEnabled: row?.internationalBackupEnabled ?? true,
     mode: row?.mode === "live" ? "live" : "test",
     enabled: row?.enabled ?? false,
     graceDays: row?.graceDays ?? 7,
@@ -462,6 +503,14 @@ export async function updatePlatformBillingSettings(
     if (input.provider !== undefined && input.provider !== activeProviderOf(existing) && !hasNationalKeys) {
       throw new Error(`Bad Request: save the ${nationalKeysText} before switching to ${gateway}`);
     }
+    const internationalProvider = input.internationalProvider ?? (existing?.internationalProvider === "razorpay" ? "razorpay" : "paypal");
+    const nationalBackupEnabled = input.nationalBackupEnabled ?? existing?.nationalBackupEnabled ?? true;
+    const internationalBackupEnabled = input.internationalBackupEnabled ?? existing?.internationalBackupEnabled ?? true;
+    // Razorpay can bill stores outside India (USD cards) from the same account, so it needs the same key set as the national Razorpay.
+    const hasRazorpayKeys = Boolean(merged[col.keyId] && merged[col.secretCt] && merged[col.secretIv]);
+    if (input.internationalProvider === "razorpay" && !hasRazorpayKeys) {
+      throw new Error(`Bad Request: save the Razorpay ${mode} key id and secret before making Razorpay the international gateway`);
+    }
     if (input.paypalEnabled === true && !hasPayPalKeys) {
       throw new Error(`Bad Request: save the PayPal ${mode} Client ID and Secret before switching PayPal on`);
     }
@@ -471,18 +520,21 @@ export async function updatePlatformBillingSettings(
     }
     if (input.provider !== undefined && input.provider !== activeProviderOf(existing)) changed.push("provider");
     if (input.paypalEnabled !== undefined && input.paypalEnabled !== (existing?.paypalEnabled ?? false)) changed.push("paypalEnabled");
+    if (input.internationalProvider !== undefined && input.internationalProvider !== (existing?.internationalProvider ?? "paypal")) changed.push("internationalProvider");
+    if (input.nationalBackupEnabled !== undefined && input.nationalBackupEnabled !== (existing?.nationalBackupEnabled ?? true)) changed.push("nationalBackupEnabled");
+    if (input.internationalBackupEnabled !== undefined && input.internationalBackupEnabled !== (existing?.internationalBackupEnabled ?? true)) changed.push("internationalBackupEnabled");
     if (input.mode !== undefined && input.mode !== (existing?.mode ?? "test")) changed.push("mode");
     if (input.enabled !== undefined && input.enabled !== (existing?.enabled ?? false)) changed.push("enabled");
 
     await tx
       .insert(schema.platformBillingSettings)
-      .values({ id: "default", ...values, provider, paypalEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() })
+      .values({ id: "default", ...values, provider, paypalEnabled, internationalProvider, nationalBackupEnabled, internationalBackupEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() })
       .onConflictDoUpdate({
         target: schema.platformBillingSettings.id,
-        set: { ...values, provider, paypalEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() },
+        set: { ...values, provider, paypalEnabled, internationalProvider, nationalBackupEnabled, internationalBackupEnabled, mode, enabled, updatedBy: staffUserId, updatedAt: new Date() },
       });
 
-    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, paypalEnabled, mode, enabled, ...(input.trial ? { trial: { enabled: values.trialEnabled ?? existing?.trialEnabled ?? true, days: values.trialDays ?? existing?.trialDays ?? DEFAULT_TRIAL_DAYS } } : {}) }, meta);
+    await writePlatformAudit(tx, staffUserId, "platform_billing.updated", "platform_billing", "default", null, { changedFields: changed, provider, paypalEnabled, internationalProvider, nationalBackupEnabled, internationalBackupEnabled, mode, enabled, ...(input.trial ? { trial: { enabled: values.trialEnabled ?? existing?.trialEnabled ?? true, days: values.trialDays ?? existing?.trialDays ?? DEFAULT_TRIAL_DAYS } } : {}) }, meta);
     return { ok: true as const };
   });
 }

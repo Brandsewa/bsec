@@ -10,6 +10,8 @@ import { loadPlatformBillingCredentials, type BillingMode } from "./billing-sett
  */
 
 export type BillingInterval = "monthly" | "yearly";
+/** INR plans bill Indian stores; USD plans bill stores outside India when Razorpay is their international gateway. */
+export type BillingCurrency = "INR" | "USD";
 
 export interface BillingPlanIntervalView {
   pricePaise: number;
@@ -25,6 +27,9 @@ export interface BillingPlanView {
   name: string;
   monthly: BillingPlanIntervalView;
   yearly: BillingPlanIntervalView;
+  /** The same for USD (`pricePaise` holds cents). Used when Razorpay bills stores outside India. */
+  monthlyUsd: BillingPlanIntervalView;
+  yearlyUsd: BillingPlanIntervalView;
 }
 
 export interface BillingPlansView {
@@ -48,6 +53,18 @@ function priceOf(p: { priceMonthlyPaise: number; priceYearlyPaise: number }, int
 }
 
 /**
+ * The USD price (cents) of a plan: its own USD price, or its rupee price / 80 when none is set. Same fallback the PayPal path
+ * and the Activate screen use, so a store is shown and charged the same amount whichever gateway bills it.
+ */
+export function usdCentsOf(
+  p: { priceMonthlyPaise: number; priceYearlyPaise: number; priceMonthlyUsdCents: number | bigint | null; priceYearlyUsdCents: number | bigint | null },
+  interval: BillingInterval,
+): number {
+  const own = interval === "monthly" ? p.priceMonthlyUsdCents : p.priceYearlyUsdCents;
+  return own !== null ? Number(own) : Math.round(priceOf(p, interval) / 80);
+}
+
+/**
  * The Razorpay plan id for this plan, interval and mode. With `amountPaise` only a plan created at exactly that price
  * counts (a price that went back to an older value reuses the older plan); without it the newest plan is returned.
  */
@@ -57,6 +74,7 @@ export async function findRazorpayPlanId(
   interval: BillingInterval,
   mode: BillingMode,
   amountPaise?: number,
+  currency: BillingCurrency = "INR",
 ): Promise<{ razorpayPlanId: string; amountPaise: number } | null> {
   const [row] = await db
     .select({ razorpayPlanId: schema.platformRazorpayPlans.razorpayPlanId, amountPaise: schema.platformRazorpayPlans.amountPaise })
@@ -66,6 +84,7 @@ export async function findRazorpayPlanId(
         eq(schema.platformRazorpayPlans.planId, planId),
         eq(schema.platformRazorpayPlans.interval, interval),
         eq(schema.platformRazorpayPlans.mode, mode),
+        eq(schema.platformRazorpayPlans.currency, currency),
         ...(amountPaise !== undefined ? [eq(schema.platformRazorpayPlans.amountPaise, amountPaise)] : []),
       ),
     )
@@ -87,7 +106,20 @@ export async function listBillingPlans(rt: Runtime, staffUserId: string): Promis
         const r = match ?? (await findRazorpayPlanId(db, p.id, interval, mode));
         return { pricePaise: priceOf(p, interval), razorpayPlanId: r?.razorpayPlanId ?? null, inSync: Boolean(match) };
       });
-    out.push({ planId: p.id, code: p.code, name: p.name, monthly: await view("monthly"), yearly: await view("yearly") });
+    const viewUsd = (interval: BillingInterval): Promise<BillingPlanIntervalView> =>
+      findRazorpayPlanId(db, p.id, interval, mode, usdCentsOf(p, interval), "USD").then(async (match) => {
+        const r = match ?? (await findRazorpayPlanId(db, p.id, interval, mode, undefined, "USD"));
+        return { pricePaise: usdCentsOf(p, interval), razorpayPlanId: r?.razorpayPlanId ?? null, inSync: Boolean(match) };
+      });
+    out.push({
+      planId: p.id,
+      code: p.code,
+      name: p.name,
+      monthly: await view("monthly"),
+      yearly: await view("yearly"),
+      monthlyUsd: await viewUsd("monthly"),
+      yearlyUsd: await viewUsd("yearly"),
+    });
   }
   return { mode, canSync: Boolean(creds), plans: out };
 }
@@ -101,7 +133,9 @@ export async function syncBillingPlans(
   staffUserId: string,
   meta?: AuditMeta,
   fetchImpl: typeof fetch = fetch,
+  opts: { currency?: BillingCurrency } = {},
 ): Promise<SyncBillingPlansResult> {
+  const currency: BillingCurrency = opts.currency ?? "INR";
   const staff = await assertPlatformStaff(rt, staffUserId);
   assertRoleAtLeast(staff.role, "platform_owner", "sync billing plans");
   const db = rt._db.db;
@@ -114,9 +148,9 @@ export async function syncBillingPlans(
 
   for (const p of plans) {
     for (const interval of ["monthly", "yearly"] as const) {
-      const amount = priceOf(p, interval);
+      const amount = currency === "USD" ? usdCentsOf(p, interval) : priceOf(p, interval);
       if (amount <= 0) continue;
-      const existing = await findRazorpayPlanId(db, p.id, interval, creds.mode, amount);
+      const existing = await findRazorpayPlanId(db, p.id, interval, creds.mode, amount, currency);
       if (existing) {
         result.unchanged++;
         continue;
@@ -128,7 +162,7 @@ export async function syncBillingPlans(
           body: JSON.stringify({
             period: PERIOD[interval],
             interval: 1,
-            item: { name: `${p.name} (${interval})`, amount, currency: "INR", description: `Brand Sewa ${p.name} plan, billed ${interval}` },
+            item: { name: `${p.name} (${interval}${currency === "USD" ? ", USD" : ""})`, amount, currency, description: `Brand Sewa ${p.name} plan, billed ${interval}` },
             notes: { plan_code: p.code, plan_id: p.id },
           }),
           signal: AbortSignal.timeout(15_000),
@@ -145,7 +179,7 @@ export async function syncBillingPlans(
         }
         await db
           .insert(schema.platformRazorpayPlans)
-          .values({ planId: p.id, interval, mode: creds.mode, razorpayPlanId: data.id, amountPaise: amount })
+          .values({ planId: p.id, interval, mode: creds.mode, razorpayPlanId: data.id, currency, amountPaise: amount })
           .onConflictDoNothing();
         result.created++;
       } catch (err) {
@@ -155,7 +189,7 @@ export async function syncBillingPlans(
   }
 
   await db.transaction((tx) =>
-    writePlatformAudit(tx, staffUserId, "platform_billing.plans_synced", "platform_billing", "default", null, { mode: creds.mode, created: result.created, unchanged: result.unchanged, failed: result.failed.length }, meta),
+    writePlatformAudit(tx, staffUserId, "platform_billing.plans_synced", "platform_billing", "default", null, { mode: creds.mode, currency, created: result.created, unchanged: result.unchanged, failed: result.failed.length }, meta),
   );
   return result;
 }

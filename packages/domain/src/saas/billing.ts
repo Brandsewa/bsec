@@ -4,7 +4,7 @@ import { schema, type Db } from "@bs/db";
 import { saasDb, type Runtime } from "../runtime.ts";
 import { LAPSED_TRIAL_TIER, tierForPlan } from "./plan-tiers.ts";
 import { loadInvoiceProfile, loadPlatformBillingCredentials, type BillingProviderId } from "../platform/billing-settings.ts";
-import { findRazorpayPlanId } from "../platform/billing-plans.ts";
+import { findRazorpayPlanId, usdCentsOf } from "../platform/billing-plans.ts";
 import { CashfreeApiError, cashfreeRequest, paiseToRupees, verifyCashfreeSignature, type CashfreeMode, PayPalProvider, toPayPalAmount, fromPayPalAmount } from "@bs/payments";
 import { enforceExtraMarketsQuota } from "../markets/service.ts";
 
@@ -821,7 +821,7 @@ export async function handlePlatformBillingWebhook(
     event?: string;
     payload?: {
       subscription?: { entity?: { id?: string; current_start?: number; current_end?: number; notes?: Record<string, string> } };
-      payment?: { entity?: { id?: string; amount?: number; notes?: Record<string, string> } };
+      payment?: { entity?: { id?: string; amount?: number; currency?: string; notes?: Record<string, string> } };
     };
   }
 
@@ -861,6 +861,8 @@ export async function handlePlatformBillingWebhook(
         tenantIdNote: subEntity?.notes?.tenant_id ?? paymentEntity.notes?.tenant_id,
         planCodeNote: subEntity?.notes?.plan_code ?? paymentEntity.notes?.plan_code,
         amountPaise: paymentEntity.amount,
+        // A USD plan charges in USD: the invoice carries its currency and no GST (the amount is the smallest unit of it).
+        ...(typeof paymentEntity.currency === "string" && paymentEntity.currency.toUpperCase() !== "INR" ? { currency: paymentEntity.currency.toUpperCase() } : {}),
         paymentId: paymentEntity.id ?? null,
         ...(subEntity?.current_start ? { currentStart: new Date(subEntity.current_start * 1000) } : {}),
         ...(subEntity?.current_end ? { currentEnd: new Date(subEntity.current_end * 1000) } : {}),
@@ -1262,6 +1264,8 @@ export async function changeTenantPlan(
     chargeFirstCycleNow?: boolean;
     firstPaymentPaise?: number;
     provider?: SubscriptionBillingProvider;
+    /** USD bills a store outside India on Razorpay's USD plan (cards only). Ignored by the other gateways. Default INR. */
+    currency?: "INR" | "USD";
   },
 ) {
   const db = saasDb(rt);
@@ -1284,21 +1288,28 @@ export async function changeTenantPlan(
 
   const pricePaise = params.interval === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise;
   let razorpayPlanId: string | undefined;
+  const razorpayUsd = gateway === "razorpay" && params.currency === "USD";
   if (gateway === "razorpay") {
-    // The plan synced for the active mode (Super Admin, Platform billing) wins; the old per-plan columns stay as a fallback.
+    // The plan synced for the active mode (Super Admin, Platform billing) wins; the old per-plan columns stay as a fallback
+    // (INR only: they predate USD plans). A USD subscription needs a USD plan synced at exactly today's USD price.
     const activeMode = (await loadPlatformBillingCredentials(db, "razorpay"))?.mode ?? "test";
-    const synced = await findRazorpayPlanId(db, plan.id, params.interval, activeMode, pricePaise);
+    const synced = razorpayUsd
+      ? await findRazorpayPlanId(db, plan.id, params.interval, activeMode, usdCentsOf(plan, params.interval), "USD")
+      : await findRazorpayPlanId(db, plan.id, params.interval, activeMode, pricePaise);
     const features = plan.features as Record<string, unknown> | null;
     const planIds = features?.razorpay_plan_ids as Record<string, string> | undefined;
-    razorpayPlanId =
-      synced?.razorpayPlanId ??
-      (params.interval === "yearly"
-        ? plan.razorpayPlanIdYearly ?? planIds?.yearly
-        : plan.razorpayPlanIdMonthly ?? planIds?.monthly);
+    razorpayPlanId = razorpayUsd
+      ? synced?.razorpayPlanId
+      : synced?.razorpayPlanId ??
+        (params.interval === "yearly"
+          ? plan.razorpayPlanIdYearly ?? planIds?.yearly
+          : plan.razorpayPlanIdMonthly ?? planIds?.monthly);
 
     if (!razorpayPlanId) {
       throw new Error(
-        `Plan '${plan.code}' has no Razorpay plan ID configured for interval '${params.interval}'. Please configure real Razorpay plan IDs.`,
+        razorpayUsd
+          ? `Plan '${plan.code}' has no Razorpay USD plan for interval '${params.interval}'. Sync the USD plans in Super Admin first.`
+          : `Plan '${plan.code}' has no Razorpay plan ID configured for interval '${params.interval}'. Please configure real Razorpay plan IDs.`,
       );
     }
   } else if (pricePaise <= 0) {
@@ -1317,6 +1328,7 @@ export async function changeTenantPlan(
     ...(params.firstPaymentPaise ? { firstPaymentPaise: params.firstPaymentPaise } : {}),
     tenantId: params.tenantId,
     ...(razorpayPlanId ? { planId: razorpayPlanId } : {}),
+    ...(razorpayUsd ? { notes: { currency: "USD" } } : {}),
     ...(gateway === "cashfree" ? { amountPaise: pricePaise } : {}),
     ...(gateway === "paypal"
       ? {

@@ -931,9 +931,9 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return listBillingPlans(context.rt, staffUserId);
     }),
-    syncBillingPlans: os.integrations.syncBillingPlans.use(requireStaff("platform_owner")).handler(async ({ context }) => {
+    syncBillingPlans: os.integrations.syncBillingPlans.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
-      return syncBillingPlans(context.rt, staffUserId, context.meta);
+      return syncBillingPlans(context.rt, staffUserId, context.meta, undefined, input?.currency ? { currency: input.currency } : {});
     }),
     updateBillingSettings: os.integrations.updateBillingSettings.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);

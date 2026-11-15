@@ -107,6 +107,46 @@ describe("StripeProvider API calls (faked fetch)", () => {
     expect(form.get("metadata[tenant_id]")).toBe(ctx.tenantId);
   });
 
+  it("creates an embedded Checkout Session: ui_mode, return_url with the session placeholder, no cancel_url, client secret out", async () => {
+    const calls: Array<{ init: RequestInit }> = [];
+    const provider = new StripeProvider({
+      secretKey: SECRET,
+      uiMode: "embedded",
+      successUrl: "https://shop.example/api/storefront/checkout/return?provider=stripe&ot=tok",
+      cancelUrl: "https://shop.example/ignored",
+      idempotencySalt: "2",
+      fetchFn: (async (_url: string, init: RequestInit) => {
+        calls.push({ init });
+        return jsonResponse({ id: "cs_test_e1", status: "open", client_secret: "cs_test_e1_secret_x" });
+      }) as unknown as typeof fetch,
+    });
+    const res = await provider.createIntent(ctx, { id: "ord-e", number: "BS-1", currency: "USD", grandTotal: 2500, email: "a@b.co", phone: "1" });
+    expect(res.clientSecret).toBe("cs_test_e1_secret_x");
+    expect(res.providerOrderId).toBe("cs_test_e1");
+    const call = calls[0]!;
+    const form = new URLSearchParams(String(call.init.body));
+    expect(form.get("ui_mode")).toBe("embedded");
+    expect(form.get("return_url")).toBe("https://shop.example/api/storefront/checkout/return?provider=stripe&ot=tok&session_id={CHECKOUT_SESSION_ID}");
+    expect(form.has("cancel_url")).toBe(false);
+    expect(form.has("success_url")).toBe(false);
+    expect((call.init.headers as Record<string, string>)["Idempotency-Key"]).toBe("bsec-checkout-ord-e-emb-2");
+  });
+
+  it("an embedded session needs a return URL but not a cancel URL", async () => {
+    const noReturn = new StripeProvider({ secretKey: SECRET, uiMode: "embedded", cancelUrl: "https://x" });
+    await expect(noReturn.createIntent(ctx, { id: "o", number: "n", currency: "INR", grandTotal: 100, email: "", phone: "" })).rejects.toThrow(/return URL/);
+  });
+
+  it("retrieveSession exposes the client secret only while the session is open", async () => {
+    const make = (status: string) =>
+      new StripeProvider({
+        secretKey: SECRET,
+        fetchFn: (async () => jsonResponse({ status, client_secret: "cs_secret", payment_status: "unpaid" })) as unknown as typeof fetch,
+      });
+    expect((await make("open").retrieveSession("cs_1")).clientSecret).toBe("cs_secret");
+    expect((await make("expired").retrieveSession("cs_1")).clientSecret).toBeNull();
+  });
+
   it("refunds partially with a stable idempotency key", async () => {
     const calls: Array<{ init: RequestInit }> = [];
     const provider = new StripeProvider({

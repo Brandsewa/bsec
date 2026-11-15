@@ -977,6 +977,7 @@ export const storeRouter = os.router({
               return await saveStripeCredentials(context.rt, context.tenantCtx, {
                 secretKey: input.keySecret,
                 webhookSecret: input.webhookSecret,
+                publishableKey: input.keyId,
               });
             }
             if (input.provider === "paypal") {

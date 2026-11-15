@@ -154,6 +154,9 @@ describe("B3 subscribe and cancel", () => {
     fakeRazorpay();
     const res = await subscribeToPlan(rt, s.ctx, { planCode: "starter", interval: "monthly" });
     expect(res).toMatchObject({ checkoutUrl: "https://rzp.io/i/test", testMode: true });
+    // The admin app opens Razorpay's window with the public key id and the subscription id; the secret is never returned.
+    expect(res.razorpayCheckout).toMatchObject({ subscriptionId: expect.stringMatching(/^sub_/), keyId: expect.stringMatching(/^rzp_/) });
+    expect(JSON.stringify(res)).not.toMatch(/secret/i);
     expect(res.firstChargeAt).toBeTruthy();
 
     const call = calls.find((c) => c.url.endsWith("/v1/subscriptions"))!;

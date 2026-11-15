@@ -2342,7 +2342,7 @@ export const adminContract = {
       .input(
         z.object({
           provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
-          /** Razorpay key id (rzp_test_...) or Cashfree App ID; not used for Stripe. */
+          /** Razorpay key id (rzp_test_...), Cashfree App ID, PayPal Client ID, or the Stripe publishable key (pk_test_..., optional, needed for the embedded form). */
           keyId: z.string().min(6).max(100).optional(),
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
@@ -5170,8 +5170,10 @@ export const adminContract = {
       )
       .output(
         z.object({
-          /** Razorpay: a hosted page to open. */
+          /** A hosted page to open (PayPal, or Razorpay if its window cannot load). */
           checkoutUrl: z.string().nullable(),
+          /** Razorpay: what the admin app needs to open Razorpay's checkout window on the page (the key id is public). */
+          razorpayCheckout: z.object({ keyId: z.string(), subscriptionId: z.string() }).nullable(),
           /** Cashfree: a session the admin app opens with Cashfree's checkout script. */
           checkoutSession: z.object({ gateway: z.literal("cashfree"), sessionId: z.string(), mode: z.enum(["test", "live"]) }).nullable(),
           firstChargeAt: z.string().nullable(),
