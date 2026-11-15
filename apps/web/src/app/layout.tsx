@@ -7,7 +7,7 @@ import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { siteChrome, siteStatus } from "@/server/site-settings.ts";
-import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
+import { getCachedBrandSettings, getCachedConsentConfig, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
@@ -154,6 +154,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let requestPath = "/";
   let requestHost = "localhost";
   let pinError: string | null = null;
+  let consentConfig: Awaited<ReturnType<typeof getCachedConsentConfig>> = null;
 
   try {
     const h = await headers();
@@ -185,6 +186,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         // Fallback to null brand settings
       }
 
+      consentConfig = await getCachedConsentConfig(access.tenantId).catch(() => null);
       miniCartCopy = await getCachedDefaultPages(access.tenantId).then((d) => d.miniCart).catch(() => undefined);
 
       try {
@@ -256,6 +258,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
         <script src="/bsa.js" async />
+        {consentConfig ? (
+          <>
+            {/* The store's cookie banner (ADR-047). The JSON is escaped so merchant text can never close the tag. */}
+            <script id="bs-consent-cfg" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(consentConfig).replace(/</g, "\\u003c") }} />
+            <script src="/bsc.js" async />
+          </>
+        ) : null}
         {fontsHref ? (
           <>
             {/* Open the font connections while the stylesheet is still being fetched (it is render-blocking). */}

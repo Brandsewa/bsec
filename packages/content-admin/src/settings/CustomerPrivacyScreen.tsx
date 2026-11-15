@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { AlertTriangle, Download, Shield, Trash2, UserMinus } from "lucide-react";
-import { EmptyState, FormSkeleton, toast } from "@bs/ui";
+import { EmptyState, FormSkeleton, InfoTip, SimpleSelect, Switch, Textarea, toast } from "@bs/ui";
 import { Button } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Field } from "@bs/ui";
@@ -9,7 +9,8 @@ import { ConfirmDialog } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../settings-page.tsx";
 import { orpc } from "../host.ts";
 import { errorMessage } from "../errors.ts";
-import type { CookieInventoryItem, PrivacyRequestItem, PrivacySettings } from "@bs/contracts";
+import type { ConsentPosition, CookieInventoryItem, PrivacyRequestItem, PrivacySettings } from "@bs/contracts";
+import { DEFAULT_CONSENT_SETTINGS, GA4_ID, META_PIXEL_ID } from "@bs/contracts";
 
 const TITLE = "Customer Privacy";
 const DESCRIPTION = "Manage customer data privacy requests, contact points, statutory turnaround times, and cookie disclosure.";
@@ -73,7 +74,18 @@ function PrivacyForm({
     privacyContactEmail: data.privacyContactEmail ?? "",
     grievanceOfficerName: data.grievanceOfficerName ?? "",
     requestSlaDays: data.requestSlaDays,
+    consent: {
+      ...data.consent,
+      ga4MeasurementId: data.consent.integrations.ga4MeasurementId ?? "",
+      metaPixelId: data.consent.integrations.metaPixelId ?? "",
+    },
   });
+
+  const consent = form.consent;
+  const setConsent = (patch: Partial<typeof consent>) => setForm({ ...form, consent: { ...consent, ...patch } });
+  const ga4Bad = consent.ga4MeasurementId.trim() !== "" && !GA4_ID.test(consent.ga4MeasurementId.trim().toUpperCase());
+  const pixelBad = consent.metaPixelId.trim() !== "" && !META_PIXEL_ID.test(consent.metaPixelId.trim());
+  const hasIntegration = consent.ga4MeasurementId.trim() !== "" || consent.metaPixelId.trim() !== "";
 
   const [saved, setSaved] = useState(form);
   const dirty = JSON.stringify(form) !== JSON.stringify(saved);
@@ -90,6 +102,11 @@ function PrivacyForm({
           privacyContactEmail: updated.privacyContactEmail ?? "",
           grievanceOfficerName: updated.grievanceOfficerName ?? "",
           requestSlaDays: updated.requestSlaDays,
+          consent: {
+            ...updated.consent,
+            ga4MeasurementId: updated.consent.integrations.ga4MeasurementId ?? "",
+            metaPixelId: updated.consent.integrations.metaPixelId ?? "",
+          },
         };
         setForm(nextState);
         setSaved(nextState);
@@ -158,6 +175,20 @@ function PrivacyForm({
       privacyContactEmail: form.privacyContactEmail.trim() || null,
       grievanceOfficerName: form.grievanceOfficerName.trim() || null,
       requestSlaDays: Number(form.requestSlaDays),
+      consent: {
+        enabled: form.consent.enabled || hasIntegration,
+        position: form.consent.position,
+        title: form.consent.title.trim() || DEFAULT_CONSENT_SETTINGS.title,
+        message: form.consent.message.trim() || DEFAULT_CONSENT_SETTINGS.message,
+        acceptLabel: form.consent.acceptLabel.trim() || DEFAULT_CONSENT_SETTINGS.acceptLabel,
+        rejectLabel: form.consent.rejectLabel.trim() || DEFAULT_CONSENT_SETTINGS.rejectLabel,
+        customizeLabel: form.consent.customizeLabel.trim() || DEFAULT_CONSENT_SETTINGS.customizeLabel,
+        policyPath: form.consent.policyPath.trim(),
+        integrations: {
+          ga4MeasurementId: form.consent.ga4MeasurementId.trim().toUpperCase() || null,
+          metaPixelId: form.consent.metaPixelId.trim() || null,
+        },
+      },
       expectedVersion: data.version,
     });
   };
@@ -225,6 +256,77 @@ function PrivacyForm({
                 onChange={(e) => setForm({ ...form, requestSlaDays: Number(e.target.value) })}
               />
             </Field>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Cookie banner and tracking"
+          description="Ask visitors before any optional tracking runs. Your store's own sales and visitor reports never need this: they set no cookies."
+        >
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  Show a cookie banner
+                  <InfoTip>Visitors can accept, reject or choose. Their choice is remembered for 180 days and asked again if you change the wording or the tracking IDs.</InfoTip>
+                </p>
+                <p className="text-xs text-muted-foreground">{hasIntegration ? "Required while a tracking ID is set." : "Optional until you add a tracking ID."}</p>
+              </div>
+              <Switch id="consent-enabled" checked={consent.enabled || hasIntegration} disabled={hasIntegration} onCheckedChange={(v) => setConsent({ enabled: Boolean(v) })} aria-label="Show a cookie banner" />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="ga4MeasurementId" label="Google Analytics 4 ID" hint="Looks like G-ABC123XYZ. Loads only after the visitor accepts analytics." error={ga4Bad ? "Use the format G-XXXXXXXXXX" : undefined}>
+                <Input id="ga4MeasurementId" value={consent.ga4MeasurementId} onChange={(e) => setConsent({ ga4MeasurementId: e.target.value })} placeholder="G-ABC123XYZ" maxLength={20} />
+              </Field>
+              <Field id="metaPixelId" label="Meta Pixel ID" hint="The numeric Pixel ID. Loads only after the visitor accepts marketing." error={pixelBad ? "Use the numeric Pixel ID (8 to 20 digits)" : undefined}>
+                <Input id="metaPixelId" value={consent.metaPixelId} onChange={(e) => setConsent({ metaPixelId: e.target.value })} placeholder="1234567890123456" maxLength={20} inputMode="numeric" />
+              </Field>
+            </div>
+            {hasIntegration ? (
+              <p className="text-xs text-muted-foreground">
+                These tools set their own cookies and are run by Google or Meta, not by us. Mention them in your privacy policy. They receive page views only; shop events such as purchases are not sent yet.
+              </p>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="consentTitle" label="Banner title">
+                <Input id="consentTitle" value={consent.title} maxLength={80} onChange={(e) => setConsent({ title: e.target.value })} />
+              </Field>
+              <Field id="consentPosition" label="Position">
+                <SimpleSelect
+                  id="consentPosition"
+                  value={consent.position}
+                  onChange={(v) => setConsent({ position: v as ConsentPosition })}
+                  options={[
+                    { value: "bottom", label: "Bottom, full width" },
+                    { value: "bottom-left", label: "Bottom left" },
+                    { value: "bottom-right", label: "Bottom right" },
+                    { value: "center", label: "Center" },
+                  ]}
+                />
+              </Field>
+            </div>
+            <Field id="consentMessage" label="Message" hint="Plain text, up to 400 characters.">
+              <Textarea id="consentMessage" rows={3} value={consent.message} maxLength={400} onChange={(e) => setConsent({ message: e.target.value })} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field id="consentAccept" label="Accept button">
+                <Input id="consentAccept" value={consent.acceptLabel} maxLength={30} onChange={(e) => setConsent({ acceptLabel: e.target.value })} />
+              </Field>
+              <Field id="consentReject" label="Reject button">
+                <Input id="consentReject" value={consent.rejectLabel} maxLength={30} onChange={(e) => setConsent({ rejectLabel: e.target.value })} />
+              </Field>
+              <Field id="consentChoose" label="Choose button" hint="Shown when both tools are set.">
+                <Input id="consentChoose" value={consent.customizeLabel} maxLength={30} onChange={(e) => setConsent({ customizeLabel: e.target.value })} />
+              </Field>
+            </div>
+            <Field id="consentPolicyPath" label="Privacy policy link" hint="A path on your store, like /policies/privacy. Leave empty for no link.">
+              <Input id="consentPolicyPath" value={consent.policyPath} maxLength={120} onChange={(e) => setConsent({ policyPath: e.target.value })} placeholder="/policies/privacy" />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              To let visitors change their choice later, add a link to <span className="font-mono">#cookie-settings</span> in your footer or menu. Visitors sending a Global Privacy Control signal are treated as having rejected.
+            </p>
           </div>
         </SettingsCard>
       </form>

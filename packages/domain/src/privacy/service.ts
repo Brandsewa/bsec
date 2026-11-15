@@ -8,11 +8,18 @@ import { deleteAdminCustomer } from "../admin/customers.ts";
 import { setMarketingConsent } from "../customers/consent.ts";
 import { sendTransactionalEmail } from "../system/email.ts";
 import { checkRateLimit, RateLimitExceededError } from "../system/rate-limit.ts";
+import {
+  ConsentSettings,
+  hasConsentIntegrations,
+  normalizeConsentSettings,
+  type PublicConsentConfig,
+} from "@bs/contracts";
 
 export interface PrivacySettingsView {
   privacyContactEmail: string | null;
   grievanceOfficerName: string | null;
   requestSlaDays: number;
+  consent: ConsentSettings;
   version: number;
 }
 
@@ -20,6 +27,7 @@ export interface UpdatePrivacySettingsInput {
   privacyContactEmail?: string | null | undefined;
   grievanceOfficerName?: string | null | undefined;
   requestSlaDays?: number | undefined;
+  consent?: ConsentSettings | undefined;
   expectedVersion?: number | undefined;
 }
 
@@ -64,6 +72,12 @@ export const TEST_LOCKED_COOKIE_INVENTORY: CookieInventoryItem[] = [
     name: "bs_customer_session",
     purpose: "Cryptographic session credential maintaining customer authentication.",
     duration: "Session / 14 days",
+    category: "strictly_necessary",
+  },
+  {
+    name: "bs_consent",
+    purpose: "Remembers your cookie choices so the cookie banner is not shown on every visit.",
+    duration: "180 days",
     category: "strictly_necessary",
   },
   {
@@ -124,9 +138,44 @@ export async function getPrivacySettings(
       privacyContactEmail: row.privacyContactEmail,
       grievanceOfficerName: row.grievanceOfficerName,
       requestSlaDays: row.requestSlaDays,
+      consent: normalizeConsentSettings(row.consentSettings),
       version: row.version,
     };
   });
+}
+
+/**
+ * What the storefront banner script needs, or null when the store has no banner. No permission check: this is public by design
+ * (it is the text and ids the visitor's browser receives) and contains nothing private. Reads one row in a tenant transaction.
+ */
+export async function getStorefrontConsentConfig(rt: Runtime, tenantId: string): Promise<PublicConsentConfig | null> {
+  const row = await withTenant(rt._db.db, tenantId, async (tx) => {
+    const [r] = await tx
+      .select({ consentSettings: schema.privacySettings.consentSettings })
+      .from(schema.privacySettings)
+      .where(eq(schema.privacySettings.tenantId, tenantId))
+      .limit(1);
+    return r ?? null;
+  });
+  const c = normalizeConsentSettings(row?.consentSettings);
+  if (!c.enabled) return null;
+  const rev = createHash("sha256")
+    .update(JSON.stringify([c.title, c.message, c.integrations.ga4MeasurementId, c.integrations.metaPixelId]))
+    .digest("hex")
+    .slice(0, 8);
+  return {
+    v: 1,
+    rev,
+    position: c.position,
+    title: c.title,
+    message: c.message,
+    acceptLabel: c.acceptLabel,
+    rejectLabel: c.rejectLabel,
+    customizeLabel: c.customizeLabel,
+    policyPath: c.policyPath,
+    ga4: c.integrations.ga4MeasurementId,
+    pixel: c.integrations.metaPixelId,
+  };
 }
 
 /**
@@ -157,6 +206,17 @@ export async function updatePrivacySettings(
     const grievanceOfficerName =
       input.grievanceOfficerName !== undefined ? (input.grievanceOfficerName ? input.grievanceOfficerName.trim() : null) : current.grievanceOfficerName;
 
+    let consent = normalizeConsentSettings(current.consentSettings);
+    if (input.consent !== undefined) {
+      const parsed = ConsentSettings.safeParse(input.consent);
+      if (!parsed.success) throw new Error(`Bad Request: ${parsed.error.issues[0]?.message ?? "Invalid cookie banner settings"}`);
+      consent = parsed.data;
+    }
+    // Tracking ids may only exist while the banner is on, so nothing can load without the visitor being asked first.
+    if (hasConsentIntegrations(consent) && !consent.enabled) {
+      throw new Error("Bad Request: Turn the cookie banner on before adding a Google Analytics or Meta Pixel ID.");
+    }
+
     const nextVersion = current.version + 1;
     const now = new Date();
 
@@ -166,6 +226,7 @@ export async function updatePrivacySettings(
         privacyContactEmail,
         grievanceOfficerName,
         requestSlaDays: nextSlaDays,
+        consentSettings: consent,
         version: nextVersion,
         updatedAt: now,
       })
@@ -181,7 +242,7 @@ export async function updatePrivacySettings(
         targetId: current.id,
         diff: {
           before: current,
-          after: { privacyContactEmail, grievanceOfficerName, requestSlaDays: nextSlaDays, version: nextVersion },
+          after: { privacyContactEmail, grievanceOfficerName, requestSlaDays: nextSlaDays, consent, version: nextVersion },
         },
       });
     }
@@ -190,6 +251,7 @@ export async function updatePrivacySettings(
       privacyContactEmail,
       grievanceOfficerName,
       requestSlaDays: nextSlaDays,
+      consent,
       version: nextVersion,
     };
   });

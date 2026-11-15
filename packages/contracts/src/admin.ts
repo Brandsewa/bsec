@@ -5,6 +5,7 @@ import { z } from "zod";
 import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
 import { analyticsContract } from "./analytics.ts";
+import { ConsentSettings } from "./consent.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
@@ -2154,6 +2155,8 @@ export const PrivacySettings = z.object({
   privacyContactEmail: z.string().email().nullable(),
   grievanceOfficerName: z.string().nullable(),
   requestSlaDays: z.number().int().min(7).max(90),
+  /** Cookie banner and optional tracking integrations (ADR-047). */
+  consent: ConsentSettings,
   version: z.number().int(),
 });
 
@@ -2161,6 +2164,7 @@ export const UpdatePrivacySettingsInput = z.object({
   privacyContactEmail: z.string().email().nullable().optional(),
   grievanceOfficerName: z.string().max(120).nullable().optional(),
   requestSlaDays: z.number().int().min(7).max(90).optional(),
+  consent: ConsentSettings.optional(),
   expectedVersion: z.number().int().optional(),
 });
 

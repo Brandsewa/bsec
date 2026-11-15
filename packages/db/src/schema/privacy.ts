@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  jsonb,
   index,
   integer,
   text,
@@ -23,6 +24,8 @@ export const privacySettings = tenantTable(
     privacyContactEmail: citext("privacy_contact_email"),
     grievanceOfficerName: text("grievance_officer_name"),
     requestSlaDays: integer("request_sla_days").notNull().default(30),
+    /** Cookie banner wording and optional GA4 / Meta Pixel ids (ADR-047). null = defaults (banner off). Validated by `ConsentSettings`. */
+    consentSettings: jsonb("consent_settings"),
     version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

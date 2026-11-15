@@ -23,6 +23,12 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - `admin.analytics.overview` and `admin.analytics.report` (contracts in `packages/contracts/src/analytics.ts`, services in `packages/domain/src/analytics/reports.ts`), `analytics.read` enforced in the route and the domain service; both mapped in `isolation.int.test.ts`. 30 reports, including sales by market.
 - Admin: `/analytics` dashboard and `/analytics/reports/$reportId`, sidebar item "Analytics" (needs `analytics.read`), shared range controls (presets, comparison, currency), CSV export for staff with `exports.run`. Charts: `@bs/ui/charts` (Recharts, lazy loaded).
 
+## Slice 5: cookie banner and consent-gated integrations
+- Migration `0109_privacy_consent_settings` (`privacy_settings.consent_settings` jsonb, null = off). `ConsentSettings` in `packages/contracts/src/consent.ts`; `getPrivacySettings` and `updatePrivacySettings` carry it; `getStorefrontConsentConfig` feeds the storefront.
+- Admin: new card "Cookie banner and tracking" on `/settings/customer-privacy` (needs `privacy.manage`).
+- Storefront: `apps/web/public/bsc.js` and a JSON config script in the layout head, only when the banner is on. Choice stored in `bs_consent` (added to the test-locked necessary-cookie inventory).
+- Rules: a tracking id requires the banner to be on; ids match strict patterns; GPC counts as a rejection; withdrawing consent reloads the page; `#cookie-settings` links reopen the banner. GA4 and Meta get page views only.
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.
