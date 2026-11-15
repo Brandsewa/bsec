@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
 
-/** Raw events are kept 90 days; rollups (aggregate counts only) 26 months so "same period last year" always has data (ADR-046). */
+/** Raw events are kept 90 days; rollups (aggregate counts only) 26 months so "same period last year" always has data (ADR-047). */
 export const ANALYTICS_EVENT_RETENTION_DAYS = 90;
 export const ANALYTICS_ROLLUP_RETENTION_MONTHS = 26;
 

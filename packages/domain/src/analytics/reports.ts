@@ -12,7 +12,7 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 
 /**
- * Merchant analytics reports (docs/ANALYTICS-PLAN.md, ADR-046).
+ * Merchant analytics reports (docs/ANALYTICS-PLAN.md, ADR-047).
  *
  * Definitions, shared by every report:
  * - An order counts when it is not cancelled, on the store-local day it was placed (store timezone, never UTC or the browser's).

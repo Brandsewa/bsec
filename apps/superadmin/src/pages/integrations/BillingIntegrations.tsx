@@ -130,6 +130,17 @@ export function BillingIntegrations() {
     }
   };
 
+  // Region defaults and backups (docs/EMBEDDED-CHECKOUT-PLAN.md 5.2): small, reversible choices, so no confirm dialog.
+  const patch = async (input: Parameters<typeof client.integrations.updateBillingSettings>[0], message: string) => {
+    try {
+      await client.integrations.updateBillingSettings(input);
+      toast.success(message);
+      await refresh();
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
+  };
+
   const saveGrace = async () => {
     const days = Number(grace);
     if (!Number.isInteger(days) || days < 0 || days > 30) {
@@ -174,7 +185,7 @@ export function BillingIntegrations() {
 
       <PageHeader
         title="Platform billing"
-        description="How Brand Sewa charges merchants for their plan. Indian stores pay in INR through one national gateway; stores outside India pay in USD through PayPal. This is separate from each store's own payment gateway. Start in test mode."
+        description="How Brand Sewa charges merchants for their plan. Indian stores pay in INR (Razorpay first, Cashfree as backup); stores outside India pay in USD (PayPal first, Razorpay as backup). Each region has a primary and a backup you can switch. This is separate from each store's own payment gateway. Start in test mode."
       />
 
       {isLoading ? <MetricCardsSkeleton count={3} /> : null}
@@ -276,7 +287,21 @@ export function BillingIntegrations() {
                       onManage={() => void manage(g)}
                     />
                   ))}
-                  <p className="text-[11px] text-muted-foreground">To change the active gateway, switch the other one on.</p>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">Backup: {data.provider === "razorpay" ? "Cashfree" : "Razorpay"}</div>
+                      <p className="text-[11px] text-muted-foreground">
+                        If {GATEWAY_NAME[data.provider]} is off, has no keys, or cannot start a payment, the new subscription is created on {data.provider === "razorpay" ? "Cashfree" : "Razorpay"} instead.
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label="National backup gateway"
+                      checked={data.nationalBackupEnabled}
+                      disabled={!canEdit}
+                      onCheckedChange={(next) => void patch({ nationalBackupEnabled: next }, next ? "Backup gateway on" : "Backup gateway off")}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">To change the primary gateway, switch the other one on.</p>
                 </CardContent>
               </Card>
 
@@ -295,6 +320,41 @@ export function BillingIntegrations() {
                     onToggle={(next) => setConfirm({ gateway: "paypal", on: next })}
                     onManage={() => void manage("paypal")}
                   />
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">Razorpay (USD cards)</span>
+                        <StatusIcon ready={keysReady(data, "razorpay")} label="Razorpay" />
+                        {data.internationalProvider === "razorpay" ? <Badge>Primary</Badge> : null}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Recurring card billing in USD with the same Razorpay account. Razorpay must enable international payments for it; plans are synced on the Razorpay page.</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {data.internationalProvider === "razorpay" ? (
+                        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void patch({ internationalProvider: "paypal" }, "PayPal is now the international primary")}>
+                          Make PayPal primary
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => void patch({ internationalProvider: "razorpay" }, "Razorpay is now the international primary")}>
+                          Make primary
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">Backup: {data.internationalProvider === "razorpay" ? "PayPal" : "Razorpay"}</div>
+                      <p className="text-[11px] text-muted-foreground">
+                        If the primary is off, has no keys, or cannot start a payment, the new subscription is created on the other gateway. PayPal charges once; Razorpay renews by card.
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label="International backup gateway"
+                      checked={data.internationalBackupEnabled}
+                      disabled={!canEdit}
+                      onCheckedChange={(next) => void patch({ internationalBackupEnabled: next }, next ? "Backup gateway on" : "Backup gateway off")}
+                    />
+                  </div>
                   <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border p-3 opacity-70">
                     <div>
                       <div className="flex items-center gap-2">

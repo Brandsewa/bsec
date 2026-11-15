@@ -962,7 +962,7 @@ export async function startJobs(opts: {
     }
   });
 
-  // Merchant analytics (ADR-046): hourly traffic rollup for yesterday and today, plus raw-event and rollup retention
+  // Merchant analytics (ADR-047): hourly traffic rollup for yesterday and today, plus raw-event and rollup retention
   await boss.work(QUEUE_NAMES.ANALYTICS_MAINTENANCE, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
       try {

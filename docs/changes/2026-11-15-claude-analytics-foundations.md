@@ -1,4 +1,4 @@
-# Merchant analytics: plan, ADR-046, collector, rollups, 30 reports and the admin dashboard
+# Merchant analytics: plan, ADR-047, collector, rollups, 30 reports and the admin dashboard
 
 - **Date:** 2026-11-15
 - **Agent:** claude
@@ -11,14 +11,14 @@
 First slice of merchant analytics. There is now a plan and an ADR (first-party, cookieless, orders as the source of truth), the date range picker can take analytics presets with comparison and granularity helpers, and the storefront records cookieless pageviews into a new tenant table. No dashboard yet.
 
 ## What changed
-- `docs/ANALYTICS-PLAN.md` (reports by phase, architecture, slices with acceptance criteria) and `docs/adr/046-first-party-analytics.md`.
+- `docs/ANALYTICS-PLAN.md` (reports by phase, architecture, slices with acceptance criteria) and `docs/adr/047-first-party-analytics.md`.
 - `packages/ui`: `lib/date-presets.ts` (`ANALYTICS_PRESETS`, `comparisonRange`, `autoGranularity`); `DateRangePicker` gains optional `presets` and `today` props. Existing screens are unchanged.
-- `packages/db`: `analytics_events` tenant table (migration `0106_analytics_events`, forced RLS, CHECKs on type and device).
+- `packages/db`: `analytics_events` tenant table (migration `0107_analytics_events`, forced RLS, CHECKs on type and device).
 - `packages/domain/src/analytics/collect.ts`: `recordAnalyticsEvent` drops bots, Do Not Track and Global Privacy Control requests, unknown types and bad paths; HMAC visitor hash per tenant per UTC day; no raw IP stored.
 - `apps/web`: `POST /api/storefront/analytics/collect` (always 204, in-memory per-IP limiter, live stores only) and `public/bsa.js` (async script tag in the storefront layout head).
 
 ## Slices 2 to 4 (added later on the same branch)
-- Migration `0107_analytics_traffic_daily`; queue `analytics.maintenance` (hourly :20): traffic rollup for yesterday and today, 90-day raw retention, 26-month rollup retention.
+- Migration `0108_analytics_traffic_daily`; queue `analytics.maintenance` (hourly :20): traffic rollup for yesterday and today, 90-day raw retention, 26-month rollup retention.
 - `add_to_cart` recorded server-side from `cart/items/route.ts`.
 - `admin.analytics.overview` and `admin.analytics.report` (contracts in `packages/contracts/src/analytics.ts`, services in `packages/domain/src/analytics/reports.ts`), `analytics.read` enforced in the route and the domain service; both mapped in `isolation.int.test.ts`. 30 reports, including sales by market.
 - Admin: `/analytics` dashboard and `/analytics/reports/$reportId`, sidebar item "Analytics" (needs `analytics.read`), shared range controls (presets, comparison, currency), CSV export for staff with `exports.run`. Charts: `@bs/ui/charts` (Recharts, lazy loaded).

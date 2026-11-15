@@ -1,6 +1,6 @@
 # Merchant analytics plan
 
-Owner decisions 2026-11-15: build first-party, start with the essentials, leave room to grow, charts with shadcn/Recharts, every report filterable by date with comparison, cookieless collector now, a merchant-configurable consent popup later. Decision record: [ADR-046](adr/046-first-party-analytics.md). Reference: Shopify's Reports categories (Acquisition, Behavior, Customers, Sales, Orders, Inventory).
+Owner decisions 2026-11-15: build first-party, start with the essentials, leave room to grow, charts with shadcn/Recharts, every report filterable by date with comparison, cookieless collector now, a merchant-configurable consent popup later. Decision record: [ADR-047](adr/047-first-party-analytics.md). Reference: Shopify's Reports categories (Acquisition, Behavior, Customers, Sales, Orders, Inventory).
 
 ## Legend
 **N** = computed from our tables (exact). **E** = needs the first-party event collector. **G** = possible with Google Analytics 4 (optional later add-on, consent-gated, viewed in Google, not in our dashboard). **x** = blocked or not applicable.

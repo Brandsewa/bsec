@@ -3,7 +3,7 @@ import { date, index, integer, text, timestamp, unique, uuid } from "drizzle-orm
 import { tenantTable } from "../tenant-table.ts";
 
 /**
- * First-party storefront traffic events (ADR-046, docs/ANALYTICS-PLAN.md).
+ * First-party storefront traffic events (ADR-047, docs/ANALYTICS-PLAN.md).
  *
  * Cookieless: no identifier is stored on the shopper's device. `visitor_hash` is an HMAC of tenant + IP + user agent keyed by a
  * secret and the UTC day, so it cannot be reversed, cannot be linked across days and never crosses stores. Raw IPs are not stored.
@@ -37,7 +37,7 @@ export const analyticsEvents = tenantTable(
 );
 
 /**
- * Daily traffic rollup (ADR-046). Aggregate counts only, no visitor hash, kept at least 25 months so year-over-year works.
+ * Daily traffic rollup (ADR-047). Aggregate counts only, no visitor hash, kept at least 25 months so year-over-year works.
  * One row per store day (in the store timezone), dimension and key. Dimensions: total (key ""), referrer, source (utm_source),
  * country, device, landing (first path of the visit). Rebuilt for today and yesterday every hour by `analytics.maintenance`.
  */

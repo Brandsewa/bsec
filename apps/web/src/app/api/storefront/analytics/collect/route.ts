@@ -23,7 +23,7 @@ function edgeCountry(h: Headers): string | null {
 }
 
 /**
- * Cookieless storefront traffic collector (ADR-046). Always answers 204 so the beacon never retries or shows an error;
+ * Cookieless storefront traffic collector (ADR-047). Always answers 204 so the beacon never retries or shows an error;
  * what is ignored (bots, Do Not Track, bad input, closed stores) is decided in the domain service.
  */
 export async function POST(req: Request) {

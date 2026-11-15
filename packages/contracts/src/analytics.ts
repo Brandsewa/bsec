@@ -2,7 +2,7 @@ import { oc } from "@orpc/contract";
 import { z } from "zod";
 
 /**
- * Merchant analytics contracts (docs/ANALYTICS-PLAN.md, ADR-046). Mounted under admin.analytics.*
+ * Merchant analytics contracts (docs/ANALYTICS-PLAN.md, ADR-047). Mounted under admin.analytics.*
  * Money is always in minor units (paise) of the report's currency; amounts are never summed across currencies.
  */
 

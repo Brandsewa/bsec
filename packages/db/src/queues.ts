@@ -35,7 +35,7 @@ export const QUEUES = [
   // Finance queues (docs/FINANCE-PLAN.md §3.5)
   { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
-  // Merchant analytics (ADR-046): hourly traffic rollup and raw-event retention
+  // Merchant analytics (ADR-047): hourly traffic rollup and raw-event retention
   { name: "analytics.maintenance", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // Media library queues (MEDIA-LIBRARY-PLAN §8, Phase 4 S2/S4)
   { name: "media.purge", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },

@@ -1,4 +1,4 @@
-# ADR-046: First-party merchant analytics, cookieless collector, orders as the source of truth
+# ADR-047: First-party merchant analytics, cookieless collector, orders as the source of truth
 
 - **Status:** Accepted
 - **Date:** 2026-11-15

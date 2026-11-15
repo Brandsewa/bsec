@@ -149,6 +149,23 @@ describe("platform payment providers (real DB)", () => {
     expect(JSON.stringify(audit)).not.toContain(SK_TEST);
   });
 
+  it("stores an optional Stripe publishable key encrypted, in the same mode as the secret key, and drops a stale one", async () => {
+    const PK_TEST = "pk_test_PublishableKey1234567890";
+    await expect(saveStripeCredentials(rtWeb, ctxA, { secretKey: SK_TEST, webhookSecret: WHSEC, publishableKey: "nope" })).rejects.toThrow(/pk_test/);
+    await expect(saveStripeCredentials(rtWeb, ctxA, { secretKey: SK_TEST, webhookSecret: WHSEC, publishableKey: "pk_live_PublishableKey1234567890" })).rejects.toThrow(/both be test keys/i);
+
+    await saveStripeCredentials(rtWeb, ctxA, { secretKey: SK_TEST, webhookSecret: WHSEC, publishableKey: PK_TEST });
+    const names = async () =>
+      (await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.tenantSecrets).where(eq(schema.tenantSecrets.provider, "stripe")))).map((r) => r.keyName).sort();
+    expect(await names()).toEqual(["key_id", "key_secret", "webhook_secret"]);
+    const rows = await withTenant(rtWeb._db.db, ctxA.tenantId, (tx) => tx.select().from(schema.tenantSecrets).where(eq(schema.tenantSecrets.provider, "stripe")));
+    for (const r of rows) expect(r.ciphertext).not.toContain(PK_TEST);
+
+    // Saving a new secret key without a publishable key must not keep the old publishable key.
+    await saveStripeCredentials(rtWeb, ctxA, { secretKey: SK_TEST, webhookSecret: WHSEC });
+    expect(await names()).toEqual(["key_secret", "webhook_secret"]);
+  });
+
   it("activation needs a passing connection test and the webhook secret; a failing test keeps it inactive", async () => {
     await expect(setPaymentProviderActive(rtWeb, ctxA, "stripe", true)).rejects.toThrow(/Test connection/i);
 

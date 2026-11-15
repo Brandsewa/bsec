@@ -1,4 +1,4 @@
--- Merchant analytics, slice 1: first-party traffic events (ADR-046, docs/ANALYTICS-PLAN.md). Expand-only: a new tenant table.
+-- Merchant analytics, slice 1: first-party traffic events (ADR-047, docs/ANALYTICS-PLAN.md). Expand-only: a new tenant table.
 CREATE TABLE "analytics_events" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"tenant_id" uuid NOT NULL,

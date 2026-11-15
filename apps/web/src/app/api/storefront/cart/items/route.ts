@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       properties: parsed.data.properties,
     });
 
-    // Funnel event recorded on the server (ADR-046): no client JavaScript, and it never delays or fails the add to cart.
+    // Funnel event recorded on the server (ADR-047): no client JavaScript, and it never delays or fails the add to cart.
     const analyticsSecret = process.env.BETTER_AUTH_SECRET;
     if (analyticsSecret && (access.mode ?? "live") === "live") {
       let path = "/";

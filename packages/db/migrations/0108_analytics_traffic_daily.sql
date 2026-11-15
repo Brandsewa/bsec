@@ -1,4 +1,4 @@
--- Merchant analytics, slice 2: daily traffic rollup (ADR-046). Expand-only: a new tenant table. Aggregate counts only.
+-- Merchant analytics, slice 2: daily traffic rollup (ADR-047). Expand-only: a new tenant table. Aggregate counts only.
 CREATE TABLE "analytics_traffic_daily" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"tenant_id" uuid NOT NULL,
