@@ -57,8 +57,10 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   // A store outside India is billed in USD through PayPal (the server decides; this page only follows it).
   const isPayPal = billing?.provider === "paypal";
   const currency = billing?.currency ?? "INR";
+  // Stores outside India are billed in USD, by PayPal or by Razorpay (cards): the price follows the currency, not the gateway.
+  const isUsd = currency === "USD";
   const providerName = isPayPal ? "PayPal" : isCashfree ? "Cashfree" : "Razorpay";
-  const payMethod = isPayPal ? "PayPal" : isCashfree ? "UPI AutoPay or card" : "card or UPI";
+  const payMethod = isPayPal ? "PayPal" : isCashfree ? "UPI AutoPay or card" : isUsd ? "card" : "card or UPI";
   const needsPhone = isCashfree && !billing?.phoneOnFile;
   // The payment failed when PayPal declined it after the payer came back: the subscription turns past due.
   const failed = paypalReturn === "approved" && !retrying && billingQuery.data?.plan?.status === "past_due";
@@ -67,7 +69,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
   const coupon = billing?.firstPaymentCoupon;
   // Same fallback as the server (changeTenantPlan): a plan with no USD price is charged at its rupee price / 80.
   const price = (p: (typeof plans)[number]) => {
-    if (!isPayPal) return billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise;
+    if (!isUsd) return billed === "yearly" ? p.priceYearlyPaise : p.priceMonthlyPaise;
     return billed === "yearly" ? (p.priceYearlyUsdCents ?? Math.round(p.priceYearlyPaise / 80)) : (p.priceMonthlyUsdCents ?? Math.round(p.priceMonthlyPaise / 80));
   };
   const money = (minor: number) => formatMoney(minor, currency);
@@ -197,7 +199,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
                 const selected = p.code === chosenPlan;
                 const list = price(p);
                 // A percent-off coupon discounts the first payment only; PayPal charges the list price.
-                const off = !isPayPal && !freeEnds && coupon && (!coupon.planCode || coupon.planCode === p.code) ? Math.round((list * (100 - coupon.percentOff)) / 100) : 0;
+                const off = !isUsd && !freeEnds && coupon && (!coupon.planCode || coupon.planCode === p.code) ? Math.round((list * (100 - coupon.percentOff)) / 100) : 0;
                 const busy = subscribe.isPending && selected;
                 return (
                   <div key={p.code} className={cn("flex flex-col rounded-xl border bg-card p-5", selected ? "border-foreground ring-1 ring-foreground" : "border-border")}>
@@ -229,7 +231,7 @@ export function ActivateStore({ storeName, onSignOut }: { storeName: string; onS
 
             {freeEnds && !isPayPal ? (
               <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-foreground">
-                To open your store we set up automatic payment through {payMethod}; about {money(100)} is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged the plan price every {perUnit} automatically, and you can stop it any time before then.
+                To open your store we set up automatic payment through {payMethod}; about {isUsd ? "a small amount" : money(100)} is taken to verify it and is refunded. Your coupon covers the time until {freeEnds}, so nothing else is charged now. After that you are charged the plan price every {perUnit} automatically, and you can stop it any time before then.
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
