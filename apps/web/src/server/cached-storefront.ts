@@ -22,6 +22,7 @@ import {
   getStorefrontPageByPath,
   getBrandSettings,
   getStorefrontBrandAssets,
+  getStorefrontOfferExtras,
   getStorefrontThemePage,
   getStorefrontThemeTokens,
   THEME_SYSTEM_PAGES,
@@ -300,6 +301,18 @@ export async function getCachedBrandAssets(tenantId: string) {
   // Logo kept only in the theme header or footer: use it so the page head and the Organization schema still have one.
   const [header, footer] = await Promise.all([getCachedThemePage(tenantId, "header").catch(() => null), getCachedThemePage(tenantId, "footer").catch(() => null)]);
   return withThemeLogoFallback(assets, themeChromeIdentity(header, footer).logoUrl);
+}
+
+/**
+ * Return policy, shipping options and newest reviews for one product's structured data. Reviews refresh with the product tag;
+ * return and shipping settings have no cache tag, so the entry also expires on its own within the hour.
+ */
+export async function getCachedOfferExtras(tenantId: string, productId: string, market: { id: string; isBase: boolean } | null) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product", productId));
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  cacheLife({ stale: 30, revalidate: 300, expire: 3600 });
+  return getStorefrontOfferExtras(server().rt, tenantId, { productId, market: market ?? undefined });
 }
 
 /** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */

@@ -21,6 +21,7 @@ This document defines the deployment configuration and required environment vari
 - `COOKIE_DOMAIN` (optional): cookie domain shared by the API and admin hosts. Default: `.<host of BETTER_AUTH_URL>` on https.
 
 Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admin sign-in answers 503 ("not configured").
+- `INDEXNOW_ENABLED` (worker, web; optional, off by default): set to `true` in production only. The worker then tells Bing and other IndexNow search engines (every 15 minutes) which pages of each live, indexable store changed, and each store serves its own key file at `/<key>.txt` (web). The key is derived from `TENANT_SECRETS_KEY` and the tenant id, so nothing is stored. Leave it unset on staging and local stacks so they never contact anyone. `INDEXNOW_ENDPOINT` optionally overrides `https://api.indexnow.org/IndexNow`.
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Master symmetric encryption key (32 bytes or 64 hex characters) used by `@bs/payments` and `@bs/shipping` (`encryptSecret`/`decryptSecret`) to secure payment gateway secrets and third-party credentials stored in `tenant_secrets`. (Fallback alias: `ENCRYPTION_KEY`).
 
 ### Platform (`bsec-platform`)
@@ -43,6 +44,7 @@ Without `BETTER_AUTH_URL` / `BETTER_AUTH_SECRET` the site keeps serving but admi
 - `DATABASE_URL_SAAS`: as for web. Optional; without it the hourly trial-expiry sweep is skipped (a warning is logged).
 - `APP_ENV`: `production` | `staging` | `development`.
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`: **Same values as on web.** The worker stores images downloaded by the product import; without the two keys every imported image fails with "Image storage is not set up yet".
+- `INDEXNOW_ENABLED`, `TENANT_SECRETS_KEY`: **Same values as on web.** Both services must agree, because the worker sends each store's IndexNow key and web serves it (the key is derived from the secret and the tenant id). With `INDEXNOW_ENABLED` unset the `seo.indexnow_sweep` job does nothing.
 - `PORT`: `4100`.
 - `TENANT_SECRETS_KEY`: **Set before saving any payment/shipping/email credentials.** The app boots and serves without it (a warning is logged), but storing or reading tenant credentials fails until it is set. Used by background workers (e.g. transactional email dispatcher, payment webhooks, shipping background jobs) to decrypt tenant and platform credentials (e.g. Razorpay, ZeptoMail SMTP). (Fallback alias: `ENCRYPTION_KEY`). **It must be the same value as on the web service**: the worker also decrypts the saved image-storage keys to store images downloaded by the product import, and without it those images fail with "cannot read its saved credentials".
 

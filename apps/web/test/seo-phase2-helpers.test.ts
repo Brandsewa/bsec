@@ -51,7 +51,7 @@ describe("themeChromeIdentity", () => {
 });
 
 describe("withThemeLogoFallback", () => {
-  const none = { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, shareImage: null };
+  const none = { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, faviconSizes: null, appleTouchIconSizes: null, shareImage: null };
   it("fills the logo and share image from the theme logo when Brand settings have none, never a favicon", () => {
     expect(withThemeLogoFallback(none, "https://media.x/logo.png")).toEqual({ ...none, logoUrl: "https://media.x/logo.png", shareImage: { url: "https://media.x/logo.png" } });
   });

@@ -708,6 +708,13 @@
       "when": 1794720600000,
       "tag": "0106_billing_region_gateways",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794740193825,
+      "tag": "0107_seo_indexnow_watermark",
+      "breakpoints": true
     }
   ]
 }

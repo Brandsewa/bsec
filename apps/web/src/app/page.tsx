@@ -10,6 +10,7 @@ import {
   getStoreSettings,
   getStorefrontSeoSettings,
   buildHomeSeoMetadata,
+  homeLanguageAlternates,
   tenantTag,
 } from "@bs/domain";
 import { renderBlockDocument, type BlockData } from "@bs/blocks";
@@ -77,7 +78,7 @@ export async function generateMetadata(): Promise<Metadata> {
         robots: seoMeta.robots,
         openGraph: { ...seoMeta.openGraph, type: "website" },
         twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
-        alternates: seoMeta.alternates,
+        alternates: { ...seoMeta.alternates, ...(marketCtx?.markets && homeLanguageAlternates(marketCtx.markets, host) ? { languages: homeLanguageAlternates(marketCtx.markets, host) } : {}) },
       },
       assets?.shareImage,
     );
