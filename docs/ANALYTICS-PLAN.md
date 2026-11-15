@@ -57,6 +57,24 @@ Delivery and carrier reports (courier not live; shipping integrations are out of
 
 **Owner decisions still open:** none blocking; the 90-day raw retention and sales by market were decided on 2026-11-15.
 
+## Go-live checklist and parked work (2026-11-15)
+**Parked by the owner on 2026-11-15** while the Google Analytics 4 and Meta accounts are connected and live data comes in. Everything below is optional or a check; nothing is half-built.
+
+**When connecting the accounts** (Settings, Customer privacy):
+1. Switch the cookie banner on and enter the GA4 measurement ID and the Meta Pixel ID. Add a `#cookie-settings` link to the footer or menu. Mention Google and Meta in the store's privacy policy.
+2. **Meta:** in Events Manager generate a Conversions API access token and paste it under Server-side events. Enter the Test events code in the settings while testing. Place a test cash-on-delivery order after accepting the banner and confirm Purchase, AddToCart and InitiateCheckout appear under Test events, and that the browser and server copies show as deduplicated. Then clear the test code. Also confirm the Graph API version in `META_CAPI_VERSION` (`packages/domain/src/analytics/conversions.ts`) is still current.
+3. **GA4:** create a Measurement Protocol API secret (Admin, Data streams, your stream) and paste it. Use DebugView to confirm `view_item`, `add_to_cart`, `begin_checkout` and `purchase`, and that a purchase is counted once. Server-side GA4 needs the visitor's `_ga` cookie; without it GA4 is skipped for that order.
+4. Watch the "last 7 days sent, failed, waiting" line on the settings card; a failed count means a rejected token or ID (the reason is stored on the order's tracking row).
+
+**Before merging PR #267:** visual checks at phone widths and in dark mode (dashboard, report pages, banner, settings cards); the date picker popover and CSV export by hand; the 15-second refresh of "Visitors right now"; CI and e2e; review.
+
+**Parked features, in the order I would build them:**
+1. Month-end inventory value snapshot (a snapshot table and a monthly job; "Inventory value now" exists).
+2. Profit by single order; an RFM customer list (lists individuals, so needs a permission decision).
+3. Ad integrations: server-side Meta `ViewContent`, Meta `external_id`, GA4 server-side add to cart and begin checkout (only if the browser stops sending them for the same visitor), a per-order delivery log in the admin, per-region banner rules.
+4. Multi-day attribution: needs a first-party cookie and consent, so an owner decision first (today attribution is same-day and cookieless).
+5. Merchant-event date presets (Black Friday, Cyber Monday) and a comparison and currency selector on report pages.
+
 ## Risks and open questions
 - Write volume: one row per pageview. If it grows, batch beacons client-side or buffer in the worker; do not move to a second database before measuring.
 - Visitor counts undercount by design (Do Not Track, bots, ad blockers). The UI says "measured visitors".
