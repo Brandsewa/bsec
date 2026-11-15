@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-- claude · `fix/security-alerts-2026-11-15` · close the open Dependabot alerts (hono 4.13.16, @hono/node-server 2.1.6, shadcn CLI to dev dependencies) and add the platform audit plan `docs/PLATFORM-AUDIT-PLAN.md`; change record `docs/changes/2026-11-15-claude-security-alerts-and-audit-plan.md` · 2026-11-15
+- claude · `test/platform-audit-phase-1-2` · platform audit phases 1 and 2 (tenant isolation, auth, checkout, payments): findings in `docs/audit/2026-11-A1..A4-*.md`, probe tests, `scripts/audit-*`; stacked on `fix/security-alerts-2026-11-15`; change record `docs/changes/2026-11-15-claude-platform-audit-phase-1-2.md` · 2026-11-15
 - claude · `feat/seo-geo-aeo` · SEO/GEO/AEO audit of storefronts (ricwell.com) and fixes: product schema price units, home metadata, robots and AI crawler defaults, llms.txt, policy pages; plan `docs/SEO-GEO-AEO-PLAN.md`, change record `docs/changes/2026-11-15-claude-seo-geo-aeo-audit.md` · 2026-11-15
 - claude · `feat/seo-phase2` · SEO Phase 2 slice: Organization schema with logo and contact, default og:image and favicon, one H1 on home and collections, blog title fix; plan `docs/SEO-GEO-AEO-PLAN.md`, change record `docs/changes/2026-11-15-claude-seo-phase2.md` · 2026-11-15
 - claude · `feat/stripe-payment-element` · Stripe card fields inline in the checkout Payment Method card (Payment Element, ADR-048) replacing the Embedded Checkout panel; plan in this change record `docs/changes/2026-11-15-claude-stripe-payment-element.md` · 2026-11-15
