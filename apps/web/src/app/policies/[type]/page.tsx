@@ -12,6 +12,8 @@ import {
   type PolicyContent,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { getCachedBrandAssets } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
 import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 
 export const ALLOWED_POLICY_TYPES = ["privacy", "terms", "refund", "shipping", "legal_notice"] as const;
@@ -137,14 +139,19 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
     const url = `https://${host}/policies/${type}`;
     const title = formatTitle(seoSettings?.titleTemplate, name, storeName);
     const description = `${name} of ${storeName}.`;
-    return {
-      title,
-      description,
-      // The platform's stock text is the same on every store, so it is kept out of search results until the merchant publishes their own.
-      robots: published ? { index: true, follow: true } : { index: false, follow: true },
-      alternates: { canonical: url },
-      openGraph: { title, description, url, siteName: storeName },
-    };
+    const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+    return withShareImage(
+      {
+        title,
+        description,
+        // The platform's stock text is the same on every store, so it is kept out of search results until the merchant publishes their own.
+        robots: published ? { index: true, follow: true } : { index: false, follow: true },
+        alternates: { canonical: url },
+        openGraph: { title, description, url, siteName: storeName },
+        twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title, description },
+      },
+      assets?.shareImage,
+    );
   } catch {
     return fallbackMeta;
   }

@@ -95,6 +95,13 @@ for (const url of picks) {
   const noAlt = imgs.filter((i) => !/ alt="[^"]/.test(i) && !/aria-hidden/.test(i)).length;
   if (noAlt > 0) warn(path, `${noAlt} of ${imgs.length} images have no alt text`);
   if (!/<meta property="og:title"/.test(html)) warn(path, "no Open Graph tags");
+  else if (!/<meta property="og:image"/.test(html)) warn(path, "no og:image (shared links and AI cards show no picture)");
+  if (path === "/") {
+    if (!/<link rel="(shortcut )?icon"/.test(html)) warn(path, "no favicon link");
+    const org = jsonLd(html).find((x) => x["@type"] === "Organization");
+    if (!org) fail(path, "home page without Organization schema");
+    else if (!org.logo) warn(path, "Organization schema has no logo");
+  }
 
   const ld = jsonLd(html);
   if (ld.some((x) => x.__invalid)) fail(path, "invalid JSON-LD");

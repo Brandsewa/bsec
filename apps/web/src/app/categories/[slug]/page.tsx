@@ -16,7 +16,8 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontCategory, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontCategory, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
 
@@ -75,13 +76,18 @@ export async function generateMetadata({ params, searchParams }: CategoryPagePro
           prefix: marketCtx?.prefix,
         });
 
-        return {
-          title: seoMeta.title,
-          description: seoMeta.description,
-          robots: seoMeta.robots,
-          openGraph: seoMeta.openGraph,
-          alternates: seoMeta.alternates,
-        };
+        const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+        return withShareImage(
+          {
+            title: seoMeta.title,
+            description: seoMeta.description,
+            robots: seoMeta.robots,
+            openGraph: seoMeta.openGraph,
+            twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+            alternates: seoMeta.alternates,
+          },
+          assets?.shareImage,
+        );
       }
     }
   } catch {

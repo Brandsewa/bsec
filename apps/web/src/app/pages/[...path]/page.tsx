@@ -13,7 +13,8 @@ import {
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
@@ -67,27 +68,32 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
           }
         }
 
-        return {
-          title,
-          description,
-          alternates: {
-            canonical: canonicalUrl,
-          },
-          openGraph: {
+        // A page with no picture of its own shows the store's default share image.
+        const assets = imageUrl ? null : await getCachedBrandAssets(access.tenantId).catch(() => null);
+        return withShareImage(
+          {
             title,
             description,
-            url: canonicalUrl,
-            images: imageUrl ? [{ url: imageUrl, alt: title }] : undefined,
+            alternates: {
+              canonical: canonicalUrl,
+            },
+            openGraph: {
+              title,
+              description,
+              url: canonicalUrl,
+              images: imageUrl ? [{ url: imageUrl, alt: title }] : undefined,
+            },
+            twitter: imageUrl
+              ? {
+                  card: "summary_large_image",
+                  title,
+                  description,
+                  images: [imageUrl],
+                }
+              : { card: assets?.shareImage ? "summary_large_image" : "summary", title, description },
           },
-          twitter: imageUrl
-            ? {
-                card: "summary_large_image",
-                title,
-                description,
-                images: [imageUrl],
-              }
-            : undefined,
-        };
+          assets?.shareImage,
+        );
       }
     }
   } catch {
