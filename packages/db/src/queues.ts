@@ -50,6 +50,8 @@ export const QUEUES = [
   { name: "blog.publish_due", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // Custom domain checks
   { name: "domains.sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // SEO: tells search engines about changed pages (IndexNow), docs/SEO-GEO-AEO-PLAN.md Phase 2
+  { name: "seo.indexnow_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 30 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -94,6 +96,7 @@ export const QUEUE_NAMES = {
   MEDIA_HASH: "media.hash",
   MEDIA_BACKFILL_HASHES: "media.backfill_hashes",
   DOMAINS_SWEEP: "domains.sweep",
+  SEO_INDEXNOW_SWEEP: "seo.indexnow_sweep",
   NOTIFICATION_DISPATCH: "notification.dispatch",
   NOTIFICATION_RETENTION_SWEEP: "notification.retention_sweep",
 } as const;

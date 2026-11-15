@@ -9,6 +9,8 @@ import { syncMediaUsages } from "../media-services.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
 import { toMajorUnits } from "@bs/contracts/money";
 import { publicMediaUrl } from "../media/storage.ts";
+import { buildHreflangAlternates, marketHreflangs, type HreflangAlternate } from "./seo-markets.ts";
+import { buildMerchantReturnPolicyJsonLd, buildReviewsJsonLd, buildShippingDetailsJsonLd, type StorefrontOfferExtras } from "./seo-offers.ts";
 import { loadStorefrontMarkets } from "../markets/lookup.ts";
 import { withMarketScope } from "../markets/scope.ts";
 import {
@@ -327,7 +329,7 @@ export function generateProductJsonLd(
   product: StorefrontProductDetail,
   storeUrl: string,
   currency = "INR",
-  opts: { storeName?: string | undefined; urlPrefix?: string | null | undefined } = {},
+  opts: { storeName?: string | undefined; urlPrefix?: string | null | undefined; extras?: StorefrontOfferExtras | undefined } = {},
 ): ProductJsonLd {
   const baseUrl = storeUrl.replace(/\/$/, "");
   const pfx = opts.urlPrefix ? (opts.urlPrefix.startsWith("/") ? opts.urlPrefix : `/${opts.urlPrefix}`) : "";
@@ -339,6 +341,7 @@ export function generateProductJsonLd(
 
   // Variant prices are stored in minor units (paise, cents); schema.org and Google want the amount a shopper sees.
   // A price-on-request product has no price to publish, so it carries no offers at all.
+  const returnPolicy = buildMerchantReturnPolicyJsonLd(opts.extras?.returnPolicy);
   const offers: ProductOfferJsonLd[] = product.priceOnRequest
     ? []
     : (product.variants ?? []).map((v) => {
@@ -362,6 +365,10 @@ export function generateProductJsonLd(
         // GTIN is only valid as 8, 12, 13 or 14 digits; anything else would make the item invalid in Merchant Center.
         if (v.barcode && /^(\d{8}|\d{12,14})$/.test(v.barcode.trim())) offer["gtin"] = v.barcode.trim();
         if (opts.storeName) offer["seller"] = { "@type": "Organization", name: opts.storeName };
+        // Merchant listing details, from the store's own settings (seo-offers.ts). Nothing is added for what is not configured.
+        if (returnPolicy) offer["hasMerchantReturnPolicy"] = returnPolicy;
+        const shippingDetails = buildShippingDetailsJsonLd(opts.extras?.shipping, { subtotalPaise: v.price, weightGrams: v.weightGrams, currency });
+        if (shippingDetails.length > 0) offer["shippingDetails"] = shippingDetails.length === 1 ? shippingDetails[0] : shippingDetails;
         return offer;
       });
 
@@ -395,6 +402,9 @@ export function generateProductJsonLd(
       ratingValue: ratingAvg,
       reviewCount: ratingCount,
     };
+    // Individual reviews only alongside a real rating, and only the newest few that the page itself shows.
+    const reviews = buildReviewsJsonLd(opts.extras?.reviews);
+    if (reviews.length > 0) result["review"] = reviews;
   }
 
   return result;
@@ -654,6 +664,9 @@ export interface StorefrontBrandAssets {
   logoUrl: string | null;
   faviconUrl: string | null;
   appleTouchIconUrl: string | null;
+  /** "32x32" style sizes of the icons, when the file's dimensions are known (web manifest). */
+  faviconSizes: string | null;
+  appleTouchIconSizes: string | null;
   /** Image used for og:image and twitter:image on pages that have none of their own. */
   shareImage: StorefrontShareImage | null;
 }
@@ -682,7 +695,7 @@ export async function getStorefrontBrandAssets(rt: Runtime, tenantId: string): P
       .limit(1);
 
     const ids = [brand?.logo, brand?.favicon, brand?.apple, brand?.social, seo?.og].filter((v): v is string => Boolean(v));
-    if (ids.length === 0) return { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, shareImage: null };
+    if (ids.length === 0) return { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, faviconSizes: null, appleTouchIconSizes: null, shareImage: null };
     const rows = await tx
       .select({ id: schema.media.id, storageKey: schema.media.storageKey, width: schema.media.width, height: schema.media.height, alt: schema.media.alt })
       .from(schema.media)
@@ -698,10 +711,16 @@ export async function getStorefrontBrandAssets(rt: Runtime, tenantId: string): P
       if (!row || !url) return null;
       return { url, ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(row.alt?.trim() ? { alt: row.alt.trim() } : {}) };
     };
+    const sizesOf = (id: string | null | undefined): string | null => {
+      const row = id ? byId.get(id) : undefined;
+      return row?.width && row?.height ? `${row.width}x${row.height}` : null;
+    };
     return {
       logoUrl: urlOf(brand?.logo),
       faviconUrl: urlOf(brand?.favicon),
       appleTouchIconUrl: urlOf(brand?.apple),
+      faviconSizes: sizesOf(brand?.favicon),
+      appleTouchIconSizes: sizesOf(brand?.apple),
       shareImage: imageOf(seo?.og) ?? imageOf(brand?.social) ?? imageOf(brand?.logo),
     };
   });
@@ -785,6 +804,10 @@ export interface SitemapUrlItem {
   lastmod?: string | undefined;
   changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never" | undefined;
   priority?: number | undefined;
+  /** Product pictures for Google image search (image sitemap extension). */
+  images?: Array<{ loc: string; title?: string | undefined }> | undefined;
+  /** The same page in the store's other markets (hreflang), only when every market has a distinct language-region code. */
+  alternates?: HreflangAlternate[] | undefined;
 }
 
 function escapeXml(value: string): string {
@@ -795,9 +818,12 @@ function escapeXml(value: string): string {
  * Generates valid Sitemap 0.9 XML string from a list of URLs.
  */
 export function generateSitemapXml(urls: SitemapUrlItem[]): string {
+  // The image and xhtml namespaces are declared only when an entry uses them, so a plain sitemap stays byte-for-byte as before.
+  const hasImages = urls.some((u) => (u.images?.length ?? 0) > 0);
+  const hasAlternates = urls.some((u) => (u.alternates?.length ?? 0) > 0);
   const xmlLines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${hasImages ? ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' : ""}${hasAlternates ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : ""}>`,
   ];
 
   for (const item of urls) {
@@ -811,6 +837,15 @@ export function generateSitemapXml(urls: SitemapUrlItem[]): string {
     }
     if (item.priority !== undefined) {
       xmlLines.push(`    <priority>${item.priority.toFixed(1)}</priority>`);
+    }
+    for (const alt of item.alternates ?? []) {
+      xmlLines.push(`    <xhtml:link rel="alternate" hreflang="${escapeXml(alt.hreflang)}" href="${escapeXml(alt.href)}"/>`);
+    }
+    for (const img of item.images ?? []) {
+      xmlLines.push("    <image:image>");
+      xmlLines.push(`      <image:loc>${escapeXml(img.loc)}</image:loc>`);
+      if (img.title) xmlLines.push(`      <image:title>${escapeXml(img.title)}</image:title>`);
+      xmlLines.push("    </image:image>");
     }
     xmlLines.push("  </url>");
   }
@@ -1098,6 +1133,7 @@ async function getScopedCatalogForSitemap(
   // 1. Published Products (Listed statuses only)
   const productRows = await tx
     .select({
+      id: schema.products.id,
       slug: schema.products.slug,
       title: schema.products.title,
       shortDescription: schema.products.shortDescription,
@@ -1241,9 +1277,33 @@ export async function getStorefrontSitemapUrls(
 
     const sitemapItems: SitemapUrlItem[] = [];
 
+    // Product pictures for the image sitemap: the first few per product, in the merchant's order, with a public URL.
+    const imageRows = await tx
+      .select({ productId: schema.productMedia.productId, storageKey: schema.media.storageKey, alt: schema.productMedia.alt, mediaAlt: schema.media.alt })
+      .from(schema.productMedia)
+      .innerJoin(schema.media, and(eq(schema.media.tenantId, schema.productMedia.tenantId), eq(schema.media.id, schema.productMedia.mediaId)))
+      .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.productMedia.tenantId), eq(schema.products.id, schema.productMedia.productId)))
+      .where(and(eq(schema.productMedia.tenantId, ctx.tenantId), inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .orderBy(schema.productMedia.productId, schema.productMedia.position);
+    const imagesByProduct = new Map<string, Array<{ loc: string; title?: string | undefined }>>();
+    for (const r of imageRows) {
+      const loc = publicMediaUrl(r.storageKey);
+      if (!loc) continue;
+      const list = imagesByProduct.get(r.productId) ?? [];
+      if (list.length >= 5) continue;
+      const title = (r.alt?.trim() || r.mediaAlt?.trim()) || undefined;
+      list.push({ loc, ...(title ? { title } : {}) });
+      imagesByProduct.set(r.productId, list);
+    }
+    const imagesFor = (productId: string) => {
+      const imgs = imagesByProduct.get(productId);
+      return imgs && imgs.length > 0 ? { images: imgs } : {};
+    };
+
     // Home page
     const homePageRow = pageRows.find((p) => p.type === "home");
-    const homeLastMod = homePageRow ? homePageRow.updatedAt.toISOString() : new Date().toISOString();
+    // Without a saved home page the real change time is unknown: omit lastmod rather than claim the page changed just now.
+    const homeLastMod = homePageRow ? homePageRow.updatedAt.toISOString() : undefined;
     sitemapItems.push({
       loc: baseUrl,
       lastmod: homeLastMod,
@@ -1258,6 +1318,7 @@ export async function getStorefrontSitemapUrls(
         lastmod: p.updatedAt.toISOString(),
         changefreq: "weekly",
         priority: 0.8,
+        ...imagesFor(p.id),
       });
     }
 
@@ -1313,6 +1374,7 @@ export async function getStorefrontSitemapUrls(
           lastmod: p.updatedAt.toISOString(),
           changefreq: "weekly",
           priority: 0.8,
+          ...imagesFor(p.id),
         });
       }
 
@@ -1366,7 +1428,7 @@ export async function getStorefrontSitemapUrls(
     // Blog: real, visible, indexable posts and the categories that have any (ADR-033)
     const blog = await listBlogForSitemap(tx, ctx.tenantId);
     if (blog.enabled) {
-      sitemapItems.push({ loc: `${baseUrl}/blog`, lastmod: (blog.posts[0]?.lastmod ?? new Date()).toISOString(), changefreq: "weekly", priority: 0.6 });
+      sitemapItems.push({ loc: `${baseUrl}/blog`, lastmod: blog.posts[0]?.lastmod.toISOString(), changefreq: "weekly", priority: 0.6 });
       for (const c of blog.categories) {
         sitemapItems.push({ loc: `${baseUrl}/blog/category/${c.path}`, lastmod: c.lastmod.toISOString(), changefreq: "weekly", priority: 0.5 });
       }
@@ -1392,6 +1454,35 @@ export async function getStorefrontSitemapUrls(
     }
     if (publishedHandles.has("legal_notice")) {
       sitemapItems.push({ loc: `${baseUrl}/policies/legal_notice`, changefreq: "yearly", priority: 0.3 });
+    }
+
+    // hreflang: the same page in each market that serves it, only for stores whose markets all have distinct language-region codes.
+    const hreflangs = marketHreflangs(markets);
+    if (hreflangs) {
+      const prefixes = extraMarkets.map((m) => {
+        const raw = m.pathPrefix ?? "";
+        return { id: m.id, prefix: `${baseUrl}${raw.startsWith("/") ? raw : `/${raw}`}` };
+      });
+      const baseMarket = markets.find((m) => m.isBase);
+      const keyOf = (loc: string): { key: string; marketId: string | undefined; isBase: boolean } => {
+        for (const p of prefixes) {
+          if (loc === p.prefix || loc.startsWith(`${p.prefix}/`)) return { key: `${baseUrl}${loc.slice(p.prefix.length)}`, marketId: p.id, isBase: false };
+        }
+        return { key: loc, marketId: baseMarket?.id, isBase: true };
+      };
+      const groups = new Map<string, Array<{ marketId: string; isBase: boolean; href: string }>>();
+      for (const item of sitemapItems) {
+        const k = keyOf(item.loc);
+        if (!k.marketId) continue;
+        const list = groups.get(k.key) ?? [];
+        list.push({ marketId: k.marketId, isBase: k.isBase, href: item.loc });
+        groups.set(k.key, list);
+      }
+      for (const item of sitemapItems) {
+        const k = keyOf(item.loc);
+        const alts = buildHreflangAlternates(groups.get(k.key) ?? [], hreflangs);
+        if (alts.length > 0) item.alternates = alts;
+      }
     }
 
     return sitemapItems;

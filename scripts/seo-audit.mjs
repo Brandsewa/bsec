@@ -115,6 +115,8 @@ for (const url of picks) {
       const visible = new Set([...html.matchAll(/[₹$€£]\s?([0-9][0-9,]*(?:\.[0-9]+)?)/g)].map((m) => Number(m[1].replace(/,/g, ""))));
       for (const o of offers) {
         if (!visible.has(Number(o.price))) fail(path, `schema price ${o.price} is not shown on the page (shown: ${[...visible].slice(0, 5).join(", ")})`);
+        if (!o.hasMerchantReturnPolicy) warn(path, "offer has no return policy (hasMerchantReturnPolicy)");
+        if (!o.shippingDetails) warn(path, "offer has no shipping details (shippingDetails)");
         if (!/^https:\/\/schema\.org\/(InStock|OutOfStock|PreOrder|BackOrder|LimitedAvailability|SoldOut)$/.test(o.availability ?? "")) warn(path, `odd availability ${o.availability}`);
       }
     }
