@@ -20,6 +20,7 @@
     "hooks:install": "node scripts/install-hooks.mjs",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",
     "docs:check": "node scripts/check-docs.mjs",
+    "notion:check": "node scripts/check-notion-sync.mjs",
     "db:migrate": "pnpm --filter @bs/db migrate",
     "db:generate": "pnpm --filter @bs/db generate",
     "lint:fast": "oxlint",
