@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `fix/security-alerts-2026-11-15` (not merged yet)
+- **Branch:** `fix/security-alerts-2026-11-15` (merged in #274, eff94dc; main run deployed successfully)
 - **Area:** platform, web, admin (dependencies), docs
 - **Type:** fix
 - **Supersedes:** none

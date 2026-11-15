@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `feat/seo-phase2b` (not merged yet)
+- **Branch:** `feat/seo-phase2b` (merged in #270, 4289e69)
 - **Area:** domain, db (one migration), web, admin, worker job, contracts, docs
 - **Type:** feat
 - **Supersedes:** none (finishes `docs/SEO-GEO-AEO-PLAN.md` section 4)
@@ -42,3 +42,6 @@ Builds the rest of Phase 2 that code can do: Google merchant-listing fields on p
 
 ## Definition of done
 Gate run before push; after merge set the `Branch` line, remove the in-flight line, delete the branch and worktree.
+
+## Deployed and checked
+Merged and deployed on 2026-11-15 (main run for e152e4b succeeded). Read-only `pnpm seo:audit https://ricwell.com` afterwards: 0 failures; offers carried the return policy and shipping details. Not checked live: the SEO health page, hreflang and image entries, the manifest in a browser. Notion rows: Feature "Storefront SEO, GEO and AEO", this record in Change Log, a Done Work Item and four Risks and Gaps rows.
