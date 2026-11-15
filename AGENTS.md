@@ -115,6 +115,7 @@ Several agents and the owner work on this repo at the same time, in different wo
 4. **Fix the docs you find wrong.** If `docs/ARCHITECTURE.md` disagrees with the code, the code wins: correct the doc in the same change and mention it.
 5. **Hand-offs** (one agent plans, another builds, another verifies) go in a plan doc under `docs/` with explicit acceptance criteria, as `docs/AUTH-OVERHAUL-PLAN.md` does. The verifier checks each criterion against the code and runs the gate; "done" means verified, not written.
 6. **Unknowns:** if a decision is the owner's (pricing, legal, providers, deleting data), ask in the session; do not guess and bury it in code.
+7. **Keep the BCOM Platform OS in Notion current.** It is the coordination layer (roadmap, feature status, work items, change log index, decisions index, risks) on top of this repo; GitHub stays the source of truth for code, rules, ADRs and change records. Follow its "Session protocol" page at the start and the end of every session: claim your Work Item, then at the end add the Change Log row, update the Feature, Work Item and any Decision, Risk or Docs Library row, and list the Notion rows you touched in your final message. Notion has no automation here, so a session is not done until Notion matches GitHub (or you say what you could not update and why). Never put secrets, server IPs, personal data or customer data in Notion, and never copy a technical spec there: link the GitHub file. If you cannot reach Notion, say so; do not claim it was updated.
 
 ### Per-agent notes
 
@@ -158,6 +159,7 @@ A change is done only when **all** apply. Copy this list into your change record
 - [ ] ADR written or updated if you made or changed an architectural decision.
 - [ ] `DEPLOYMENT.md` / `infra/coolify/RUNBOOK.md` updated if env vars, services, ports or the deploy pipeline changed.
 - [ ] A change record in `docs/changes/` (required) and `progress.md` status/known-gaps/in-flight updated if a milestone item changed state.
+- [ ] Notion updated per the Session protocol (Change Log row, Feature, Work Item, and Decisions, Risks or Docs Library rows if any), or the gap stated (section 6, rule 7).
 - [ ] No secrets, no generated files, no unrelated edits in the diff.
 - [ ] Honest status: what you verified live, what you only read, what you did not do.
 - [ ] After merge: change record updated with the PR and commit, "In flight" line removed, your feature branch deleted (remote and local) and worktree removed (section 5).
