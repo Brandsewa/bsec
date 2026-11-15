@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `feat/seo-phase2` (not merged yet)
+- **Branch:** `feat/seo-phase2` (merged in #266, 977d01d)
 - **Area:** domain, web, scripts, docs
 - **Type:** feat
 - **Supersedes:** none (continues `2026-11-15-claude-seo-geo-aeo-audit.md`; plan `docs/SEO-GEO-AEO-PLAN.md` section 4)
@@ -31,6 +31,9 @@ First slice of Phase 2, every item code-only and tenant-scoped. After deploy eve
 ## Verification
 - Ran in `C:\dev\bsec-seo2`: root `pnpm typecheck` (17 tasks) and `pnpm lint` (0 errors, existing warnings); `@bs/web` build (lists `/llms.txt`); `perf-budget-bundle.int.test.ts` 3 pass (50 KB page-script budget kept; all new code is server-side); domain unit tests; web suite; `storefront-brand-assets.int.test.ts` 2 pass on real Postgres.
 - NOT verified: a running storefront in a browser (head tags, hidden H1, logo in the schema on a store with a theme header); Google's Rich Results Test; production. After deploy run `pnpm seo:audit https://ricwell.com` and look at the home page rows.
+
+## Merge note
+GitHub answered the merge call with a 502; the PR merged but no `main` run started for `977d01d`, so this docs PR's merge is what starts the deploy of #266. After deploy, run `pnpm seo:audit https://ricwell.com` and check the home page rows (og:image, favicon, Organization logo).
 
 ## Docs updated
 - [x] `docs/SEO-GEO-AEO-PLAN.md` (Phase 2 items marked)
