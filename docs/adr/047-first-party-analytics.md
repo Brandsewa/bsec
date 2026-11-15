@@ -22,6 +22,9 @@ Browser events miss visitors with ad blockers, so a confirmed order's `Purchase`
 ## Server-side add to cart and begin checkout (slice 5c)
 Meta gets `AddToCart` and `InitiateCheckout` from the server too, with the same consent, credential and clearing rules as purchases and the same event id as the browser pixel so Meta counts them once. GA4 does not: it can only de-duplicate purchases, so it keeps receiving those two events from the browser only.
 
+## Order attribution (Phase 2)
+Sales by referrer and campaign need to know where an order came from, without a cookie. When an order is placed, the collector's daily visitor hash finds that visitor's page views the same day and the last visit from a referrer or campaign link becomes the order's source (`order_attribution`). Only the referrer host and utm values are kept, never the hash. Orders without a same-day visit show as direct. This trades accuracy on multi-day journeys for needing no consent banner or cookie; a longer attribution window would need a first-party cookie and is a separate decision.
+
 ## Consequences
 - No new service or env var; one new table and one public route. The collector writes one row per pageview, so write volume scales with traffic. Batching and the retention job are in the plan.
 - The product-page JS budget is not spent by analytics. It stays at 50 KB; raising it is not needed for this design.

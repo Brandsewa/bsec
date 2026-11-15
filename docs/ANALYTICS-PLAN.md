@@ -48,7 +48,7 @@ Delivery and carrier reports (courier not live; shipping integrations are out of
 **Before merge (not features):** visual checks at phone widths and in dark mode for the dashboard, report pages, banner and settings cards; the date picker popover and CSV export by hand; one test purchase with the merchant's Meta test event code and a GA4 debug view to confirm live delivery (the Graph API version `META_CAPI_VERSION` and payload follow the docs but were never sent to Meta or Google); CI and e2e on PR #267; review.
 
 **Phase 2 reports (optional, each its own slice, in this order):**
-1. **Attribution:** capture `utm_*` and referrer on the cart and order, then sales by referrer, items sold by referrer, and visitors right now.
+1. ~~**Attribution:**~~ **built** (`order_attribution`, migration 0112): same-day, cookieless attribution on the order; sales by referrer, sales by campaign, items sold by referrer, visitors right now. Not on the cart. Multi-day attribution would need a first-party cookie and consent: a separate decision.
 2. **Customers:** cohort analysis and RFM analysis (builds on `segments`).
 3. **Orders and inventory:** returned products with reasons, cancellation reasons, items bought together, sell-through rate, ABC analysis, inventory adjustments, and a month-end inventory snapshot job for inventory value.
 4. **Profit:** profit margin by order and by product (needs `cost_price` filled in by merchants).

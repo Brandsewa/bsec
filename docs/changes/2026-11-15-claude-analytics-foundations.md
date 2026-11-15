@@ -47,6 +47,13 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Tested: unit (decision matrix, payload without personal data), real database (record, repeat, send, retry, permanent failure, removed token, stats, retention), and a production build in a browser (event rows and matching ids; no row for analytics-only or no-choice visitors; a checkout refresh adds no second row).
 - Not verified against live Meta.
 
+## Phase 2: attribution
+- Migration `0112_order_attribution`; `packages/domain/src/analytics/attribution.ts` (`resolveOrderAttribution`); `PlaceOrderInput.attribution`; the place-order route resolves and passes it.
+- Cookieless: the collector's daily visitor hash finds the visitor's same-day page views; the last visit from a referrer or utm link is stored on the order (host and utm values only, never the hash). Different day, Do Not Track, bot or blocked beacon means direct.
+- Four new reports (34 in all): sales by referrer, sales by campaign, items sold by referrer, and visitors right now (live: ignores the date range, refreshes every 15 s).
+- Tested: real database (last non-direct visit wins, direct and unseen visitors store nothing, other visitor or store or day is not linked, report totals equal the order totals, visitors right now counts only the last 5 minutes); production build in a browser (a utm-tagged visit and a real order through the route produced the attribution row; both reports render).
+- Not verified: the 15-second auto refresh of visitors right now (code only), and attribution for orders placed just after midnight UTC.
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.

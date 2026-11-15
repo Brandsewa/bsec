@@ -55,6 +55,8 @@ function AnalyticsReportPage() {
   const permissions = store?.permissions ?? [];
   const allowed = permissions.includes("analytics.read");
   const meta = ANALYTICS_REPORTS.find((r) => r.id === reportId);
+  // A live report (visitors right now) ignores the date range and refreshes by itself.
+  const live = Boolean(meta && "live" in meta && meta.live);
   const range = resolveRange({ ...search, compare: "none" });
   const setSearch = (patch: AnalyticsSearch) => void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
   const back = { href: "/analytics", label: "Analytics" };
@@ -63,6 +65,7 @@ function AnalyticsReportPage() {
     ...orpc.admin.analytics.report.queryOptions({ input: { ...rangeInput(range), id: (meta?.id ?? "sales_over_time") as AnalyticsReportId } }),
     enabled: allowed && Boolean(meta),
     placeholderData: (prev) => prev,
+    refetchInterval: live ? 15_000 : false,
   });
   const report = query.data;
 
@@ -102,7 +105,7 @@ function AnalyticsReportPage() {
           ) : null
         }
       />
-      <RangeControls range={range} onChange={setSearch} showCompare={false} />
+      {live ? null : <RangeControls range={range} onChange={setSearch} showCompare={false} />}
       {report?.note ? <p className="text-sm text-muted-foreground">{report.note}</p> : null}
 
       {report?.chart && report.rows.length > 0 ? (

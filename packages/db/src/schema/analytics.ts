@@ -134,3 +134,27 @@ export const conversionEvents = tenantTable(
     index("conversion_events_tenant_created_idx").on(t.tenantId, t.createdAt),
   ],
 );
+
+/**
+ * Where an order came from (ADR-047, docs/ANALYTICS-PLAN.md Phase 2, attribution). Last non-direct visit of the same visitor on the
+ * same day, found through the cookieless visitor hash when the order is placed; only the derived referrer host and utm values are
+ * kept, never the hash. No row means direct or unknown (a different day, Do Not Track, a blocked beacon). No new cookie is used.
+ */
+export const orderAttribution = tenantTable(
+  "order_attribution",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    referrerHost: text("referrer_host"),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    /** The page the attributed visit landed on. */
+    landingPath: text("landing_path"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("order_attribution_tenant_order_uniq").on(t.tenantId, t.orderId),
+    tenantForeignKey({ tableTenantId: t.tenantId, column: t.orderId, target: orders, name: "order_attribution_order_fk", onDelete: "cascade" }),
+  ],
+);

@@ -19,6 +19,9 @@ export const ANALYTICS_REPORTS = [
   { id: "sales_by_discount", category: "Sales", title: "Sales by discount code", description: "Orders, discount given and sales for each discount." },
   { id: "sales_by_channel", category: "Sales", title: "Sales by sales channel", description: "Where orders came from: online store, admin, quotes." },
   { id: "sales_by_market", category: "Sales", title: "Sales by market", description: "Orders and sales for each market, each in its own currency." },
+  { id: "sales_by_referrer", category: "Sales", title: "Sales by referrer", description: "Orders and sales by the site or app the visitor came from." },
+  { id: "sales_by_campaign", category: "Sales", title: "Sales by campaign", description: "Orders and sales by utm source, medium and campaign." },
+  { id: "items_sold_by_referrer", category: "Sales", title: "Items sold by referrer", description: "Units and sales of each product, by where the visitor came from." },
   { id: "sales_new_vs_returning", category: "Sales", title: "New vs returning customer sales", description: "Sales from first-time buyers and repeat buyers." },
   { id: "sales_reversals_over_time", category: "Sales", title: "Sales reversals over time", description: "Refunds issued." },
   { id: "orders_over_time", category: "Orders", title: "Orders over time", description: "Orders placed and items ordered." },
@@ -31,6 +34,7 @@ export const ANALYTICS_REPORTS = [
   { id: "customers_returning", category: "Customers", title: "Returning customers", description: "Customers who ordered in this period and had ordered before." },
   { id: "customers_by_location", category: "Customers", title: "Customers by location", description: "Buying customers by state." },
   { id: "sessions_over_time", category: "Acquisition", title: "Sessions over time", description: "Measured visits and page views." },
+  { id: "visitors_right_now", category: "Acquisition", title: "Visitors right now", description: "Who is on the store in the last 5 minutes, by page. Refreshes by itself.", live: true },
   { id: "sessions_by_referrer", category: "Acquisition", title: "Sessions by referrer", description: "Which sites sent visits, with social and search grouped." },
   { id: "sessions_by_source", category: "Acquisition", title: "Sessions by campaign source", description: "Visits by utm_source." },
   { id: "sessions_by_location", category: "Acquisition", title: "Sessions by location", description: "Visits by country." },
@@ -43,7 +47,7 @@ export const ANALYTICS_REPORTS = [
   { id: "searches_no_results", category: "Behavior", title: "Searches with no results", description: "Searches that found nothing." },
   { id: "inventory_sold_by_product", category: "Inventory", title: "Inventory sold by product", description: "Units sold and the daily average for each variant." },
   { id: "inventory_days_remaining", category: "Inventory", title: "Products by days of inventory remaining", description: "Stock on hand divided by the recent daily sales rate." },
-] as const satisfies ReadonlyArray<{ id: string; category: AnalyticsCategory; title: string; description: string }>;
+] as const satisfies ReadonlyArray<{ id: string; category: AnalyticsCategory; title: string; description: string; live?: true }>;
 
 export type AnalyticsReportId = (typeof ANALYTICS_REPORTS)[number]["id"];
 const REPORT_IDS = ANALYTICS_REPORTS.map((r) => r.id) as [AnalyticsReportId, ...AnalyticsReportId[]];

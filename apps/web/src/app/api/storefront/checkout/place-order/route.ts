@@ -14,6 +14,7 @@ import {
   getStorefrontConsentConfig,
   conversionCredentialStatus,
   decideOrderTracking,
+  resolveOrderAttribution,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
@@ -122,8 +123,19 @@ export async function POST(req: Request) {
         }),
       )
       .catch(() => null);
+    // Where the order came from, from the visitor's same-day cookieless page views (ADR-047, Phase 2).
+    const attributionSecret = process.env.BETTER_AUTH_SECRET;
+    const attribution = attributionSecret
+      ? await resolveOrderAttribution(
+          rt,
+          access.tenantId,
+          { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? "", doNotTrack: req.headers.get("sec-gpc") === "1" || req.headers.get("dnt") === "1" },
+          { secret: attributionSecret },
+        )
+      : null;
     const orderResult = await placeOrder(rt, tenantCtx, {
       tracking,
+      attribution,
       cartToken: token,
       idempotencyKey,
       email: parsed.data.email,

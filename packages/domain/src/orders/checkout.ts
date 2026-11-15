@@ -7,6 +7,7 @@ import { gatewayCurrencyCheck } from "../markets/gateways.ts";
 import { addressProblem, phoneProblem, postalCodeProblem } from "../markets/addresses.ts";
 import type { Db } from "@bs/db";
 import type { OrderTrackingRow } from "../analytics/conversions.ts";
+import type { OrderAttributionRow } from "../analytics/attribution.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -53,6 +54,8 @@ import { resolveTaxClass } from "../admin/tax-settings.ts";
 export interface PlaceOrderInput {
   /** What the server-side conversion APIs may remember about this order (decided by `decideOrderTracking`; null = nothing). */
   tracking?: OrderTrackingRow | null | undefined;
+  /** Where the order came from (decided by `resolveOrderAttribution`; null = direct or unknown). */
+  attribution?: OrderAttributionRow | null | undefined;
   cartToken: string;
   idempotencyKey?: string | undefined;
   email: string;
@@ -866,6 +869,11 @@ export async function placeOrder(
     // accepted the matching category and the store has credentials; cleared once the events are settled.
     if (input.tracking) {
       await tx.insert(schema.orderTracking).values({ tenantId, orderId, ...input.tracking });
+    }
+
+    // 11c. Where the order came from, for the sales by referrer reports (ADR-047, Phase 2).
+    if (input.attribution) {
+      await tx.insert(schema.orderAttribution).values({ tenantId, orderId, ...input.attribution });
     }
 
     // 12. Enqueue order.created job if boss runtime is present

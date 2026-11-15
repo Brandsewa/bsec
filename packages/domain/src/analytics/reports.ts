@@ -44,6 +44,8 @@ interface Built {
 }
 
 const MAX_RANGE_DAYS = 800;
+const ATTRIBUTION_NOTE =
+  "A sale is credited to the visitor's last visit from another site or a campaign link on the same day they ordered. Orders from visitors who first came on an earlier day, who opted out of measurement, or whose browser blocked the page counter are shown as direct.";
 const TRAFFIC_NOTE = "Measured visits only: bots, Do Not Track and blocked requests are not counted. Today can be up to an hour behind.";
 
 const c = (key: string, label: string, kind: AnalyticsColumn["kind"] = "number"): AnalyticsColumn => ({ key, label, kind });
@@ -206,6 +208,77 @@ const BUILDERS: Record<AnalyticsReportId, (tx: Db, p: P) => Promise<Built>> = {
       rows,
       chart: { type: "bar", x: "market", series: ["orders"] },
       note: "Each market is shown in its own currency. Amounts in different currencies are never added together.",
+    };
+  },
+
+  async sales_by_referrer(tx, p) {
+    const raw = await q(
+      tx,
+      sql`SELECT COALESCE(a.referrer_host, '(direct)') AS referrer, count(*)::int AS orders, sum(o.grand_total)::float8 AS total
+          FROM orders o LEFT JOIN order_attribution a ON a.tenant_id = o.tenant_id AND a.order_id = o.id
+          WHERE ${ordersIn(p)} GROUP BY 1 ORDER BY 3 DESC, 1 LIMIT 200`,
+    );
+    const rows = raw.map((r) => ({ ...r, type: referrerType(String(r.referrer)) }));
+    return {
+      columns: [c("referrer", "Referrer", "text"), c("type", "Type", "text"), c("orders", "Orders"), c("total", "Sales", "money")],
+      rows,
+      chart: { type: "bar", x: "referrer", series: ["total"] },
+      note: ATTRIBUTION_NOTE,
+    };
+  },
+
+  async sales_by_campaign(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT COALESCE(a.utm_source, '(none)') AS source, COALESCE(a.utm_medium, '(none)') AS medium, COALESCE(a.utm_campaign, '(none)') AS campaign,
+                 count(*)::int AS orders, sum(o.grand_total)::float8 AS total
+          FROM orders o LEFT JOIN order_attribution a ON a.tenant_id = o.tenant_id AND a.order_id = o.id
+          WHERE ${ordersIn(p)} GROUP BY 1, 2, 3 ORDER BY 5 DESC, 1, 2, 3 LIMIT 200`,
+    );
+    return {
+      columns: [c("source", "Source", "text"), c("medium", "Medium", "text"), c("campaign", "Campaign", "text"), c("orders", "Orders"), c("total", "Sales", "money")],
+      rows,
+      chart: { type: "bar", x: "campaign", series: ["total"] },
+      note: `${ATTRIBUTION_NOTE} Only links tagged with utm_source, utm_medium or utm_campaign appear here; everything else is (none).`,
+    };
+  },
+
+  async items_sold_by_referrer(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT COALESCE(a.referrer_host, '(direct)') AS referrer, oi.product_title AS product, sum(oi.quantity)::int AS quantity, sum(oi.total)::float8 AS total
+          FROM order_items oi
+          JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+          LEFT JOIN order_attribution a ON a.tenant_id = o.tenant_id AND a.order_id = o.id
+          WHERE ${ordersIn(p)} GROUP BY 1, 2 ORDER BY 3 DESC, 4 DESC, 1, 2 LIMIT 200`,
+    );
+    return {
+      columns: [c("referrer", "Referrer", "text"), c("product", "Product", "text"), c("quantity", "Units sold"), c("total", "Sales", "money")],
+      rows,
+      chart: { type: "bar", x: "product", series: ["quantity"] },
+      note: ATTRIBUTION_NOTE,
+    };
+  },
+
+  async visitors_right_now(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT path AS page, count(DISTINCT visitor_hash)::int AS visitors, count(*)::int AS pageviews
+          FROM analytics_events
+          WHERE tenant_id = ${p.tenantId} AND event_type = 'pageview' AND occurred_at > now() - interval '5 minutes'
+          GROUP BY path ORDER BY 2 DESC, 3 DESC, 1 LIMIT 20`,
+    );
+    const [t] = await q(
+      tx,
+      sql`SELECT count(DISTINCT visitor_hash)::int AS visitors
+          FROM analytics_events WHERE tenant_id = ${p.tenantId} AND occurred_at > now() - interval '5 minutes'`,
+    );
+    const n = num(t?.visitors);
+    return {
+      columns: [c("page", "Page", "text"), c("visitors", "Visitors"), c("pageviews", "Page views")],
+      rows,
+      chart: null,
+      note: `${n.toLocaleString()} ${n === 1 ? "visitor" : "visitors"} in the last 5 minutes. Measured visits only: bots, Do Not Track and blocked requests are not counted. The date range does not apply.`,
     };
   },
 
