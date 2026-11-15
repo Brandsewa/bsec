@@ -21,7 +21,9 @@ export async function rollupTrafficForTenant(
     const tzRes = await tx.execute<{ tz: string; today: string }>(sql`
       SELECT s.tz, to_char((now() AT TIME ZONE s.tz)::date, 'YYYY-MM-DD') AS today
       FROM (SELECT COALESCE((SELECT timezone FROM store_settings WHERE tenant_id = ${tenantId} LIMIT 1), 'Asia/Kolkata') AS tz) s`);
-    const { tz, today } = tzRes.rows[0]!;
+    const first = tzRes.rows[0];
+    if (!first) throw new Error("Not Found: store settings");
+    const { tz, today } = first;
     const to = range?.to ?? today;
     const from = range?.from ?? sql`(${today}::date - 1)`;
 

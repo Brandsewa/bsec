@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
+    "./charts": "./src/charts.tsx",
     "./styles.css": "./src/styles/index.css",
     "./tokens.css": "./src/styles/tokens.css"
   },

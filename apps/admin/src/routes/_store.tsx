@@ -76,7 +76,12 @@ interface GatedGroup {
 }
 
 const nav: GatedGroup[] = [
-  { items: [{ label: "Home", href: "/", icon: Home }] },
+  {
+    items: [
+      { label: "Home", href: "/", icon: Home },
+      { label: "Analytics", href: "/analytics", icon: BarChart3, perm: "analytics.read" },
+    ],
+  },
   {
     label: "Orders",
     icon: ShoppingBag,

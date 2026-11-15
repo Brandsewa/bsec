@@ -375,7 +375,7 @@ const BUILDERS: Record<AnalyticsReportId, (tx: Db, p: P) => Promise<Built>> = {
     const built = await byDimension(tx, p, "referrer", "Referrer");
     return {
       ...built,
-      columns: [built.columns[0]!, c("type", "Type", "text"), ...built.columns.slice(1)],
+      columns: [c("key", "Referrer", "text"), c("type", "Type", "text"), ...built.columns.slice(1)],
       rows: built.rows.map((r) => ({ ...r, type: referrerType(String(r.key)) })),
     };
   },
