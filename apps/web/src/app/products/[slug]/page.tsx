@@ -17,11 +17,13 @@ import {
   generateBreadcrumbJsonLd,
   buildProductSeoMetadata,
   tenantTag,
+  buildViewItemEvent,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getCachedStoreName, getCachedProductCustomFields,getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
+import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -219,6 +221,7 @@ const templateContext = {
       {/* Schema.org Structured Data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      <ShopEvent tenantId={tenantId} build={() => buildViewItemEvent(product, marketCtx?.currency ?? "INR")} />
       {template ? (
         <>
           <BlockRenderer blocks={beforeReviews} renderData={renderData} context={templateContext} />

@@ -285,7 +285,7 @@ function PrivacyForm({
             </div>
             {hasIntegration ? (
               <p className="text-xs text-muted-foreground">
-                These tools set their own cookies and are run by Google or Meta, not by us. Mention them in your privacy policy. They receive page views only; shop events such as purchases are not sent yet.
+                These tools set their own cookies and are run by Google or Meta, not by us. Mention them in your privacy policy. They receive page views and shop events (view item, add to cart, begin checkout and purchase) from visitors who accepted. Customer details are never sent.
               </p>
             ) : null}
 

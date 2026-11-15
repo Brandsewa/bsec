@@ -1,8 +1,16 @@
 /* BCOM storefront cookie banner and consent-gated integrations (ADR-047). Vanilla JS, loaded async, outside the app bundle.
    Reads the store's config from <script id="bs-consent-cfg" type="application/json">. All text is set with textContent. */
 (function () {
-  var el = document.getElementById("bs-consent-cfg");
-  if (!el || window.top !== window.self) return;
+  if (window.top !== window.self) return;
+  // The framework hoists this script into <head>, so it can run before the config element (further down the document) exists.
+  function boot() {
+    var el = document.getElementById("bs-consent-cfg");
+    if (el) main(el);
+  }
+  if (document.getElementById("bs-consent-cfg")) boot();
+  else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+
+  function main(el) {
   var cfg;
   try { cfg = JSON.parse(el.textContent || ""); } catch { return; }
   if (!cfg || cfg.v !== 1) return;
@@ -59,9 +67,104 @@
       };
     });
   }
+  // ---- Shop events (view item, add to cart, begin checkout, purchase) ----
+  // Server-rendered blobs and the cart request are turned into GA4 and Pixel events, only for the tools the visitor accepted.
+  var state = null; // the visitor's decision, once there is one
+  var queue = [];
+  var META = { view_item: "ViewContent", add_to_cart: "AddToCart", begin_checkout: "InitiateCheckout", purchase: "Purchase" };
+
+  function send(ev) {
+    if (!state) { if (queue.length < 20) queue.push(ev); return; }
+    var useGa = state.a && loaded.ga4 && window.gtag;
+    var usePx = state.m && loaded.pixel && window.fbq;
+    if (!useGa && !usePx) return;
+    if (ev.t === "purchase") {
+      // A refresh of the thank-you page must not count the order twice.
+      var key = "bs_pur_" + ev.orderId;
+      try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch { /* storage blocked: send anyway */ }
+    }
+    var items = ev.items || [];
+    if (useGa) {
+      var g = { currency: ev.currency, value: ev.value, items: items.map(function (i) { return { item_id: i.id, item_name: i.name, item_variant: i.variant, price: i.price, quantity: i.quantity }; }) };
+      if (ev.t === "purchase") { g.transaction_id = ev.orderId; g.shipping = ev.shipping; }
+      window.gtag("event", ev.t, g);
+    }
+    if (usePx) {
+      var px = {
+        currency: ev.currency, value: ev.value, content_type: "product",
+        content_ids: items.map(function (i) { return i.id; }),
+        contents: items.map(function (i) { return { id: i.id, quantity: i.quantity, item_price: i.price }; })
+      };
+      if (ev.t === "purchase") px.num_items = items.reduce(function (n, i) { return n + i.quantity; }, 0);
+      if (ev.t === "purchase") window.fbq("track", META[ev.t], px, { eventID: ev.orderId }); else window.fbq("track", META[ev.t], px);
+    }
+  }
+  function handle(n) {
+    if (n.__bs) return;
+    n.__bs = 1;
+    var ev;
+    try { ev = JSON.parse(n.textContent || ""); } catch { return; }
+    if (ev && META[ev.t]) send(ev);
+  }
+  function scan(root) {
+    var list = root.querySelectorAll ? root.querySelectorAll("script[data-bs-ev]") : [];
+    for (var i = 0; i < list.length; i++) handle(list[i]);
+  }
+  function decimals(cur) {
+    try { return new Intl.NumberFormat("en", { style: "currency", currency: cur }).resolvedOptions().maximumFractionDigits; } catch { return 2; }
+  }
+  function cartAdded(cart, body) {
+    if (!cart || !cart.items || !body) return;
+    var line = null;
+    for (var i = 0; i < cart.items.length; i++) if (cart.items[i].variantId === body.variantId) line = cart.items[i];
+    if (!line) return;
+    var d = Math.pow(10, decimals(cart.currency));
+    var price = line.unitPriceSnapshot / d;
+    var vt = line.variant && line.variant.title;
+    var qty = body.quantity > 0 ? body.quantity : 1;
+    send({
+      t: "add_to_cart", currency: cart.currency, value: Math.round(price * qty * 100) / 100,
+      items: [{ id: (line.variant && line.variant.sku) || line.variantId, name: line.product.title, variant: vt && vt.toLowerCase() !== "default title" && vt.toLowerCase() !== "default" ? vt : undefined, price: price, quantity: qty }]
+    });
+  }
+  if (cfg.ga4 || cfg.pixel) {
+    var realFetch = window.fetch;
+    if (realFetch) {
+      window.fetch = function (input, init) {
+        var p = realFetch.apply(this, arguments);
+        try {
+          var url = typeof input === "string" ? input : (input && input.url) || "";
+          var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
+          if (method === "POST" && /\/api\/storefront\/cart\/items\/?(\?|$)/.test(url) && init && typeof init.body === "string") {
+            var body = JSON.parse(init.body);
+            p.then(function (r) {
+              if (r.ok) r.clone().json().then(function (d) { cartAdded(d && d.cart, body); }).catch(function () {});
+            }).catch(function () {});
+          }
+        } catch { /* never interfere with the shop's own request */ }
+        return p;
+      };
+    }
+    if (window.MutationObserver) {
+      new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var added = muts[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var n = added[j];
+            if (n.nodeType !== 1) continue;
+            if (n.matches && n.matches("script[data-bs-ev]")) handle(n); else scan(n);
+          }
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    }
+  }
+
   function apply(c) {
+    state = c;
     if (c.a) loadGa4(cfg.ga4);
     if (c.m) loadPixel(cfg.pixel);
+    var q = queue; queue = [];
+    for (var i = 0; i < q.length; i++) send(q[i]);
   }
 
   var box = null;
@@ -135,10 +238,12 @@
 
   function start() {
     var c = read();
-    if (c) { apply(c); return; }
+    if (c) { apply(c); scan(document); return; }
     // Global Privacy Control is a standing "no": record it as a rejection and do not interrupt the visitor.
-    if (navigator.globalPrivacyControl) { write(false, false); return; }
+    if (navigator.globalPrivacyControl) { write(false, false); apply({ a: false, m: false }); return; }
+    scan(document);
     open();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  }
 })();

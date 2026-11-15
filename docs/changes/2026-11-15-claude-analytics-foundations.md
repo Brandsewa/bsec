@@ -29,6 +29,11 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Storefront: `apps/web/public/bsc.js` and a JSON config script in the layout head, only when the banner is on. Choice stored in `bs_consent` (added to the test-locked necessary-cookie inventory).
 - Rules: a tracking id requires the banner to be on; ids match strict patterns; GPC counts as a rejection; withdrawing consent reloads the page; `#cookie-settings` links reopen the banner. GA4 and Meta get page views only.
 
+## Shop events for GA4 and Meta (slice 5, part 2)
+- `view_item` (product page), `begin_checkout` (checkout page) and `purchase` (thank-you page) are rendered by `components/analytics/ShopEvent.tsx` as inert JSON blobs, only when the store has a GA4 or Pixel id; `add_to_cart` is read by `bsc.js` from the cart request's response. `bsc.js` sends them to GA4 (`gtag event`) and Meta (`ViewContent`, `AddToCart`, `InitiateCheckout`, `Purchase`) only for accepted categories; events before a decision are queued.
+- Builders and serialization in `packages/domain/src/analytics/shop-events.ts` (unit tests `shop-events.test.ts`). No customer details are sent. Purchase is de-duplicated per browser and carries the order number as the transaction id and Meta `eventID`.
+- Bug fixed on the way: React hoists `bsc.js` into `<head>`, so it could run before the config element existed and silently do nothing; it now waits for the config (found while testing in the browser).
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.

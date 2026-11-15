@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
+import { buildPurchaseEvent, evaluateStorefrontAccess, getOrderByActionToken } from "@bs/domain";
+import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 import { describeOrderStatus, describePayment } from "@/components/orders/order-labels.ts";
@@ -44,6 +45,7 @@ export default async function ThankYouPage({ params }: ThankYouPageProps) {
 
   return (
     <div className="bs-skin mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
+      <ShopEvent tenantId={access.tenantId} build={() => buildPurchaseEvent(order)} />
       <div
         className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full mb-6 ${
           cancelled ? "bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
