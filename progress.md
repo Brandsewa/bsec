@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `ci/notion-sync-check` · `pnpm notion:check`: lists docs/changes and docs/adr files with no row in the Notion Change Log or Decisions (offline, reads a Notion export); change record `docs/changes/2026-11-15-claude-notion-sync-check.md` · 2026-11-15
 - claude · `fix/brand-endpoint-marketing-host` · /api/brand was blocked by the storefront gate on bcom.si (sign-in pages never got the brand); smaller Super Admin sidebar logo; change record `docs/changes/2026-11-06-claude-brand-endpoint-gate-fix.md` · 2026-11-06
 - claude · `feat/bulk-editor-polish` · bulk editor follow-ups: resizable and movable columns, click-to-edit text boxes, rows loaded as you scroll, one-row bulk bar; change record `docs/changes/2026-11-05-claude-bulk-editor-polish.md` · 2026-11-05
 - claude · `fix/billing-invoice-currency` · platform invoices carry their currency (USD, no GST for stores outside India), invoice PDF and lists follow it, Activate screen shows a payment-successful notice before opening the store; change record `docs/changes/2026-11-02-claude-billing-invoice-currency.md` · 2026-11-02

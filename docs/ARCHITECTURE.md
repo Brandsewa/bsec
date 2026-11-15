@@ -122,7 +122,7 @@ pnpm workspace + Turborepo. Node `24.15`, pnpm `10.34.5`, TypeScript 6, ESLint 1
 | `docs/` | `ARCHITECTURE.md` (this), `PLAN.html`, `adr/`, `changes/` (change log), `runbooks/`, `audit/`, `superpowers/` (milestone plans/specs), `admin-ui-standards.md`, `BUILD-PLAN-M2-M9.md`, `AUTH-OVERHAUL-PLAN.md`, `FAST-LOCAL-TESTS.md`, `migrations.md`, `M1-BUILD-GUIDE.md`, `M8-FIXES-PROGRESS.md` |
 | `infra/` | `docker/` (one Dockerfile per app + nginx confs), `coolify/RUNBOOK.md` (real UUIDs and config), `backups/`, `loadtest/` (k6 scripts), `monitoring/`, `runbooks/`, `uptime/` |
 | `e2e/` | Playwright: `admin.spec.ts`, `superadmin.spec.ts` (run in CI against the ephemeral stack) |
-| `scripts/` | `extract-plan.cjs`, `check-docs.mjs` (docs freshness check) |
+| `scripts/` | `extract-plan.cjs`, `check-docs.mjs` (docs freshness check), `check-notion-sync.mjs` (lists change records and ADRs with no row in the Notion workspace; `pnpm notion:check -- --notion <export file>`; test: `node --test scripts/check-notion-sync.test.mjs`) |
 | `.github/workflows/ci.yml` | The only pipeline: gates (incl. `secret-scan`), images, staging smoke test, production deploy |
 | `.github/` (other) | `dependabot.yml` (weekly updates), `CODEOWNERS`, `PULL_REQUEST_TEMPLATE.md`; `.gitleaks.toml` at the root configures the secret scan; `.claude/settings.json` denies agents reading `.env*`/keys and asks before force-push, `reset --hard`, `--no-verify` |
 | `docker-compose.yml`, `docker-compose.staging.yml`, `docker-compose.test-db.yml` | local stack, CI ephemeral stack, test database |
