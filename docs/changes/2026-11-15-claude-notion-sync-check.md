@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `ci/notion-sync-check` (not merged yet)
+- **Branch:** `ci/notion-sync-check` (merged in #260, 04fc77c; production deploy succeeded)
 - **Area:** infra, docs
 - **Type:** ci
 - **Supersedes:** none
@@ -36,7 +36,7 @@ AGENTS.md section 6 rule 7 (#258) makes every agent keep the BCOM Platform OS in
 
 ## Follow-ups and open questions
 - Owner: should an API mode be added (needs a read-only Notion integration token)? Until then the check is manual.
-- After merge: update this record's Branch line with the PR and commit, remove the In flight line, delete the branch and worktree.
+- Done after merge: PR and commit recorded, In flight line removed, branch and worktree removed.
 
 ## Definition of done
 No secrets, no generated files, no unrelated edits. Rule 7 (Notion updated) is done by hand on the Notion side after merge.
