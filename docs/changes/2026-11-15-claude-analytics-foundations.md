@@ -54,6 +54,13 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Tested: real database (last non-direct visit wins, direct and unseen visitors store nothing, other visitor or store or day is not linked, report totals equal the order totals, visitors right now counts only the last 5 minutes); production build in a browser (a utm-tagged visit and a real order through the route produced the attribution row; both reports render).
 - Not verified: the 15-second auto refresh of visitors right now (code only), and attribution for orders placed just after midnight UTC.
 
+## Phase 2: customers, orders, inventory and profit reports
+- Eleven reports added (45 in all), all computed from existing tables, no migration: customer cohorts, RFM segments, cancellation reasons, returned products with reasons, items bought together, sell-through, ABC analysis, inventory adjustments and movements, inventory value now, profit by product, profit over time.
+- Profit: sales are after discounts and before tax (taxable value when the order recorded one), cost is the `cost_price` copied onto the order line at placement; lines without a cost are left out and counted in the report note.
+- Deliberately not built: month-end inventory snapshot (the report shows value now), profit by single order, RFM customer list (it would list individuals; use the Customers page).
+- Tested: real database with seeded orders, returns and stock movements and exact expected numbers (cohort percentages including blank future months, RFM segments cover every customer once, cancellation and return reasons, bought-together pairs, sell-through, ABC classes, movement totals, inventory value and missing costs, profit and margin, another store sees nothing). Browser: cohorts and RFM render on the demo store.
+- Not verified: profit and ABC pages in a browser (the demo orders have no cost prices), and the RFM segment boundaries on large stores.
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.

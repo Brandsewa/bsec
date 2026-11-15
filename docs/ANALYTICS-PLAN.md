@@ -49,9 +49,9 @@ Delivery and carrier reports (courier not live; shipping integrations are out of
 
 **Phase 2 reports (optional, each its own slice, in this order):**
 1. ~~**Attribution:**~~ **built** (`order_attribution`, migration 0112): same-day, cookieless attribution on the order; sales by referrer, sales by campaign, items sold by referrer, visitors right now. Not on the cart. Multi-day attribution would need a first-party cookie and consent: a separate decision.
-2. **Customers:** cohort analysis and RFM analysis (builds on `segments`).
-3. **Orders and inventory:** returned products with reasons, cancellation reasons, items bought together, sell-through rate, ABC analysis, inventory adjustments, and a month-end inventory snapshot job for inventory value.
-4. **Profit:** profit margin by order and by product (needs `cost_price` filled in by merchants).
+2. ~~**Customers:**~~ **built:** cohort analysis and RFM segments.
+3. ~~**Orders and inventory:**~~ **built:** cancellation reasons, returned products with reasons, items bought together, sell-through, ABC, inventory adjustments and movements, inventory value now. Not built: a month-end inventory snapshot job (needs a snapshot table and a monthly job); the report shows the value now instead.
+4. ~~**Profit:**~~ **built:** profit by product and profit over time (needs `cost_price` filled in by merchants; profit by single order is not built).
 
 **Optional follow-ups for the ad integrations:** server-side Meta `ViewContent`, Meta `external_id`, a per-order delivery log in the admin, per-region banner rules.
 

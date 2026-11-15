@@ -46,6 +46,10 @@ interface Built {
 const MAX_RANGE_DAYS = 800;
 const ATTRIBUTION_NOTE =
   "A sale is credited to the visitor's last visit from another site or a campaign link on the same day they ordered. Orders from visitors who first came on an earlier day, who opted out of measurement, or whose browser blocked the page counter are shown as direct.";
+const PROFIT_NOTE =
+  "Sales here are after discounts and before tax. Only order lines that had a cost price when the order was placed are counted, so set cost prices on your products first. Shipping and returns are not included.";
+/** Revenue of an order line: after discounts and before tax (the taxable value when the order recorded one). */
+const LINE_REVENUE = sql.raw("COALESCE(oi.taxable_value_paise, oi.total - oi.discount_amount)");
 const TRAFFIC_NOTE = "Measured visits only: bots, Do Not Track and blocked requests are not counted. Today can be up to an hour behind.";
 
 const c = (key: string, label: string, kind: AnalyticsColumn["kind"] = "number"): AnalyticsColumn => ({ key, label, kind });
@@ -279,6 +283,277 @@ const BUILDERS: Record<AnalyticsReportId, (tx: Db, p: P) => Promise<Built>> = {
       rows,
       chart: null,
       note: `${n.toLocaleString()} ${n === 1 ? "visitor" : "visitors"} in the last 5 minutes. Measured visits only: bots, Do Not Track and blocked requests are not counted. The date range does not apply.`,
+    };
+  },
+
+  async profit_by_product(tx, p) {
+    const raw = await q(
+      tx,
+      sql`SELECT oi.product_title AS product, sum(oi.quantity)::int AS units, sum(${LINE_REVENUE})::float8 AS sales,
+                 sum(oi.cost_price * oi.quantity)::float8 AS cost
+          FROM order_items oi JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+          WHERE ${ordersIn(p)} AND oi.cost_price IS NOT NULL GROUP BY 1 ORDER BY (sum(${LINE_REVENUE}) - sum(oi.cost_price * oi.quantity)) DESC, 1 LIMIT 200`,
+    );
+    const [skipped] = await q(
+      tx,
+      sql`SELECT count(*)::int AS lines FROM order_items oi JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+          WHERE ${ordersIn(p)} AND oi.cost_price IS NULL`,
+    );
+    const rows = raw.map((r) => {
+      const sales = num(r.sales);
+      const cost = num(r.cost);
+      return { product: r.product ?? null, units: r.units ?? null, sales, cost, profit: sales - cost, margin: pct(sales - cost, sales) };
+    });
+    const left = num(skipped?.lines);
+    return {
+      columns: [c("product", "Product", "text"), c("units", "Units sold"), c("sales", "Sales", "money"), c("cost", "Cost", "money"), c("profit", "Profit", "money"), c("margin", "Margin", "percent")],
+      rows,
+      chart: { type: "bar", x: "product", series: ["profit"] },
+      note: `${PROFIT_NOTE}${left > 0 ? ` ${left.toLocaleString()} order ${left === 1 ? "line has" : "lines have"} no cost price and ${left === 1 ? "is" : "are"} left out.` : ""}`,
+    };
+  },
+
+  async profit_over_time(tx, p) {
+    const raw = await overTime(
+      tx,
+      p,
+      sql`SELECT ${bucketOf(sql`o.placed_at`, p)} AS bucket, sum(${LINE_REVENUE}) AS sales, sum(oi.cost_price * oi.quantity) AS cost
+          FROM order_items oi JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+          WHERE ${ordersIn(p)} AND oi.cost_price IS NOT NULL GROUP BY 1`,
+      ["sales", "cost"],
+    );
+    const rows = raw.map((r) => ({ bucket: r.bucket, sales: r.sales, cost: r.cost, profit: r.sales - r.cost, margin: pct(r.sales - r.cost, r.sales) }));
+    return {
+      columns: [c("bucket", "Date", "date"), c("sales", "Sales", "money"), c("cost", "Cost", "money"), c("profit", "Profit", "money"), c("margin", "Margin", "percent")],
+      rows,
+      chart: { type: "line", x: "bucket", series: ["profit"] },
+      note: PROFIT_NOTE,
+    };
+  },
+
+  async customer_cohorts(tx, p) {
+    const raw = await q(
+      tx,
+      sql`WITH firsts AS (
+            SELECT ${custKey("o")} AS k, date_trunc('month', min(o.placed_at AT TIME ZONE ${p.tz})) AS cohort
+            FROM orders o WHERE o.tenant_id = ${p.tenantId} AND o.status <> 'cancelled' AND o.currency = ${p.currency} GROUP BY 1
+          ), picked AS (
+            SELECT k, cohort FROM firsts
+            WHERE cohort >= date_trunc('month', ${p.from}::date::timestamp) AND cohort <= date_trunc('month', ${p.to}::date::timestamp)
+          ), act AS (
+            SELECT DISTINCT ${custKey("o")} AS k, date_trunc('month', o.placed_at AT TIME ZONE ${p.tz}) AS m
+            FROM orders o WHERE o.tenant_id = ${p.tenantId} AND o.status <> 'cancelled' AND o.currency = ${p.currency}
+          )
+          SELECT to_char(c.cohort, 'YYYY-MM') AS cohort, count(DISTINCT c.k)::int AS customers,
+                 ((extract(year FROM now() AT TIME ZONE ${p.tz}) - extract(year FROM c.cohort)) * 12
+                   + extract(month FROM now() AT TIME ZONE ${p.tz}) - extract(month FROM c.cohort))::int AS elapsed,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '1 month')::int AS m1,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '2 months')::int AS m2,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '3 months')::int AS m3,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '4 months')::int AS m4,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '5 months')::int AS m5,
+                 count(DISTINCT c.k) FILTER (WHERE a.m = c.cohort + interval '6 months')::int AS m6
+          FROM picked c LEFT JOIN act a ON a.k = c.k GROUP BY c.cohort ORDER BY c.cohort`,
+    );
+    const rows = raw.map((r) => {
+      const out: Row = { cohort: r.cohort ?? null, customers: r.customers ?? null };
+      for (let k = 1; k <= 6; k++) out[`m${k}`] = num(r.elapsed) >= k ? pct(num(r[`m${k}`]), num(r.customers)) : null;
+      return out;
+    });
+    return {
+      columns: [c("cohort", "First order month", "text"), c("customers", "Customers"), ...[1, 2, 3, 4, 5, 6].map((k) => c(`m${k}`, `Month ${k}`, "percent"))],
+      rows,
+      chart: null,
+      note: "Share of each month's first-time customers who ordered again, 1 to 6 months later. Months that have not happened yet are blank. Cohorts are chosen by the dates above; later orders are counted whenever they happened.",
+    };
+  },
+
+  async rfm_segments(tx, p) {
+    const raw = await q(
+      tx,
+      sql`WITH c AS (
+            SELECT ${custKey("o")} AS k, max(o.placed_at) AS last_at, count(*) AS n, sum(o.grand_total) AS spent
+            FROM orders o WHERE o.tenant_id = ${p.tenantId} AND o.status <> 'cancelled' AND o.currency = ${p.currency} AND o.placed_at < ${hi(p)}
+            GROUP BY 1
+          ), s AS (
+            SELECT *, ntile(5) OVER (ORDER BY last_at) AS r, ntile(5) OVER (ORDER BY n) AS f,
+                   greatest(0, (${p.to}::date - (last_at AT TIME ZONE ${p.tz})::date)) AS days FROM c
+          ), seg AS (
+            SELECT *, CASE
+              WHEN r >= 4 AND f >= 4 THEN 'Champions'
+              WHEN r >= 3 AND f >= 3 THEN 'Loyal customers'
+              WHEN r >= 4 THEN 'New customers'
+              WHEN r = 3 THEN 'Potential loyalists'
+              WHEN f >= 3 THEN 'At risk'
+              WHEN r = 2 THEN 'About to sleep'
+              ELSE 'Lost' END AS segment FROM s
+          )
+          SELECT segment, count(*)::int AS customers, round(avg(n)::numeric, 1)::float8 AS avg_orders,
+                 round(avg(spent))::float8 AS avg_spend, round(avg(days))::int AS avg_days
+          FROM seg GROUP BY segment`,
+    );
+    const order = ["Champions", "Loyal customers", "Potential loyalists", "New customers", "At risk", "About to sleep", "Lost"];
+    const total = raw.reduce((s, r) => s + num(r.customers), 0);
+    const rows = order
+      .map((name) => raw.find((r) => r.segment === name))
+      .filter((r): r is Row => Boolean(r))
+      .map((r) => ({ segment: r.segment ?? null, customers: r.customers ?? null, share: pct(num(r.customers), total), avg_orders: r.avg_orders ?? null, avg_spend: r.avg_spend ?? null, avg_days: r.avg_days ?? null }));
+    return {
+      columns: [c("segment", "Segment", "text"), c("customers", "Customers"), c("share", "Share", "percent"), c("avg_orders", "Average orders"), c("avg_spend", "Average spend", "money"), c("avg_days", "Days since last order")],
+      rows,
+      chart: { type: "bar", x: "segment", series: ["customers"] },
+      note: "Customers are scored from 1 to 5 against each other on how recently and how often they bought, as of the end date. It is most useful once you have a few dozen customers. Individual customers are listed on the Customers page.",
+    };
+  },
+
+  async cancellation_reasons(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT COALESCE(NULLIF(o.cancel_reason, ''), '(none given)') AS reason, count(*)::int AS orders, sum(o.grand_total)::float8 AS total
+          FROM orders o
+          WHERE o.tenant_id = ${p.tenantId} AND o.status = 'cancelled' AND o.currency = ${p.currency} AND ${within(sql`COALESCE(o.cancelled_at, o.placed_at)`, p)}
+          GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 200`,
+    );
+    return {
+      columns: [c("reason", "Reason", "text"), c("orders", "Orders cancelled"), c("total", "Sales lost", "money")],
+      rows,
+      chart: { type: "bar", x: "reason", series: ["orders"] },
+      note: "Orders cancelled in the selected dates.",
+    };
+  },
+
+  async returned_products_reasons(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT oi.product_title AS product, rt.reason AS reason, sum(ri.quantity)::int AS items, count(DISTINCT rt.id)::int AS returns
+          FROM return_items ri
+          JOIN returns rt ON rt.tenant_id = ri.tenant_id AND rt.id = ri.return_id
+          JOIN orders o ON o.tenant_id = rt.tenant_id AND o.id = rt.order_id
+          JOIN order_items oi ON oi.tenant_id = ri.tenant_id AND oi.id = ri.order_item_id
+          WHERE ri.tenant_id = ${p.tenantId} AND rt.status NOT IN ('rejected', 'cancelled') AND o.currency = ${p.currency} AND ${within(sql`rt.created_at`, p)}
+          GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2 LIMIT 200`,
+    );
+    return {
+      columns: [c("product", "Product", "text"), c("reason", "Reason", "text"), c("items", "Items returned"), c("returns", "Returns")],
+      rows,
+      chart: { type: "bar", x: "product", series: ["items"] },
+      note: "Returns requested in the selected dates; rejected and cancelled returns are left out.",
+    };
+  },
+
+  async items_bought_together(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT a.product_title AS product_a, b.product_title AS product_b, count(DISTINCT a.order_id)::int AS orders
+          FROM order_items a
+          JOIN order_items b ON b.tenant_id = a.tenant_id AND b.order_id = a.order_id AND a.product_title < b.product_title
+          JOIN orders o ON o.tenant_id = a.tenant_id AND o.id = a.order_id
+          WHERE ${ordersIn(p)} GROUP BY 1, 2 ORDER BY 3 DESC, 1, 2 LIMIT 100`,
+    );
+    return {
+      columns: [c("product_a", "Product", "text"), c("product_b", "Bought with", "text"), c("orders", "Orders together")],
+      rows,
+      chart: null,
+      note: "Pairs of different products in the same order. A pair appears once, alphabetically.",
+    };
+  },
+
+  async inventory_sell_through(tx, p) {
+    const rows = await q(
+      tx,
+      sql`WITH sold AS (
+            SELECT oi.variant_id, sum(oi.quantity) AS qty
+            FROM order_items oi JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+            WHERE ${ordersAnyCurrency(p)} GROUP BY 1
+          ), stock AS (
+            SELECT variant_id, sum(on_hand) AS on_hand FROM inventory_levels WHERE tenant_id = ${p.tenantId} GROUP BY 1
+          )
+          SELECT pd.title AS product, v.title AS variant, v.sku AS sku, COALESCE(sold.qty, 0)::int AS sold, COALESCE(stock.on_hand, 0)::int AS on_hand,
+                 CASE WHEN COALESCE(sold.qty, 0) + COALESCE(stock.on_hand, 0) > 0
+                      THEN round(100.0 * COALESCE(sold.qty, 0) / (COALESCE(sold.qty, 0) + COALESCE(stock.on_hand, 0)), 1)::float8 END AS rate
+          FROM variants v
+          JOIN products pd ON pd.tenant_id = v.tenant_id AND pd.id = v.product_id
+          LEFT JOIN sold ON sold.variant_id = v.id
+          LEFT JOIN stock ON stock.variant_id = v.id
+          WHERE v.tenant_id = ${p.tenantId} AND v.track_inventory
+          ORDER BY 6 DESC NULLS LAST, 1, 2 LIMIT 200`,
+    );
+    return {
+      columns: [c("product", "Product", "text"), c("variant", "Variant", "text"), c("sku", "SKU", "text"), c("sold", "Units sold"), c("on_hand", "On hand now"), c("rate", "Sell-through", "percent")],
+      rows,
+      chart: null,
+      note: "Units sold in the selected dates divided by units sold plus units on hand now.",
+    };
+  },
+
+  async inventory_abc(tx, p) {
+    const raw = await q(
+      tx,
+      sql`SELECT oi.product_title AS product, sum(oi.total - oi.discount_amount)::float8 AS sales
+          FROM order_items oi JOIN orders o ON o.tenant_id = oi.tenant_id AND o.id = oi.order_id
+          WHERE ${ordersIn(p)} GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 500`,
+    );
+    const total = raw.reduce((s, r) => s + num(r.sales), 0);
+    let before = 0;
+    const rows = raw.map((r) => {
+      const share = total > 0 ? (num(r.sales) / total) * 100 : 0;
+      // A product is A while the products above it have not yet made 80% of sales, B up to 95%, C after.
+      const cls = before < 80 ? "A" : before < 95 ? "B" : "C";
+      before += share;
+      return { product: r.product ?? null, sales: num(r.sales), share: Math.round(share * 10) / 10, cumulative: Math.round(Math.min(before, 100) * 10) / 10, class: cls };
+    });
+    return {
+      columns: [c("product", "Product", "text"), c("sales", "Sales", "money"), c("share", "Share of sales", "percent"), c("cumulative", "Cumulative", "percent"), c("class", "Class", "text")],
+      rows,
+      chart: { type: "bar", x: "product", series: ["sales"] },
+      note: "A products make the first 80% of sales, B the next 15%, C the rest. Sales are after discounts.",
+    };
+  },
+
+  async inventory_adjustments(tx, p) {
+    const rows = await q(
+      tx,
+      sql`SELECT m.reason AS reason, count(*)::int AS movements,
+                 COALESCE(sum(m.delta) FILTER (WHERE m.delta > 0), 0)::int AS units_in,
+                 COALESCE(-sum(m.delta) FILTER (WHERE m.delta < 0), 0)::int AS units_out,
+                 sum(m.delta)::int AS net
+          FROM inventory_movements m
+          WHERE m.tenant_id = ${p.tenantId} AND ${within(sql`m.created_at`, p)}
+          GROUP BY 1 ORDER BY 2 DESC, 1`,
+    );
+    return {
+      columns: [c("reason", "Reason", "text"), c("movements", "Movements"), c("units_in", "Units added"), c("units_out", "Units removed"), c("net", "Net change")],
+      rows,
+      chart: { type: "bar", x: "reason", series: ["movements"] },
+    };
+  },
+
+  async inventory_value(tx, p) {
+    const rows = await q(
+      tx,
+      sql`WITH stock AS (SELECT variant_id, sum(on_hand) AS on_hand FROM inventory_levels WHERE tenant_id = ${p.tenantId} GROUP BY 1)
+          SELECT pd.title AS product, v.title AS variant, v.sku AS sku, stock.on_hand::int AS on_hand,
+                 v.cost_price::float8 AS cost, (stock.on_hand * v.cost_price)::float8 AS value
+          FROM stock
+          JOIN variants v ON v.tenant_id = ${p.tenantId} AND v.id = stock.variant_id
+          JOIN products pd ON pd.tenant_id = v.tenant_id AND pd.id = v.product_id
+          WHERE v.track_inventory AND stock.on_hand > 0
+          ORDER BY 6 DESC NULLS LAST, 1, 2 LIMIT 200`,
+    );
+    const [t] = await q(
+      tx,
+      sql`WITH stock AS (SELECT variant_id, sum(on_hand) AS on_hand FROM inventory_levels WHERE tenant_id = ${p.tenantId} GROUP BY 1)
+          SELECT COALESCE(sum(stock.on_hand * v.cost_price), 0)::float8 AS value,
+                 count(*) FILTER (WHERE v.cost_price IS NULL)::int AS missing
+          FROM stock JOIN variants v ON v.tenant_id = ${p.tenantId} AND v.id = stock.variant_id
+          WHERE v.track_inventory AND stock.on_hand > 0`,
+    );
+    const missing = num(t?.missing);
+    return {
+      columns: [c("product", "Product", "text"), c("variant", "Variant", "text"), c("sku", "SKU", "text"), c("on_hand", "On hand"), c("cost", "Cost each", "money"), c("value", "Value at cost", "money")],
+      rows,
+      chart: null,
+      note: `Stock on hand now at cost price, in the store currency. Total: ${new Intl.NumberFormat("en", { style: "currency", currency: p.currency }).format(num(t?.value) / 100)}.${missing > 0 ? ` ${missing} ${missing === 1 ? "variant has" : "variants have"} no cost price and ${missing === 1 ? "is" : "are"} not valued. The date range does not apply.` : " The date range does not apply."}`,
     };
   },
 
