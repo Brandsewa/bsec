@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `feat/merchant-analytics`  (not merged yet)
+- **Branch:** `feat/merchant-analytics`  (merged in #267, 952092a; deployed to production 2026-11-15)
 - **Area:** db, domain, web, ui, docs
 - **Type:** feature
 - **Supersedes:** none
