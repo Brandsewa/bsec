@@ -24,7 +24,7 @@ Stripe now takes payment inside the store's checkout page when the store saved a
 - R1 (expire unpaid online orders) is **not built**: a late payment on an expired order would settle against released stock. It needs a provider-side check first; follow-up below.
 
 ## Verification
-- Ran: `pnpm typecheck` pass; `pnpm lint` 0 errors (existing warnings); `pnpm docs:check` ok; payments `stripe.test.ts` 12 pass; real-DB (Docker Postgres) `stripe-embedded-checkout` 6, `payment-providers` 13, `platform-billing-gateways` 12, `platform-billing-subscribe/paypal/cashfree/settings/dunning`, `billing-lifecycle`, `markets-checkout`, `razorpay-checkout`, `admin-refund-gateway` 5, `concurrency-scale` all pass (see below for the final full run).
+- Ran: `pnpm typecheck` pass; `pnpm lint` 0 errors (existing warnings); `pnpm build` pass; `pnpm docs:check` ok; payments unit tests 57 pass; web unit tests 256 pass (including the production page-weight budget); `@bs/domain` real-database suite (Docker Postgres) 145 files, 2998 tests pass (three files crashed their worker once with a Windows exit code and passed on re-run: themes, security-fixes, shipping-offered). New suites: `stripe-embedded-checkout` 6, `platform-billing-gateways` 12, `admin-refund-gateway` 5, plus added cases in `payment-providers` and `platform-billing-subscribe`.
 - NOT verified: any real Stripe, Razorpay or PayPal call (all gateways faked at fetch); the Stripe embedded form, the Razorpay subscription window and the new Super Admin and admin screens in a browser; migration `0105` against a database that has billing settings rows (defaults only, read not run on production data); Razorpay international recurring availability on the platform account (Q1); QuickBuy on a phone (slice R0); the e2e suite.
 
 ## Docs updated
@@ -40,4 +40,4 @@ Stripe now takes payment inside the store's checkout page when the store saved a
 - First live runs by the owner: one small Stripe test-mode embedded payment, one Razorpay test subscription through the window, one USD Razorpay subscription once enabled, one refund per gateway.
 
 ## Definition of done
-Gate partly run (typecheck, lint, docs:check, affected real-DB suites); browser checks and full heavy shards not run locally. No secrets or generated files in the diff.
+Gate run locally (typecheck, lint, build, docs:check, unit and domain real-database tests); apps/platform and db suites, e2e and browser checks not run. Notion updated (Change Log x2, Decisions x2, Work Item, Risks x2); Feature rows and Docs Library not edited. No secrets or generated files in the diff.
