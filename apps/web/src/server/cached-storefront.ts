@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { themeChromeIdentity, withThemeLogoFallback } from "@/lib/theme-brand.ts";
 import {
   tenantTag,
   getStorefrontProduct,
@@ -294,7 +295,11 @@ export async function getCachedBrandAssets(tenantId: string) {
   cacheTag(tenantTag(tenantId, "theme"));
   cacheTag(tenantTag(tenantId, "store-shell"));
   cacheTag(tenantTag(tenantId, "seo"));
-  return getStorefrontBrandAssets(server().rt, tenantId);
+  const assets = await getStorefrontBrandAssets(server().rt, tenantId);
+  if (assets.logoUrl && assets.shareImage) return assets;
+  // Logo kept only in the theme header or footer: use it so the page head and the Organization schema still have one.
+  const [header, footer] = await Promise.all([getCachedThemePage(tenantId, "header").catch(() => null), getCachedThemePage(tenantId, "footer").catch(() => null)]);
+  return withThemeLogoFallback(assets, themeChromeIdentity(header, footer).logoUrl);
 }
 
 /** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */

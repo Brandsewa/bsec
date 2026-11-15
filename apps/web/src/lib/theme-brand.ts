@@ -1,4 +1,4 @@
-import { cleanSameAs } from "@bs/domain";
+import { cleanSameAs, type StorefrontBrandAssets } from "@bs/domain";
 
 interface ChromePage {
   blocks: ReadonlyArray<{ type: string; props?: unknown }>;
@@ -22,5 +22,19 @@ export function themeChromeIdentity(header: ChromePage | null | undefined, foote
   return {
     logoUrl: logoOf(header, "SiteHeader") ?? logoOf(footer, "SiteFooter"),
     sameAs: cleanSameAs(socials.map((s) => s.url)),
+  };
+}
+
+/**
+ * Brand settings win; a store that keeps its logo only in the theme header or footer (ricwell does) would otherwise have no logo
+ * and no share image. The theme logo then fills both, so shared links and AI cards still show the store. No favicon is guessed
+ * from a logo: it is rarely square, so that stays a Brand setting.
+ */
+export function withThemeLogoFallback(assets: StorefrontBrandAssets, themeLogoUrl: string | null): StorefrontBrandAssets {
+  if (!themeLogoUrl) return assets;
+  return {
+    ...assets,
+    logoUrl: assets.logoUrl ?? themeLogoUrl,
+    shareImage: assets.shareImage ?? { url: themeLogoUrl },
   };
 }
