@@ -13,18 +13,18 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 ## What changed
 - `docs/ANALYTICS-PLAN.md` (reports by phase, architecture, slices with acceptance criteria) and `docs/adr/047-first-party-analytics.md`.
 - `packages/ui`: `lib/date-presets.ts` (`ANALYTICS_PRESETS`, `comparisonRange`, `autoGranularity`); `DateRangePicker` gains optional `presets` and `today` props. Existing screens are unchanged.
-- `packages/db`: `analytics_events` tenant table (migration `0107_analytics_events`, forced RLS, CHECKs on type and device).
+- `packages/db`: `analytics_events` tenant table (migration `0108_analytics_events`, forced RLS, CHECKs on type and device).
 - `packages/domain/src/analytics/collect.ts`: `recordAnalyticsEvent` drops bots, Do Not Track and Global Privacy Control requests, unknown types and bad paths; HMAC visitor hash per tenant per UTC day; no raw IP stored.
 - `apps/web`: `POST /api/storefront/analytics/collect` (always 204, in-memory per-IP limiter, live stores only) and `public/bsa.js` (async script tag in the storefront layout head).
 
 ## Slices 2 to 4 (added later on the same branch)
-- Migration `0108_analytics_traffic_daily`; queue `analytics.maintenance` (hourly :20): traffic rollup for yesterday and today, 90-day raw retention, 26-month rollup retention.
+- Migration `0109_analytics_traffic_daily`; queue `analytics.maintenance` (hourly :20): traffic rollup for yesterday and today, 90-day raw retention, 26-month rollup retention.
 - `add_to_cart` recorded server-side from `cart/items/route.ts`.
 - `admin.analytics.overview` and `admin.analytics.report` (contracts in `packages/contracts/src/analytics.ts`, services in `packages/domain/src/analytics/reports.ts`), `analytics.read` enforced in the route and the domain service; both mapped in `isolation.int.test.ts`. 30 reports, including sales by market.
 - Admin: `/analytics` dashboard and `/analytics/reports/$reportId`, sidebar item "Analytics" (needs `analytics.read`), shared range controls (presets, comparison, currency), CSV export for staff with `exports.run`. Charts: `@bs/ui/charts` (Recharts, lazy loaded).
 
 ## Slice 5: cookie banner and consent-gated integrations
-- Migration `0109_privacy_consent_settings` (`privacy_settings.consent_settings` jsonb, null = off). `ConsentSettings` in `packages/contracts/src/consent.ts`; `getPrivacySettings` and `updatePrivacySettings` carry it; `getStorefrontConsentConfig` feeds the storefront.
+- Migration `0110_privacy_consent_settings` (`privacy_settings.consent_settings` jsonb, null = off). `ConsentSettings` in `packages/contracts/src/consent.ts`; `getPrivacySettings` and `updatePrivacySettings` carry it; `getStorefrontConsentConfig` feeds the storefront.
 - Admin: new card "Cookie banner and tracking" on `/settings/customer-privacy` (needs `privacy.manage`).
 - Storefront: `apps/web/public/bsc.js` and a JSON config script in the layout head, only when the banner is on. Choice stored in `bs_consent` (added to the test-locked necessary-cookie inventory).
 - Rules: a tracking id requires the banner to be on; ids match strict patterns; GPC counts as a rejection; withdrawing consent reloads the page; `#cookie-settings` links reopen the banner. GA4 and Meta get page views only.
@@ -35,20 +35,20 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Bug fixed on the way: React hoists `bsc.js` into `<head>`, so it could run before the config element existed and silently do nothing; it now waits for the config (found while testing in the browser).
 
 ## Server-side conversion APIs (slice 5b)
-- Migration `0110_order_tracking`; queue `analytics.conversion`; `packages/domain/src/analytics/conversions.ts`; `PlaceOrderInput.tracking`; `place-order` route decides and passes it; `order.created` consumer enqueues the job; hourly maintenance gives up stale rows and deletes old ones.
+- Migration `0111_order_tracking`; queue `analytics.conversion`; `packages/domain/src/analytics/conversions.ts`; `PlaceOrderInput.tracking`; `place-order` route decides and passes it; `order.created` consumer enqueues the job; hourly maintenance gives up stale rows and deletes old ones.
 - Admin: Meta access token and GA4 API secret on `/settings/customer-privacy` (new procedures `customerPrivacy.saveConversionCredentials` and `clearConversionCredentials`, also exposed on the marketing-site router), Meta test event code, and a 7-day sent, failed, waiting line. Mapped in `isolation.int.test.ts`.
 - Rules, all tested: consent required per platform and per revision; no credential, no row; hashed email and phone to Meta only; GA4 gets no personal data; token in the Meta request body, never the URL; failure text redacted; idempotent per platform; retry on network, 429 and 5xx; request details cleared when settled.
 - Not verified against live Meta or Google (no real credentials used): the Graph API version constant `META_CAPI_VERSION` (v21.0) and the payload shape follow Meta's documented Conversions API and should be checked once with the merchant's Test events code.
 
 ## Server-side add to cart and begin checkout (slice 5c)
-- Migration `0111_conversion_events` (named so after finding `tracking_events` already exists for shipments); queue `analytics.conversion_event`; `packages/domain/src/analytics/server-events.ts` (`recordServerEvent`, `handleServerEventJob`); `decideEventTracking` and `buildMetaEventPayload` in `conversions.ts`.
+- Migration `0112_conversion_events` (named so after finding `tracking_events` already exists for shipments); queue `analytics.conversion_event`; `packages/domain/src/analytics/server-events.ts` (`recordServerEvent`, `handleServerEventJob`); `decideEventTracking` and `buildMetaEventPayload` in `conversions.ts`.
 - Cart route returns `analyticsEventId`; checkout page records `InitiateCheckout` and passes the id in the `begin_checkout` blob; `bsc.js` uses it as the Meta `eventID`.
 - Meta only. GA4 cannot de-duplicate non-purchase events, so it stays browser-only for these two; sending both would inflate GA4.
 - Tested: unit (decision matrix, payload without personal data), real database (record, repeat, send, retry, permanent failure, removed token, stats, retention), and a production build in a browser (event rows and matching ids; no row for analytics-only or no-choice visitors; a checkout refresh adds no second row).
 - Not verified against live Meta.
 
 ## Phase 2: attribution
-- Migration `0112_order_attribution`; `packages/domain/src/analytics/attribution.ts` (`resolveOrderAttribution`); `PlaceOrderInput.attribution`; the place-order route resolves and passes it.
+- Migration `0113_order_attribution`; `packages/domain/src/analytics/attribution.ts` (`resolveOrderAttribution`); `PlaceOrderInput.attribution`; the place-order route resolves and passes it.
 - Cookieless: the collector's daily visitor hash finds the visitor's same-day page views; the last visit from a referrer or utm link is stored on the order (host and utm values only, never the hash). Different day, Do Not Track, bot or blocked beacon means direct.
 - Four new reports (34 in all): sales by referrer, sales by campaign, items sold by referrer, and visitors right now (live: ignores the date range, refreshes every 15 s).
 - Tested: real database (last non-direct visit wins, direct and unseen visitors store nothing, other visitor or store or day is not linked, report totals equal the order totals, visitors right now counts only the last 5 minutes); production build in a browser (a utm-tagged visit and a real order through the route produced the attribution row; both reports render).

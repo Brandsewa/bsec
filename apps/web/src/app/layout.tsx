@@ -93,6 +93,7 @@ export async function generateMetadata(): Promise<Metadata> {
         description: `Shop at ${name}.`,
         robots: isNoIndex ? { index: false, follow: false } : { index: true, follow: true },
         ...icons,
+        manifest: "/manifest.webmanifest",
         // Pages that set their own openGraph replace this object: they add the share image back with withShareImage.
         openGraph: { type: "website", siteName: name, ...(share ? { images: [{ url: share.url, ...(share.width ? { width: share.width } : {}), ...(share.height ? { height: share.height } : {}) }] } : {}) },
         twitter: { card: share ? "summary_large_image" : "summary", ...(share ? { images: [share.url] } : {}) },

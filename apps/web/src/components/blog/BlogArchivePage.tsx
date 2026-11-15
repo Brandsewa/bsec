@@ -8,7 +8,7 @@ import {
   generateBreadcrumbJsonLd,
 } from "@bs/domain";
 import { getBlockDefinition, type BlockInstance, type BlogListingOptions } from "@bs/blocks";
-import { getCachedBlogList, getCachedBlogMagazine, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBlogList, getCachedBlogMagazine, getCachedBrandAssets, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { BlogListingSection } from "./BlogListingSection.tsx";
 import { BlogMagazine } from "./BlogMagazine.tsx";
@@ -41,9 +41,9 @@ async function loadArchive(tenantId: string, categoryPath: string | undefined, p
 export async function blogArchiveMetadata(categoryPath: string | undefined, page: number): Promise<Metadata> {
   const { host, tenantId, noindex } = await request();
   if (!tenantId) return { title: "Blog" };
-  const [{ list }, storeName] = await Promise.all([loadArchive(tenantId, categoryPath, page), getCachedStoreName(tenantId)]);
+  const [{ list }, storeName, assets] = await Promise.all([loadArchive(tenantId, categoryPath, page), getCachedStoreName(tenantId), getCachedBrandAssets(tenantId).catch(() => null)]);
   if (!list.enabled || list.categoryMissing) return { title: "Not found", robots: { index: false } };
-  const m = buildBlogArchiveMetadata({ list, settings: list.settings, storeName, host, storeNoindex: noindex });
+  const m = buildBlogArchiveMetadata({ list, settings: list.settings, storeName, host, storeNoindex: noindex, ...(assets?.shareImage ? { fallbackImageUrl: assets.shareImage.url } : {}) });
   return { title: m.title, description: m.description, robots: m.robots, alternates: m.alternates, openGraph: m.openGraph, twitter: m.twitter };
 }
 

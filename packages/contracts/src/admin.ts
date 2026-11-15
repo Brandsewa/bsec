@@ -903,6 +903,25 @@ export const StorageUsageBreakdownItem = z.object({
 });
 export type StorageUsageBreakdownItem = z.infer<typeof StorageUsageBreakdownItem>;
 
+/** One line of the store's SEO health report (docs/SEO-GEO-AEO-PLAN.md Phase 2). `count` is how many items are affected. */
+export const SeoHealthCheck = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["ok", "warn", "fail"]),
+  detail: z.string(),
+  count: z.number().int().nonnegative().optional(),
+  /** Admin path where the merchant fixes it. */
+  fixHref: z.string().optional(),
+});
+export type SeoHealthCheck = z.infer<typeof SeoHealthCheck>;
+
+export const SeoHealthView = z.object({
+  /** Pages listed in the store's sitemap right now. */
+  indexablePageCount: z.number().int().nonnegative(),
+  checks: z.array(SeoHealthCheck),
+});
+export type SeoHealthView = z.infer<typeof SeoHealthView>;
+
 export const StorageUsageView = z.object({
   usedBytes: z.number(),
   limitBytes: z.number().nullable(),
@@ -5086,6 +5105,13 @@ export const adminContract = {
     get: oc
       .route({ method: "GET", path: "/admin/storage/usage" })
       .output(StorageUsageView),
+  },
+
+  // --- SEO health: what search engines and AI assistants can and cannot see (docs/SEO-GEO-AEO-PLAN.md Phase 2) ---
+  seo: {
+    health: oc
+      .route({ method: "GET", path: "/admin/seo/health" })
+      .output(SeoHealthView),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---

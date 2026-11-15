@@ -1223,6 +1223,20 @@ export async function startJobs(opts: {
     }
   });
 
+  // seo.indexnow_sweep: tells search engines which pages changed (docs/SEO-GEO-AEO-PLAN.md Phase 2). A no-op unless INDEXNOW_ENABLED=true.
+  await boss.work(QUEUE_NAMES.SEO_INDEXNOW_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { runIndexNowSweep } = await import("./storefront/indexnow.ts");
+        const res = await runIndexNowSweep(db, { log: opts.log });
+        if (res.notified > 0 || res.failed > 0) opts.log.info({ job_id: job.id, ...res }, "seo.indexnow_sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "seo.indexnow_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Handle maintenance.watchdog_sweep recurring job (Settings Phase 8 / Slice 8B)
   await boss.work(
     QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP,
@@ -1411,6 +1425,7 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.BLOG_PUBLISH_DUE, "* * * * *", {});
+    await boss.schedule(QUEUE_NAMES.SEO_INDEXNOW_SWEEP, "*/15 * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
     await boss.schedule(QUEUE_NAMES.ANALYTICS_MAINTENANCE, "20 * * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});

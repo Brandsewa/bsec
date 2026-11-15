@@ -65,6 +65,7 @@ import {
   getCookieInventory,
   previewShippingRate,
   getStorageUsage,
+  getSeoHealth,
   scheduleMaintenance,
   cancelScheduledMaintenance,
   endMaintenance,
@@ -2251,6 +2252,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
       }
       case "storageUsage.get":
         return await getStorageUsage(rt, ctx);
+      case "seo.health":
+        return await getSeoHealth(rt, ctx);
       case "storefront.listTransitions":
         return await listStoreStatusTransitions(rt, ctx, { limit: 5 });
       case "storefront.scheduleMaintenance":

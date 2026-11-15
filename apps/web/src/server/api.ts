@@ -376,6 +376,7 @@ import {
   endMaintenance,
   listStoreStatusTransitions,
   getStorageUsage,
+  getSeoHealth,
   getSettingsUpdate,
   applySettingsUpdate,
   getCookieInventory,
@@ -3207,6 +3208,17 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return applySettingsUpdate(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    seo: {
+      health: os.admin.seo.health
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSeoHealth(context.rt, context.tenantCtx).catch((e) => {
             throw mapAuthError(e);
           });
         }),

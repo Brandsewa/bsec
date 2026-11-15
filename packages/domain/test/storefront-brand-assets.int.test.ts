@@ -46,7 +46,7 @@ afterAll(async () => {
 
 describe("getStorefrontBrandAssets", () => {
   it("returns nothing for a store with no brand images", async () => {
-    expect(await getStorefrontBrandAssets(rtWeb, storeB)).toEqual({ logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, shareImage: null });
+    expect(await getStorefrontBrandAssets(rtWeb, storeB)).toEqual({ logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, faviconSizes: null, appleTouchIconSizes: null, shareImage: null });
   });
 
   it("falls back from the SEO default image to the social image to the logo, and stays inside its own store", async () => {
@@ -59,6 +59,7 @@ describe("getStorefrontBrandAssets", () => {
     const a1 = await getStorefrontBrandAssets(rtWeb, storeA);
     expect(a1.logoUrl).toBe("https://media.example.test/tenants/a/logo.png");
     expect(a1.faviconUrl).toBe("https://media.example.test/tenants/a/fav.png");
+    expect(a1.faviconSizes).toBe("64x64");
     expect(a1.shareImage?.url).toBe("https://media.example.test/tenants/a/logo.png");
 
     // A social image beats the logo; the SEO default image beats both.

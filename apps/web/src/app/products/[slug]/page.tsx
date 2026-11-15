@@ -20,7 +20,7 @@ import {
   buildViewItemEvent,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStoreName, getCachedProductCustomFields,getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedStoreName, getCachedOfferExtras, getCachedProductCustomFields,getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
@@ -158,7 +158,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
   const storeUrl = `https://${host}`;
   const storeName = await getCachedStoreName(tenantId).catch(() => undefined);
-  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency, { storeName, urlPrefix: marketCtx?.prefix });
+  // Return policy, shipping options and reviews from the store's own settings; a failure only drops these extras.
+  const offerExtras = await getCachedOfferExtras(tenantId, product.id, marketCtx?.market ? { id: marketCtx.market.id, isBase: marketCtx.market.isBase } : null).catch(() => undefined);
+  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency, { storeName, urlPrefix: marketCtx?.prefix, extras: offerExtras });
   // There is no /products index page (it is a 404), so a "Products" crumb would point crawlers at a dead URL.
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: storeUrl },
