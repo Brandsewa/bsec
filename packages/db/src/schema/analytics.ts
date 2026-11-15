@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
-import { date, index, integer, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { tenantTable } from "../tenant-table.ts";
+import { boolean, date, index, integer, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
+import { orders } from "./orders.ts";
 
 /**
  * First-party storefront traffic events (ADR-047, docs/ANALYTICS-PLAN.md).
@@ -59,4 +60,39 @@ export const analyticsTrafficDaily = tenantTable(
     bounces: integer("bounces").notNull().default(0),
   },
   (t) => [unique("analytics_traffic_daily_uniq").on(t.tenantId, t.day, t.dimension, t.key)],
+);
+
+/**
+ * What the server-side conversion APIs need about one order (ADR-047, docs/ANALYTICS-PLAN.md slice 5). Written when the order is
+ * placed, and only when the visitor accepted the matching cookie category and the store has server-side credentials for it.
+ * The request details (IP, user agent, Meta and Google browser ids) are cleared as soon as every platform is settled; the row is
+ * deleted 30 days after the order. Customer email and phone are never stored here: they are read from the order and hashed at send time.
+ */
+export const orderTracking = tenantTable(
+  "order_tracking",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    consentAnalytics: boolean("consent_analytics").notNull().default(false),
+    consentMarketing: boolean("consent_marketing").notNull().default(false),
+    clientIp: text("client_ip"),
+    userAgent: text("user_agent"),
+    fbp: text("fbp"),
+    fbc: text("fbc"),
+    gaClientId: text("ga_client_id"),
+    sourceUrl: text("source_url"),
+    /** pending | sent | failed | skipped, per platform. `*_detail` says why for failed and skipped; never a credential. */
+    metaStatus: text("meta_status").notNull().default("skipped"),
+    metaDetail: text("meta_detail"),
+    ga4Status: text("ga4_status").notNull().default("skipped"),
+    ga4Detail: text("ga4_detail"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("order_tracking_tenant_order_uniq").on(t.tenantId, t.orderId),
+    index("order_tracking_tenant_created_idx").on(t.tenantId, t.createdAt),
+    tenantForeignKey({ tableTenantId: t.tenantId, column: t.orderId, target: orders, name: "order_tracking_order_fk", onDelete: "cascade" }),
+  ],
 );

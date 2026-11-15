@@ -44,6 +44,7 @@ export * from "./storefront/search.ts";
 export * from "./analytics/collect.ts";
 export * from "./analytics/rollup.ts";
 export * from "./analytics/shop-events.ts";
+export * from "./analytics/conversions.ts";
 export * from "./analytics/reports.ts";
 export * from "./storefront/cart.ts";
 export * from "./storefront/newsletter.ts";

@@ -14,6 +14,8 @@ export type ConsentPosition = (typeof CONSENT_POSITIONS)[number];
 
 export const GA4_ID = /^G-[A-Z0-9]{4,14}$/;
 export const META_PIXEL_ID = /^[0-9]{8,20}$/;
+/** The "Test events" code shown in Meta Events Manager, e.g. TEST12345. Not a secret. */
+export const META_TEST_EVENT_CODE = /^[A-Z0-9]{3,20}$/;
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 
@@ -33,6 +35,8 @@ export const ConsentSettings = z.object({
     ga4MeasurementId: z.string().trim().regex(GA4_ID, "Use the format G-XXXXXXXXXX").nullable(),
     /** Marketing category. The numeric Pixel ID. */
     metaPixelId: z.string().trim().regex(META_PIXEL_ID, "Use the numeric Pixel ID (8 to 20 digits)").nullable(),
+    /** Marks server-side Meta events as test traffic while the merchant checks them in Events Manager. */
+    metaTestEventCode: z.string().trim().regex(META_TEST_EVENT_CODE, "Use the test code from Meta Events Manager").nullable().default(null),
   }),
 });
 export type ConsentSettings = z.infer<typeof ConsentSettings>;
@@ -46,7 +50,7 @@ export const DEFAULT_CONSENT_SETTINGS: ConsentSettings = {
   rejectLabel: "Reject non-essential",
   customizeLabel: "Choose",
   policyPath: "",
-  integrations: { ga4MeasurementId: null, metaPixelId: null },
+  integrations: { ga4MeasurementId: null, metaPixelId: null, metaTestEventCode: null },
 };
 
 /** Reads whatever is stored (null, an older shape, junk) into a complete, valid settings object. */

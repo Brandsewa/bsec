@@ -34,6 +34,12 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Builders and serialization in `packages/domain/src/analytics/shop-events.ts` (unit tests `shop-events.test.ts`). No customer details are sent. Purchase is de-duplicated per browser and carries the order number as the transaction id and Meta `eventID`.
 - Bug fixed on the way: React hoists `bsc.js` into `<head>`, so it could run before the config element existed and silently do nothing; it now waits for the config (found while testing in the browser).
 
+## Server-side conversion APIs (slice 5b)
+- Migration `0110_order_tracking`; queue `analytics.conversion`; `packages/domain/src/analytics/conversions.ts`; `PlaceOrderInput.tracking`; `place-order` route decides and passes it; `order.created` consumer enqueues the job; hourly maintenance gives up stale rows and deletes old ones.
+- Admin: Meta access token and GA4 API secret on `/settings/customer-privacy` (new procedures `customerPrivacy.saveConversionCredentials` and `clearConversionCredentials`, also exposed on the marketing-site router), Meta test event code, and a 7-day sent, failed, waiting line. Mapped in `isolation.int.test.ts`.
+- Rules, all tested: consent required per platform and per revision; no credential, no row; hashed email and phone to Meta only; GA4 gets no personal data; token in the Meta request body, never the URL; failure text redacted; idempotent per platform; retry on network, 429 and 5xx; request details cleared when settled.
+- Not verified against live Meta or Google (no real credentials used): the Graph API version constant `META_CAPI_VERSION` (v21.0) and the payload shape follow Meta's documented Conversions API and should be checked once with the merchant's Test events code.
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.

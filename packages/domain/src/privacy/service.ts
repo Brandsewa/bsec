@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { eq, and, desc } from "drizzle-orm";
+import { encryptSecret } from "@bs/payments";
+import { conversionCredentialStatus, conversionStats, GA4_SECRET, META_SECRET } from "../analytics/conversions.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -20,6 +22,8 @@ export interface PrivacySettingsView {
   grievanceOfficerName: string | null;
   requestSlaDays: number;
   consent: ConsentSettings;
+  conversionCredentials: { metaAccessTokenSet: boolean; ga4ApiSecretSet: boolean };
+  conversionStats: { sent: number; failed: number; pending: number; skipped: number };
   version: number;
 }
 
@@ -141,7 +145,11 @@ export async function getPrivacySettings(
       consent: normalizeConsentSettings(row.consentSettings),
       version: row.version,
     };
-  });
+  }).then(async (view) => ({
+    ...view,
+    conversionCredentials: await conversionCredentialStatus(db, ctx.tenantId),
+    conversionStats: await conversionStats(db, ctx.tenantId),
+  }));
 }
 
 /**
@@ -257,7 +265,87 @@ export async function updatePrivacySettings(
   });
 
   await invalidateCache(rt, ctx, { type: "store_or_seo_updated" });
-  return result;
+  return {
+    ...result,
+    conversionCredentials: await conversionCredentialStatus(db, ctx.tenantId),
+    conversionStats: await conversionStats(db, ctx.tenantId),
+  };
+}
+
+/**
+ * Saves the server-side conversion credentials (Meta access token, GA4 API secret), encrypted in tenant_secrets. Requires
+ * privacy.manage. Values are never returned, logged or put in the audit entry (AGENTS.md rule 7). Saving needs the matching
+ * id to be set already, so a credential can never exist for a platform the store is not using.
+ */
+export async function saveConversionCredentials(
+  rt: Runtime,
+  ctx: TenantContext,
+  input: { metaAccessToken?: string | undefined; ga4ApiSecret?: string | undefined },
+): Promise<PrivacySettingsView> {
+  assertPermission(ctx, "privacy.manage");
+  if (!input.metaAccessToken && !input.ga4ApiSecret) throw new Error("Bad Request: Enter an access token or an API secret.");
+  const current = await getPrivacySettings(rt, ctx);
+  if (input.metaAccessToken && !current.consent.integrations.metaPixelId) {
+    throw new Error("Bad Request: Save your Meta Pixel ID before adding the access token.");
+  }
+  if (input.ga4ApiSecret && !current.consent.integrations.ga4MeasurementId) {
+    throw new Error("Bad Request: Save your Google Analytics 4 ID before adding the API secret.");
+  }
+  const entries: Array<{ provider: string; keyName: string; value: string }> = [];
+  if (input.metaAccessToken) entries.push({ ...META_SECRET, value: input.metaAccessToken });
+  if (input.ga4ApiSecret) entries.push({ ...GA4_SECRET, value: input.ga4ApiSecret });
+  let encrypted: Array<{ provider: string; keyName: string; ciphertext: string; iv: string; keyVersion: number }>;
+  try {
+    encrypted = entries.map((e) => ({ provider: e.provider, keyName: e.keyName, ...encryptSecret(e.value) }));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Encryption key not set")) {
+      throw new Error("Precondition: credentials cannot be saved yet because the server has no encryption key. Ask the platform operator to set TENANT_SECRETS_KEY.", { cause: err });
+    }
+    throw err;
+  }
+  const updatedBy = ctx.actor.type === "staff" ? ctx.actor.userId : null;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    for (const e of encrypted) {
+      await tx
+        .insert(schema.tenantSecrets)
+        .values({ tenantId: ctx.tenantId, provider: e.provider, keyName: e.keyName, ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy })
+        .onConflictDoUpdate({
+          target: [schema.tenantSecrets.tenantId, schema.tenantSecrets.provider, schema.tenantSecrets.keyName],
+          set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
+        });
+    }
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: updatedBy,
+      action: "conversion_credentials.saved",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { providers: { before: null, after: entries.map((e) => (e.provider === META_SECRET.provider ? "meta" : "ga4")) } },
+    });
+  });
+  return getPrivacySettings(rt, ctx);
+}
+
+/** Removes one platform's server-side credential. Requires privacy.manage. */
+export async function clearConversionCredentials(rt: Runtime, ctx: TenantContext, provider: "meta" | "ga4"): Promise<PrivacySettingsView> {
+  assertPermission(ctx, "privacy.manage");
+  const secret = provider === "meta" ? META_SECRET : GA4_SECRET;
+  await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    await tx
+      .delete(schema.tenantSecrets)
+      .where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, secret.provider)));
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: "staff",
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "conversion_credentials.cleared",
+      targetType: "tenant_secrets",
+      targetId: ctx.tenantId,
+      diff: { provider: { before: provider, after: null } },
+    });
+  });
+  return getPrivacySettings(rt, ctx);
 }
 
 /**

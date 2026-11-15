@@ -48,29 +48,29 @@ describe("cookie banner settings (real database)", () => {
 
   it("saves the banner and tracking ids, and the storefront config carries them and a revision", async () => {
     const saved = await updatePrivacySettings(web, ctxA, {
-      consent: on({ title: "Cookies", integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456" } }),
+      consent: on({ title: "Cookies", integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456", metaTestEventCode: null } }),
     });
-    expect(saved.consent.integrations).toEqual({ ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456" });
+    expect(saved.consent.integrations).toEqual({ ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456", metaTestEventCode: null });
     const cfg = await getStorefrontConsentConfig(web, ctxA.tenantId);
     expect(cfg).toMatchObject({ v: 1, title: "Cookies", ga4: "G-ABC123XYZ", pixel: "1234567890123456", position: "bottom" });
     expect(cfg?.rev).toMatch(/^[0-9a-f]{8}$/);
 
     // New wording or new ids mean a new revision, so earlier choices are asked again; unrelated edits keep it.
     const before = cfg!.rev;
-    await updatePrivacySettings(web, ctxA, { consent: on({ title: "Cookies", acceptLabel: "Yes", integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456" } }) });
+    await updatePrivacySettings(web, ctxA, { consent: on({ title: "Cookies", acceptLabel: "Yes", integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: "1234567890123456", metaTestEventCode: null } }) });
     expect((await getStorefrontConsentConfig(web, ctxA.tenantId))?.rev).toBe(before);
-    await updatePrivacySettings(web, ctxA, { consent: on({ title: "Cookies", integrations: { ga4MeasurementId: "G-ZZZ999AAA", metaPixelId: null } }) });
+    await updatePrivacySettings(web, ctxA, { consent: on({ title: "Cookies", integrations: { ga4MeasurementId: "G-ZZZ999AAA", metaPixelId: null, metaTestEventCode: null } }) });
     expect((await getStorefrontConsentConfig(web, ctxA.tenantId))?.rev).not.toBe(before);
   });
 
   it("refuses tracking ids while the banner is off, and malformed ids", async () => {
     await expect(
-      updatePrivacySettings(web, ctxA, { consent: { ...DEFAULT_CONSENT_SETTINGS, enabled: false, integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: null } } }),
+      updatePrivacySettings(web, ctxA, { consent: { ...DEFAULT_CONSENT_SETTINGS, enabled: false, integrations: { ga4MeasurementId: "G-ABC123XYZ", metaPixelId: null, metaTestEventCode: null } } }),
     ).rejects.toThrow(/banner on/i);
     for (const bad of ["UA-12345-1", "G-ab", "<script>", "G-ABC123XYZ\"onload=\"x"]) {
-      await expect(updatePrivacySettings(web, ctxA, { consent: on({ integrations: { ga4MeasurementId: bad, metaPixelId: null } }) })).rejects.toThrow(/Bad Request/);
+      await expect(updatePrivacySettings(web, ctxA, { consent: on({ integrations: { ga4MeasurementId: bad, metaPixelId: null, metaTestEventCode: null } }) })).rejects.toThrow(/Bad Request/);
     }
-    await expect(updatePrivacySettings(web, ctxA, { consent: on({ integrations: { ga4MeasurementId: null, metaPixelId: "12ab" } }) })).rejects.toThrow(/Bad Request/);
+    await expect(updatePrivacySettings(web, ctxA, { consent: on({ integrations: { ga4MeasurementId: null, metaPixelId: "12ab", metaTestEventCode: null } }) })).rejects.toThrow(/Bad Request/);
     await expect(updatePrivacySettings(web, ctxA, { consent: on({ policyPath: "https://evil.test" }) })).rejects.toThrow(/Bad Request/);
   });
 

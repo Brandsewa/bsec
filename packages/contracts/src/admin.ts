@@ -2157,6 +2157,10 @@ export const PrivacySettings = z.object({
   requestSlaDays: z.number().int().min(7).max(90),
   /** Cookie banner and optional tracking integrations (ADR-047). */
   consent: ConsentSettings,
+  /** Server-side conversion credentials: only whether they are set, never the values. */
+  conversionCredentials: z.object({ metaAccessTokenSet: z.boolean(), ga4ApiSecretSet: z.boolean() }),
+  /** Server-side purchase events of the last 7 days, by outcome. */
+  conversionStats: z.object({ sent: z.number().int(), failed: z.number().int(), pending: z.number().int(), skipped: z.number().int() }),
   version: z.number().int(),
 });
 
@@ -2566,6 +2570,14 @@ export const adminContract = {
     updateSettings: oc
       .route({ method: "PUT", path: "/admin/settings/privacy" })
       .input(UpdatePrivacySettingsInput)
+      .output(PrivacySettings),
+    saveConversionCredentials: oc
+      .route({ method: "PUT", path: "/admin/settings/privacy/conversion-credentials" })
+      .input(z.object({ metaAccessToken: z.string().trim().min(20).max(600).optional(), ga4ApiSecret: z.string().trim().min(8).max(100).optional() }))
+      .output(PrivacySettings),
+    clearConversionCredentials: oc
+      .route({ method: "DELETE", path: "/admin/settings/privacy/conversion-credentials" })
+      .input(z.object({ provider: z.enum(["meta", "ga4"]) }))
       .output(PrivacySettings),
     listRequests: oc
       .route({ method: "GET", path: "/admin/settings/privacy/requests" })

@@ -37,6 +37,8 @@ export const QUEUES = [
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // Merchant analytics (ADR-047): hourly traffic rollup and raw-event retention
   { name: "analytics.maintenance", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Server-side conversion APIs: one purchase per order, retried with backoff (ADR-047)
+  { name: "analytics.conversion", options: { retryLimit: 6, retryBackoff: true, retryDelay: 30 } },
   // Media library queues (MEDIA-LIBRARY-PLAN §8, Phase 4 S2/S4)
   { name: "media.purge", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "media.trash_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
@@ -89,6 +91,7 @@ export const QUEUE_NAMES = {
   FINANCE_POST: "finance.post",
   FINANCE_RECONCILE: "finance.reconcile",
   ANALYTICS_MAINTENANCE: "analytics.maintenance",
+  ANALYTICS_CONVERSION: "analytics.conversion",
   MEDIA_PURGE: "media.purge",
   MEDIA_TRASH_SWEEP: "media.trash_sweep",
   MEDIA_BACKFILL_USAGES: "media.backfill_usages",

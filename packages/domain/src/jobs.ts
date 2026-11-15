@@ -783,6 +783,15 @@ export async function startJobs(opts: {
           await withTenantJobSlot(job.data.tenantId, async () => {
             await handleOrderCreatedJob(db, opts.log, job.data);
             opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "order.created processed");
+            // The order is confirmed (COD placed, or online payment settled): send its Purchase to Meta and GA4 if the visitor allowed it.
+            const tracked = await withTenant(db, job.data.tenantId, (tx) =>
+              tx
+                .select({ id: schema.orderTracking.id })
+                .from(schema.orderTracking)
+                .where(and(eq(schema.orderTracking.tenantId, job.data.tenantId), eq(schema.orderTracking.orderId, job.data.orderId)))
+                .limit(1),
+            );
+            if (tracked.length > 0) await boss.send(QUEUE_NAMES.ANALYTICS_CONVERSION, job.data, { singletonKey: job.data.orderId });
           });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "order.created failed");
@@ -957,6 +966,19 @@ export async function startJobs(opts: {
         opts.log.info({ job_id: job.id, ...res }, "notification.retention_sweep processed");
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "notification.retention_sweep failed");
+        throw err;
+      }
+    }
+  });
+
+  // Server-side conversion APIs (ADR-047): one Purchase per order to Meta CAPI and GA4, retried with backoff
+  await boss.work<{ tenantId: string; orderId: string }>(QUEUE_NAMES.ANALYTICS_CONVERSION, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { handleAnalyticsConversionJob } = await import("./analytics/conversions.ts");
+        await handleAnalyticsConversionJob(db, opts.log, job.data);
+      } catch (err) {
+        opts.log.warn({ err, job_id: job.id }, "analytics.conversion will retry");
         throw err;
       }
     }

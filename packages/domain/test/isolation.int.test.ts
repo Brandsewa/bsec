@@ -11,6 +11,7 @@
  * 6. True PostgreSQL Row Level Security (RLS) enforcement: direct queries across tenants
  *    return 0 rows, and queries without tenant context return 0 rows under app_rw.
  */
+import { DEFAULT_CONSENT_SETTINGS } from "@bs/contracts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -324,6 +325,8 @@ import {
   getAdminAbandonedCheckoutStats,
   getAnalyticsOverview,
   getAnalyticsReport,
+  saveConversionCredentials,
+  clearConversionCredentials,
   listAdminAbandonedCheckouts,
   createAdminCustomer,
   getOrderSettings,
@@ -2186,6 +2189,16 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getPrivacySettings(rt, ctx);
       case "customerPrivacy.updateSettings":
         return await updatePrivacySettings(rt, ctx, { requestSlaDays: 30 });
+      case "customerPrivacy.saveConversionCredentials": {
+        // Saving needs a Pixel ID and the server encryption key; both are set up here so the authorised path can succeed.
+        process.env.TENANT_SECRETS_KEY ??= "isolation-test-secret-key-32-chars!!";
+        await updatePrivacySettings(rt, { ...ctx, permissions: [...ctx.permissions, "privacy.manage"] }, {
+          consent: { ...DEFAULT_CONSENT_SETTINGS, enabled: true, integrations: { ga4MeasurementId: null, metaPixelId: "1234567890123456", metaTestEventCode: null } },
+        });
+        return await saveConversionCredentials(rt, ctx, { metaAccessToken: "isolation-token-0123456789-abcdef" });
+      }
+      case "customerPrivacy.clearConversionCredentials":
+        return await clearConversionCredentials(rt, ctx, "meta");
       case "customerPrivacy.listRequests":
         return await listPrivacyRequests(rt, ctx);
       case "customerPrivacy.cookieInventory":

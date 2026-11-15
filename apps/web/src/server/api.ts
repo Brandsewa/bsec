@@ -383,6 +383,8 @@ import {
   getFinanceOverview,
   getAnalyticsOverview,
   getAnalyticsReport,
+  saveConversionCredentials,
+  clearConversionCredentials,
   getDistinctCurrencies,
   listLedgerEntriesForAdmin,
   getTrialBalanceForAdmin,
@@ -1392,6 +1394,20 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getPrivacySettings(context.rt, context.tenantCtx);
+        }),
+      saveConversionCredentials: os.admin.customerPrivacy.saveConversionCredentials
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return saveConversionCredentials(context.rt, context.tenantCtx, input);
+        }),
+      clearConversionCredentials: os.admin.customerPrivacy.clearConversionCredentials
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearConversionCredentials(context.rt, context.tenantCtx, input.provider);
         }),
       updateSettings: os.admin.customerPrivacy.updateSettings
         .use(requireAdmin)

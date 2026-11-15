@@ -6,6 +6,7 @@ import { computeTax, type TaxResult } from "../markets/rules.ts";
 import { gatewayCurrencyCheck } from "../markets/gateways.ts";
 import { addressProblem, phoneProblem, postalCodeProblem } from "../markets/addresses.ts";
 import type { Db } from "@bs/db";
+import type { OrderTrackingRow } from "../analytics/conversions.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -50,6 +51,8 @@ import { validateGstin } from "./gst-validation.ts";
 import { resolveTaxClass } from "../admin/tax-settings.ts";
 
 export interface PlaceOrderInput {
+  /** What the server-side conversion APIs may remember about this order (decided by `decideOrderTracking`; null = nothing). */
+  tracking?: OrderTrackingRow | null | undefined;
   cartToken: string;
   idempotencyKey?: string | undefined;
   email: string;
@@ -857,6 +860,12 @@ export async function placeOrder(
 
     // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
+    }
+
+    // 11b. Remember the visitor's consent and browser ids for the server-side conversion APIs (ADR-047). Only present when the visitor
+    // accepted the matching category and the store has credentials; cleared once the events are settled.
+    if (input.tracking) {
+      await tx.insert(schema.orderTracking).values({ tenantId, orderId, ...input.tracking });
     }
 
     // 12. Enqueue order.created job if boss runtime is present

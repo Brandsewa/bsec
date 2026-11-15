@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
+import { pruneOrderTracking } from "./conversions.ts";
 
 /** Raw events are kept 90 days; rollups (aggregate counts only) 26 months so "same period last year" always has data (ADR-047). */
 export const ANALYTICS_EVENT_RETENTION_DAYS = 90;
@@ -78,6 +79,7 @@ export async function runAnalyticsMaintenance(db: Db): Promise<{ tenants: number
   for (const t of tenants) {
     try {
       rolledUp += (await rollupTrafficForTenant(db, t.id)).rows;
+      await pruneOrderTracking(db, t.id);
       prunedEvents += await withTenant(db, t.id, async (tx) => {
         const del = await tx.execute(sql`
           DELETE FROM analytics_events
