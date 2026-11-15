@@ -1,6 +1,8 @@
 "use client";
 
 import { payWithRazorpay } from "@/lib/razorpay-client.ts";
+import type { StripeEmbeddedParams } from "@/lib/stripe-client.ts";
+import { StripeEmbeddedOverlay } from "./StripeEmbeddedOverlay.tsx";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -170,6 +172,7 @@ export function CheckoutForm({
   const [selectedId, setSelectedId] = useState<string | null>(initialSaved?.id ?? null);
   const [addrMode, setAddrMode] = useState<"saved" | "form">(initialSaved ? "saved" : "form");
   const [chooseOpen, setChooseOpen] = useState(false);
+  const [stripeSession, setStripeSession] = useState<{ params: StripeEmbeddedParams; orderToken: string } | null>(null);
 
   // Contact
   const [email, setEmail] = useState(customerEmail);
@@ -377,6 +380,11 @@ export function CheckoutForm({
           window.location.assign(data.checkoutUrl);
           return;
         }
+        // Stripe with a publishable key: the card form opens in this page; Stripe sends the window on when the shopper has paid.
+        if (data.stripe && data.orderToken) {
+          setStripeSession({ params: data.stripe as StripeEmbeddedParams, orderToken: data.orderToken as string });
+          return;
+        }
         if (data.razorpay && data.orderToken) {
           const outcome = await payWithRazorpay(data.razorpay, data.orderToken);
           if (outcome.status === "failed" && outcome.unconfirmed) {
@@ -406,6 +414,25 @@ export function CheckoutForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+      {stripeSession ? (
+        <StripeEmbeddedOverlay
+          params={stripeSession.params}
+          onCancel={() => {
+            // Same as closing the Razorpay window: the held order is cancelled and the cart restored.
+            void fetch("/api/storefront/checkout/abandon", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderToken: stripeSession.orderToken, reason: "cancelled" }),
+            })
+              .then((r) => r.json())
+              .catch(() => ({}))
+              .then((back: { redirectUrl?: string }) => {
+                window.dispatchEvent(new Event("cart-updated"));
+                window.location.assign(back.redirectUrl ?? "/checkout?payment=cancelled");
+              });
+          }}
+        />
+      ) : null}
       {/* 1. Contact, with an optional business block */}
       <section className={CARD}>
         <div className="mb-3 flex items-center justify-between gap-3">

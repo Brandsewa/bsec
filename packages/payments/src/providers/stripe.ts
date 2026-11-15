@@ -24,6 +24,12 @@ import { sanitizePaymentPayload } from "./razorpay.ts";
  * Per-store keys come from tenant_secrets, never from environment variables.
  */
 export const STRIPE_API_VERSION = "2025-09-30.clover";
+/**
+ * Stripe.js release train that matches STRIPE_API_VERSION. Embedded Checkout's browser method was renamed in the later
+ * "dahlia" train, so the storefront loads this train explicitly instead of the moving default. Move both together.
+ */
+export const STRIPE_JS_TRAIN = "clover";
+export const STRIPE_JS_URL = `https://js.stripe.com/${STRIPE_JS_TRAIN}/stripe.js`;
 const STRIPE_BASE = "https://api.stripe.com";
 /** Stripe's own recommendation for webhook replay protection. */
 export const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
@@ -34,6 +40,14 @@ export interface StripeProviderOptions {
   /** Where Stripe sends the shopper after paying or cancelling. Required to create a Checkout Session. */
   successUrl?: string | undefined;
   cancelUrl?: string | undefined;
+  /**
+   * "hosted" (default) redirects the shopper to stripe.com. "embedded" returns a client secret the checkout page mounts with
+   * Stripe.js (Embedded Checkout), so the shopper never leaves the page; `successUrl` then becomes the `return_url` and
+   * `cancelUrl` is not sent (Stripe refuses it in embedded mode).
+   */
+  uiMode?: "hosted" | "embedded" | undefined;
+  /** Makes the idempotency key unique for a replacement session after the previous one expired. */
+  idempotencySalt?: string | undefined;
   fetchFn?: typeof fetch | undefined;
   /** Injected clock for signature tolerance tests (unix seconds). */
   nowSeconds?: (() => number) | undefined;
@@ -73,6 +87,8 @@ export class StripeProvider implements PaymentProvider {
   private readonly webhookSecret: string | undefined;
   private readonly successUrl: string | undefined;
   private readonly cancelUrl: string | undefined;
+  private readonly uiMode: "hosted" | "embedded";
+  private readonly idempotencySalt: string | undefined;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
 
@@ -81,6 +97,8 @@ export class StripeProvider implements PaymentProvider {
     this.webhookSecret = opts.webhookSecret;
     this.successUrl = opts.successUrl;
     this.cancelUrl = opts.cancelUrl;
+    this.uiMode = opts.uiMode ?? "hosted";
+    this.idempotencySalt = opts.idempotencySalt;
     this.fetchFn = opts.fetchFn ?? globalThis.fetch;
     this.now = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
   }
@@ -131,12 +149,17 @@ export class StripeProvider implements PaymentProvider {
 
   /** Creates a Stripe-hosted Checkout Session for the order total (POST /v1/checkout/sessions). */
   async createIntent(ctx: TenantContext, order: OrderForPayment): Promise<IntentResult> {
-    if (!this.successUrl || !this.cancelUrl) {
-      throw new Error("Stripe success and cancel URLs are required to create a Checkout Session");
+    const embedded = this.uiMode === "embedded";
+    if (!this.successUrl || (!embedded && !this.cancelUrl)) {
+      throw new Error(
+        embedded ? "A Stripe return URL is required to create an embedded Checkout Session" : "Stripe success and cancel URLs are required to create a Checkout Session",
+      );
     }
+    // Stripe fills {CHECKOUT_SESSION_ID} in itself; the return route still reads the session from our own saved intent.
+    const returnUrl = `${this.successUrl}${this.successUrl.includes("?") ? "&" : "?"}session_id={CHECKOUT_SESSION_ID}`;
     const amount = Math.round(Number(order.grandTotal));
     const currency = (order.currency ?? "INR").toLowerCase();
-    const session = await this.call<{ id: string; url?: string; status?: string }>(
+    const session = await this.call<{ id: string; url?: string; status?: string; client_secret?: string }>(
       "POST",
       "/v1/checkout/sessions",
       {
@@ -145,8 +168,7 @@ export class StripeProvider implements PaymentProvider {
         "line_items[0][price_data][currency]": currency,
         "line_items[0][price_data][unit_amount]": amount,
         "line_items[0][price_data][product_data][name]": `Order ${order.number}`,
-        success_url: this.successUrl,
-        cancel_url: this.cancelUrl,
+        ...(embedded ? { ui_mode: "embedded", return_url: returnUrl } : { success_url: this.successUrl, cancel_url: this.cancelUrl }),
         client_reference_id: order.id,
         customer_email: order.email || undefined,
         "metadata[tenant_id]": ctx.tenantId,
@@ -154,25 +176,38 @@ export class StripeProvider implements PaymentProvider {
         "payment_intent_data[metadata][tenant_id]": ctx.tenantId,
         "payment_intent_data[metadata][order_id]": order.id,
       },
-      `bsec-checkout-${order.id}`,
+      `bsec-checkout-${order.id}${embedded ? "-emb" : ""}${this.idempotencySalt ? `-${this.idempotencySalt}` : ""}`,
     );
     return {
       providerOrderId: session.id,
       amount,
       currency: currency.toUpperCase(),
       status: "requires_action",
+      ...(embedded && session.client_secret ? { clientSecret: session.client_secret } : {}),
       meta: { checkoutUrl: session.url ?? null, sessionStatus: session.status ?? null },
     };
   }
 
   /** Reads a Checkout Session, so the shopper's return can settle the order without waiting for the webhook. */
-  async retrieveSession(sessionId: string): Promise<{ paymentStatus: string; amountTotal: number | null; currency: string | null; paymentIntentId: string | null; orderId: string | null }> {
-    const s = await this.call<{ payment_status?: string; amount_total?: number; currency?: string; payment_intent?: string | null; client_reference_id?: string | null }>(
+  async retrieveSession(sessionId: string): Promise<{
+    paymentStatus: string;
+    /** "open", "complete" or "expired". */
+    status: string;
+    amountTotal: number | null;
+    currency: string | null;
+    paymentIntentId: string | null;
+    orderId: string | null;
+    /** Present only while an embedded session is still open, so a reload can mount the same form again. */
+    clientSecret: string | null;
+  }> {
+    const s = await this.call<{ status?: string; client_secret?: string | null; payment_status?: string; amount_total?: number; currency?: string; payment_intent?: string | null; client_reference_id?: string | null }>(
       "GET",
       `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
     );
     return {
       paymentStatus: s.payment_status ?? "unpaid",
+      status: s.status ?? "open",
+      clientSecret: s.status === "open" ? (s.client_secret ?? null) : null,
       amountTotal: typeof s.amount_total === "number" ? s.amount_total : null,
       currency: s.currency ? s.currency.toUpperCase() : null,
       paymentIntentId: s.payment_intent ?? null,
