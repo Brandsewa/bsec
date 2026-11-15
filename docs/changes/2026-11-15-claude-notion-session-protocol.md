@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `docs/notion-session-protocol` (not merged yet)
+- **Branch:** `docs/notion-session-protocol` (merged in #258, 2dc5ad3; production deploy succeeded)
 - **Area:** docs
 - **Type:** docs
 - **Supersedes:** none
@@ -33,7 +33,7 @@ The owner made the BCOM Platform OS workspace in Notion the coordination layer f
 - [x] `progress.md` (in flight)
 
 ## Follow-ups and open questions
-- Remove the In flight line and record the PR and commit after merge.
+- Done after merge: In flight line removed, PR and commit recorded, branch and worktree removed.
 - Optional second layer of enforcement (repo script or hook): see the Notion Work Item "Add a repo check that lists docs/changes and docs/adr files with no Notion row".
 
 ## Definition of done
