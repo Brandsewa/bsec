@@ -12,6 +12,8 @@ import { calculateGstLineItem, normalizeState } from "../orders/invoices.ts";
 import { calculateTax } from "../orders/tax-engine.ts";
 import { resolveTaxClass } from "./tax-settings.ts";
 import { reserveInventory, commitReservation, InsufficientInventoryError } from "../catalog/inventory-reservations.ts";
+import { RazorpayProvider, StripeProvider } from "@bs/payments";
+import { getTenantPaymentSecrets } from "../payments/credentials.ts";
 import { transitionOrder } from "../orders/state-machine.ts";
 import { transitionFulfillment } from "../orders/fulfillment-state-machine.ts";
 import { generateInvoice } from "../orders/invoices.ts";
@@ -1323,10 +1325,48 @@ export async function cancelAdminOrder(
   return { success: true };
 }
 
+/** Test seams for the provider call (the real gateways are never reached from tests). */
+export interface RefundDeps {
+  /** A stand-in for Razorpay's client. */
+  razorpayClient?: unknown;
+  fetchFn?: typeof fetch | undefined;
+}
+
+/**
+ * Refunds a captured online payment at the gateway with the store's own keys (Razorpay or Stripe), so the money goes back to the
+ * shopper's original payment method. Other gateways and manual orders stay recorded by hand. Throws when the gateway refuses,
+ * which rolls the whole refund back: nothing is recorded as refunded that the gateway did not accept.
+ */
+async function refundAtGateway(
+  rt: Runtime,
+  ctx: TenantContext,
+  intent: { id: string; provider: string; providerPaymentId: string | null; status: string },
+  input: { amount: number; reason?: string | undefined },
+  deps: RefundDeps,
+): Promise<{ providerRefundId: string; status: "processed" | "pending" } | null> {
+  if (!intent.providerPaymentId || (intent.provider !== "razorpay" && intent.provider !== "stripe")) return null;
+  if (!["captured", "partially_refunded"].includes(intent.status)) return null;
+  const creds = await getTenantPaymentSecrets(rt._db.db, ctx.tenantId, intent.provider);
+  const reason = input.reason ?? "customer_requested";
+  const pay = { intentId: intent.id, providerPaymentId: intent.providerPaymentId };
+  try {
+    const result =
+      intent.provider === "razorpay"
+        ? await new RazorpayProvider({ keyId: creds.keyId, keySecret: creds.keySecret, client: deps.razorpayClient as never }).refund({ tenantId: ctx.tenantId }, pay, input.amount, reason)
+        : await new StripeProvider({ secretKey: creds.keySecret, fetchFn: deps.fetchFn }).refund({ tenantId: ctx.tenantId }, pay, input.amount, reason);
+    if (result.status === "failed") throw new Error("the gateway reported the refund as failed");
+    return { providerRefundId: result.providerRefundId, status: result.status };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "the gateway refused the refund";
+    throw new Error(`Bad Request: ${intent.provider === "stripe" ? "Stripe" : "Razorpay"} could not refund this payment (${message.slice(0, 160)}). Nothing was changed; try again or refund from the gateway dashboard.`);
+  }
+}
+
 export async function refundAdminOrder(
   rt: Runtime,
   ctx: TenantContext,
   input: { id: string; amount: number; reason?: string | undefined },
+  deps: RefundDeps = {},
 ) {
   assertPermission(ctx, "orders.refund");
   const db = rt._db.db;
@@ -1372,7 +1412,21 @@ export async function refundAdminOrder(
       tx,
     );
 
-    // 2. Record refund record
+    // 2. Money back at the gateway (online Razorpay or Stripe payments), after the guards above passed and before anything is
+    // recorded: if the gateway says no, the transaction rolls back and no refund is shown.
+    let gateway: Awaited<ReturnType<typeof refundAtGateway>> = null;
+    if (existingIntent) {
+      // The gateway's payment id is saved on the captured attempt when the payment is settled.
+      const [attempt] = await tx
+        .select({ providerPaymentId: schema.paymentAttempts.providerPaymentId })
+        .from(schema.paymentAttempts)
+        .where(and(eq(schema.paymentAttempts.tenantId, ctx.tenantId), eq(schema.paymentAttempts.intentId, existingIntent.id), eq(schema.paymentAttempts.status, "captured")))
+        .orderBy(desc(schema.paymentAttempts.createdAt))
+        .limit(1);
+      gateway = await refundAtGateway(rt, ctx, { id: existingIntent.id, provider: existingIntent.provider, providerPaymentId: attempt?.providerPaymentId ?? null, status: existingIntent.status }, input, deps);
+    }
+
+    // 3. Record refund record
     const [refund] = await tx
       .insert(schema.refunds)
       .values({
@@ -1382,6 +1436,7 @@ export async function refundAdminOrder(
         amount: input.amount,
         status: "succeeded",
         reason: input.reason ?? "Admin initiated refund",
+        ...(gateway ? { method: "original_payment_method", reference: gateway.providerRefundId, providerRefundId: gateway.providerRefundId } : {}),
       })
       .returning();
 
