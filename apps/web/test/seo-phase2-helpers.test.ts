@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import { withShareImage } from "../src/lib/share-image.ts";
 import { blocksHaveH1 } from "../src/lib/has-h1.ts";
-import { themeChromeIdentity } from "../src/lib/theme-brand.ts";
+import { themeChromeIdentity, withThemeLogoFallback } from "../src/lib/theme-brand.ts";
 
 const IMG = { url: "https://media.x/og.png", width: 1200, height: 630, alt: "Shop" };
 
@@ -47,5 +47,19 @@ describe("themeChromeIdentity", () => {
   });
   it("returns nothing when the theme has no header or footer", () => {
     expect(themeChromeIdentity(null, null)).toEqual({ logoUrl: null, sameAs: [] });
+  });
+});
+
+describe("withThemeLogoFallback", () => {
+  const none = { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, shareImage: null };
+  it("fills the logo and share image from the theme logo when Brand settings have none, never a favicon", () => {
+    expect(withThemeLogoFallback(none, "https://media.x/logo.png")).toEqual({ ...none, logoUrl: "https://media.x/logo.png", shareImage: { url: "https://media.x/logo.png" } });
+  });
+  it("keeps what Brand settings already provide", () => {
+    const own = { ...none, logoUrl: "https://media.x/own.png", shareImage: { url: "https://media.x/og.png" } };
+    expect(withThemeLogoFallback(own, "https://media.x/theme.png")).toEqual(own);
+  });
+  it("does nothing without a theme logo", () => {
+    expect(withThemeLogoFallback(none, null)).toBe(none);
   });
 });
