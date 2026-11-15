@@ -17,6 +17,7 @@ import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { downloadInvoicePdf } from "../../../lib/invoice-download.ts";
 import { openCashfreeCheckout } from "../../../lib/cashfree-checkout.ts";
+import { openRazorpaySubscriptionCheckout } from "../../../lib/razorpay-subscription-checkout.ts";
 
 export const Route = createFileRoute("/_store/settings/plan-and-billing")({
   pendingComponent: () => <PageSkeleton />,
@@ -329,7 +330,20 @@ export function PlanAndBillingPage() {
                         },
                         {
                           onSuccess: (res) => {
-                            if (res.checkoutSession) {
+                            if (res.razorpayCheckout) {
+                              void openRazorpaySubscriptionCheckout(res.razorpayCheckout)
+                                .then((outcome) => {
+                                  if (outcome.status === "authorized") {
+                                    toast.success("Payment received. Your plan updates as soon as Razorpay confirms it.");
+                                    void queryClient.invalidateQueries({ queryKey: orpc.admin.planAndBilling.key() });
+                                  } else if (outcome.status === "failed") toast.error(outcome.message);
+                                })
+                                .catch((e: unknown) => {
+                                  console.error("Razorpay checkout failed", e);
+                                  if (res.checkoutUrl) window.location.assign(res.checkoutUrl);
+                                  else toast.error(e instanceof Error && e.message ? e.message : errorMessage(e));
+                                });
+                            } else if (res.checkoutSession) {
                               void openCashfreeCheckout(res.checkoutSession).catch((e: unknown) => {
                                 // errorMessage hides plain Errors; this one is about Cashfree's own script, so show it.
                                 console.error("Cashfree checkout failed", e);

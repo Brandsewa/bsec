@@ -627,8 +627,7 @@ async function firstPaymentCoupon(rt: Runtime, tenantId: string): Promise<{ perc
 const MIN_START_AHEAD_MS = 15 * 60 * 1000;
 
 /**
- * Starts a paid subscription for the store owner (billing B3). Razorpay returns a hosted page where the owner authorises
- * a card or UPI AutoPay; Cashfree returns a checkout session the admin app opens with Cashfree's script (ADR-037). The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
+ * Starts a paid subscription for the store owner (billing B3). Razorpay returns a subscription the admin app opens in Razorpay's checkout window (card, UPI AutoPay or e-mandate), with the hosted page as a fallback; Cashfree returns a checkout session the admin app opens with Cashfree's script (ADR-037). The first charge waits until the trial or a free-months promotion ends, so nobody pays early.
  * The plan only changes after the payment webhook confirms the first charge.
  */
 export async function subscribeToPlan(
@@ -637,6 +636,7 @@ export async function subscribeToPlan(
   input: { planCode: string; interval: "monthly" | "yearly"; phone?: string | undefined; returnUrl?: string | undefined },
 ): Promise<{
   checkoutUrl: string | null;
+  razorpayCheckout: { keyId: string; subscriptionId: string } | null;
   checkoutSession: { gateway: "cashfree"; sessionId: string; mode: "test" | "live" } | null;
   firstChargeAt: string | null;
   testMode: boolean;
@@ -726,6 +726,8 @@ export async function subscribeToPlan(
 
   return {
     checkoutUrl: res.shortUrl ?? null,
+    // Razorpay's checkout window opens on the page with the subscription id; the key id is public. The secret never leaves the server.
+    razorpayCheckout: creds.provider === "razorpay" && res.providerSubscriptionId ? { keyId: creds.keyId, subscriptionId: res.providerSubscriptionId } : null,
     checkoutSession: res.checkoutSession ? { gateway: "cashfree", ...res.checkoutSession } : null,
     firstChargeAt: startAtMs ? new Date(startAtMs).toISOString() : null, testMode: creds.mode !== "live",
   };
