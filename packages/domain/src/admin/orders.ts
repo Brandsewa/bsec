@@ -1332,33 +1332,61 @@ export interface RefundDeps {
   fetchFn?: typeof fetch | undefined;
 }
 
+interface RefundGateway {
+  intentId: string;
+  provider: "razorpay" | "stripe";
+  providerPaymentId: string;
+  creds: { keyId?: string | undefined; keySecret?: string | undefined };
+}
+
 /**
- * Refunds a captured online payment at the gateway with the store's own keys (Razorpay or Stripe), so the money goes back to the
- * shopper's original payment method. Other gateways and manual orders stay recorded by hand. Throws when the gateway refuses,
- * which rolls the whole refund back: nothing is recorded as refunded that the gateway did not accept.
+ * Reads, before the refund transaction starts, what a gateway refund needs: the order's online intent, the gateway's payment id
+ * (saved on the captured attempt when the payment was settled) and the store's own keys. Returns null for manual payments and
+ * for gateways refunds are not sent to (they stay recorded by hand).
+ */
+async function loadRefundGateway(rt: Runtime, ctx: TenantContext, orderId: string): Promise<RefundGateway | null> {
+  const found = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [intent] = await tx
+      .select({ id: schema.paymentIntents.id, provider: schema.paymentIntents.provider })
+      .from(schema.paymentIntents)
+      .where(and(eq(schema.paymentIntents.tenantId, ctx.tenantId), eq(schema.paymentIntents.orderId, orderId)))
+      .limit(1);
+    if (!intent || (intent.provider !== "razorpay" && intent.provider !== "stripe")) return null;
+    const [attempt] = await tx
+      .select({ providerPaymentId: schema.paymentAttempts.providerPaymentId })
+      .from(schema.paymentAttempts)
+      .where(and(eq(schema.paymentAttempts.tenantId, ctx.tenantId), eq(schema.paymentAttempts.intentId, intent.id), eq(schema.paymentAttempts.status, "captured")))
+      .orderBy(desc(schema.paymentAttempts.createdAt))
+      .limit(1);
+    return attempt?.providerPaymentId ? { intentId: intent.id, provider: intent.provider === "stripe" ? ("stripe" as const) : ("razorpay" as const), providerPaymentId: attempt.providerPaymentId } : null;
+  });
+  if (!found) return null;
+  return { ...found, creds: await getTenantPaymentSecrets(rt._db.db, ctx.tenantId, found.provider) };
+}
+
+/**
+ * Sends the refund to the gateway with the store's own keys, so the money goes back to the shopper's original payment method.
+ * Throws when the gateway refuses, which rolls the whole refund back: nothing is recorded as refunded that the gateway did not
+ * accept. Pure gateway call (no database), so it is safe inside the refund transaction.
  */
 async function refundAtGateway(
-  rt: Runtime,
-  ctx: TenantContext,
-  intent: { id: string; provider: string; providerPaymentId: string | null; status: string },
+  tenantId: string,
+  gw: RefundGateway,
   input: { amount: number; reason?: string | undefined },
   deps: RefundDeps,
-): Promise<{ providerRefundId: string; status: "processed" | "pending" } | null> {
-  if (!intent.providerPaymentId || (intent.provider !== "razorpay" && intent.provider !== "stripe")) return null;
-  if (!["captured", "partially_refunded"].includes(intent.status)) return null;
-  const creds = await getTenantPaymentSecrets(rt._db.db, ctx.tenantId, intent.provider);
+): Promise<{ providerRefundId: string; status: "processed" | "pending" }> {
   const reason = input.reason ?? "customer_requested";
-  const pay = { intentId: intent.id, providerPaymentId: intent.providerPaymentId };
+  const pay = { intentId: gw.intentId, providerPaymentId: gw.providerPaymentId };
   try {
     const result =
-      intent.provider === "razorpay"
-        ? await new RazorpayProvider({ keyId: creds.keyId, keySecret: creds.keySecret, client: deps.razorpayClient as never }).refund({ tenantId: ctx.tenantId }, pay, input.amount, reason)
-        : await new StripeProvider({ secretKey: creds.keySecret, fetchFn: deps.fetchFn }).refund({ tenantId: ctx.tenantId }, pay, input.amount, reason);
+      gw.provider === "razorpay"
+        ? await new RazorpayProvider({ keyId: gw.creds.keyId, keySecret: gw.creds.keySecret, client: deps.razorpayClient as never }).refund({ tenantId }, pay, input.amount, reason)
+        : await new StripeProvider({ secretKey: gw.creds.keySecret, fetchFn: deps.fetchFn }).refund({ tenantId }, pay, input.amount, reason);
     if (result.status === "failed") throw new Error("the gateway reported the refund as failed");
     return { providerRefundId: result.providerRefundId, status: result.status };
   } catch (err) {
     const message = err instanceof Error ? err.message : "the gateway refused the refund";
-    throw new Error(`Bad Request: ${intent.provider === "stripe" ? "Stripe" : "Razorpay"} could not refund this payment (${message.slice(0, 160)}). Nothing was changed; try again or refund from the gateway dashboard.`);
+    throw new Error(`Bad Request: ${gw.provider === "stripe" ? "Stripe" : "Razorpay"} could not refund this payment (${message.slice(0, 160)}). Nothing was changed; try again or refund from the gateway dashboard.`, { cause: err });
   }
 }
 
@@ -1370,6 +1398,8 @@ export async function refundAdminOrder(
 ) {
   assertPermission(ctx, "orders.refund");
   const db = rt._db.db;
+  // Read the gateway and the store's keys before the transaction (a service call must not run inside it).
+  const gateway = await loadRefundGateway(rt, ctx, input.id);
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
     // Find active payment intent for order with row lock
@@ -1414,17 +1444,11 @@ export async function refundAdminOrder(
 
     // 2. Money back at the gateway (online Razorpay or Stripe payments), after the guards above passed and before anything is
     // recorded: if the gateway says no, the transaction rolls back and no refund is shown.
-    let gateway: Awaited<ReturnType<typeof refundAtGateway>> = null;
-    if (existingIntent) {
-      // The gateway's payment id is saved on the captured attempt when the payment is settled.
-      const [attempt] = await tx
-        .select({ providerPaymentId: schema.paymentAttempts.providerPaymentId })
-        .from(schema.paymentAttempts)
-        .where(and(eq(schema.paymentAttempts.tenantId, ctx.tenantId), eq(schema.paymentAttempts.intentId, existingIntent.id), eq(schema.paymentAttempts.status, "captured")))
-        .orderBy(desc(schema.paymentAttempts.createdAt))
-        .limit(1);
-      gateway = await refundAtGateway(rt, ctx, { id: existingIntent.id, provider: existingIntent.provider, providerPaymentId: attempt?.providerPaymentId ?? null, status: existingIntent.status }, input, deps);
-    }
+    // Only when it is still the same intent that was read above and it is captured.
+    const sent =
+      gateway && existingIntent && existingIntent.id === gateway.intentId && ["captured", "partially_refunded"].includes(existingIntent.status)
+        ? await refundAtGateway(ctx.tenantId, gateway, input, deps)
+        : null;
 
     // 3. Record refund record
     const [refund] = await tx
@@ -1436,7 +1460,7 @@ export async function refundAdminOrder(
         amount: input.amount,
         status: "succeeded",
         reason: input.reason ?? "Admin initiated refund",
-        ...(gateway ? { method: "original_payment_method", reference: gateway.providerRefundId, providerRefundId: gateway.providerRefundId } : {}),
+        ...(sent ? { method: "original_payment_method", reference: sent.providerRefundId, providerRefundId: sent.providerRefundId } : {}),
       })
       .returning();
 
