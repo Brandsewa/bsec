@@ -708,6 +708,13 @@
       "when": 1794724109014,
       "tag": "0106_analytics_events",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794727709014,
+      "tag": "0107_analytics_traffic_daily",
+      "breakpoints": true
     }
   ]
 }

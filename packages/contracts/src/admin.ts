@@ -4,6 +4,7 @@ import { appsContract } from "./apps.ts";
 import { z } from "zod";
 import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
+import { analyticsContract } from "./analytics.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
@@ -5298,6 +5299,7 @@ export const adminContract = {
   },
 
   finance: financeContract,
+  analytics: analyticsContract,
   blog: blogContract,
   notifications: storeNotificationsContract,
 };

@@ -962,6 +962,20 @@ export async function startJobs(opts: {
     }
   });
 
+  // Merchant analytics (ADR-046): hourly traffic rollup for yesterday and today, plus raw-event and rollup retention
+  await boss.work(QUEUE_NAMES.ANALYTICS_MAINTENANCE, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { runAnalyticsMaintenance } = await import("./analytics/rollup.ts");
+        const res = await runAnalyticsMaintenance(db);
+        opts.log.info({ job_id: job.id, ...res }, "analytics.maintenance processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "analytics.maintenance failed");
+        throw err;
+      }
+    }
+  });
+
   // Custom domains: pick up DNS/SSL progress without the merchant pressing "Check status" (ADR-017)
   await boss.work(QUEUE_NAMES.DOMAINS_SWEEP, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
@@ -1363,6 +1377,7 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.BLOG_PUBLISH_DUE, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
+    await boss.schedule(QUEUE_NAMES.ANALYTICS_MAINTENANCE, "20 * * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});
     // The web service has no job queue, so new uploads are found here: derived images within a minute, hashes in minutes.
     await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, "* * * * *", {});

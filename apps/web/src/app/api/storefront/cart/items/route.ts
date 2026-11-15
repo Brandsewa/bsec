@@ -9,6 +9,8 @@ import {
   removeCartItem,
   checkStorefrontRateLimit,
   RateLimitExceededError,
+  recordAnalyticsEvent,
+  getClientIp,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, getRequestHeaders, getCookieValue } from "../route.ts";
@@ -86,6 +88,30 @@ export async function POST(req: Request) {
       quantity: parsed.data.quantity,
       properties: parsed.data.properties,
     });
+
+    // Funnel event recorded on the server (ADR-046): no client JavaScript, and it never delays or fails the add to cart.
+    const analyticsSecret = process.env.BETTER_AUTH_SECRET;
+    if (analyticsSecret && (access.mode ?? "live") === "live") {
+      let path = "/";
+      try {
+        path = new URL(h.get("referer") ?? "").pathname;
+      } catch {
+        // no usable referer: keep "/"
+      }
+      void recordAnalyticsEvent(
+        rt,
+        access.tenantId,
+        {
+          type: "add_to_cart",
+          path,
+          ip: getClientIp(h),
+          userAgent: h.get("user-agent") ?? "",
+          country: h.get("cf-ray") ? h.get("cf-ipcountry") : null,
+          doNotTrack: h.get("sec-gpc") === "1" || h.get("dnt") === "1",
+        },
+        { secret: analyticsSecret },
+      ).catch(() => undefined);
+    }
 
     const response = NextResponse.json({
       cart,

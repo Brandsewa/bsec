@@ -381,6 +381,8 @@ import {
   getCookieInventory,
   resolvePeriod,
   getFinanceOverview,
+  getAnalyticsOverview,
+  getAnalyticsReport,
   getDistinctCurrencies,
   listLedgerEntriesForAdmin,
   getTrialBalanceForAdmin,
@@ -3462,6 +3464,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAdminAbandonedCheckouts(context.rt, context.tenantCtx, input);
+        }),
+    },
+    analytics: {
+      overview: os.admin.analytics.overview
+        .use(requireAdmin)
+        .use(requirePermission("analytics.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAnalyticsOverview(context.rt, context.tenantCtx, input);
+        }),
+      report: os.admin.analytics.report
+        .use(requireAdmin)
+        .use(requirePermission("analytics.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAnalyticsReport(context.rt, context.tenantCtx, input);
         }),
     },
     finance: {

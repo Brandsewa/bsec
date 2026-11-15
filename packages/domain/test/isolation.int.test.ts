@@ -322,6 +322,8 @@ import {
   restoreMedia,
   deleteMediaPermanent,
   getAdminAbandonedCheckoutStats,
+  getAnalyticsOverview,
+  getAnalyticsReport,
   listAdminAbandonedCheckouts,
   createAdminCustomer,
   getOrderSettings,
@@ -1853,6 +1855,12 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         assertPermission(ctx, "settings.write");
         return await dismissOnboardingProgress(rt, ctx);
 
+      // --- Analytics ---
+      case "analytics.overview":
+        return await getAnalyticsOverview(rt, ctx, { from: "2026-01-01", to: "2026-01-31" });
+      case "analytics.report":
+        return await getAnalyticsReport(rt, ctx, { id: "sales_over_time", from: "2026-01-01", to: "2026-01-31" });
+
       // --- Abandoned checkouts ---
       case "abandonedCheckouts.list":
         return await listAdminAbandonedCheckouts(rt, ctx);
@@ -2726,9 +2734,11 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           expect(limitedCtx).not.toBeNull();
           expect(limitedCtx!.permissions).toEqual(["analytics.read"]);
 
-          // Procedure execution fails because userLimited lacks required permissions
+          // Procedure execution fails because userLimited lacks required permissions.
+          // Analytics procedures need exactly analytics.read, so for those the denial is proven with a different single permission.
+          const deniedCtx = proc.startsWith("analytics.") ? { ...limitedCtx!, permissions: ["orders.read" as const] } : limitedCtx!;
           await expect(
-            executeAdminProcedure(proc, rtApp, limitedCtx!),
+            executeAdminProcedure(proc, rtApp, deniedCtx),
           ).rejects.toThrow(/forbidden: missing required permission/i);
         });
 
@@ -2778,7 +2788,13 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           if (exportOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/exports.run/);
           }
-          const runCtx = exportOnly
+          const analyticsOnly = proc.startsWith("analytics.");
+          if (analyticsOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/analytics\.read/);
+          }
+          const runCtx = analyticsOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "analytics.read"] }
+            : exportOnly
             ? { ...authCtx!, roles: ["store_owner"], permissions: [...authCtx!.permissions, "exports.run"] }
             : marketsOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }
