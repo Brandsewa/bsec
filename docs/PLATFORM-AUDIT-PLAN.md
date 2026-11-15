@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Author:** claude
-- **Status:** plan only, nothing audited yet. Awaiting the owner's go-ahead and choice of order.
+- **Status:** owner go-ahead 2026-11-15. Phases 1 and 2 (A1 to A4) done in a first pass, partly covered: results and the "not checked" lists are in `docs/audit/2026-11-SUMMARY.md`. Phases 3 to 7 not started.
 - **Change record:** `docs/changes/2026-11-15-claude-security-alerts-and-audit-plan.md`
 
 ## 1. Goal and scope
@@ -273,7 +273,7 @@ The audit is done when:
 
 - [ ] Every check in section 4 has a recorded result: pass, finding (with ID), or "not checked" with the reason.
 - [ ] Every Critical and High finding has a reproducing real-database test or exact steps with evidence.
-- [ ] The mechanical scripts from phase 0 are committed and can be re-run (`scripts/audit-*.mjs`).
+- [ ] The mechanical scripts from phase 0 are committed and can be re-run (`scripts/audit-api-guards.mjs`, `scripts/audit-rls.sql`).
 - [ ] `docs/audit/2026-11-SUMMARY.md` lists all findings by severity with status, and the counts per section.
 - [ ] New gaps that belong to recovery or monitoring are added to the hardening plan's pending list, not duplicated here.
 - [ ] The owner has seen the summary and marked each Critical and High as "fix" or "accepted".
