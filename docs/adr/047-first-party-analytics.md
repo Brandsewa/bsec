@@ -19,6 +19,9 @@ Merchants need starter analytics (sales, orders, customers, traffic, funnel). `a
 ## Server-side conversion APIs (added with slice 5b)
 Browser events miss visitors with ad blockers, so a confirmed order's `Purchase` is also sent from the server to the Meta Conversions API and the GA4 Measurement Protocol. Rules: only for visitors who accepted the matching cookie category (read from the `bs_consent` cookie when the order is placed and stored on the order), only when the merchant saved the credential, encrypted in `tenant_secrets` and never shown again; the same event id and transaction id as the browser event so platforms de-duplicate; personal data (hashed email and phone, IP, user agent) goes to Meta only and is cleared once the event settles; sent after commit through a retrying pg-boss job. The merchant's privacy policy must mention these processors; the admin card says so.
 
+## Server-side add to cart and begin checkout (slice 5c)
+Meta gets `AddToCart` and `InitiateCheckout` from the server too, with the same consent, credential and clearing rules as purchases and the same event id as the browser pixel so Meta counts them once. GA4 does not: it can only de-duplicate purchases, so it keeps receiving those two events from the browser only.
+
 ## Consequences
 - No new service or env var; one new table and one public route. The collector writes one row per pageview, so write volume scales with traffic. Batching and the retention job are in the plan.
 - The product-page JS budget is not spent by analytics. It stays at 50 KB; raising it is not needed for this design.

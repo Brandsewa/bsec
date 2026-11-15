@@ -31,6 +31,8 @@ const TIMEOUT_MS = 8000;
 export const CONVERSION_GIVE_UP_HOURS = 48;
 /** Tracking rows are deleted this long after the order. */
 export const ORDER_TRACKING_RETENTION_DAYS = 30;
+/** Add to cart and begin checkout rows are deleted this long after the event. */
+export const TRACKING_EVENT_RETENTION_DAYS = 7;
 
 export const META_SECRET = { provider: META_PROVIDER, keyName: META_KEY } as const;
 export const GA4_SECRET = { provider: GA4_PROVIDER, keyName: GA4_KEY } as const;
@@ -206,7 +208,12 @@ async function post(fetchFn: Fetch, url: string, body: unknown, secret: string):
   }
 }
 
-export function sendMetaPurchase(fetchFn: Fetch, pixelId: string, payload: NonNullable<ReturnType<typeof buildMetaPurchasePayload>>): Promise<SendResult> {
+export interface MetaPayload {
+  access_token: string;
+  [key: string]: unknown;
+}
+
+export function sendMetaPurchase(fetchFn: Fetch, pixelId: string, payload: MetaPayload): Promise<SendResult> {
   // The token travels in the body, not the URL, so it cannot end up in access logs.
   return post(fetchFn, `https://graph.facebook.com/${META_CAPI_VERSION}/${encodeURIComponent(pixelId)}/events`, payload, payload.access_token);
 }
@@ -259,6 +266,8 @@ export async function conversionStats(db: Db, tenantId: string): Promise<{ sent:
         SELECT meta_status AS s FROM order_tracking WHERE tenant_id = ${tenantId} AND created_at > now() - interval '7 days' AND meta_status <> 'skipped'
         UNION ALL
         SELECT ga4_status FROM order_tracking WHERE tenant_id = ${tenantId} AND created_at > now() - interval '7 days' AND ga4_status <> 'skipped'
+        UNION ALL
+        SELECT meta_status FROM conversion_events WHERE tenant_id = ${tenantId} AND created_at > now() - interval '7 days' AND meta_status <> 'skipped'
       ) x GROUP BY s`),
   );
   const out = { sent: 0, failed: 0, pending: 0, skipped: 0 };
@@ -465,6 +474,105 @@ export async function pruneOrderTracking(db: Db, tenantId: string): Promise<{ ga
       .delete(schema.orderTracking)
       .where(and(eq(schema.orderTracking.tenantId, tenantId), lt(schema.orderTracking.createdAt, sql`now() - make_interval(days => ${ORDER_TRACKING_RETENTION_DAYS})`)))
       .returning({ id: schema.orderTracking.id });
-    return { gaveUp: gave.length, deleted: del.length };
+    // Add to cart and begin checkout events (slice 5c): same give-up rule, deleted after 7 days.
+    const gaveEvents = await tx
+      .update(schema.conversionEvents)
+      .set({
+        metaStatus: sql`CASE WHEN meta_status = 'pending' THEN 'failed' ELSE meta_status END`,
+        metaDetail: sql`CASE WHEN meta_status = 'pending' THEN 'Gave up after repeated errors' ELSE meta_detail END`,
+        clientIp: null,
+        userAgent: null,
+        fbp: null,
+        fbc: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.conversionEvents.tenantId, tenantId),
+          lt(schema.conversionEvents.createdAt, sql`now() - make_interval(hours => ${CONVERSION_GIVE_UP_HOURS})`),
+          sql`(meta_status = 'pending' OR client_ip IS NOT NULL OR user_agent IS NOT NULL OR fbp IS NOT NULL OR fbc IS NOT NULL)`,
+        ),
+      )
+      .returning({ id: schema.conversionEvents.id });
+    const delEvents = await tx
+      .delete(schema.conversionEvents)
+      .where(and(eq(schema.conversionEvents.tenantId, tenantId), lt(schema.conversionEvents.createdAt, sql`now() - make_interval(days => ${TRACKING_EVENT_RETENTION_DAYS})`)))
+      .returning({ id: schema.conversionEvents.id });
+    return { gaveUp: gave.length + gaveEvents.length, deleted: del.length + delEvents.length };
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Add to cart and begin checkout, sent from the server to Meta only (slice 5c)
+// ---------------------------------------------------------------------------------------------
+
+export type ServerEventName = "AddToCart" | "InitiateCheckout";
+
+export interface ServerEventRow {
+  clientIp: string | null;
+  userAgent: string | null;
+  fbp: string | null;
+  fbc: string | null;
+  sourceUrl: string | null;
+}
+
+/**
+ * Whether to send this visitor's AddToCart or InitiateCheckout to Meta from the server. Only with marketing consent of the current
+ * banner revision, a configured Pixel ID and a saved access token. Meta only: GA4 cannot de-duplicate these against the browser
+ * event, so sending both would double count. Pure, so it is unit tested without a database.
+ */
+export function decideEventTracking(
+  cfg: PublicConsentConfig | null,
+  creds: { metaAccessTokenSet: boolean },
+  req: OrderTrackingRequest,
+): ServerEventRow | null {
+  if (!cfg || !cfg.pixel || !creds.metaAccessTokenSet) return null;
+  const consent = parseConsentCookie(readCookie(req.cookieHeader, "bs_consent"), cfg.rev);
+  if (!consent?.marketing) return null;
+  const fbp = readCookie(req.cookieHeader, "_fbp");
+  const fbc = readCookie(req.cookieHeader, "_fbc");
+  const cap = (v: string | null | undefined, n: number) => (v ? v.slice(0, n) : null);
+  return {
+    clientIp: cap(req.ip && req.ip !== "unknown" ? req.ip : null, 64),
+    userAgent: cap(req.userAgent, 400),
+    fbp: fbp && FB_ID.test(fbp) ? fbp : null,
+    fbc: fbc && FB_ID.test(fbc) ? fbc : null,
+    sourceUrl: cap(req.sourceUrl, 500),
+  };
+}
+
+export function buildMetaEventPayload(
+  ev: { name: ServerEventName; eventId: string; eventTime: Date; currency: string; value: number; items: Array<{ id: string; quantity: number; price: number }> },
+  t: ServerEventRow,
+  testEventCode: string | null,
+  token: string,
+): MetaPayload {
+  const userData: Record<string, unknown> = {};
+  if (t.clientIp) userData["client_ip_address"] = t.clientIp;
+  if (t.userAgent) userData["client_user_agent"] = t.userAgent;
+  if (t.fbp) userData["fbp"] = t.fbp;
+  if (t.fbc) userData["fbc"] = t.fbc;
+  return {
+    access_token: token,
+    ...(testEventCode ? { test_event_code: testEventCode } : {}),
+    data: [
+      {
+        event_name: ev.name,
+        // The browser sends the same id as `eventID`, so Meta counts the event once.
+        event_id: ev.eventId,
+        event_time: Math.floor(ev.eventTime.getTime() / 1000),
+        action_source: "website",
+        ...(t.sourceUrl ? { event_source_url: t.sourceUrl } : {}),
+        user_data: userData,
+        custom_data: {
+          currency: ev.currency,
+          value: ev.value,
+          content_type: "product",
+          content_ids: ev.items.map((i) => i.id),
+          contents: ev.items.map((i) => ({ id: i.id, quantity: i.quantity, item_price: i.price })),
+          num_items: ev.items.reduce((n, i) => n + i.quantity, 0),
+        },
+      },
+    ],
+  };
 }

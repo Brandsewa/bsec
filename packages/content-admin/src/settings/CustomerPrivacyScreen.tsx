@@ -367,7 +367,7 @@ function PrivacyForm({
       {saved.consent.metaPixelId.trim() !== "" || saved.consent.ga4MeasurementId.trim() !== "" ? (
         <SettingsCard
           title="Server-side events"
-          description="Send purchases from our server as well, so they still count when a visitor's browser blocks the tracking script. Only for visitors who accepted the matching cookie choice."
+          description="Send purchases from our server as well, so they still count when a visitor's browser blocks the tracking script. Meta also gets add to cart and begin checkout from the server. Only for visitors who accepted the matching cookie choice."
         >
           <div className="space-y-5">
             {saved.consent.metaPixelId.trim() !== "" ? (
@@ -421,7 +421,7 @@ function PrivacyForm({
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              Sent with each purchase: order number, items, total, and the customer's email and phone as one-way hashes (Meta only), plus the visitor's IP address and browser details (Meta only). Google receives no personal data. This information is kept only until the event is sent.
+              Sent with each purchase: order number, items, total, and the customer's email and phone as one-way hashes (Meta only), plus the visitor's IP address and browser details (Meta only). Add to cart and begin checkout (Meta only) carry items, value and the visitor's IP address and browser details, but no email or phone. Google receives no personal data. This information is kept only until the event is sent.
             </p>
           </div>
         </SettingsCard>

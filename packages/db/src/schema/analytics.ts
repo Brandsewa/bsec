@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, index, integer, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, numeric, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { tenantForeignKey, tenantTable } from "../tenant-table.ts";
 import { orders } from "./orders.ts";
 
@@ -94,5 +94,43 @@ export const orderTracking = tenantTable(
     unique("order_tracking_tenant_order_uniq").on(t.tenantId, t.orderId),
     index("order_tracking_tenant_created_idx").on(t.tenantId, t.createdAt),
     tenantForeignKey({ tableTenantId: t.tenantId, column: t.orderId, target: orders, name: "order_tracking_order_fk", onDelete: "cascade" }),
+  ],
+);
+
+/**
+ * Server-side Meta events that happen before an order exists: AddToCart and InitiateCheckout (ADR-047, slice 5c).
+ * One row per event, written only when the visitor accepted marketing cookies and the store has a Pixel ID and Conversions API
+ * token. `event_id` is also given to the browser so Meta counts the event once. The request details are cleared as soon as the
+ * event settles; rows are deleted after 7 days. Meta only: GA4 cannot de-duplicate these events against the browser, so it is
+ * not sent them from the server.
+ */
+export const conversionEvents = tenantTable(
+  "conversion_events",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    /** Meta event name: AddToCart | InitiateCheckout. */
+    eventName: text("event_name").notNull(),
+    eventId: text("event_id").notNull(),
+    eventTime: timestamp("event_time", { withTimezone: true }).notNull().default(sql`now()`),
+    currency: text("currency").notNull(),
+    /** Major units, as Meta expects. */
+    value: numeric("value", { precision: 14, scale: 2 }).notNull(),
+    /** [{ id, quantity, price }] with price in major units. */
+    items: jsonb("items").notNull(),
+    clientIp: text("client_ip"),
+    userAgent: text("user_agent"),
+    fbp: text("fbp"),
+    fbc: text("fbc"),
+    sourceUrl: text("source_url"),
+    /** pending | sent | failed | skipped, as for order_tracking. */
+    metaStatus: text("meta_status").notNull().default("pending"),
+    metaDetail: text("meta_detail"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    unique("conversion_events_tenant_event_uniq").on(t.tenantId, t.eventId),
+    index("conversion_events_tenant_created_idx").on(t.tenantId, t.createdAt),
   ],
 );

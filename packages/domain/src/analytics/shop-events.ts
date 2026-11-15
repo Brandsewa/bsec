@@ -19,7 +19,7 @@ export interface ShopItem {
 
 export type ShopEvent =
   | { t: "view_item"; currency: string; value: number; items: ShopItem[] }
-  | { t: "begin_checkout"; currency: string; value: number; items: ShopItem[] }
+  | { t: "begin_checkout"; currency: string; value: number; items: ShopItem[]; eventId?: string | undefined }
   | { t: "purchase"; currency: string; value: number; orderId: string; shipping: number; items: ShopItem[] };
 
 interface VariantLike {

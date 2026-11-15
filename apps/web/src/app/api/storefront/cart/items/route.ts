@@ -10,8 +10,10 @@ import {
   checkStorefrontRateLimit,
   RateLimitExceededError,
   recordAnalyticsEvent,
+  recordServerEvent,
   getClientIp,
 } from "@bs/domain";
+import { toMajorUnits } from "@bs/contracts/money";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, getRequestHeaders, getCookieValue } from "../route.ts";
 
@@ -113,10 +115,27 @@ export async function POST(req: Request) {
       ).catch(() => undefined);
     }
 
+    // Meta Conversions API AddToCart (ADR-047, slice 5c): only for visitors who accepted marketing cookies and stores that saved a token.
+    // The id goes back to the browser so its pixel event and this one count once.
+    let analyticsEventId: string | null = null;
+    const added = cart.items.find((i) => i.variantId === parsed.data.variantId);
+    if (added && (access.mode ?? "live") === "live") {
+      const price = toMajorUnits(added.unitPriceSnapshot, cart.currency);
+      analyticsEventId = await recordServerEvent(rt, access.tenantId, {
+        name: "AddToCart",
+        eventId: `atc_${crypto.randomUUID()}`,
+        currency: cart.currency,
+        value: Math.round(price * parsed.data.quantity * 100) / 100,
+        items: [{ id: added.variant.sku?.trim() || added.variantId, quantity: parsed.data.quantity, price }],
+        req: { cookieHeader: h.get("cookie"), ip: getClientIp(h), userAgent: h.get("user-agent"), sourceUrl: h.get("referer") },
+      });
+    }
+
     const response = NextResponse.json({
       cart,
       itemCount: cart.itemCount,
       subtotal: cart.subtotal,
+      ...(analyticsEventId ? { analyticsEventId } : {}),
     });
 
     response.cookies.set({

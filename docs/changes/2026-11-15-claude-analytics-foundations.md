@@ -40,6 +40,13 @@ First slice of merchant analytics. There is now a plan and an ADR (first-party, 
 - Rules, all tested: consent required per platform and per revision; no credential, no row; hashed email and phone to Meta only; GA4 gets no personal data; token in the Meta request body, never the URL; failure text redacted; idempotent per platform; retry on network, 429 and 5xx; request details cleared when settled.
 - Not verified against live Meta or Google (no real credentials used): the Graph API version constant `META_CAPI_VERSION` (v21.0) and the payload shape follow Meta's documented Conversions API and should be checked once with the merchant's Test events code.
 
+## Server-side add to cart and begin checkout (slice 5c)
+- Migration `0111_conversion_events` (named so after finding `tracking_events` already exists for shipments); queue `analytics.conversion_event`; `packages/domain/src/analytics/server-events.ts` (`recordServerEvent`, `handleServerEventJob`); `decideEventTracking` and `buildMetaEventPayload` in `conversions.ts`.
+- Cart route returns `analyticsEventId`; checkout page records `InitiateCheckout` and passes the id in the `begin_checkout` blob; `bsc.js` uses it as the Meta `eventID`.
+- Meta only. GA4 cannot de-duplicate non-purchase events, so it stays browser-only for these two; sending both would inflate GA4.
+- Tested: unit (decision matrix, payload without personal data), real database (record, repeat, send, retry, permanent failure, removed token, stats, retention), and a production build in a browser (event rows and matching ids; no row for analytics-only or no-choice visitors; a checkout refresh adds no second row).
+- Not verified against live Meta.
+
 ## Decisions and trade-offs
 - No new env var: the hash is keyed by `BETTER_AUTH_SECRET` plus the UTC day.
 - The collector uses an in-memory limiter, not the database-backed storefront quota, so analytics cannot spend the store's request budget. It is per instance and best-effort.

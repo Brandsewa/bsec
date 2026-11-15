@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildMetaEventPayload,
+  decideEventTracking,
   buildGa4PurchasePayload,
   buildMetaPurchasePayload,
   decideOrderTracking,
@@ -142,5 +144,34 @@ describe("sending", () => {
     const net = await sendGa4Purchase(down, "G-TEST12345", "ga-secret-value", ga4);
     expect(net).toMatchObject({ ok: false, retryable: true });
     expect(JSON.stringify(net)).not.toContain("ga-secret-value");
+  });
+});
+
+describe("add to cart and begin checkout from the server (Meta only)", () => {
+  const meta = { metaAccessTokenSet: true };
+
+  it("needs marketing consent of the current revision, a Pixel ID and a saved token", () => {
+    expect(decideEventTracking(cfg, meta, req(cookies("abcd1234.01")))).toMatchObject({ clientIp: "203.0.113.7", fbp: "fb.1.1700000000.123456789" });
+    expect(decideEventTracking(cfg, meta, req(cookies("abcd1234.10")))).toBeNull(); // analytics only
+    expect(decideEventTracking(cfg, meta, req(cookies("abcd1234.00")))).toBeNull();
+    expect(decideEventTracking(cfg, meta, req(cookies("old00000.11")))).toBeNull();
+    expect(decideEventTracking(cfg, meta, req("bs_cart_count=1"))).toBeNull();
+    expect(decideEventTracking(cfg, { metaAccessTokenSet: false }, req(cookies("abcd1234.11")))).toBeNull();
+    expect(decideEventTracking({ ...cfg, pixel: null }, meta, req(cookies("abcd1234.11")))).toBeNull();
+    expect(decideEventTracking(null, meta, req(cookies("abcd1234.11")))).toBeNull();
+  });
+
+  it("the payload carries the shared event id, items and request details, and no personal data", () => {
+    const row = decideEventTracking(cfg, meta, req(cookies("abcd1234.11")))!;
+    const p = buildMetaEventPayload(
+      { name: "AddToCart", eventId: "atc_123", eventTime: new Date("2026-11-15T10:00:00Z"), currency: "INR", value: 2398, items: [{ id: "TEA-50", quantity: 2, price: 1199 }] },
+      row,
+      "TEST123",
+      "TOKEN-VALUE-0123456789",
+    );
+    expect(p.test_event_code).toBe("TEST123");
+    const ev = (p["data"] as Array<Record<string, unknown>>)[0]!;
+    expect(ev).toMatchObject({ event_name: "AddToCart", event_id: "atc_123", action_source: "website", custom_data: { value: 2398, num_items: 2, content_ids: ["TEA-50"] } });
+    expect(JSON.stringify(ev)).not.toMatch(/"em"|"ph"/);
   });
 });

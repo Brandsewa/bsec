@@ -96,7 +96,9 @@
         contents: items.map(function (i) { return { id: i.id, quantity: i.quantity, item_price: i.price }; })
       };
       if (ev.t === "purchase") px.num_items = items.reduce(function (n, i) { return n + i.quantity; }, 0);
-      if (ev.t === "purchase") window.fbq("track", META[ev.t], px, { eventID: ev.orderId }); else window.fbq("track", META[ev.t], px);
+      // The server sends the same event to Meta; the shared id makes Meta count it once.
+      var eid = ev.t === "purchase" ? ev.orderId : ev.eventId;
+      if (eid) window.fbq("track", META[ev.t], px, { eventID: eid }); else window.fbq("track", META[ev.t], px);
     }
   }
   function handle(n) {
@@ -113,7 +115,7 @@
   function decimals(cur) {
     try { return new Intl.NumberFormat("en", { style: "currency", currency: cur }).resolvedOptions().maximumFractionDigits; } catch { return 2; }
   }
-  function cartAdded(cart, body) {
+  function cartAdded(cart, body, eventId) {
     if (!cart || !cart.items || !body) return;
     var line = null;
     for (var i = 0; i < cart.items.length; i++) if (cart.items[i].variantId === body.variantId) line = cart.items[i];
@@ -123,7 +125,7 @@
     var vt = line.variant && line.variant.title;
     var qty = body.quantity > 0 ? body.quantity : 1;
     send({
-      t: "add_to_cart", currency: cart.currency, value: Math.round(price * qty * 100) / 100,
+      t: "add_to_cart", eventId: eventId, currency: cart.currency, value: Math.round(price * qty * 100) / 100,
       items: [{ id: (line.variant && line.variant.sku) || line.variantId, name: line.product.title, variant: vt && vt.toLowerCase() !== "default title" && vt.toLowerCase() !== "default" ? vt : undefined, price: price, quantity: qty }]
     });
   }
@@ -138,7 +140,7 @@
           if (method === "POST" && /\/api\/storefront\/cart\/items\/?(\?|$)/.test(url) && init && typeof init.body === "string") {
             var body = JSON.parse(init.body);
             p.then(function (r) {
-              if (r.ok) r.clone().json().then(function (d) { cartAdded(d && d.cart, body); }).catch(function () {});
+              if (r.ok) r.clone().json().then(function (d) { cartAdded(d && d.cart, body, d && d.analyticsEventId); }).catch(function () {});
             }).catch(function () {});
           }
         } catch { /* never interfere with the shop's own request */ }

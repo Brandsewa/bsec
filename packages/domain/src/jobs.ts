@@ -984,6 +984,19 @@ export async function startJobs(opts: {
     }
   });
 
+  // Server-side Meta events before an order exists: add to cart and begin checkout (ADR-047, slice 5c)
+  await boss.work<{ tenantId: string; id: string }>(QUEUE_NAMES.ANALYTICS_CONVERSION_EVENT, { localConcurrency: 4 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { handleServerEventJob } = await import("./analytics/server-events.ts");
+        await handleServerEventJob(db, opts.log, job.data);
+      } catch (err) {
+        opts.log.warn({ err, job_id: job.id }, "analytics.conversion_event will retry");
+        throw err;
+      }
+    }
+  });
+
   // Merchant analytics (ADR-047): hourly traffic rollup for yesterday and today, plus raw-event and rollup retention
   await boss.work(QUEUE_NAMES.ANALYTICS_MAINTENANCE, { localConcurrency: 1 }, async (batch) => {
     for (const job of batch) {
