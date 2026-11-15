@@ -20,6 +20,7 @@ import {
   getStorefrontPage,
   getStorefrontPageByPath,
   getBrandSettings,
+  getStorefrontBrandAssets,
   getStorefrontThemePage,
   getStorefrontThemeTokens,
   THEME_SYSTEM_PAGES,
@@ -284,6 +285,18 @@ export async function getCachedBrandSettings(tenantId: string) {
   cacheTag(tenantTag(tenantId, "nav"));
 
   return settings;
+}
+
+/**
+ * Logo, favicon, apple touch icon and default share image for the page head and structured data (docs/SEO-GEO-AEO-PLAN.md
+ * Phase 2). Refreshed when the brand is published or the SEO settings change.
+ */
+export async function getCachedBrandAssets(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "theme"));
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  cacheTag(tenantTag(tenantId, "seo"));
+  return getStorefrontBrandAssets(server().rt, tenantId);
 }
 
 /** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */

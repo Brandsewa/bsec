@@ -8,6 +8,7 @@ import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
 import { toMajorUnits } from "@bs/contracts/money";
+import { publicMediaUrl } from "../media/storage.ts";
 import { loadStorefrontMarkets } from "../markets/lookup.ts";
 import { withMarketScope } from "../markets/scope.ts";
 import {
@@ -239,16 +240,33 @@ export function generateOrganizationJsonLd(opts: {
   url: string;
   logoUrl?: string | null;
   sameAs?: string[];
+  legalName?: string | null;
+  email?: string | null;
+  telephone?: string | null;
 }): OrganizationJsonLd {
   const result: OrganizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
+    "@id": `${opts.url.replace(/\/$/, "")}/#organization`,
     name: opts.name,
     url: opts.url,
   };
 
+  if (opts.legalName && opts.legalName !== opts.name) result.legalName = opts.legalName;
+
+  // Google wants a logo as an ImageObject or URL it can crawl; an https URL on the store's media domain qualifies.
   if (opts.logoUrl) {
     result.logo = opts.logoUrl;
+  }
+
+  // A customer-service contact point only when the merchant gave one: nothing is invented.
+  if (opts.email || opts.telephone) {
+    result.contactPoint = {
+      "@type": "ContactPoint",
+      contactType: "customer service",
+      ...(opts.email ? { email: opts.email } : {}),
+      ...(opts.telephone ? { telephone: opts.telephone } : {}),
+    };
   }
 
   if (opts.sameAs && opts.sameAs.length > 0) {
@@ -256,6 +274,23 @@ export function generateOrganizationJsonLd(opts: {
   }
 
   return result;
+}
+
+/** Keeps only absolute https URLs, de-duplicated: merchant-entered profile links go straight into structured data. */
+export function cleanSameAs(values: unknown): string[] {
+  if (!values || typeof values !== "object") return [];
+  const raw = Array.isArray(values) ? values : Object.values(values as Record<string, unknown>);
+  const out = new Set<string>();
+  for (const v of raw) {
+    if (typeof v !== "string") continue;
+    try {
+      const u = new URL(v.trim());
+      if (u.protocol === "https:") out.add(u.toString());
+    } catch {
+      // not a URL: skip
+    }
+  }
+  return [...out];
 }
 
 /**
@@ -604,6 +639,70 @@ export async function getStorefrontSeoSettings(
       },
       breadcrumbsEnabled: row.breadcrumbsEnabled,
       faqSchemaEnabled: row.faqSchemaEnabled,
+    };
+  });
+}
+
+export interface StorefrontShareImage {
+  url: string;
+  width?: number | undefined;
+  height?: number | undefined;
+  alt?: string | undefined;
+}
+
+export interface StorefrontBrandAssets {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  appleTouchIconUrl: string | null;
+  /** Image used for og:image and twitter:image on pages that have none of their own. */
+  shareImage: StorefrontShareImage | null;
+}
+
+/**
+ * Public brand images for the page head and structured data: logo, favicon, apple touch icon and the default share image.
+ * The share image is the SEO default image, else the brand's social image, else the logo, so every page that has no picture of
+ * its own still shows the store when a link is pasted or cited. Only files with a public URL are returned.
+ */
+export async function getStorefrontBrandAssets(rt: Runtime, tenantId: string): Promise<StorefrontBrandAssets> {
+  return withTenant(rt._db.db, tenantId, async (tx) => {
+    const [brand] = await tx
+      .select({
+        logo: schema.brandSettings.logoMediaId,
+        favicon: schema.brandSettings.faviconMediaId,
+        apple: schema.brandSettings.appleTouchIconMediaId,
+        social: schema.brandSettings.socialImageMediaId,
+      })
+      .from(schema.brandSettings)
+      .where(eq(schema.brandSettings.tenantId, tenantId))
+      .limit(1);
+    const [seo] = await tx
+      .select({ og: schema.seoSettings.defaultOgImageMediaId })
+      .from(schema.seoSettings)
+      .where(eq(schema.seoSettings.tenantId, tenantId))
+      .limit(1);
+
+    const ids = [brand?.logo, brand?.favicon, brand?.apple, brand?.social, seo?.og].filter((v): v is string => Boolean(v));
+    if (ids.length === 0) return { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, shareImage: null };
+    const rows = await tx
+      .select({ id: schema.media.id, storageKey: schema.media.storageKey, width: schema.media.width, height: schema.media.height, alt: schema.media.alt })
+      .from(schema.media)
+      .where(inArray(schema.media.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const urlOf = (id: string | null | undefined): string | null => {
+      const row = id ? byId.get(id) : undefined;
+      return (row && publicMediaUrl(row.storageKey)) || null;
+    };
+    const imageOf = (id: string | null | undefined): StorefrontShareImage | null => {
+      const row = id ? byId.get(id) : undefined;
+      const url = urlOf(id);
+      if (!row || !url) return null;
+      return { url, ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(row.alt?.trim() ? { alt: row.alt.trim() } : {}) };
+    };
+    return {
+      logoUrl: urlOf(brand?.logo),
+      faviconUrl: urlOf(brand?.favicon),
+      appleTouchIconUrl: urlOf(brand?.apple),
+      shareImage: imageOf(seo?.og) ?? imageOf(brand?.social) ?? imageOf(brand?.logo),
     };
   });
 }
