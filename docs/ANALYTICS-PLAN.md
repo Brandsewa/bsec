@@ -36,13 +36,26 @@ Delivery and carrier reports (courier not live; shipping integrations are out of
 - **Date filter (helpers built, slice 1):** `DateRangePicker` accepts `presets` and `today` (the store's today). `ANALYTICS_PRESETS`: Today, Yesterday, Last 7/30/90 days, This/last month, This/last quarter, Year to date, Last year. `comparisonRange(range, mode)` gives previous period or same period last year, `autoGranularity` gives day, week or month. Range and comparison live in the URL as `yyyy-MM-dd`; the server validates and caps the range. Still to build: a comparison selector and currency selector component, optional merchant-event presets (Black Friday, Cyber Monday).
 
 ## Slices and acceptance criteria
-**Status 2026-11-15:** slices 1 to 4 are built on `feat/merchant-analytics` (see `docs/changes/2026-11-15-claude-analytics-foundations.md`); slice 5 (consent banner, GA4 and Meta Pixel page views) is built too (see below); GA4 and Meta shop events (view item, add to cart, purchase) are not. Deviations: `begin_checkout` is not yet recorded from the checkout route (the funnel counts a `/checkout` pageview instead); cohort, RFM and the other Phase 2 reports are not built; the 30 Phase 1 reports are.
+**Status 2026-11-15:** all five slices are built on `feat/merchant-analytics` (PR #267; see `docs/changes/2026-11-15-claude-analytics-foundations.md`): foundations and collector (1), server-side `add_to_cart` and retention (2), rollups and the sales, orders and customer reports (3), traffic, behavior and inventory reports (4), and the cookie banner with consent-gated GA4 and Meta Pixel (5), including browser shop events, server-side Purchase to Meta CAPI and GA4 (5b) and server-side Meta AddToCart and InitiateCheckout (5c). Intentional differences from the slice text: the first-party funnel counts `begin_checkout` from a `/checkout` pageview instead of recording a separate event (same result, one fewer write); GA4 receives add to cart and begin checkout from the browser only, because its server API cannot de-duplicate them. What is left is under "Remaining work" below.
 
 1. **Foundations (this branch):** date presets, comparison and granularity helpers with tests; `analytics_events` table with forced RLS; collector service and route; beacon script. Accept: real-database test passes (stores a clean event; drops bots, Do Not Track, unknown types, bad paths; another store cannot read it); `pnpm typecheck` and `pnpm lint` pass; `bsa.js` is not part of the `.next` chunks.
 2. **Server-side funnel events:** record `add_to_cart` and `begin_checkout` from the cart and checkout routes; retention job. Accept: one event per action, none for bots or closed stores.
 3. **Rollups and Sales/Orders/Customers reports:** `analytics_daily`, `admin.analytics.*` contracts, dashboard with KPI tiles and the Phase 1 sales, orders and customer reports, date and comparison controls. Accept: totals equal a direct SQL sum over `orders` for the same range and timezone (real-database test); a staff user without `analytics.read` is refused at the domain service.
 4. **Traffic and behavior reports:** Acquisition and Behavior reports from the traffic rollup and `search_queries`; inventory Phase 1 reports. Accept: numbers reconcile with raw events for a seeded day; empty states for a new store.
-5. **Consent popup and optional integrations (later):** merchant-configurable consent banner and GA4 or Meta pixel through a curated settings field (ADR-010). Not required for slices 1 to 4.
+5. **Consent popup and optional integrations (built):** merchant-configurable consent banner and GA4 or Meta pixel through a curated settings field (ADR-010). Not required for slices 1 to 4.
+
+## Remaining work (2026-11-15)
+**Before merge (not features):** visual checks at phone widths and in dark mode for the dashboard, report pages, banner and settings cards; the date picker popover and CSV export by hand; one test purchase with the merchant's Meta test event code and a GA4 debug view to confirm live delivery (the Graph API version `META_CAPI_VERSION` and payload follow the docs but were never sent to Meta or Google); CI and e2e on PR #267; review.
+
+**Phase 2 reports (optional, each its own slice, in this order):**
+1. **Attribution:** capture `utm_*` and referrer on the cart and order, then sales by referrer, items sold by referrer, and visitors right now.
+2. **Customers:** cohort analysis and RFM analysis (builds on `segments`).
+3. **Orders and inventory:** returned products with reasons, cancellation reasons, items bought together, sell-through rate, ABC analysis, inventory adjustments, and a month-end inventory snapshot job for inventory value.
+4. **Profit:** profit margin by order and by product (needs `cost_price` filled in by merchants).
+
+**Optional follow-ups for the ad integrations:** server-side Meta `ViewContent`, Meta `external_id`, a per-order delivery log in the admin, per-region banner rules.
+
+**Owner decisions still open:** none blocking; the 90-day raw retention and sales by market were decided on 2026-11-15.
 
 ## Risks and open questions
 - Write volume: one row per pageview. If it grows, batch beacons client-side or buffer in the worker; do not move to a second database before measuring.
