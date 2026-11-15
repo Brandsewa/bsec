@@ -1015,7 +1015,9 @@ export async function revalidateCartLines(rt: Runtime, ctx: TenantContext, token
       let fresh: number;
       try {
         fresh = (await resolveVariantForCart(tx, ctx, cartRecord, it.variantId)).unitPriceSnapshot;
-      } catch {
+      } catch (err) {
+        // A price-on-request product has no price to refresh; checkout refuses it with its own, more specific message.
+        if (err instanceof Error && /price on request/i.test(err.message)) continue;
         await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, it.id));
         result.removed.push(it.title);
         continue;
