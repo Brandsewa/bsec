@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@bs/ui";
 import { payWithRazorpay, type RazorpayParams } from "@/lib/razorpay-client.ts";
-import type { StripeEmbeddedParams } from "@/lib/stripe-client.ts";
-import { StripeEmbeddedOverlay } from "@/components/checkout/StripeEmbeddedOverlay.tsx";
+import type { StripePaymentParams } from "@/lib/stripe-client.ts";
+import { StripePayOverlay } from "@/components/checkout/StripePayOverlay.tsx";
 
 type Started =
   | { kind: "razorpay"; razorpay: RazorpayParams }
   | { kind: "hosted"; checkoutUrl: string }
-  | { kind: "stripe_embedded"; stripe: StripeEmbeddedParams };
+  | { kind: "stripe_elements"; stripe: StripePaymentParams };
 
 /**
  * Shown on an order whose online payment was not completed. The server picks the gateway from the order's own payment, so the
@@ -20,7 +20,7 @@ export function PayNowButton({ orderToken }: { orderToken: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stripe, setStripe] = useState<StripeEmbeddedParams | null>(null);
+  const [stripe, setStripe] = useState<StripePaymentParams | null>(null);
 
   async function pay() {
     setBusy(true);
@@ -37,7 +37,7 @@ export function PayNowButton({ orderToken }: { orderToken: string }) {
         window.location.assign(data.checkoutUrl);
         return;
       }
-      if (data.kind === "stripe_embedded") {
+      if (data.kind === "stripe_elements") {
         setStripe(data.stripe);
         return;
       }
@@ -57,8 +57,8 @@ export function PayNowButton({ orderToken }: { orderToken: string }) {
         {busy ? "Opening payment…" : "Pay now"}
       </Button>
       {error ? <p role="alert" className="mt-2 text-sm text-destructive">{error}</p> : null}
-      {/* Closing the form keeps the order: it stays held and this button opens a fresh form. */}
-      {stripe ? <StripeEmbeddedOverlay params={stripe} onCancel={() => setStripe(null)} /> : null}
+      {/* Closing the form keeps the order: it stays held and this button opens the same payment again. */}
+      {stripe ? <StripePayOverlay params={stripe} orderToken={orderToken} onClose={() => setStripe(null)} /> : null}
     </div>
   );
 }

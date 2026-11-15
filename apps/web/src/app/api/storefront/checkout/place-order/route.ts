@@ -174,12 +174,13 @@ export async function POST(req: Request) {
     if (paymentMethod === "razorpay") {
       razorpay = await startRazorpayPayment(rt, tenantCtx.tenantId, orderResult.orderId).catch(() => undefined);
     } else if (paymentMethod === "stripe" || paymentMethod === "paypal") {
-      // Stripe and PayPal take the shopper to the provider's own page; the same order page offers "Pay now" if this fails.
+      // PayPal (and Stripe without a publishable key) take the shopper to the provider's own page; Stripe with one returns the
+      // PaymentIntent the checkout page confirms. The same order page offers "Pay now" if this fails.
       const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
       const storeName = (await getStoreSettings(rt, tenantCtx).catch(() => null))?.storeName;
       const started = await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined);
       checkoutUrl = started?.checkoutUrl;
-      stripe = started?.stripeEmbedded;
+      stripe = started?.stripeElements;
     }
 
     const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl, stripe }, { status: 200 });

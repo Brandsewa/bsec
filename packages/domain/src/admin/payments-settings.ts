@@ -6,7 +6,7 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { readStoreConfig } from "./store-config.ts";
 import { assertPaymentProviderEnabled } from "./payment-providers.ts";
 import { isRazorpayCheckoutReady } from "../payments/razorpay-checkout.ts";
-import { isHostedProviderReady } from "../payments/online-checkout.ts";
+import { getStripeElementsConfig, isHostedProviderReady } from "../payments/online-checkout.ts";
 import { loadCheckoutMarket } from "../markets/lookup.ts";
 import { gatewayCurrencyCheck } from "../markets/gateways.ts";
 import { parseCheckoutDisplay, type CheckoutDisplayConfig } from "./checkout-config.ts";
@@ -62,6 +62,8 @@ export interface StorefrontCheckoutOptions extends StorefrontPaymentOptions {
   defaultCountry: string;
   /** What the shopper can pick, in order: cod, razorpay (shown as online), stripe, paypal. Empty = no way to pay. */
   methods: Array<"cod" | "razorpay" | "stripe" | "paypal">;
+  /** Present when Stripe is offered and the store saved a publishable key: the checkout shows the card fields in the page. */
+  stripeElements: { publishableKey: string; jsUrl: string } | null;
   /** The merchant's wording for the shipping and payment sections, and the payment option text and logos. */
   display: CheckoutDisplayConfig;
 }
@@ -80,6 +82,7 @@ export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string
   if (base.online.available && offered("razorpay")) methods.push("razorpay");
   if (offered("stripe") && (await isHostedProviderReady(rt._db.db, tenantId, "stripe"))) methods.push("stripe");
   if (offered("paypal") && (await isHostedProviderReady(rt._db.db, tenantId, "paypal"))) methods.push("paypal");
+  const stripeElements = methods.includes("stripe") ? await getStripeElementsConfig(rt._db.db, tenantId) : null;
   const [settingsRow] = await withTenant(rt._db.db, tenantId, (tx) =>
     tx.select({ checkout: schema.storeSettings.checkout }).from(schema.storeSettings).where(eq(schema.storeSettings.tenantId, tenantId)).limit(1),
   );
@@ -94,6 +97,7 @@ export async function getStorefrontCheckoutOptions(rt: Runtime, tenantId: string
     countries: [home, ...countries.filter((c) => c !== home)],
     defaultCountry: home,
     methods,
+    stripeElements,
     display: parseCheckoutDisplay((settingsRow?.checkout as Record<string, unknown> | null | undefined)?.display),
   };
 }

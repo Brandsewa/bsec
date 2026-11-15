@@ -1,15 +1,15 @@
 "use client";
 
 import { payWithRazorpay } from "@/lib/razorpay-client.ts";
-import type { StripeEmbeddedParams } from "@/lib/stripe-client.ts";
-import { StripeEmbeddedOverlay } from "./StripeEmbeddedOverlay.tsx";
+import type { StripeConfig, StripePaymentApi } from "@/lib/stripe-client.ts";
+import { StripePaymentElement } from "./StripePaymentElement.tsx";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { phoneProblem, postalCodeProblem, regionsFor } from "@bs/domain/addresses";
 import { countryName } from "@bs/contracts/countries";
-import { useMoney } from "@/components/market/MarketProvider.tsx";
+import { useMarket, useMoney } from "@/components/market/MarketProvider.tsx";
 
 export const INDIAN_STATES_AND_UTS = [
   "Andaman and Nicobar Islands",
@@ -67,6 +67,8 @@ export interface CheckoutPaymentOptions {
   onlineAvailable: boolean;
   /** What this market offers, in order (ADR-040). When absent the store has only COD and Razorpay, as before markets. */
   methods?: Array<"cod" | "razorpay" | "stripe" | "paypal"> | undefined;
+  /** Set when Stripe is offered and the store saved a publishable key: the card fields show inside this page (ADR-048). */
+  stripeElements?: StripeConfig | null | undefined;
 }
 
 /** The countries the shopper's market sells to. One country: the checkout fixes it and shows no country field. */
@@ -165,6 +167,7 @@ export function CheckoutForm({
 }: CheckoutFormProps) {
   const router = useRouter();
   const money = useMoney();
+  const { currency } = useMarket();
 
   // A saved address (the default one, else the first that fits) is chosen up front when the shopper has any.
   const initialSaved = savedAddresses.find((a) => addressFields(a).state) ?? null;
@@ -172,7 +175,10 @@ export function CheckoutForm({
   const [selectedId, setSelectedId] = useState<string | null>(initialSaved?.id ?? null);
   const [addrMode, setAddrMode] = useState<"saved" | "form">(initialSaved ? "saved" : "form");
   const [chooseOpen, setChooseOpen] = useState(false);
-  const [stripeSession, setStripeSession] = useState<{ params: StripeEmbeddedParams; orderToken: string } | null>(null);
+  // Stripe's card fields (Payment Element). Once the order is placed its payment is kept here, so a declined card can be retried
+  // without placing a second order.
+  const stripeApi = useRef<StripePaymentApi | null>(null);
+  const [pendingStripe, setPendingStripe] = useState<{ clientSecret: string; orderToken: string } | null>(null);
 
   // Contact
   const [email, setEmail] = useState(customerEmail);
@@ -252,6 +258,34 @@ export function CheckoutForm({
 
   // The price comes from the store's own shipping rates (the same ones the order is charged with).
   const currentShippingPaise = (shippingRates.find((r) => r.method === shippingMethod) ?? shippingRates[0])?.amount ?? 0;
+  const orderTotal = priceOrder({ subtotal: cart.subtotal, shipping: currentShippingPaise, codFee: codFeePaise, discounts: toPricingDiscounts(cart.discounts) }).grandTotal;
+  const stripeElementsConfig = paymentMethod === "stripe" ? (paymentOptions.stripeElements ?? null) : null;
+
+  /** Confirms the Stripe payment. On success Stripe sends the window to our return route, which settles the order. */
+  const confirmStripe = async (clientSecret: string, orderToken: string) => {
+    const returnUrl = `${window.location.origin}/api/storefront/checkout/return?provider=stripe&ot=${encodeURIComponent(orderToken)}`;
+    const failure = stripeApi.current ? await stripeApi.current.pay(clientSecret, returnUrl) : "The payment form is not ready. Please try again.";
+    if (failure) {
+      setError(failure);
+      setLoading(false);
+    }
+  };
+
+  /** Gives the held order up (same as closing the Razorpay window): it is cancelled and the cart restored. */
+  const abandonStripeOrder = () => {
+    if (!pendingStripe) return;
+    void fetch("/api/storefront/checkout/abandon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderToken: pendingStripe.orderToken, reason: "cancelled" }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({}))
+      .then((back: { redirectUrl?: string }) => {
+        window.dispatchEvent(new Event("cart-updated"));
+        window.location.assign(back.redirectUrl ?? "/checkout?payment=cancelled");
+      });
+  };
 
   // Shipping options follow the state the order ships to (the separate shipping address when one is used).
   const shippingState = shipDifferent ? shipState : state;
@@ -272,6 +306,19 @@ export function CheckoutForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // The order is already placed and only the card was refused: try the same payment again, do not place another order.
+    if (stripeElementsConfig && pendingStripe) {
+      setLoading(true);
+      const issue = (await stripeApi.current?.validate()) ?? null;
+      if (issue) {
+        setError(issue);
+        setLoading(false);
+        return;
+      }
+      await confirmStripe(pendingStripe.clientSecret, pendingStripe.orderToken);
+      return;
+    }
 
     // Phone and postal code are checked for the country being shipped to (India keeps its exact rules).
     const cleanPhone = phone.replace(/\D/g, "");
@@ -324,6 +371,19 @@ export function CheckoutForm({
     if (consent.termsRequired && !termsAccepted) {
       setError("Please tick the box to agree to the Terms and Conditions before placing your order");
       return;
+    }
+
+    // Stripe's fields are checked before the order is placed, so a typo never leaves an unpaid order behind.
+    if (stripeElementsConfig) {
+      if (!stripeApi.current) {
+        setError("The payment form is still loading. Please wait a moment and try again.");
+        return;
+      }
+      const issue = await stripeApi.current.validate();
+      if (issue) {
+        setError(issue);
+        return;
+      }
     }
 
     setLoading(true);
@@ -380,9 +440,12 @@ export function CheckoutForm({
           window.location.assign(data.checkoutUrl);
           return;
         }
-        // Stripe with a publishable key: the card form opens in this page; Stripe sends the window on when the shopper has paid.
-        if (data.stripe && data.orderToken) {
-          setStripeSession({ params: data.stripe as StripeEmbeddedParams, orderToken: data.orderToken as string });
+        // Stripe with a publishable key: the card fields are already on this page; confirm the payment with them. Stripe sends
+        // the window on when the shopper has paid.
+        if (data.stripe && data.orderToken && stripeElementsConfig) {
+          const orderToken = data.orderToken as string;
+          setPendingStripe({ clientSecret: (data.stripe as { clientSecret: string }).clientSecret, orderToken });
+          await confirmStripe((data.stripe as { clientSecret: string }).clientSecret, orderToken);
           return;
         }
         if (data.razorpay && data.orderToken) {
@@ -414,25 +477,6 @@ export function CheckoutForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-      {stripeSession ? (
-        <StripeEmbeddedOverlay
-          params={stripeSession.params}
-          onCancel={() => {
-            // Same as closing the Razorpay window: the held order is cancelled and the cart restored.
-            void fetch("/api/storefront/checkout/abandon", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderToken: stripeSession.orderToken, reason: "cancelled" }),
-            })
-              .then((r) => r.json())
-              .catch(() => ({}))
-              .then((back: { redirectUrl?: string }) => {
-                window.dispatchEvent(new Event("cart-updated"));
-                window.location.assign(back.redirectUrl ?? "/checkout?payment=cancelled");
-              });
-          }}
-        />
-      ) : null}
       {/* 1. Contact, with an optional business block */}
       <section className={CARD}>
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -678,11 +722,12 @@ export function CheckoutForm({
 
           {([
             ["online", "UPI / Card / NetBanking", "Pay securely online"],
-            ["stripe", "Credit or debit card", "Pay securely on Stripe's payment page"],
+            ["stripe", "Credit or debit card", paymentOptions.stripeElements ? "Pay securely with your card or a wallet" : "Pay securely on Stripe's payment page"],
             ["paypal", "PayPal", "Pay with your PayPal account or card"],
           ] as const).map(([value, title, hint]) =>
             available.includes(value) ? (
-              <label key={value} className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+              <React.Fragment key={value}>
+              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
@@ -699,6 +744,12 @@ export function CheckoutForm({
                 </div>
                 <PaymentLogos logos={display.payment[value === "online" ? "razorpay" : value]?.logos} />
               </label>
+              {value === "stripe" && stripeElementsConfig ? (
+                <div className="rounded-lg border border-border bg-background p-3.5">
+                  <StripePaymentElement config={stripeElementsConfig} mode={{ kind: "deferred", amount: orderTotal, currency }} amount={orderTotal} apiRef={stripeApi} />
+                </div>
+              ) : null}
+              </React.Fragment>
             ) : null,
           )}
 
@@ -779,6 +830,11 @@ export function CheckoutForm({
       {error && (
         <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive font-medium">
           {error}
+          {pendingStripe ? (
+            <button type="button" onClick={abandonStripeOrder} className="mt-2 block text-sm font-medium underline">
+              Cancel this order and start over
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -787,14 +843,7 @@ export function CheckoutForm({
         disabled={loading || noPaymentMethod}
         className="w-full rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {loading ? "Processing Order..." : `Place Order (${money(
-          priceOrder({
-            subtotal: cart.subtotal,
-            shipping: currentShippingPaise,
-            codFee: codFeePaise,
-            discounts: toPricingDiscounts(cart.discounts),
-          }).grandTotal,
-        )})`}
+        {loading ? "Processing Order..." : `${pendingStripe ? "Try payment again" : "Place Order"} (${money(orderTotal)})`}
       </button>
     </form>
   );

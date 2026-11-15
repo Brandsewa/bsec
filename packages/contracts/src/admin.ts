@@ -2370,7 +2370,7 @@ export const adminContract = {
       .input(
         z.object({
           provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
-          /** Razorpay key id (rzp_test_...), Cashfree App ID, PayPal Client ID, or the Stripe publishable key (pk_test_..., optional, needed for the embedded form). */
+          /** Razorpay key id (rzp_test_...), Cashfree App ID, PayPal Client ID, or the Stripe publishable key (pk_test_..., optional, needed for the card fields inside the checkout page). */
           keyId: z.string().min(6).max(100).optional(),
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
