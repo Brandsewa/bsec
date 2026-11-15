@@ -6,6 +6,7 @@ import { Button } from "./ui/button.tsx";
 import { Calendar } from "./ui/calendar.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
 import { useIsMobile } from "../hooks/use-mobile.ts";
+import type { DatePreset } from "../lib/date-presets.ts";
 
 const ISO = "yyyy-MM-dd";
 const toDate = (s?: string) => {
@@ -38,6 +39,10 @@ export interface DateRangePickerProps {
   onChange: (from: string | undefined, to: string | undefined) => void;
   emptyLabel?: string;
   className?: string;
+  /** Replaces the default preset list, e.g. `ANALYTICS_PRESETS` for reports. */
+  presets?: ReadonlyArray<DatePreset>;
+  /** The day presets and the calendar's last selectable day count from. Pass the store's today; defaults to the browser's. */
+  today?: Date;
 }
 
 /**
@@ -50,7 +55,10 @@ export function DateRangePicker({
   onChange,
   emptyLabel = "Any date",
   className,
+  presets,
+  today,
 }: DateRangePickerProps) {
+  const base = today ?? startOfToday();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>();
@@ -82,8 +90,8 @@ export function DateRangePicker({
       <PopoverContent align="start" className="w-auto gap-0 p-0">
         <div className="flex flex-col sm:flex-row">
           <div className="flex gap-1 overflow-x-auto border-b border-border p-2 sm:w-36 sm:flex-col sm:overflow-visible sm:border-r sm:border-b-0">
-            {PRESETS.map((p) => (
-              <Button key={p.label} variant="ghost" size="sm" className="justify-start whitespace-nowrap" onClick={() => commit(p.range())}>
+            {(presets ?? PRESETS.map((p) => ({ id: p.label, label: p.label, range: () => p.range() as { from: Date; to: Date } }))).map((p) => (
+              <Button key={p.id} variant="ghost" size="sm" className="justify-start whitespace-nowrap" onClick={() => commit(p.range(base))}>
                 {p.label}
               </Button>
             ))}
@@ -94,8 +102,8 @@ export function DateRangePicker({
               numberOfMonths={isMobile ? 1 : 2}
               selected={draft}
               onSelect={setDraft}
-              defaultMonth={draft?.from ?? startOfToday()}
-              disabled={{ after: startOfToday() }}
+              defaultMonth={draft?.from ?? base}
+              disabled={{ after: base }}
               autoFocus
             />
             <div className="flex items-center justify-between gap-2 border-t border-border p-2">

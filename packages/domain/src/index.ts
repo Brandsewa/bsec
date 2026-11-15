@@ -41,6 +41,7 @@ export * from "./catalog/variant-options.ts";
 export * from "./catalog/custom-fields.ts";
 export * from "./catalog/custom-field-rules.ts";
 export * from "./storefront/search.ts";
+export * from "./analytics/collect.ts";
 export * from "./storefront/cart.ts";
 export * from "./storefront/newsletter.ts";
 export * from "./storefront/coupons.ts";

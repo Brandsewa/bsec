@@ -219,6 +219,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | `blog.ts` | `blog_categories`, `blog_posts`, `blog_slug_redirects` T (ADR-033) |
 | `settings.ts` | `store_settings` (including `blog_settings` JSONB, `return_settings` JSONB, `order_settings` JSONB, `auto_publish_reviews`), `customer_account_settings`, `store_status`, `seo_settings` T |
 | `search.ts` | `search_queries` T |
+| `analytics.ts` | `analytics_events` T (cookieless traffic events, ADR-046, migration 0106) |
 | `system.ts` | `webhook_inbox`, `idempotency_keys`, `email_log` |
 | `tenant-secrets.ts` | `tenant_secrets` T |
 | `platform.ts` | `domains`, `feature_flags`, `tenant_feature_overrides`, `platform_staff`, `platform_staff_invitations`, `support_sessions`, `tenant_deletions`, `tenant_notes`, `export_files` |
@@ -333,6 +334,7 @@ Drizzle schema files in `packages/db/src/schema/` (one Postgres database, `publi
 | 0104 | `cart_auto_free_qty` | `cart_items.auto_free_qty`: how many units of a cart line the store added by itself for a free-item offer (section 22) |
 | 0103 | `discount_code_lists` | Discount engine phase 4: `discounts.uses_code_list` and the `discount_codes` table of generated single-use codes (tenant, forced RLS) |
 | 0105 | `seo_reset_old_ai_crawler_defaults` | Data only: `seo_settings.ai_crawlers` rows still equal to the old default (five blocked AI bots) are set to NULL so existing stores follow the new default (`docs/SEO-GEO-AEO-PLAN.md` 3.1) |
+| 0106 | `analytics_events` | Merchant analytics slice 1 (ADR-046): cookieless storefront traffic events (type, visitor hash, path, referrer host, utm, country, device); tenant table, forced RLS, CHECKs on type and device. Expand-only |
 | 0100 | `platform_branding_versions` | Append-only brand history (last 20 kept); `platform.branding.history` / `restore`; brand also carries name, tagline and an enumerated font, derives a primary shade ramp, and feeds `GET /api/brand/og` (share image) and `/api/brand/manifest` (web manifest) |
 | 0096 | `apps_state_pricing` | Apps framework and State Pricing: `platform_apps`, `platform_in_states`, `platform_in_pincodes` (platform data, `app_rw` read only), `tenant_apps` and `state_prices` (tenant, forced RLS), `carts.price_region`, `orders.price_region`, `market_variant_price` now state-aware while `app.price_region` is set (ADR-043, ADR-044) |
 | 0093 | `platform_billing_paypal_enabled` | `platform_billing_settings.paypal_enabled` (PayPal on or off for stores outside India); `provider` is now the national gateway only (razorpay or cashfree), and a row that had `provider='paypal'` becomes `paypal_enabled=true`, `provider='razorpay'` |

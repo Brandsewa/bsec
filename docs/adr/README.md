@@ -52,6 +52,7 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [044](044-state-pricing.md) | State Pricing: per-variant prices by Indian state, detected automatically, locked on the cart | Accepted |
 
 | [045](045-discount-engine.md) | Discount engine: classes, stacking and a pure evaluator | Accepted |
+| [046](046-first-party-analytics.md) | First-party merchant analytics, cookieless collector, orders as the source of truth | Accepted |
 
 **Next number: 046.**
 

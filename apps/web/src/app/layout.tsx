@@ -255,6 +255,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
+        <script src="/bsa.js" async />
         {fontsHref ? (
           <>
             {/* Open the font connections while the stylesheet is still being fetched (it is render-blocking). */}
