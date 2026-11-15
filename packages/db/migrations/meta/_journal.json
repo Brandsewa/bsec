@@ -694,6 +694,13 @@
       "when": 1794187800000,
       "tag": "0104_cart_auto_free_qty",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794720509014,
+      "tag": "0105_seo_reset_old_ai_crawler_defaults",
+      "breakpoints": true
     }
   ]
 }

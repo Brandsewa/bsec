@@ -8,6 +8,8 @@ import {
   generateWebSiteJsonLd,
   generateOrganizationJsonLd,
   getStoreSettings,
+  getStorefrontSeoSettings,
+  buildHomeSeoMetadata,
   tenantTag,
 } from "@bs/domain";
 import { renderBlockDocument, type BlockData } from "@bs/blocks";
@@ -24,7 +26,7 @@ import { PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { marketingPage } from "@/server/marketing-page.ts";
 
 export async function generateMetadata(): Promise<Metadata> {
-  let title = "Home";
+  const title = "Home";
   const description = "Welcome to our store.";
 
   try {
@@ -48,10 +50,30 @@ export async function generateMetadata(): Promise<Metadata> {
       permissions: ["settings.write", "content.write", "theme.publish"],
       requestId: crypto.randomUUID(),
     };
-    const homePage = await getStorefrontHomePage(rt, tenantCtx);
-    if (homePage.title) {
-      title = homePage.title;
-    }
+    const [homePage, seoSettings, storeSettings, marketCtx] = await Promise.all([
+      getStorefrontHomePage(rt, tenantCtx),
+      getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
+      getStoreSettings(rt, tenantCtx).catch(() => null),
+      getMarketContext(access.tenantId).catch(() => null),
+    ]);
+    // Title, description, canonical and share tags for the store's home page (never "Home" / "Welcome to our store.").
+    const seoMeta = buildHomeSeoMetadata({
+      homePage,
+      seoSettings,
+      storeSettings,
+      storeStatusMode: access.mode,
+      noindex: access.noindex,
+      host,
+      prefix: marketCtx?.prefix,
+    });
+    return {
+      title: { absolute: seoMeta.title },
+      description: seoMeta.description,
+      robots: seoMeta.robots,
+      openGraph: { ...seoMeta.openGraph, type: "website" },
+      twitter: { card: "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+      alternates: seoMeta.alternates,
+    };
   } catch {
     // Non-fatal fallback for static compilation / mock setups
   }

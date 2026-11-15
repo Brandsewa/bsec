@@ -245,7 +245,7 @@ describe("Storefront Product Detail Page (/products/[slug])", () => {
       expect(jsonLd.name).toBe("Mechanical Keyboard Pro");
       expect(jsonLd.brand?.name).toBe("KeyCraft");
       expect(jsonLd.offers).toHaveLength(3);
-      expect(jsonLd.offers?.[0]?.price).toBe(899900);
+      expect(jsonLd.offers?.[0]?.price).toBe(8999); // 899900 paise is the shopper-visible ₹8,999.00
       expect(jsonLd.offers?.[0]?.availability).toBe("https://schema.org/InStock");
       expect(jsonLd.offers?.[2]?.availability).toBe("https://schema.org/OutOfStock");
       expect(jsonLd.aggregateRating?.ratingValue).toBe("4.8");

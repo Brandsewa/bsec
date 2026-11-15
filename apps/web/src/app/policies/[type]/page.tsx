@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import {
   evaluateStorefrontAccess,
+  formatTitle,
   generateBreadcrumbJsonLd,
   getPublishedPolicy,
+  getStorefrontSeoSettings,
+  getStoreSettings,
   isFeatureEnabled,
   type PolicyContent,
 } from "@bs/domain";
@@ -105,10 +108,46 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
   }
 
   const fallback = fallbackPolicyContent[type];
-  return {
+  const fallbackMeta: Metadata = {
     title: `${fallback?.title ?? "Policy"} | Store Policies`,
     description: `Read our ${fallback?.title.toLowerCase() ?? "policy"} and customer commitments.`,
   };
+
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+    if (!access.tenantId) return fallbackMeta;
+    const ctx = {
+      tenantId: access.tenantId,
+      storeStatus: access.mode ?? "live",
+      actor: { type: "system" as const },
+      roles: ["store_admin"],
+      permissions: ["settings.write"],
+      requestId: crypto.randomUUID(),
+    };
+    const [published, seoSettings, storeSettings] = await Promise.all([
+      getPublishedPolicy(rt._db.db, access.tenantId, type).catch(() => null),
+      getStorefrontSeoSettings(rt, ctx).catch(() => null),
+      getStoreSettings(rt, ctx).catch(() => null),
+    ]);
+    const storeName = storeSettings?.storeName ?? "Store";
+    const name = published?.title ?? fallback?.title ?? "Policy";
+    const url = `https://${host}/policies/${type}`;
+    const title = formatTitle(seoSettings?.titleTemplate, name, storeName);
+    const description = `${name} of ${storeName}.`;
+    return {
+      title,
+      description,
+      // The platform's stock text is the same on every store, so it is kept out of search results until the merchant publishes their own.
+      robots: published ? { index: true, follow: true } : { index: false, follow: true },
+      alternates: { canonical: url },
+      openGraph: { title, description, url, siteName: storeName },
+    };
+  } catch {
+    return fallbackMeta;
+  }
 }
 
 export default async function PolicyPage({ params }: PolicyPageProps) {
@@ -166,7 +205,6 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
 
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: `https://${host}` },
-    { name: "Policies", url: `https://${host}/policies/${type}` },
     { name: title, url: `https://${host}/policies/${type}` },
   ]);
 

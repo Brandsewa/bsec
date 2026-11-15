@@ -833,7 +833,8 @@ describe("Storefront Integration & Tenant Isolation Suite (Real PostgreSQL 18)",
       const robotsA = generateRobotsTxt(seoA, "live", hostA);
       expect(robotsA).toContain(`Sitemap: https://${hostA}/sitemap.xml`);
       expect(robotsA).toContain("Disallow: /cart");
-      expect(robotsA).toContain("User-agent: GPTBot\nDisallow: /");
+      expect(robotsA).toContain("User-agent: CCBot\nDisallow: /");
+      expect(robotsA).not.toContain("User-agent: GPTBot");
     });
   });
 

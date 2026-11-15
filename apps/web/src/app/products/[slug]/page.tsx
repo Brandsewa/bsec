@@ -19,7 +19,7 @@ import {
   tenantTag,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedProductCustomFields, getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedStoreName, getCachedProductCustomFields,getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
 
@@ -69,6 +69,12 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
           description: seoMeta.description,
           robots: seoMeta.robots,
           openGraph: seoMeta.openGraph,
+          twitter: {
+            card: seoMeta.openGraph.images ? "summary_large_image" : "summary",
+            title: seoMeta.openGraph.title,
+            description: seoMeta.openGraph.description,
+            ...(seoMeta.openGraph.images ? { images: seoMeta.openGraph.images.map((i) => i.url) } : {}),
+          },
           alternates: seoMeta.alternates,
         };
       }
@@ -149,11 +155,12 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const productCacheTag = tenantTag(tenantId, "product", product.id);
 
   const storeUrl = `https://${host}`;
-  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency);
+  const storeName = await getCachedStoreName(tenantId).catch(() => undefined);
+  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency, { storeName, urlPrefix: marketCtx?.prefix });
+  // There is no /products index page (it is a 404), so a "Products" crumb would point crawlers at a dead URL.
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: storeUrl },
-    { name: "Products", url: `${storeUrl}/products` },
-    { name: product.title, url: `${storeUrl}/products/${product.slug}` },
+    { name: product.title, url: `${storeUrl}${marketCtx?.prefix ? (marketCtx.prefix.startsWith("/") ? marketCtx.prefix : `/${marketCtx.prefix}`) : ""}/products/${product.slug}` },
   ]);
 
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
