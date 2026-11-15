@@ -1,13 +1,6 @@
 /**
- * Platform audit probes for checkout (docs/PLATFORM-AUDIT-PLAN.md section A3, findings in docs/audit/2026-11-A3-checkout-money.md).
- *
- * Each `it.fails` is an open finding: the assertion states the behaviour AGENTS.md rule 12 asks for ("prices and totals
- * are recomputed on the server at checkout") and fails today. When the defect is fixed the test starts passing, vitest
- * reports the `it.fails` as an error, and the fixer turns it into a plain `it`.
- *
- * `it.fails` passes on ANY error, a broken setup included. Each probe was therefore also run once as a plain `it`
- * (2026-11-15) and failed on its own assertion: "expected 2000 to be 200000" and "expected null not to be null" (twice).
- * The control test at the bottom uses the same helpers and must stay green.
+ * Regression tests for audit findings A3-01 and A3-02 (docs/audit/2026-11-A3-checkout-money.md), written first as
+ * failing probes and now passing since checkout re-checks every cart line against the catalog (AGENTS.md rule 12).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -87,33 +80,33 @@ afterAll(async () => {
 });
 
 describe("audit A3: checkout recomputes from the catalog, not from the cart's saved price", () => {
-  // A3-01
-  it.fails("a price raised after the item went into the cart is the price charged", async () => {
+  // A3-01 (fixed): a stale price is corrected and the shopper is asked to review before paying the new price.
+  it("a price raised after the item went into the cart is refused once, then charged at the current price", async () => {
     const p = await product("Mispriced", 1000);
     const token = await cartWith(p.variantId, 2);
-    // The merchant corrects a pricing mistake (10.00 instead of 1000.00) while the item sits in a shopper's cart.
     await rt._db.db.update(schema.variants).set({ price: 100000n }).where(eq(schema.variants.id, p.variantId));
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).toMatch(/price of an item in your cart has changed/);
     const placed = await placeOrder(rtWeb, ctx, buyer(token));
     expect(placed.subtotal).toBe(200000);
   });
 
-  // A3-02
-  it.fails("a product taken off sale after it went into the cart cannot be ordered", async () => {
+  // A3-02 (fixed)
+  it("a product taken off sale after it went into the cart is taken out and the order refused", async () => {
     const p = await product("Withdrawn", 5000);
     const token = await cartWith(p.variantId, 1);
     await rt._db.db.update(schema.products).set({ status: "draft" }).where(eq(schema.products.id, p.productId));
-    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).not.toBeNull();
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).toMatch(/Withdrawn is no longer available/);
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).toMatch(/empty cart/);
   });
 
-  // A3-02
-  it.fails("a deleted product that is still in a cart cannot be ordered", async () => {
+  // A3-02 (fixed)
+  it("a deleted product that is still in a cart cannot be ordered", async () => {
     const p = await product("Deleted", 5000);
     const token = await cartWith(p.variantId, 1);
     await rt._db.db.update(schema.products).set({ deletedAt: new Date() }).where(eq(schema.products.id, p.productId));
-    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).not.toBeNull();
+    expect(await errorOf(placeOrder(rtWeb, ctx, buyer(token)))).toMatch(/Deleted is no longer available/);
   });
 
-  // Control: the same flow with nothing changed places the order at the catalog price.
   it("an unchanged cart is charged the catalog price", async () => {
     const p = await product("Control", 2500);
     const placed = await placeOrder(rtWeb, ctx, buyer(await cartWith(p.variantId, 3)));

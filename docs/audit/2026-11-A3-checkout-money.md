@@ -4,7 +4,7 @@
 - **Auditor:** claude
 - **Plan:** `docs/PLATFORM-AUDIT-PLAN.md` section A3
 - **Code audited:** `main` e152e4b plus the dependency bumps of PR #274
-- **How:** code read, existing tests read, and new real-database probes in `packages/domain/test/audit-checkout-probes.int.test.ts` (local test Postgres). Nothing was run against production.
+- **How:** code read, existing tests read, and new real-database probes in `packages/domain/test/audit-checkout-probes.int.test.ts`, since renamed `checkout-cart-revalidation.int.test.ts` when A3-01 and A3-02 were fixed (local test Postgres). Nothing was run against production.
 
 ## Result
 
@@ -12,8 +12,8 @@ Two defects are confirmed by test, one more by reading the code. A shopper canno
 
 | ID | Severity | Title | Status |
 |---|---|---|---|
-| A3-01 | High | An order is charged the price saved when the item entered the cart, not the current price | open, confirmed by test |
-| A3-02 | Medium | A product that was unpublished or deleted can still be ordered from an old cart | open, confirmed by test |
+| A3-01 | High | An order is charged the price saved when the item entered the cart, not the current price | fixed in `fix/checkout-revalidate-cart`, test `checkout-cart-revalidation.int.test.ts` |
+| A3-02 | Medium | A product that was unpublished or deleted can still be ordered from an old cart | fixed in `fix/checkout-revalidate-cart`, same test file |
 | A3-03 | Medium | Turning off guest checkout blocks every order, including signed-in customers | open, from code |
 | A3-04 | Medium | Order placement has no per-visitor limit and no bot check | open, from code |
 | A3-05 | Low (owner decision) | "For these customers only" discounts go to anyone who types that customer's email or phone | by design today |
@@ -27,7 +27,7 @@ Two defects are confirmed by test, one more by reading the code. A shopper canno
 
 - **Rule:** rule 12 ("prices and totals are recomputed on the server at checkout").
 - **Where:** `packages/domain/src/storefront/cart.ts:213` (line total from `unit_price_snapshot`), `:506-523` (snapshot written only when an item is added), `packages/domain/src/orders/checkout.ts:249` (`subtotal = cart.subtotal`). The snapshot is refreshed only when the shopper changes market or state (`repriceCartToMarket`, `repriceCartToRegion`).
-- **Reproduce:** `audit-checkout-probes.int.test.ts`, "a price raised after the item went into the cart is the price charged". A variant priced 10.00, 2 in the cart; the merchant corrects the price to 1,000.00; `placeOrder` returns subtotal 2,000 minor units where 200,000 is expected.
+- **Reproduce (before the fix):** `audit-checkout-probes.int.test.ts`, "a price raised after the item went into the cart is the price charged". A variant priced 10.00, 2 in the cart; the merchant corrects the price to 1,000.00; `placeOrder` returns subtotal 2,000 minor units where 200,000 is expected.
 - **Expected:** the order uses the variant's price at the moment of ordering (or the shopper is told the price changed).
 - **Actual:** the old price is charged. The cart cookie lasts 30 days and an abandoned cart can still be opened, so the window is at least a month.
 - **Impact:** a merchant who fixes a pricing mistake, or ends a sale by raising the price, keeps selling at the old price to anyone who already has the item in a cart. A shopper can keep a cart on purpose. It also works the other way: a price cut is not given to existing carts.

@@ -32,8 +32,8 @@
 
 | ID | Severity | Title | Evidence | Status |
 |---|---|---|---|---|
-| A3-01 | High | Orders are charged the price saved in the cart, not the current price | real-database test | open |
-| A3-02 | Medium | Unpublished or deleted products can still be ordered from an old cart | real-database test | open |
+| A3-01 | High | Orders are charged the price saved in the cart, not the current price | real-database test | fixed (PR pending) |
+| A3-02 | Medium | Unpublished or deleted products can still be ordered from an old cart | real-database test | fixed (PR pending) |
 | A3-03 | Medium | Turning off guest checkout blocks every order | code read | open |
 | A3-04 | Medium | No per-visitor limit or bot check on order placement | code read (hardening item 1.7) | open |
 | A4-01 | Medium | A payment arriving for a cancelled order is recorded with no alert | code read, not reproduced | open |
@@ -57,7 +57,7 @@
 
 ## Suggested fix order
 
-1. A3-01 and A3-02 together: re-resolve cart lines at checkout (one change, the three probe tests turn green).
+1. ~~A3-01 and A3-02 together~~ done: cart lines are re-checked at checkout.
 2. A3-03: pass the signed-in customer to `placeOrder`.
 3. A4-01: handle a payment on a cancelled order explicitly, with a test.
 4. The two live checks (A1-02, A2-05), then fix or close them.

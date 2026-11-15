@@ -986,3 +986,45 @@ export async function removeCartDiscount(rt: Runtime, ctx: TenantContext, input:
     return loadCartWithItems(tx, updated ?? cartRecord);
   });
 }
+
+export interface CartRevalidation {
+  /** Titles of lines that are no longer for sale (unpublished, deleted, hidden in the market or unpriced) and were taken out. */
+  removed: string[];
+  /** How many lines had their saved price replaced by the current price. */
+  repriced: number;
+}
+
+/**
+ * Checks every line of a cart against the catalog as it is now (audit A3-01, A3-02; AGENTS.md rule 12): a line whose
+ * product was unpublished or deleted is removed, and a line whose price changed since it was added gets the current
+ * price. Runs in its own transaction so the correction is saved even when the caller then refuses the order and asks
+ * the shopper to review the cart.
+ */
+export async function revalidateCartLines(rt: Runtime, ctx: TenantContext, token: string): Promise<CartRevalidation> {
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const result: CartRevalidation = { removed: [], repriced: 0 };
+    const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, token)).limit(1);
+    if (!cartRecord || cartRecord.status !== "active") return result;
+    const items = await tx
+      .select({ id: schema.cartItems.id, variantId: schema.cartItems.variantId, snapshot: schema.cartItems.unitPriceSnapshot, title: schema.products.title })
+      .from(schema.cartItems)
+      .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+      .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.variants.tenantId), eq(schema.products.id, schema.variants.productId)))
+      .where(eq(schema.cartItems.cartId, cartRecord.id));
+    for (const it of items) {
+      let fresh: number;
+      try {
+        fresh = (await resolveVariantForCart(tx, ctx, cartRecord, it.variantId)).unitPriceSnapshot;
+      } catch {
+        await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, it.id));
+        result.removed.push(it.title);
+        continue;
+      }
+      if (fresh !== Number(it.snapshot)) {
+        await tx.update(schema.cartItems).set({ unitPriceSnapshot: fresh, updatedAt: new Date() }).where(eq(schema.cartItems.id, it.id));
+        result.repriced += 1;
+      }
+    }
+    return result;
+  });
+}
