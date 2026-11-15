@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `feat/seo-geo-aeo` (not merged yet)
+- **Branch:** `feat/seo-geo-aeo` (merged in #264, d0fa25a)
 - **Area:** domain, web, scripts, docs
 - **Type:** fix
 - **Supersedes:** none
@@ -39,7 +39,7 @@ Audited the live store `ricwell.com` (read-only GETs) and the storefront SEO cod
 - [x] `docs/SEO-GEO-AEO-PLAN.md` (new)
 
 ## Follow-ups and open questions
-- After deploy, confirm ricwell's `robots.txt` no longer blocks the five bots (allow up to a day for the CDN).
+- Deployed 2026-11-15 (migration 0105 applied). `pnpm seo:audit https://ricwell.com` after deploy: price, home title, canonical, breadcrumb and `/llms.txt` failures gone; one failure left, a product with an empty description (merchant content). The origin `robots.txt` now blocks only CCBot and Bytespider, but Cloudflare still served the old cached copy (`s-maxage=86400`, about 3.5 h old at check time), so it should clear within a day: re-check `https://ricwell.com/robots.txt`. Purging the cache is a Cloudflare change and needs the owner's yes.
 - Phase 2 list in the plan (H1 on home and collections, Organization logo, return policy and shipping schema, default `og:image`, favicon, image sitemap and hreflang, IndexNow, http to https 301 and `www`, the one-year `max-age` on `robots.txt`).
 - After deploy, re-run `pnpm seo:audit https://ricwell.com` and expect the price and breadcrumb failures to be gone.
 
