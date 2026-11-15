@@ -6,7 +6,8 @@ onlyBuiltDependencies:
   - esbuild
 # Security fixes for transitive dependencies Dependabot cannot bump (GitHub alerts, 2026-10-30).
 # Each line forces the patched version only where an older one would be installed; remove a line once the
-# parent package ships it. Not overridden on purpose: deepmerge (no patched release exists).
+# parent package ships it. Not overridden on purpose: deepmerge (no patched release exists;
+# it only arrives through the shadcn CLI, a dev dependency of apps/admin, see docs/PLATFORM-AUDIT-PLAN.md section 7).
 overrides:
   "fast-uri@<3.1.9": "3.1.9"
   "seroval@<1.6.11": "1.6.11"
