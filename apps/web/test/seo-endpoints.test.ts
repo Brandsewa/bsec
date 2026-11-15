@@ -133,7 +133,8 @@ describe("Storefront SEO Endpoints (/robots.txt & /sitemap.xml)", () => {
       expect(text).toContain("Disallow: /api/");
       expect(text).toContain("Disallow: /staging/");
       expect(text).toContain("User-agent: GPTBot\nDisallow: /");
-      expect(text).toContain("User-agent: ClaudeBot\nAllow: /");
+      // An allowed bot follows the "*" rules; a group of its own would let it into the cart and checkout.
+      expect(text).not.toContain("User-agent: ClaudeBot");
       expect(text).toContain("Sitemap: https://shop.example.com/sitemap.xml");
     });
   });

@@ -57,7 +57,7 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
 
       return {
         title: metaTitle,
-        description: `Search our catalog at ${storeName}. Find the best mechanical keyboards, accessories, and components.`,
+        description: `Search the ${storeName} catalog by product name, category or keyword.`,
         robots: {
           index: false, // Prevent indexing of dynamic internal search results pages
           follow: true,

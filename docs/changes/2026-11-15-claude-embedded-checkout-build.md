@@ -13,7 +13,7 @@ Stripe now takes payment inside the store's checkout page when the store saved a
 ## What changed
 - **Stripe (store checkout):** `StripeProvider` embedded mode (`ui_mode=embedded`, `return_url` with the session placeholder, no `cancel_url`, client secret out, `retrieveSession` returns status and client secret). `startHostedPayment` returns `stripeEmbedded` or `checkoutUrl`; it reuses an open session and replaces an expired one (new idempotency key). Web: `lib/stripe-client.ts`, `StripeEmbeddedOverlay`, `CheckoutForm`, and `PayNowButton` now uses `/api/storefront/checkout/pay` so Pay now works for Stripe and PayPal as well (it only handled Razorpay before). Store admin payments sheet has an optional "Publishable key" field for Stripe (stored encrypted as `key_id`, mode must match the secret key).
 - **Platform billing window:** `subscribeToPlan` returns `razorpayCheckout`; admin `lib/razorpay-subscription-checkout.ts`, Activate screen and Plan and billing use it; the hosted URL is the fallback; the webhook alone activates the plan.
-- **Region gateways:** migration `0105_billing_region_gateways` (`international_provider`, two backup flags, `platform_razorpay_plans.currency`); `resolveBillingGateways`; `subscribeToPlan` loops primary then backup; USD Razorpay plans (`syncBillingPlans` with `currency: "USD"`, `usdCentsOf`); a USD Razorpay charge is invoiced in USD with no GST. Super Admin: backup switches, international primary choice, "Sync USD plans" and USD columns.
+- **Region gateways:** migration `0106_billing_region_gateways` (`international_provider`, two backup flags, `platform_razorpay_plans.currency`); `resolveBillingGateways`; `subscribeToPlan` loops primary then backup; USD Razorpay plans (`syncBillingPlans` with `currency: "USD"`, `usdCentsOf`); a USD Razorpay charge is invoiced in USD with no GST. Super Admin: backup switches, international primary choice, "Sync USD plans" and USD columns.
 - **Refunds:** `refundAdminOrder` sends Razorpay and Stripe refunds to the gateway before recording them.
 
 ## Decisions and trade-offs
@@ -25,10 +25,10 @@ Stripe now takes payment inside the store's checkout page when the store saved a
 
 ## Verification
 - Ran: `pnpm typecheck` pass; `pnpm lint` 0 errors (existing warnings); `pnpm build` pass; `pnpm docs:check` ok; payments unit tests 57 pass; web unit tests 256 pass (including the production page-weight budget); `@bs/domain` real-database suite (Docker Postgres) 145 files, 2998 tests pass (three files crashed their worker once with a Windows exit code and passed on re-run: themes, security-fixes, shipping-offered). New suites: `stripe-embedded-checkout` 6, `platform-billing-gateways` 12, `admin-refund-gateway` 5, plus added cases in `payment-providers` and `platform-billing-subscribe`.
-- NOT verified: any real Stripe, Razorpay or PayPal call (all gateways faked at fetch); the Stripe embedded form, the Razorpay subscription window and the new Super Admin and admin screens in a browser; migration `0105` against a database that has billing settings rows (defaults only, read not run on production data); Razorpay international recurring availability on the platform account (Q1); QuickBuy on a phone (slice R0); the e2e suite.
+- NOT verified: any real Stripe, Razorpay or PayPal call (all gateways faked at fetch); the Stripe embedded form, the Razorpay subscription window and the new Super Admin and admin screens in a browser; migration `0106` against a database that has billing settings rows (defaults only, read not run on production data); Razorpay international recurring availability on the platform account (Q1); QuickBuy on a phone (slice R0); the e2e suite.
 
 ## Docs updated
-- [x] `docs/ARCHITECTURE.md` (checkout paragraph, platform billing, migration 0105, last verified)
+- [x] `docs/ARCHITECTURE.md` (checkout paragraph, platform billing, migration 0106, last verified)
 - [x] ADR-046; `docs/adr/README.md`
 - [x] `DEPLOYMENT.md` not needed (no env vars, ports or services)
 - [x] `progress.md` In flight line
