@@ -11,6 +11,7 @@ import {
   RateLimitExceededError,
   registerCustomer,
   getClientIp,
+  getCustomerBySession,
   getStorefrontConsentConfig,
   conversionCredentialStatus,
   decideOrderTracking,
@@ -18,6 +19,7 @@ import {
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
+import { CUSTOMER_COOKIE_NAME } from "@/server/customer-session.ts";
 
 const PlaceOrderSchema = z.object({
   email: z.string().email("Valid email is required"),
@@ -98,6 +100,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No active shopping cart" }, { status: 400 });
     }
 
+    // Who is signed in, from the session cookie only (never from the body). A store that turned guest checkout off needs this
+    // to let its signed-in customers order, and the order is then linked to that account (audit A3-03).
+    const signedIn = await getCustomerBySession(rt._db.db, access.tenantId, await getCookieValue(CUSTOMER_COOKIE_NAME, req));
+
     const tenantCtx = {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
@@ -137,6 +143,7 @@ export async function POST(req: Request) {
       tracking,
       attribution,
       cartToken: token,
+      customerId: signedIn?.id,
       idempotencyKey,
       email: parsed.data.email,
       phone: parsed.data.phone,
