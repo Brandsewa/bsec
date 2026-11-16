@@ -74,6 +74,9 @@ vi.mock("@bs/domain", async (importOriginal) => {
       email: "buyer@example.in",
       phone: "9876543210",
     })),
+    getCustomerBySession: vi.fn(async (_db: unknown, _tenantId: string, token?: string) =>
+      token === "valid-customer-token" ? { id: "cust-signed-in", phone: "9876543210", email: "member@example.in", name: "Member", phoneVerified: true, emailVerified: true } : null,
+    ),
     placeOrder: vi.fn(async () => ({
       success: true,
       orderId: "ord-test-1",
@@ -513,6 +516,29 @@ const noConsent = { termsRequired: false, marketing: null };
         }
         expect(vi.mocked(domain.placeOrder).mock.calls.every((c) => c[2].paymentMethod === "razorpay")).toBe(true);
         expect(domain.startRazorpayPayment).toHaveBeenCalled();
+      });
+
+      it("passes the signed-in customer from the session cookie to placeOrder, and ignores a customerId sent in the body (audit A3-03)", async () => {
+        const domain = await import("@bs/domain");
+        const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
+        const post = (cookie: string, extra: Record<string, unknown> = {}) =>
+          POST(
+            new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
+              method: "POST",
+              headers: { host: "demo.bcom.si", "content-type": "application/json", cookie },
+              body: JSON.stringify({
+                email: "buyer@example.in", phone: "9876543210", fullName: "Aarav Sharma", addressLine1: "123 MG Road",
+                city: "Bengaluru", state: "Karnataka", pincode: "560001", paymentMethod: "cod", ...extra,
+              }),
+            }),
+          );
+        vi.mocked(domain.placeOrder).mockClear();
+        expect((await post("bs_cart_token=cart-token-1234; bs_customer_token=valid-customer-token")).status).toBe(200);
+        expect(vi.mocked(domain.placeOrder).mock.calls.at(-1)?.[2].customerId).toBe("cust-signed-in");
+
+        // No session, or a session that is not valid: no customer, and a customerId in the body changes nothing.
+        expect((await post("bs_cart_token=cart-token-1234; bs_customer_token=forged", { customerId: "cust-someone-else" })).status).toBe(200);
+        expect(vi.mocked(domain.placeOrder).mock.calls.at(-1)?.[2].customerId).toBeUndefined();
       });
 
       it("returns 503 Service Unavailable when checkout feature flag is disabled", async () => {

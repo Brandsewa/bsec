@@ -34,7 +34,7 @@
 |---|---|---|---|---|
 | A3-01 | High | Orders are charged the price saved in the cart, not the current price | real-database test | fixed (PR pending) |
 | A3-02 | Medium | Unpublished or deleted products can still be ordered from an old cart | real-database test | fixed (PR pending) |
-| A3-03 | Medium | Turning off guest checkout blocks every order | code read | open |
+| A3-03 | Medium | Turning off guest checkout blocks every order | code read | fixed (PR pending) |
 | A3-04 | Medium | No per-visitor limit or bot check on order placement | code read (hardening item 1.7) | open |
 | A4-01 | Medium | A payment arriving for a cancelled order is recorded with no alert | code read, not reproduced | open |
 | A1-02 | Unconfirmed | Store chosen from `X-Forwarded-Host` before `Host` | code read; proxy behaviour unknown | needs a live check |
@@ -58,7 +58,7 @@
 ## Suggested fix order
 
 1. ~~A3-01 and A3-02 together~~ done: cart lines are re-checked at checkout.
-2. A3-03: pass the signed-in customer to `placeOrder`.
+2. ~~A3-03~~ done: the place-order route passes the signed-in customer to `placeOrder`.
 3. A4-01: handle a payment on a cancelled order explicitly, with a test.
 4. The two live checks (A1-02, A2-05), then fix or close them.
 5. A3-04 with the go-live hardening work.

@@ -14,7 +14,7 @@ Two defects are confirmed by test, one more by reading the code. A shopper canno
 |---|---|---|---|
 | A3-01 | High | An order is charged the price saved when the item entered the cart, not the current price | fixed in `fix/checkout-revalidate-cart`, test `checkout-cart-revalidation.int.test.ts` |
 | A3-02 | Medium | A product that was unpublished or deleted can still be ordered from an old cart | fixed in `fix/checkout-revalidate-cart`, same test file |
-| A3-03 | Medium | Turning off guest checkout blocks every order, including signed-in customers | open, from code |
+| A3-03 | Medium | Turning off guest checkout blocks every order, including signed-in customers | fixed in `fix/checkout-signed-in-customer`; tests `checkout-guest-off.int.test.ts` and `cart-checkout.test.ts` |
 | A3-04 | Medium | Order placement has no per-visitor limit and no bot check | open, from code |
 | A3-05 | Low (owner decision) | "For these customers only" discounts go to anyone who types that customer's email or phone | by design today |
 | A3-06 | Low | The order-created job is sent after the payment transaction commits, not inside it | open, from code |
