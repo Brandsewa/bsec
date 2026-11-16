@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-16
 - **Agent:** claude
-- **Branch:** `test/platform-audit-phase-3-7` (not merged yet)
+- **Branch:** `test/platform-audit-phase-3-7` (merged in #281, bf36ece)
 - **Area:** web, platform, blocks, domain, db, ci, docs
 - **Type:** fix (audit findings with tests)
 - **Supersedes:** none
@@ -50,4 +50,4 @@ All in `docs/audit/2026-11-DECISIONS.md` (D1 to D18).
 - [x] Docs updated where a trigger applied.
 - [x] No secrets or generated files in the diff.
 - [x] Honest status: see Verification and the "not checked" lists.
-- [ ] After merge: record updated, branch and worktree removed.
+- [x] After merge: record updated, branch and worktree removed.

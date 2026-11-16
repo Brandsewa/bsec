@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-16
 - **Agent:** claude
-- **Branch:** `fix/payment-on-cancelled-order` (not merged yet)
+- **Branch:** `fix/payment-on-cancelled-order` (merged in #279, eedc707; main run and production deploy succeeded)
 - **Area:** domain (payments, jobs, notifications, cart, team), web (webhook and place-order routes)
 - **Type:** fix
 - **Supersedes:** none

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `fix/checkout-revalidate-cart` (not merged yet; stacked on `test/platform-audit-phase-1-2`, PR #275)
+- **Branch:** `fix/checkout-revalidate-cart` (merged in #276, f3f6b32; main run and production deploy succeeded)
 - **Area:** domain (storefront cart, checkout)
 - **Type:** fix
 - **Supersedes:** none
@@ -39,4 +39,4 @@ The platform audit found that an order was charged the price saved when the item
 ## Definition of done
 - [x] Code follows section 2 and 3; tests added (real database).
 - [x] No docs trigger; no secrets or generated files.
-- [ ] After merge: record updated, branch and worktree removed.
+- [x] After merge: record updated, branch and worktree removed.
