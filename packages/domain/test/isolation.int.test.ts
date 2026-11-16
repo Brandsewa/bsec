@@ -2674,10 +2674,13 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
       const resA = await listSettingsActivity(rtApp, ctxA!);
       expect(resA.items.length).toBeGreaterThanOrEqual(2);
       expect(resA.total).toBeGreaterThanOrEqual(2);
+      // The property that matters: nothing of tenant B shows up for tenant A. (Rows may also be about other actors of tenant A,
+      // for example the person who accepted an invitation, so "the actor is userA" is not a valid test of ownership.)
       for (const item of resA.items) {
-        expect(item.targetId === tenantA || item.actorId === userA).toBe(true);
         expect(item.targetId).not.toBe(tenantB);
+        expect(item.actorId).not.toBe(userB);
       }
+      expect(resA.items.some((i) => i.action === "store_settings.update" && i.diff?.storeName && JSON.stringify(i.diff.storeName).includes("Beta"))).toBe(false);
 
       // Check redaction of secret key
       const storeUpdateItem = resA.items.find((i) => i.action === "store_settings.update");

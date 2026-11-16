@@ -15,6 +15,7 @@ import {
   getStorefrontPaymentOptions,
   confirmRazorpayPayment,
   settleRazorpayPayment,
+  handleOrderCreatedJob,
   orderTokenHash,
   type Runtime,
   type TenantContext,
@@ -196,5 +197,40 @@ describe("Razorpay payment confirmation (real DB)", () => {
     expect(await settleRazorpayPayment(db, ctx.tenantId, { providerOrderId: "order_EEE555", providerPaymentId: "pay_E2", amount: 25000, source: "webhook" })).toBe("paid");
     expect(await settleRazorpayPayment(db, ctx.tenantId, { providerOrderId: "order_EEE555", providerPaymentId: "pay_E2", amount: 25000, source: "webhook" })).toBe("already_paid");
     expect(await settleRazorpayPayment(db, ctx.tenantId, { providerOrderId: "order_UNKNOWN", providerPaymentId: "pay_X", source: "webhook" })).toBe("ignored");
+  });
+
+  // Audit A4-01: a shopper pays on the provider's page after the order was cancelled.
+  it("a payment that arrives after the order was cancelled is recorded, not confirmed, and alerts the store once", async () => {
+    const a = await seedOnlineOrder(ctx, "6", "order_FFF666", 25000);
+    await withTenant(rtWeb._db.db, ctx.tenantId, (tx) => tx.update(schema.orders).set({ status: "cancelled" }).where(eq(schema.orders.id, a.orderId)));
+    const sent: Array<{ queue: string; data: Record<string, unknown> }> = [];
+    const jobs = { send: async (queue: string, data: object) => void sent.push({ queue, data: data as Record<string, unknown> }) };
+    const settle = () => settleRazorpayPayment(rtWeb._db.db, ctx.tenantId, { providerOrderId: "order_FFF666", providerPaymentId: "pay_F1", amount: 25000, source: "webhook", jobs });
+
+    expect(await settle()).toBe("paid");
+    const order = await readOrder(ctx, a.orderId);
+    expect(order?.paymentStatus).toBe("paid"); // money received: refundable
+    expect(order?.status).toBe("cancelled"); // not reinstated
+    expect(order?.number).toBe("RZP-6"); // no order number taken from the sequence
+    const events = await withTenant(rtWeb._db.db, ctx.tenantId, (tx) => tx.select({ type: schema.orderEvents.type }).from(schema.orderEvents).where(eq(schema.orderEvents.orderId, a.orderId)));
+    expect(events.map((e) => e.type)).toContain("payment.received_after_cancel");
+    expect(events.map((e) => e.type)).not.toContain("payment.captured");
+    // One job, flagged: the store is alerted and the shopper gets no order confirmation.
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.data).toMatchObject({ orderId: a.orderId, paymentAfterCancel: true });
+
+    // The provider retries the same event: nothing more happens.
+    expect(await settle()).toBe("already_paid");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("the job for a late payment alerts the store owners and sends no order confirmation", async () => {
+    const a = await seedOnlineOrder(ctx, "7", "order_GGG777", 25000);
+    await withTenant(rtWeb._db.db, ctx.tenantId, (tx) => tx.update(schema.orders).set({ status: "cancelled" }).where(eq(schema.orders.id, a.orderId)));
+    await handleOrderCreatedJob(rtWeb._db.db, { info() {}, warn() {}, error() {} } as never, { tenantId: ctx.tenantId, orderId: a.orderId, paymentAfterCancel: true });
+    const inbox = await withTenant(rtWeb._db.db, ctx.tenantId, (tx) => tx.select({ title: schema.notifications.title, eventKey: schema.notifications.eventKey }).from(schema.notifications).where(eq(schema.notifications.eventKey, "store_payment_after_cancel")));
+    expect(inbox.some((n) => n.title.includes("RZP-7"))).toBe(true);
+    const confirmations = await withTenant(rtWeb._db.db, ctx.tenantId, (tx) => tx.select({ id: schema.emailLog.id }).from(schema.emailLog).where(eq(schema.emailLog.eventRef, `order_created_${a.orderId}`)));
+    expect(confirmations).toHaveLength(0);
   });
 });

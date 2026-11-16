@@ -12,9 +12,9 @@ No way to mark an order paid without a real, correctly signed payment for that o
 
 | ID | Severity | Title | Status |
 |---|---|---|---|
-| A4-01 | Medium | A payment that arrives for a cancelled order is recorded as paid with no alert | open, from code, not reproduced |
-| A4-02 | Low | Unsigned requests are stored in `webhook_inbox` | open, from code |
-| A4-03 | Low | The webhook route returns internal error text | open, from code |
+| A4-01 | Medium | A payment that arrives for a cancelled order is recorded as paid with no alert | fixed in `fix/payment-on-cancelled-order`, tests in `razorpay-checkout.int.test.ts` |
+| A4-02 | Low | Unsigned requests are stored in `webhook_inbox` | fixed in `fix/payment-on-cancelled-order` by a 24-hour purge; the route still stores them (existing security tests assert it) |
+| A4-03 | Low | The webhook route returns internal error text | fixed in `fix/payment-on-cancelled-order` |
 | A4-04 | Info | The store is picked from the request before the signature is checked | safe as built |
 
 ## Findings

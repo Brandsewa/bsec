@@ -21,7 +21,7 @@ const domainDir = path.join(root, "packages/domain/src");
 
 const ASSERTS = platform
   ? /assertRoleAtLeast\(|assertPlatformStaff\(|assertOwner\(|assertMayManage\(/
-  : /assertPermission\(|hasPermission\(|ctx\.roles\.includes\(/;
+  : /assertPermission\(|hasPermission\(|ctx\.roles\.includes\(|assertStoreOwner\(/;
 
 function walk(dir, out = []) {
   for (const f of readdirSync(dir)) {
