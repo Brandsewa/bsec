@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-16
 - **Agent:** claude
-- **Branch:** `fix/checkout-signed-in-customer` (not merged yet)
+- **Branch:** `fix/checkout-signed-in-customer` (merged in #278, 5b673b0; main run and production deploy succeeded)
 - **Area:** web (storefront checkout route), tests
 - **Type:** fix
 - **Supersedes:** none
@@ -39,4 +39,4 @@ The store setting "Guest checkout" (Admin, Settings, Checkout) makes `placeOrder
 ## Definition of done
 - [x] Code follows section 2 and 3; tests added (real database and route level).
 - [x] No docs trigger; no secrets or generated files.
-- [ ] After merge: record updated, branch and worktree removed.
+- [x] After merge: record updated, branch and worktree removed.
