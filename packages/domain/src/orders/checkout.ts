@@ -28,7 +28,7 @@ import {
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
+import { clearCart, getOrCreateCart, revalidateCartLines } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
 import { recordOrderDiscountApplications, redeemDiscount } from "./discounts.ts";
@@ -179,6 +179,16 @@ export async function placeOrder(
   const checkoutEnabled = await isFeatureEnabled(rt._db.db, tenantId, "checkout");
   if (!checkoutEnabled) {
     throw new FeatureDisabledError("checkout", "Checkout is currently disabled for this store");
+  }
+
+  // The cart keeps the price a line had when it was added and may hold products that have since been withdrawn.
+  // Bring it up to date first (saved in its own transaction), and ask the shopper to look again if anything moved.
+  const revalidated = await revalidateCartLines(rt, ctx, input.cartToken);
+  if (revalidated.removed.length > 0) {
+    throw new Error(`Bad Request: ${revalidated.removed.join(", ")} is no longer available and was taken out of your cart. Please review your cart and place the order again.`);
+  }
+  if (revalidated.repriced > 0) {
+    throw new Error("Bad Request: The price of an item in your cart has changed. Please review your cart and place the order again.");
   }
 
   const executeOrderPlacement = async (tx: typeof rt._db.db): Promise<{ status: number; body: PlaceOrderResult }> => {

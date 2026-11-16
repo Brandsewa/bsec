@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Agent:** claude
-- **Branch:** `test/platform-audit-phase-1-2` (not merged yet; stacked on `fix/security-alerts-2026-11-15`, PR #274)
+- **Branch:** `test/platform-audit-phase-1-2` (merged in #275, 781b783; main run succeeded)
 - **Area:** docs/audit, scripts, domain tests
 - **Type:** test
 - **Supersedes:** none
