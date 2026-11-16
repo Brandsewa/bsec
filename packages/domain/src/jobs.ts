@@ -65,7 +65,7 @@ export async function dispatchTransactionalEmailOrThrow(
 export async function handleOrderCreatedJob(
   db: Db,
   log: Logger,
-  data: { tenantId: string; orderId: string },
+  data: { tenantId: string; orderId: string; paymentAfterCancel?: boolean | undefined },
 ): Promise<void> {
   const { tenantId, orderId } = data;
   const [order] = await withTenant(db, tenantId, async (tx) => {
@@ -77,6 +77,22 @@ export async function handleOrderCreatedJob(
   });
   // The job is queued while the order is still being committed: if it is not visible yet, fail so pg-boss retries.
   if (!order) throw new Error(`Order ${orderId} not visible yet; retrying`);
+
+  // A payment arrived for an order that was already cancelled (audit A4-01): tell the store, send no confirmation to the shopper.
+  if (data.paymentAfterCancel) {
+    const { dispatchNotification } = await import("./notifications/dispatcher.ts");
+    await dispatchNotification(db, {
+      eventKey: "store_payment_after_cancel",
+      tenantId,
+      eventRef: `store_payment_after_cancel_${orderId}`,
+      title: `Payment received for cancelled order ${order.number}`,
+      body: "A shopper paid after this order was cancelled. The order was not reinstated. Refund the payment or restore the order.",
+      link: `/orders/${orderId}`,
+      ctaLabel: "View order",
+      emailSubject: `Action needed: payment received for cancelled order ${order.number}`,
+    });
+    return;
+  }
   const eventRef = `order_created_${orderId}`;
   const [alreadySent] = order.email
     ? await withTenant(db, tenantId, async (tx) => {
@@ -662,7 +678,12 @@ export async function handleMaintenanceCleanupJob(
     log.warn({ err }, "platform_message_log prune failed during maintenance pass");
     return { deletedCount: 0 };
   });
-  const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+  const { pruneEmailLogs, prunePrivacyRequests, pruneInvalidWebhookInbox } = await import("./system/retention.ts");
+  const prunedInvalidWebhooks = await pruneInvalidWebhookInbox(db, 24).catch((err) => {
+    log.warn({ err }, "webhook_inbox invalid-signature prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  if (prunedInvalidWebhooks.deletedCount > 0) log.info({ deleted: prunedInvalidWebhooks.deletedCount }, "deleted invalid-signature webhook requests older than 24 hours");
   const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
     log.warn({ err }, "email_log prune failed during maintenance pass");
     return { deletedCount: 0 };
@@ -774,7 +795,7 @@ export async function startJobs(opts: {
   });
 
   // Handle order.created domain event (send the order confirmation)
-  await boss.work<{ tenantId: string; orderId: string }>(
+  await boss.work<{ tenantId: string; orderId: string; paymentAfterCancel?: boolean }>(
     QUEUE_NAMES.ORDER_CREATED,
     { localConcurrency: 2 },
     async (batch) => {
@@ -783,6 +804,8 @@ export async function startJobs(opts: {
           await withTenantJobSlot(job.data.tenantId, async () => {
             await handleOrderCreatedJob(db, opts.log, job.data);
             opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "order.created processed");
+            // A late payment on a cancelled order is not a purchase: no conversion event.
+            if (job.data.paymentAfterCancel) return;
             // The order is confirmed (COD placed, or online payment settled): send its Purchase to Meta and GA4 if the visitor allowed it.
             const tracked = await withTenant(db, job.data.tenantId, (tx) =>
               tx

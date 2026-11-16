@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { isPlaceholderCustomerEmail } from "./placeholder-email.ts";
 import { type Db, customers, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 
@@ -19,7 +20,6 @@ export interface ProfileInput {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PLACEHOLDER_SUFFIX = "@customer.store";
 
 export async function getCustomerProfile(db: Db, tenantId: string, customerId: string): Promise<CustomerProfile | null> {
   return await withTenant(db, tenantId, async (tx) => {
@@ -34,7 +34,7 @@ export async function getCustomerProfile(db: Db, tenantId: string, customerId: s
       email: c.email,
       phone: c.phone,
       acceptsMarketing: c.acceptsMarketing,
-      emailIsPlaceholder: c.email.endsWith(PLACEHOLDER_SUFFIX),
+      emailIsPlaceholder: isPlaceholderCustomerEmail(c.email),
     };
   });
 }
@@ -91,7 +91,7 @@ export async function updateCustomerProfile(db: Db, tenantId: string, customerId
           email: c.email,
           phone: c.phone,
           acceptsMarketing: c.acceptsMarketing,
-          emailIsPlaceholder: c.email.endsWith(PLACEHOLDER_SUFFIX),
+          emailIsPlaceholder: isPlaceholderCustomerEmail(c.email),
         }
       : null;
   });

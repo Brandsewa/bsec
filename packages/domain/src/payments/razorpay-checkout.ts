@@ -185,7 +185,7 @@ export async function settleRazorpayPayment(db: Db, tenantId: string, input: Set
 export async function settleProviderPayment(db: Db, tenantId: string, input: SettleInput): Promise<SettleResult> {
   const provider = input.provider ?? "razorpay";
   const label = PROVIDER_LABEL[provider] ?? provider;
-  const outcome = await withTenant(db, tenantId, async (tx): Promise<{ result: SettleResult; orderId?: string }> => {
+  const outcome = await withTenant(db, tenantId, async (tx): Promise<{ result: SettleResult; orderId?: string; lateAfterCancel?: boolean }> => {
     const [intent] = await tx
       .select()
       .from(schema.paymentIntents)
@@ -226,6 +226,23 @@ export async function settleProviderPayment(db: Db, tenantId: string, input: Set
       raw: { source: input.source },
     });
 
+    // The order was cancelled before this payment arrived (the shopper paid on the provider's page after the order was
+    // cancelled or its stock hold ran out). The money is real, so it is recorded and the order shows as paid, which lets the
+    // merchant refund it through the normal refund flow. The order is NOT confirmed, takes no order number, its stock stays
+    // released and no confirmation goes out; the merchant is told instead (audit A4-01).
+    if (order.status === "cancelled") {
+      await tx.update(schema.orders).set({ paymentStatus: "paid", updatedAt: new Date() }).where(eq(schema.orders.id, order.id));
+      await tx.insert(schema.orderEvents).values({
+        tenantId,
+        orderId: order.id,
+        type: "payment.received_after_cancel",
+        message: `A ${label} payment of ${Number(intent.amount)} ${intent.currency} arrived after this order was cancelled. The order was not reinstated: refund the payment or restore the order.`,
+        actorType: "system",
+        data: { provider, providerPaymentId: input.providerPaymentId, source: input.source, amount: Number(intent.amount), currency: intent.currency },
+      });
+      return { result: "paid", orderId: order.id, lateAfterCancel: true };
+    }
+
     // Paid: the held order now takes the store's next real order number (it had a temporary one while unpaid).
     if (order.number.startsWith("PEND-")) {
       const seq = await allocateOrderNumber(tx as unknown as Db, tenantId);
@@ -260,6 +277,11 @@ export async function settleProviderPayment(db: Db, tenantId: string, input: Set
     });
     return { result: "paid", orderId: order.id };
   });
+
+  if (outcome.lateAfterCancel && outcome.orderId) {
+    await input.jobs?.send(QUEUE_NAMES.ORDER_CREATED, { orderId: outcome.orderId, tenantId, paymentAfterCancel: true });
+    return outcome.result;
+  }
 
   // Stock is committed after the order is saved as paid (same order as the existing webhook path).
   if (outcome.result === "paid" && outcome.orderId) {

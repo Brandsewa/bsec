@@ -8,6 +8,7 @@ import {
   getStoreSettings,
   FeatureDisabledError,
   checkStorefrontRateLimit,
+  checkPlaceOrderRateLimit,
   RateLimitExceededError,
   registerCustomer,
   getClientIp,
@@ -95,6 +96,16 @@ export async function POST(req: Request) {
       );
     }
 
+    // Per visitor and per phone, on top of the store-wide limit above (audit A3-04).
+    try {
+      await checkPlaceOrderRateLimit(rt._db.db, { tenantId: access.tenantId, ip: getClientIp(req.headers), phone: parsed.data.phone });
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 429, headers: { "Retry-After": String(err.retryAfter) } });
+      }
+      throw err;
+    }
+
     const token = await getCookieValue(CART_COOKIE_NAME, req);
     if (!token) {
       return NextResponse.json({ error: "No active shopping cart" }, { status: 400 });
@@ -107,9 +118,10 @@ export async function POST(req: Request) {
     const tenantCtx = {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
+      // A storefront request has no staff role and no store permission; the shopper is not store staff (audit A3-08).
       actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read"],
+      roles: [] as string[],
+      permissions: [] as string[],
       requestId: crypto.randomUUID(),
     };
 

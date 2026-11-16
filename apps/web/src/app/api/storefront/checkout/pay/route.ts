@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { evaluateStorefrontAccess, startPaymentByToken, getStoreSettings, checkStorefrontRateLimit, RateLimitExceededError } from "@bs/domain";
+import { evaluateStorefrontAccess, startPaymentByToken, getStoreSettings, checkStorefrontRateLimit, checkPlaceOrderRateLimit, getClientIp, RateLimitExceededError } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { getRequestHeaders } from "../../cart/route.ts";
 
@@ -20,6 +20,16 @@ export async function POST(req: Request) {
 
     try {
       await checkStorefrontRateLimit(rt._db.db, access.tenantId);
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 429, headers: { "Retry-After": String(err.retryAfter) } });
+      }
+      throw err;
+    }
+
+    // Starting a payment talks to the provider: limit it per visitor too (audit A3-04). No phone here; the IP bucket applies.
+    try {
+      await checkPlaceOrderRateLimit(rt._db.db, { tenantId: access.tenantId, ip: getClientIp(req.headers) });
     } catch (err: unknown) {
       if (err instanceof RateLimitExceededError) {
         return NextResponse.json({ error: err.message }, { status: 429, headers: { "Retry-After": String(err.retryAfter) } });

@@ -1555,6 +1555,7 @@ export async function archivePlatformAuditLogs(
   ids: string[],
   meta?: AuditMeta,
 ): Promise<{ archived: number }> {
+  assertRoleAtLeast((await assertPlatformStaff(rt, staffUserId)).role, "platform_admin", "archiving audit entries");
   const unique = [...new Set(ids)];
   return rt._db.db.transaction(async (tx) => {
     const existing = await tx
@@ -1580,6 +1581,7 @@ export async function unarchivePlatformAuditLogs(
   ids: string[],
   meta?: AuditMeta,
 ): Promise<{ unarchived: number }> {
+  assertRoleAtLeast((await assertPlatformStaff(rt, staffUserId)).role, "platform_admin", "restoring audit entries");
   const unique = [...new Set(ids)];
   return rt._db.db.transaction(async (tx) => {
     const removed = await tx
