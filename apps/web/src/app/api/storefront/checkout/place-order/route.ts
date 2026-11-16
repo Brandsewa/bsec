@@ -8,6 +8,7 @@ import {
   getStoreSettings,
   FeatureDisabledError,
   checkStorefrontRateLimit,
+  checkPlaceOrderRateLimit,
   RateLimitExceededError,
   registerCustomer,
   getClientIp,
@@ -93,6 +94,16 @@ export async function POST(req: Request) {
         { error: "Invalid checkout information", details: parsed.error.issues },
         { status: 400 },
       );
+    }
+
+    // Per visitor and per phone, on top of the store-wide limit above (audit A3-04).
+    try {
+      await checkPlaceOrderRateLimit(rt._db.db, { tenantId: access.tenantId, ip: getClientIp(req.headers), phone: parsed.data.phone });
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 429, headers: { "Retry-After": String(err.retryAfter) } });
+      }
+      throw err;
     }
 
     const token = await getCookieValue(CART_COOKIE_NAME, req);

@@ -483,6 +483,43 @@ export async function checkCustomerLoginRateLimit(
 }
 
 /**
+ * Order placement and payment start (audit A3-04): the public routes that create orders and talk to payment providers.
+ * - Per (tenant, IP): 60 / 10 min. Deliberately roomy: behind a shared address (an office, a mobile carrier, or the proxy
+ *   when the client IP cannot be told apart, see getClientIp) many real shoppers share one counter.
+ * - Per (tenant, phone): 10 / 10 min. A real person rarely orders more often; a script cycling addresses is caught here.
+ * A refused request has created nothing yet, so a shopper who waits can simply try again.
+ */
+export async function checkPlaceOrderRateLimit(
+  db: Db,
+  params: { tenantId: string; ip: string; phone?: string | undefined },
+): Promise<void> {
+  try {
+    await enforcePlaceOrderLimits(db, params);
+  } catch (err) {
+    if (err instanceof RateLimitExceededError) throw err;
+    // Same policy as the store-wide limiter: a fault in the limiter itself must not take checkout down.
+    console.warn(`[WARN] Place-order rate limit check failed for tenant ${params.tenantId}. Failing open.`, err instanceof Error ? err.message : err);
+  }
+}
+
+async function enforcePlaceOrderLimits(db: Db, params: { tenantId: string; ip: string; phone?: string | undefined }): Promise<void> {
+  const { tenantId, ip } = params;
+  const ipKey = `checkout:ip:${tenantId}:${ip}`;
+  const ipRes = await checkRateLimit(db, { key: ipKey, limit: 60, windowSeconds: 600 });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(`Too many orders from this connection. Please retry after ${ipRes.retryAfter} seconds.`, ipRes.retryAfter, ipRes.limit, ipKey);
+  }
+  const digits = (params.phone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length >= 7) {
+    const phoneKey = `checkout:phone:${tenantId}:${digits}`;
+    const phoneRes = await checkRateLimit(db, { key: phoneKey, limit: 10, windowSeconds: 600 });
+    if (!phoneRes.allowed) {
+      throw new RateLimitExceededError(`Too many orders with this phone number. Please retry after ${phoneRes.retryAfter} seconds.`, phoneRes.retryAfter, phoneRes.limit, phoneKey);
+    }
+  }
+}
+
+/**
  * Customer social (Google) sign-in: per (tenant, IP) only, 20 attempts / 5 min. There is no per-email bucket because the
  * email is not known until Google's token is verified, and a shared bucket would let one visitor lock every shopper out.
  */

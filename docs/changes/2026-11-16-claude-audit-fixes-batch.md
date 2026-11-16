@@ -1,4 +1,4 @@
-# Audit fixes: payment on a cancelled order and seven smaller findings
+# Audit fixes: payment on a cancelled order and the smaller findings
 
 - **Date:** 2026-11-16
 - **Agent:** claude
@@ -18,7 +18,12 @@ One change set for the findings of the platform audit (`docs/audit/`) that could
 - **A3-07** `storefront/cart.ts` and the cart items route: at most 9,999 of one item per cart line (rejects above, caps when an add would exceed).
 - **A3-08** place-order route: the context it builds has no staff role and no permission.
 - **A4-03** webhook route: unauthenticated callers get fixed messages; the detail goes to the log.
-- Tests: two in `razorpay-checkout.int.test.ts` (late payment recorded and alert queued once; the job alerts the owners and sends no confirmation), `team-access.int.test.ts` (audit row; two-owner race smoke check). Audit files updated.
+- **A3-04** `system/rate-limit.ts` `checkPlaceOrderRateLimit`: per-IP (60 per 10 min) and per-phone (10 per 10 min) limits on place-order, per-IP on the pay route. Fails open on its own faults like the store-wide limiter. No bot check yet.
+- **A4-02** `system/retention.ts` `pruneInvalidWebhookInbox`, called by the 15-minute maintenance pass: invalid-signature webhook rows older than 24 hours are deleted. The route is unchanged: three existing security tests assert that a forged webhook is stored and then rejected by the processor.
+- **A2-01 (partly)** feature flag update, retire and restore, and audit-log archive and unarchive check the platform role inside the service.
+- **A2-05** `TRUST_CLOUDFLARE` documented in `DEPLOYMENT.md` and `.env.example`.
+- **A2-06** `customers/otp.ts`: the sign-in code hash is an HMAC keyed with the server secret; `customers/placeholder-email.ts`: new phone-only customers get a `@phone.invalid` address; every place that recognises "no email" accepts both that and the legacy `@customer.store`.
+- Tests: two in `razorpay-checkout.int.test.ts` (late payment recorded and alert queued once; the job alerts the owners and sends no confirmation), `team-access.int.test.ts` (audit row; two-owner race smoke check), `rate-limit-place-order.int.test.ts` (per-phone and per-IP limits, per store), `webhook-inbox-retention.int.test.ts`, `placeholder-email.test.ts`. Audit files updated.
 
 ## Decisions and trade-offs
 - **Late payment keeps the order cancelled.** Reinstating it would need stock that may be gone; the merchant decides (refund, or restore the order). The order carries the original `PEND-` number because it never got a real one.
@@ -27,22 +32,22 @@ One change set for the findings of the platform audit (`docs/audit/`) that could
 - **A3-07 limit** 9,999 per line is far above any real order and below the integer limit. Tell me if a store sells in larger units.
 
 ## Verification
-- Ran against the local test Postgres (Docker): `razorpay-checkout` 8 pass, `team-access` 2 pass; the full domain heavy suite, `@bs/domain` fast tests and `@bs/web` fast tests: see the PR for the final counts. Typecheck and lint of all 17 packages pass (0 errors).
+- Ran against the local test Postgres (Docker): the full `@bs/domain` heavy suite 3,091 passed in 161 of 162 files; the one file that did not report, `rate-limiting.int.test.ts`, lost its worker to a Windows native crash (exit code 3221226505, seen once before in an unrelated file) and passes alone, together with the three new files (15 tests). `@bs/domain` fast tests 762 pass, `@bs/web` fast tests 266 pass, typecheck of all packages passes, lint has no errors (one unused variable of mine fixed). The isolation suite (1,832 tests) was re-run after its assertion was changed.
 - Exercised by hand: nothing in a browser. The new notification was not viewed in the admin inbox or the Super Admin events matrix.
 - NOT verified: a real provider webhook for a cancelled order; the email text; that the Super Admin notification matrix lists the new event correctly.
 
 ## Docs updated
 - [ ] `docs/ARCHITECTURE.md`: not needed (no route, table, queue, env var or migration changed)
 - [ ] ADR: not needed
-- [ ] `DEPLOYMENT.md` / RUNBOOK: not needed
+- [x] `DEPLOYMENT.md`: `TRUST_CLOUDFLARE` documented (also `.env.example`); RUNBOOK not needed
 - [ ] `progress.md`: not needed
 
 ## Follow-ups and open questions
 Not fixed, with the reason:
-- A1-01 RLS on shared tables (needs a migration and a grants review), A1-03 pending custom domains block a hostname (product decision), A1-04 and A2-01 (signature changes across many callers), A2-06 (phone sign-in is not live), A3-04 rate limits and bot check (hardening item 1.7), A3-06 job enqueue inside the transaction (needs design), A4-02 invalid-signature webhooks are kept so a misconfigured secret can be diagnosed (decision).
-- A3-05 (customer-only discounts) is an owner decision. A1-02 and A2-05 need a live check.
+- **A1-01** row-level security on the shared platform tables: needs a migration, and several store-side queries read these tables outside a tenant transaction, so a policy would make them return nothing. It needs a call-site review and a staged change (expand, check, enforce), not a blind policy.
+- **A1-03** a pending custom domain blocks the hostname for other stores: needs a product rule (how long, who may claim), and the provider-side hostname must be removed too.
+- **A1-04** the `TenantContext | string` overloads: about a hundred test calls and two platform call sites use the string form; the fix is to point them at the `...Internal` functions, whose return shapes differ in places.
+- **A2-01** the other ten platform services (see the A2 file); **A2-06** data migration of legacy `@customer.store` rows, and a mailer guard.
+- **A3-04** bot check (Turnstile) on checkout; **A3-06** enqueue the order job inside the transaction (needs a design for the job library's transaction option).
+- **A3-05** customer-only discounts (owner decision); **A1-02** and **A2-05** production value need a live check.
 
-## Definition of done
-- [x] Code follows section 2 and 3; tests added (real database).
-- [x] No docs trigger; no secrets or generated files.
-- [ ] After merge: record updated, branch and worktree removed.

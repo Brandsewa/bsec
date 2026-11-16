@@ -12,12 +12,12 @@ No permission bypass was found. Every admin and platform procedure is behind a s
 
 | ID | Severity | Title | Status |
 |---|---|---|---|
-| A2-01 | Low | 15 platform mutations check the role level only at the route | open |
+| A2-01 | Low | 15 platform mutations check the role level only at the route | partly fixed: 5 of 15 |
 | A2-02 | Low | Onboarding dismiss checked no permission | fixed in `fix/payment-on-cancelled-order` |
 | A2-03 | Low | Accepting a staff invitation writes no audit log | fixed in `fix/payment-on-cancelled-order` |
 | A2-04 | Low | "Keep at least one owner" can be raced | fixed by a row lock in `fix/payment-on-cancelled-order`; race not reproduced |
-| A2-05 | Unconfirmed (Medium if wrong) | Rate limits key on an IP whose meaning depends on `TRUST_CLOUDFLARE`, which is undocumented | open, needs a live check |
-| A2-06 | Low | Sign-in codes are stored as plain SHA-256; phone-only customers get an email at a real domain | open |
+| A2-05 | Unconfirmed (Medium if wrong) | Rate limits key on an IP whose meaning depends on `TRUST_CLOUDFLARE`, which is undocumented | documented in `DEPLOYMENT.md` and `.env.example`; production value still to be checked |
+| A2-06 | Low | Sign-in codes are stored as plain SHA-256; phone-only customers get an email at a real domain | fixed in `fix/payment-on-cancelled-order`; legacy rows remain |
 
 ## Findings
 
@@ -91,3 +91,8 @@ No permission bypass was found. Every admin and platform procedure is behind a s
 ## Correction (2026-11-16)
 
 A2-02 was overstated. `scripts/audit-api-guards.mjs` did not recognise `assertStoreOwner` (used by all five `admin.support.*` services), so they were reported as "route only". They do check inside the service. The script now knows it. The one real gap was `dismissOnboardingProgress`, which checked no permission; it now needs `settings.write`. `admin.apps.states` (a static list of Indian states) and `admin.billing.getSubscription` (reads the caller's own subscription by tenant id) were left as they are.
+
+## Update (2026-11-16)
+
+- A2-01: feature flag update, retire and restore, and audit-log archive and unarchive now check the staff role inside the service. The other ten (`tenants.create`, `resendOwnerInvite`, `export`, plan and quota editors) accept an optional staff id because worker jobs and seeds call them without one; a safe fix splits each into a staff-checked public function and an internal one. Not done.
+- A2-06: the sign-in code is now an HMAC-SHA256 keyed with the server secret, and new phone-only customers get `<phone>@phone.invalid` (reserved by RFC 2606, can never be a real mailbox). Rows already created with `@customer.store` are still recognised as "no email" everywhere that was checked, but that is a real domain; a one-off data migration to the new placeholder is a follow-up. The central mailer does not yet refuse placeholder addresses.

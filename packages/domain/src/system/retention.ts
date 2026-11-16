@@ -55,3 +55,16 @@ export async function prunePrivacyRequests(
   }
   return await runner(db);
 }
+
+/**
+ * Webhook requests whose signature did not verify are kept for a short while so a store with a mistyped secret can be
+ * diagnosed, then deleted (audit A4-02): anyone can send them, so they must not pile up. Verified events are kept as before.
+ */
+export async function pruneInvalidWebhookInbox(db: Db, retentionHours: number = 24): Promise<{ deletedCount: number }> {
+  const hours = Math.max(1, Math.floor(retentionHours));
+  const cutoff = new Date(Date.now() - hours * 3_600_000);
+  const result = (await db.execute(
+    sql`DELETE FROM webhook_inbox WHERE signature_valid = false AND created_at < ${cutoff} RETURNING id`,
+  )) as unknown as { rowCount?: number; rows?: unknown[] };
+  return { deletedCount: typeof result?.rowCount === "number" ? result.rowCount : (result?.rows?.length ?? 0) };
+}

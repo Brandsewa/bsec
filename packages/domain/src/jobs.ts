@@ -678,7 +678,12 @@ export async function handleMaintenanceCleanupJob(
     log.warn({ err }, "platform_message_log prune failed during maintenance pass");
     return { deletedCount: 0 };
   });
-  const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+  const { pruneEmailLogs, prunePrivacyRequests, pruneInvalidWebhookInbox } = await import("./system/retention.ts");
+  const prunedInvalidWebhooks = await pruneInvalidWebhookInbox(db, 24).catch((err) => {
+    log.warn({ err }, "webhook_inbox invalid-signature prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  if (prunedInvalidWebhooks.deletedCount > 0) log.info({ deleted: prunedInvalidWebhooks.deletedCount }, "deleted invalid-signature webhook requests older than 24 hours");
   const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
     log.warn({ err }, "email_log prune failed during maintenance pass");
     return { deletedCount: 0 };

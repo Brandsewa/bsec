@@ -29,7 +29,7 @@ export async function AccountGate({ children }: { children: React.ReactNode }) {
 
   const displayName = customer.name || customer.phone || "My account";
   // guest accounts carry a placeholder address that is not worth showing
-  const showEmail = Boolean(customer.email) && !customer.email.endsWith("@customer.store");
+  const showEmail = Boolean(customer.email) && !/@(customer\.store|phone\.invalid)$/i.test(customer.email);
   const initials = displayName.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0)).join("") || "?";
 
   // same container as the header and pages: the theme's site width plus the 2.5rem side padding the header row uses

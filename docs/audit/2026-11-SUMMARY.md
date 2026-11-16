@@ -35,23 +35,23 @@
 | A3-01 | High | Orders are charged the price saved in the cart, not the current price | real-database test | fixed (PR pending) |
 | A3-02 | Medium | Unpublished or deleted products can still be ordered from an old cart | real-database test | fixed (PR pending) |
 | A3-03 | Medium | Turning off guest checkout blocks every order | code read | fixed (PR pending) |
-| A3-04 | Medium | No per-visitor limit or bot check on order placement | code read (hardening item 1.7) | open |
+| A3-04 | Medium | No per-visitor limit or bot check on order placement | code read (hardening item 1.7) | partly fixed (PR pending): per-IP and per-phone limits on place-order and pay; bot check (Turnstile) not added, needs keys and a UI change |
 | A4-01 | Medium | A payment arriving for a cancelled order is recorded with no alert | real-database test | fixed (PR pending) |
 | A1-02 | Unconfirmed | Store chosen from `X-Forwarded-Host` before `Host` | code read; proxy behaviour unknown | needs a live check |
-| A2-05 | Unconfirmed | Rate-limit IP depends on undocumented `TRUST_CLOUDFLARE` | code read; production value unknown | needs a live check |
+| A2-05 | Unconfirmed | Rate-limit IP depends on undocumented `TRUST_CLOUDFLARE` | code read; production value unknown | documented in `DEPLOYMENT.md` and `.env.example` (PR pending); production value still to be checked |
 | A1-01 | Low | Store runtime role can use shared tables that have no row-level security | `scripts/audit-rls.sql` | open |
 | A1-03 | Low | A pending custom domain blocks the hostname for other stores | code read, partly | open |
 | A1-04 | Low | `TenantContext or string` overloads skip the permission check | code read | open |
-| A2-01 | Low | 15 platform mutations check the role level only at the route | `scripts/audit-api-guards.mjs --platform` | open |
+| A2-01 | Low | Platform mutations check the role level only at the route | `scripts/audit-api-guards.mjs --platform` | partly fixed: 5 of 15 (feature flags, audit archive) now check in the service; the other 10 take an optional staff id because jobs and seeds call them, so they need a public/internal split |
 | A2-02 | Low | Onboarding dismiss checked no permission (the other 7 route-only cases were a script blind spot and are fine) | `scripts/audit-api-guards.mjs`, corrected | fixed (PR pending) |
 | A2-03 | Low | Accepting a staff invitation writes no audit log | real-database test | fixed (PR pending) |
 | A2-04 | Low | "Keep at least one owner" can be raced | code read; race not reproduced | fixed by row lock (PR pending), not proven by test |
-| A2-06 | Low | Sign-in codes stored as plain SHA-256; phone-only customers get an email at a real domain | code read | open |
+| A2-06 | Low | Sign-in codes stored as plain SHA-256; phone-only customers get an email at a real domain | code read | fixed (PR pending): keyed HMAC, `.invalid` placeholder. Legacy `@customer.store` rows remain (data fix is a follow-up) |
 | A3-05 | Low | Customer-only discounts go to whoever types the customer's contact | existing test encodes it | owner decision |
 | A3-06 | Low | Order-created job sent after commit | code read | open |
 | A3-07 | Low | Cart quantity has no upper limit | code read | fixed (PR pending) |
 | A3-08 | Low | Place-order route builds its own context with a staff role | code read | fixed (PR pending) |
-| A4-02 | Low | Unsigned webhook requests are stored | code read | open |
+| A4-02 | Low | Unsigned webhook requests are stored | code read | fixed (PR pending) by a 24-hour purge of invalid-signature rows; the route still stores them, by design (`webhook-route.test.ts`) |
 | A4-03 | Low | Webhook route returns internal error text | code read | fixed (PR pending) |
 | A4-04 | Info | Store picked from the request before the signature check | code read, existing test | safe as built |
 

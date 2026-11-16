@@ -1,4 +1,5 @@
-import { createHash, randomInt } from "node:crypto";
+import { createHmac, randomInt } from "node:crypto";
+import { placeholderEmailForPhone } from "./placeholder-email.ts";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { type Db, customerOtps, customers, withTenant } from "@bs/db";
 import { createCustomerSession } from "./session.ts";
@@ -25,8 +26,13 @@ export interface VerifyOtpResult {
   token: string;
 }
 
+/**
+ * Keyed hash (HMAC-SHA256 with the server secret) rather than a plain hash: a 6-digit code has only 900,000 values, so a
+ * plain hash of it can be reversed in a moment by anyone who can read the table (audit A2-06). The key never leaves the server.
+ */
 function hashOtp(otp: string): string {
-  return createHash("sha256").update(otp.trim()).digest("hex");
+  const key = process.env.BETTER_AUTH_SECRET || "bsec-development-only-otp-key";
+  return createHmac("sha256", key).update(otp.trim()).digest("hex");
 }
 
 export async function requestCustomerOtp(
@@ -125,7 +131,7 @@ export async function verifyCustomerOtp(
       .values({
         tenantId,
         phone: cleanPhone,
-        email: `${cleanPhone}@customer.store`,
+        email: placeholderEmailForPhone(cleanPhone),
         name: "",
         phoneVerified: true,
         isGuest: false,
