@@ -20,13 +20,13 @@ import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, getRequestHeaders, getCookieValu
 const AddItemSchema = z.object({
   token: z.string().optional(),
   variantId: z.string().min(1, "variantId is required"),
-  quantity: z.number().int().positive("quantity must be positive"),
+  quantity: z.number().int().positive("quantity must be positive").max(9999, "quantity is too large"),
   properties: z.record(z.string(), z.unknown()).optional(),
 });
 
 const UpdateItemSchema = z.object({
   itemId: z.string().min(1, "itemId is required"),
-  quantity: z.number().int().min(0, "quantity must be non-negative"),
+  quantity: z.number().int().min(0, "quantity must be non-negative").max(9999, "quantity is too large"),
 });
 
 const RemoveItemSchema = z.object({

@@ -477,6 +477,9 @@ async function assertNotMaintenance(tx: Parameters<Parameters<typeof withTenant>
 /**
  * Adds an item to a cart or increments quantity if it already exists.
  */
+/** The most of one variant a cart line may hold. Far above any real order, and keeps the integer column and totals safe (audit A3-07). */
+export const MAX_CART_LINE_QUANTITY = 9999;
+
 export async function addToCart(
   rt: Runtime,
   ctx: TenantContext,
@@ -484,6 +487,9 @@ export async function addToCart(
 ): Promise<StorefrontCart> {
   if (!input.quantity || input.quantity <= 0) {
     throw new Error("Quantity must be greater than zero");
+  }
+  if (input.quantity > MAX_CART_LINE_QUANTITY) {
+    throw new Error(`Bad Request: you can add at most ${MAX_CART_LINE_QUANTITY} of one item`);
   }
 
   const db = rt._db.db;
@@ -519,7 +525,7 @@ export async function addToCart(
       .onConflictDoUpdate({
         target: [schema.cartItems.tenantId, schema.cartItems.cartId, schema.cartItems.variantId],
         set: {
-          quantity: sql`${schema.cartItems.quantity} + ${input.quantity}`,
+          quantity: sql`LEAST(${schema.cartItems.quantity} + ${input.quantity}, ${MAX_CART_LINE_QUANTITY})`,
           unitPriceSnapshot,
           updatedAt: sql`now()`,
         },
@@ -705,6 +711,9 @@ export async function updateCartItemQuantity(
       throw new Error("Cart not found");
     }
 
+    if (input.quantity > MAX_CART_LINE_QUANTITY) {
+      throw new Error(`Bad Request: you can have at most ${MAX_CART_LINE_QUANTITY} of one item`);
+    }
     if (input.quantity <= 0) {
       await tx
         .delete(schema.cartItems)

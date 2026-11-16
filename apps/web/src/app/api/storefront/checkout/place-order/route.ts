@@ -107,9 +107,10 @@ export async function POST(req: Request) {
     const tenantCtx = {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
+      // A storefront request has no staff role and no store permission; the shopper is not store staff (audit A3-08).
       actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read"],
+      roles: [] as string[],
+      permissions: [] as string[],
       requestId: crypto.randomUUID(),
     };
 

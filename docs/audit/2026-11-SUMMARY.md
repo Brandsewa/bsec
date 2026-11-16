@@ -36,33 +36,33 @@
 | A3-02 | Medium | Unpublished or deleted products can still be ordered from an old cart | real-database test | fixed (PR pending) |
 | A3-03 | Medium | Turning off guest checkout blocks every order | code read | fixed (PR pending) |
 | A3-04 | Medium | No per-visitor limit or bot check on order placement | code read (hardening item 1.7) | open |
-| A4-01 | Medium | A payment arriving for a cancelled order is recorded with no alert | code read, not reproduced | open |
+| A4-01 | Medium | A payment arriving for a cancelled order is recorded with no alert | real-database test | fixed (PR pending) |
 | A1-02 | Unconfirmed | Store chosen from `X-Forwarded-Host` before `Host` | code read; proxy behaviour unknown | needs a live check |
 | A2-05 | Unconfirmed | Rate-limit IP depends on undocumented `TRUST_CLOUDFLARE` | code read; production value unknown | needs a live check |
 | A1-01 | Low | Store runtime role can use shared tables that have no row-level security | `scripts/audit-rls.sql` | open |
 | A1-03 | Low | A pending custom domain blocks the hostname for other stores | code read, partly | open |
 | A1-04 | Low | `TenantContext or string` overloads skip the permission check | code read | open |
 | A2-01 | Low | 15 platform mutations check the role level only at the route | `scripts/audit-api-guards.mjs --platform` | open |
-| A2-02 | Low | 7 store procedures check the permission only at the route; onboarding dismiss checks none | `scripts/audit-api-guards.mjs` | open |
-| A2-03 | Low | Accepting a staff invitation writes no audit log | code read | open |
-| A2-04 | Low | "Keep at least one owner" can be raced | code read, not reproduced | open |
+| A2-02 | Low | Onboarding dismiss checked no permission (the other 7 route-only cases were a script blind spot and are fine) | `scripts/audit-api-guards.mjs`, corrected | fixed (PR pending) |
+| A2-03 | Low | Accepting a staff invitation writes no audit log | real-database test | fixed (PR pending) |
+| A2-04 | Low | "Keep at least one owner" can be raced | code read; race not reproduced | fixed by row lock (PR pending), not proven by test |
 | A2-06 | Low | Sign-in codes stored as plain SHA-256; phone-only customers get an email at a real domain | code read | open |
 | A3-05 | Low | Customer-only discounts go to whoever types the customer's contact | existing test encodes it | owner decision |
 | A3-06 | Low | Order-created job sent after commit | code read | open |
-| A3-07 | Low | Cart quantity has no upper limit | code read | open |
-| A3-08 | Low | Place-order route builds its own context with a staff role | code read | open |
+| A3-07 | Low | Cart quantity has no upper limit | code read | fixed (PR pending) |
+| A3-08 | Low | Place-order route builds its own context with a staff role | code read | fixed (PR pending) |
 | A4-02 | Low | Unsigned webhook requests are stored | code read | open |
-| A4-03 | Low | Webhook route returns internal error text | code read | open |
+| A4-03 | Low | Webhook route returns internal error text | code read | fixed (PR pending) |
 | A4-04 | Info | Store picked from the request before the signature check | code read, existing test | safe as built |
 
 ## Suggested fix order
 
 1. ~~A3-01 and A3-02 together~~ done: cart lines are re-checked at checkout.
 2. ~~A3-03~~ done: the place-order route passes the signed-in customer to `placeOrder`.
-3. A4-01: handle a payment on a cancelled order explicitly, with a test.
+3. ~~A4-01~~ done: a late payment on a cancelled order is recorded, refundable, and alerts the store.
 4. The two live checks (A1-02, A2-05), then fix or close them.
 5. A3-04 with the go-live hardening work.
-6. The Low items in two batches: rule 4 and rule 6 gaps (A2-01, A2-02, A2-03, A1-04), then the rest.
+6. Still open, with reason: A1-01 (RLS on shared tables: a migration and grants review), A1-03 (pending domains: product decision), A1-04 and A2-01 (signature changes across many callers), A2-06 (phone sign-in not live), A3-04 (rate limits and bot check: hardening item 1.7), A3-06 (job enqueue inside the transaction: needs design), A4-02 (invalid-signature webhooks kept for diagnosis: decision).
 
 ## Owner decisions
 

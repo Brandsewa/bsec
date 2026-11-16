@@ -18,8 +18,8 @@ Two defects are confirmed by test, one more by reading the code. A shopper canno
 | A3-04 | Medium | Order placement has no per-visitor limit and no bot check | open, from code |
 | A3-05 | Low (owner decision) | "For these customers only" discounts go to anyone who types that customer's email or phone | by design today |
 | A3-06 | Low | The order-created job is sent after the payment transaction commits, not inside it | open, from code |
-| A3-07 | Low | Cart quantity has no upper limit | open, from code |
-| A3-08 | Low | The place-order route builds its own context with a staff role | open, from code |
+| A3-07 | Low | Cart quantity has no upper limit | fixed in `fix/payment-on-cancelled-order` (limit 9,999 per line) |
+| A3-08 | Low | The place-order route builds its own context with a staff role | fixed in `fix/payment-on-cancelled-order` |
 
 ## Findings
 

@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
-import type { TenantContext } from "../context.ts";
+import { assertPermission, type TenantContext } from "../context.ts";
 
 export interface OnboardingSteps {
   store_created: boolean;
@@ -131,6 +131,8 @@ export async function dismissOnboardingProgress(
   rt: Runtime,
   ctx: TenantContext,
 ): Promise<{ success: boolean }> {
+  // Hiding the setup card changes the store, so it needs the same permission as other store settings (audit A2-02).
+  assertPermission(ctx, "settings.write");
   const db = rt._db.db;
   const tenantId = ctx.tenantId;
 

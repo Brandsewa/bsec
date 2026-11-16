@@ -90,6 +90,18 @@ export const NOTIFICATION_EVENTS: readonly NotificationEventDef[] = [
     variables: ["order.number", "customer.name", "order.total"],
   },
   {
+    key: "store_payment_after_cancel",
+    audience: "store",
+    category: "Orders",
+    label: "Payment received for a cancelled order",
+    description: "A shopper paid after the order was cancelled. The money needs a refund or the order needs restoring.",
+    locked: true,
+    channels: { in_app: true, email: true },
+    tab: "orders",
+    storeRoles: OWNERS,
+    variables: ["order.number"],
+  },
+  {
     key: "billing_failed",
     audience: "store",
     category: "Billing",

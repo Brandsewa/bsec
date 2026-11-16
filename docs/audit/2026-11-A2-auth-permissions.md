@@ -13,9 +13,9 @@ No permission bypass was found. Every admin and platform procedure is behind a s
 | ID | Severity | Title | Status |
 |---|---|---|---|
 | A2-01 | Low | 15 platform mutations check the role level only at the route | open |
-| A2-02 | Low | 7 store procedures check the permission only at the route; onboarding dismiss checks none | open |
-| A2-03 | Low | Accepting a staff invitation writes no audit log | open |
-| A2-04 | Low | "Keep at least one owner" can be raced | open, not reproduced |
+| A2-02 | Low | Onboarding dismiss checked no permission | fixed in `fix/payment-on-cancelled-order` |
+| A2-03 | Low | Accepting a staff invitation writes no audit log | fixed in `fix/payment-on-cancelled-order` |
+| A2-04 | Low | "Keep at least one owner" can be raced | fixed by a row lock in `fix/payment-on-cancelled-order`; race not reproduced |
 | A2-05 | Unconfirmed (Medium if wrong) | Rate limits key on an IP whose meaning depends on `TRUST_CLOUDFLARE`, which is undocumented | open, needs a live check |
 | A2-06 | Low | Sign-in codes are stored as plain SHA-256; phone-only customers get an email at a real domain | open |
 
@@ -87,3 +87,7 @@ No permission bypass was found. Every admin and platform procedure is behind a s
 - Platform MFA: that it cannot be skipped, backup codes single use (the assert exists; not tested).
 - Merchant MFA (not enabled; hardening plan item 2.2).
 - Whether mail senders skip `@customer.store` addresses.
+
+## Correction (2026-11-16)
+
+A2-02 was overstated. `scripts/audit-api-guards.mjs` did not recognise `assertStoreOwner` (used by all five `admin.support.*` services), so they were reported as "route only". They do check inside the service. The script now knows it. The one real gap was `dismissOnboardingProgress`, which checked no permission; it now needs `settings.write`. `admin.apps.states` (a static list of Indian states) and `admin.billing.getSubscription` (reads the caller's own subscription by tenant id) were left as they are.
