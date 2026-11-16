@@ -8,7 +8,16 @@ import { z } from "zod";
 
 // Internal paths, anchors, https URLs, mailto and tel. No javascript:, data:, or protocol-relative.
 const SAFE_HREF = /^(\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i;
-export const isSafeHref = (v: string): boolean => v === "" || SAFE_HREF.test(v);
+// Control characters and backslashes are refused (audit A8-02): a URL parser deletes tabs and newlines, so "/<tab>/evil.example" is
+// read as the protocol-relative "//evil.example" and would send visitors to another site even though it starts with "/".
+const hasUnsafeChar = (v: string): boolean => {
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i);
+    if (c <= 0x1f || c === 0x7f || c === 0x5c) return true; // control characters and the backslash
+  }
+  return false;
+};
+export const isSafeHref = (v: string): boolean => v === "" || (SAFE_HREF.test(v) && !hasUnsafeChar(v));
 
 export const hrefSchema = z
   .string()

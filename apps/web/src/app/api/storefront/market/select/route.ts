@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   const handle = url.searchParams.get("handle") ?? "";
   const rawNext = url.searchParams.get("next") ?? "/";
   // Only same-site paths: "//evil.example" and "https://..." never redirect off the store.
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\") ? rawNext : "/";
+  // Tabs and newlines are refused too: a URL parser deletes them, so "/<tab>/evil.example" would become "//evil.example" (A7-02).
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\") && !/[\t\n\r]/.test(rawNext) ? rawNext : "/";
 
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost";
   const { rt } = server();

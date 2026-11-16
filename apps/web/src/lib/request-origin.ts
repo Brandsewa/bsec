@@ -11,7 +11,14 @@ export function publicOrigin(h: Headers): string {
   return `${proto}://${host}`;
 }
 
-/** An absolute URL on the shopper-facing origin for a same-site path. */
+/**
+ * An absolute URL on the shopper-facing origin for a same-site path.
+ *
+ * It never leaves the origin (audit A7-02): URL parsers delete tabs and newlines, so "/<tab>/evil.example" parses as
+ * "//evil.example" and would send the shopper to another site. Anything that does not resolve to this origin becomes "/".
+ */
 export function publicUrl(h: Headers, path: string): URL {
-  return new URL(path, publicOrigin(h));
+  const origin = publicOrigin(h);
+  const url = new URL(path, origin);
+  return url.origin === new URL(origin).origin ? url : new URL("/", origin);
 }

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -39,7 +40,10 @@ export const domains = pgTable("domains", {
   routingCheckedAt: timestamp("routing_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  // A store's own domains (list, primary, quota count) are read by tenant (audit A10-02, migration 0114).
+  index("domains_tenant_id_idx").on(t.tenantId),
+]);
 
 /**
  * Feature flags catalog: global flag definitions (PLAN §5.1, M1).

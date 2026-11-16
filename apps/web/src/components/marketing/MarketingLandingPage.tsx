@@ -7,6 +7,7 @@
  */
 
 import { FALLBACK_PLANS, type LandingPlan } from "./landing/content.ts";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { organizationJsonLd } from "./landing/seo.ts";
 import { HomeFooter } from "./home/HomeFooter.tsx";
 import { HomeNav } from "./home/HomeNav.tsx";
@@ -18,7 +19,7 @@ export function MarketingLandingPage({ plans }: { plans?: LandingPlan[] | undefi
   const planList = plans && plans.length > 0 ? plans : FALLBACK_PLANS;
   return (
     <HomeRoot>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }} />
+      <JsonLd data={organizationJsonLd()} />
       <HomeNav />
       <main id="main">
         <Hero />
