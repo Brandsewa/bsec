@@ -1,5 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -1058,6 +1060,10 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
 
   // CORS: exact Super Admin origins only. Tenant stores live on other *.bcom.si subdomains and must never be
   // able to make credentialed calls here.
+  // JSON API only: nosniff, no framing, no referrer, HSTS (audit A7-01). Cross-origin resource policy is left off: the Super Admin
+  // SPA reads these responses cross-origin through CORS, which the exact-origin list below already controls.
+  app.use("*", secureHeaders({ crossOriginResourcePolicy: false, strictTransportSecurity: "max-age=31536000", referrerPolicy: "no-referrer" }));
+
   app.use(
     "*",
     cors({
@@ -1068,6 +1074,13 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
       exposeHeaders: ["X-Request-Id"],
     }),
   );
+
+  // A request body is capped while it streams, not only by its Content-Length header (a chunked body has none), so one request
+  // cannot make the process buffer without limit (audit A5-01). The media upload route gets room for the file plus form overhead.
+  const tooLarge = (c: Context) => c.json({ error: "Request too large" }, 413);
+  const jsonLimit = bodyLimit({ maxSize: 6 * 1024 * 1024, onError: tooLarge });
+  const uploadLimit = bodyLimit({ maxSize: MAX_MEDIA_BYTES + 1024 * 1024, onError: tooLarge });
+  app.use("*", (c, next) => (c.req.path === "/api/marketing/media/upload" ? uploadLimit(c, next) : jsonLimit(c, next)));
 
   app.use("*", async (c, next) => {
     const requestId = resolveRequestId(c.req.header("x-request-id"));

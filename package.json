@@ -19,7 +19,7 @@
     "gate:quick": "node scripts/gate-quick.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'ignore'})}catch{}\"",
-    "docs:check": "node scripts/check-docs.mjs",
+    "docs:check": "node scripts/check-docs.mjs && node scripts/check-migrations-immutable.mjs",
     "seo:audit": "node scripts/seo-audit.mjs",
     "notion:check": "node scripts/check-notion-sync.mjs",
     "db:migrate": "pnpm --filter @bs/db migrate",

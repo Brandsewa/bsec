@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import {
@@ -217,10 +218,7 @@ export default async function PolicyPage({ params }: PolicyPageProps) {
 
   return (
     <article className="mx-auto max-w-4xl px-4 py-12">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
-      />
+      <JsonLd data={breadcrumbsJsonLd} />
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
           {title}

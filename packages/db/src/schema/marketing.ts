@@ -116,6 +116,8 @@ export const discountRedemptions = tenantTable(
   (t) => [
     unique("discount_redemptions_tenant_id_uniq").on(t.tenantId, t.id),
     index("discount_redemptions_tenant_discount_idx").on(t.tenantId, t.discountId),
+    // The per-customer limit counts a customer's redemptions at every checkout (audit A10-02, migration 0114).
+    index("discount_redemptions_tenant_customer_idx").on(t.tenantId, t.customerId),
     index("discount_redemptions_tenant_order_idx").on(t.tenantId, t.orderId),
     tenantForeignKey({
       tableTenantId: t.tenantId,

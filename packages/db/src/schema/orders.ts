@@ -118,6 +118,8 @@ export const orderItems = tenantTable(
   (t) => [
     unique("order_items_tenant_id_uniq").on(t.tenantId, t.id),
     index("order_items_tenant_order_idx").on(t.tenantId, t.orderId),
+    // Reports and "is this variant ordered" checks read order lines by variant (audit A10-02, migration 0114).
+    index("order_items_tenant_variant_idx").on(t.tenantId, t.variantId),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.orderId,

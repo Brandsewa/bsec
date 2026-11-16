@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import { notFound, permanentRedirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -184,10 +185,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
 
   return (
     <article className="w-full min-h-[60vh]">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
-      />
+      <JsonLd data={breadcrumbsJsonLd} />
       {/* The page's own blocks carry the visible heading; keep the title for screen readers and search engines. */}
       <h1 className="sr-only">{pageData.page.title}</h1>
       <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} context={{ currency: marketCurrency, locale: marketLocale }} />

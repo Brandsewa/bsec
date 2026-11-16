@@ -757,6 +757,13 @@
       "when": 1794761793825,
       "tag": "0113_order_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1794765393825,
+      "tag": "0114_hot_path_indexes",
+      "breakpoints": true
     }
   ]
 }

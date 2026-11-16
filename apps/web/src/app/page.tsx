@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
@@ -222,14 +223,8 @@ export default async function HomePage() {
 
   return (
     <main className="w-full min-h-[60vh]">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
-      />
+      <JsonLd data={webSiteJsonLd} />
+      <JsonLd data={orgJsonLd} />
       {blocksHaveH1(blocksToRender) ? null : <h1 className="sr-only">{storeName}</h1>}
       <BlockRenderer
         blocks={blocksToRender}
