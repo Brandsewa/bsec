@@ -1,4 +1,5 @@
 import React from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -140,10 +141,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Schema.org Structured Data */}
       {itemListJsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
-        />
+        <JsonLd data={itemListJsonLd} />
       )}
 
       {/* Breadcrumbs Navigation */}

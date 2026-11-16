@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { renderBlockTree, type BlockData, type BlockInstance, type RenderContext } from "@bs/blocks";
 import { generateFaqJsonLd, type BlockMediaMeta } from "@bs/domain";
 import { HeroSliderClient } from "./HeroSliderClient.tsx";
@@ -64,7 +65,7 @@ export function BlockRenderer({ blocks, renderData, context }: BlockRendererProp
           if (!items || items.length === 0) return rendered;
           return (
             <>
-              <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(generateFaqJsonLd(items)) }} />
+              <JsonLd data={generateFaqJsonLd(items)} />
               {rendered}
             </>
           );

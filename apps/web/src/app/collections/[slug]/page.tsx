@@ -1,4 +1,5 @@
 import React from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -250,8 +251,8 @@ export default async function CollectionDetailPage({
   return (
     <div data-cache-tag={collectionCacheTag} className="bs-skin">
       {/* Schema.org structured data */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      <JsonLd data={itemListJsonLd} />
+      <JsonLd data={breadcrumbsJsonLd} />
       {template ? (
         <BlockRenderer
           blocks={template.blocks}

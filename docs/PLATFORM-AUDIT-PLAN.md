@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-15
 - **Author:** claude
-- **Status:** owner go-ahead 2026-11-15. Phases 1 and 2 (A1 to A4) done in a first pass, partly covered: results and the "not checked" lists are in `docs/audit/2026-11-SUMMARY.md`. Phases 3 to 7 not started.
+- **Status:** first pass done for all 15 sections (A1 to A4 on 2026-11-15, A5 to A15 on 2026-11-16). Every section lists what was not checked; the second pass over those lists, the browser walkthroughs (A14) and the production checks are open. Results: `docs/audit/2026-11-SUMMARY.md`; owner decisions: `docs/audit/2026-11-DECISIONS.md`.
 - **Change record:** `docs/changes/2026-11-15-claude-security-alerts-and-audit-plan.md`
 
 ## 1. Goal and scope

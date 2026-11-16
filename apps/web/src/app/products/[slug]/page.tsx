@@ -1,4 +1,5 @@
 import { getMarketContext } from "@/server/market.ts";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
 import { ProductShowcaseSchema, type ProductCouponsOptions } from "@bs/blocks";
@@ -221,8 +222,8 @@ const templateContext = {
   return (
     <div data-cache-tag={productCacheTag} className="bs-skin">
       {/* Schema.org Structured Data */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      <JsonLd data={productJsonLd} />
+      <JsonLd data={breadcrumbsJsonLd} />
       <ShopEvent tenantId={tenantId} build={() => buildViewItemEvent(product, marketCtx?.currency ?? "INR")} />
       {template ? (
         <>

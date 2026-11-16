@@ -777,6 +777,9 @@ describe("Phase 1C: delete and anonymise", () => {
       tx.select().from(schema.auditLogs).where(and(eq(schema.auditLogs.action, "customer.deleted"), eq(schema.auditLogs.targetId, acct1))),
     );
     expect(audits[0]?.diff).toMatchObject({ mode: "anonymised" });
+    // Audit A12-01: the erasure must not leave the person's data in places that outlive it.
+    expect(JSON.stringify(audits[0]?.diff)).not.toContain("@"); // no email copied into the kept audit row
+    expect(events.every((e) => e.ip === null)).toBe(true); // no raw IP address left on the consent history
   });
 
   it("refuses a read-only staff member and cross-store deletes", async () => {

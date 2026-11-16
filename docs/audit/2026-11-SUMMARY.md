@@ -13,7 +13,17 @@
 | A2 Auth, sessions, permissions | first pass done, partly covered | `2026-11-A2-auth-permissions.md` |
 | A3 Checkout, orders, money | first pass done, partly covered | `2026-11-A3-checkout-money.md` |
 | A4 Payments and webhooks | first pass done, partly covered | `2026-11-A4-payments-webhooks.md` |
-| A5 to A15 | not started | |
+| A5 Platform API and Super Admin | first pass, partly covered | `2026-11-A5-A15-findings.md` |
+| A6 Secrets and configuration | first pass, partly covered | same |
+| A7 Web and API attack surface | first pass, partly covered | same |
+| A8 Blocks, themes, merchant content | first pass, partly covered | same |
+| A9 Jobs and queues | first pass, mostly not checked | same |
+| A10 Database and migrations | first pass, partly covered | same |
+| A11 Dependencies, CI, supply chain | first pass, partly covered | same |
+| A12 Privacy and data handling | first pass, partly covered | same |
+| A13 Performance and caching | not checked beyond indexes | same |
+| A14 Admin and storefront quality | static checks only; no browser walkthrough | same |
+| A15 Tests and docs | stale in-flight lines fixed; rest not checked | same |
 
 "Partly covered" means: every check in the plan has a result of pass, finding or "not checked", and the "not checked" list in each file is real work still to do. This is not a clean bill of health for those four sections.
 
@@ -69,3 +79,24 @@
 - A3-05: accept typed-contact identity for customer-only discounts, or require sign-in for those codes.
 - A1-02 and A2-05: permission for the two read-only live checks, and the production value of `TRUST_CLOUDFLARE`.
 - Whether the second pass over the "not checked" lists of A1 to A4 comes before or after phases 3 to 7.
+
+## Round 2 (A5 to A15, 2026-11-16)
+
+Full detail in `docs/audit/2026-11-A5-A15-findings.md`; decisions that need the owner in `docs/audit/2026-11-DECISIONS.md`.
+
+| ID | Severity | Title | Status |
+|---|---|---|---|
+| A8-01 | High | Merchant text in structured-data scripts could close the script tag | fixed |
+| A7-02 | Medium | Open redirect through the market selector | fixed |
+| A12-01 | Medium | Customer erasure left the email in the audit log, sign-in codes and IP addresses | fixed in part |
+| A7-01 | Medium | No security headers on the storefront and platform API | headers added; CSP is a decision (D2) |
+| A10-02 | Medium | Missing indexes on hot tables | fixed (migration 0114) |
+| A5-01 | Low | No request body size cap on the platform API | fixed |
+| A6-01 | Low | Log redaction gaps | fixed |
+| A8-02 | Low | Saved link could leave the site via a tab character | fixed |
+| A10-01 | Low | Migrations could be edited silently | guard added |
+| A11-01 | Low | Actions pinned to moving tags | fixed |
+| A15-01 | Info | Stale in-flight lines | fixed |
+| A9-01, A11-02 | Info | No dead-letter alert, no image scan or audit step in CI | decision (D10) |
+
+Counts after round 2: Critical 0. High 2 found, both fixed (A3-01 and A8-01). Open Medium: A1-01 (D6), A3-04 bot check (D7); the other Mediums found are fixed or fixed in part.

@@ -938,11 +938,16 @@ export async function deleteAdminCustomer(rt: Runtime, ctx: TenantContext, input
 
   return await withTenant(db, ctx.tenantId, async (tx) => {
     const [existing] = await tx
-      .select({ id: schema.customers.id, email: schema.customers.email, name: schema.customers.name })
+      .select({ id: schema.customers.id, email: schema.customers.email, name: schema.customers.name, phone: schema.customers.phone })
       .from(schema.customers)
       .where(and(eq(schema.customers.tenantId, ctx.tenantId), eq(schema.customers.id, input.id)))
       .limit(1);
     if (!existing) throw new Error(`Customer not found: ${input.id}`);
+
+    // Sign-in codes are keyed by phone, so they would outlive the customer (audit A12-01).
+    if (existing.phone) {
+      await tx.delete(schema.customerOtps).where(and(eq(schema.customerOtps.tenantId, ctx.tenantId), eq(schema.customerOtps.phone, existing.phone.replace(/\D/g, ""))));
+    }
 
     const [orderCount] = await tx
       .select({ count: sql<number>`count(*)::int` })
@@ -960,7 +965,8 @@ export async function deleteAdminCustomer(rt: Runtime, ctx: TenantContext, input
         action: "customer.deleted",
         targetType: "customer",
         targetId: input.id,
-        diff: { mode: "deleted", email: existing.email },
+        // The id says who; the email is not copied into a log that is kept after the erasure (audit A12-01).
+        diff: { mode: "deleted" },
       });
       return { mode: "deleted", id: input.id };
     }
@@ -999,8 +1005,10 @@ export async function deleteAdminCustomer(rt: Runtime, ctx: TenantContext, input
       action: "customer.deleted",
       targetType: "customer",
       targetId: input.id,
-      diff: { mode: "anonymised", email: existing.email },
+      diff: { mode: "anonymised" },
     });
+    // The consent history is kept as proof of what was agreed, but the raw address it recorded is not (audit A12-01).
+    await tx.update(schema.customerConsentEvents).set({ ip: null }).where(and(eq(schema.customerConsentEvents.tenantId, ctx.tenantId), eq(schema.customerConsentEvents.customerId, input.id)));
     return { mode: "anonymised", id: input.id };
   });
 }
