@@ -100,6 +100,7 @@ import {
   unsubscribeAdminLead,
   createAdminReview,
   importAdminReviews,
+  getPageVersion,
   listPageVersions,
   listThemeLibrary,
   previewPageRenderData,
@@ -1308,6 +1309,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await activateTheme(rt, ctx, { code: "essential-commerce" });
       case "pages.versions":
         return await listPageVersions(rt, ctx, { id: testPageA });
+      case "pages.version":
+        return await getPageVersion(rt, ctx, { id: testPageA, versionId: testVersionA });
       case "pages.blockData":
         return await previewPageRenderData(rt, ctx, { blocks: [] });
       case "pages.list":

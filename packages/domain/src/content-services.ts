@@ -1,4 +1,4 @@
-import { and, desc, eq, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
@@ -504,29 +504,70 @@ export async function getPage(
   });
 }
 
-/** Saved versions of a page, newest first (for rollback, including after a theme switch). */
-export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+const PAGE_VERSIONS_DEFAULT_LIMIT = 30;
+const PAGE_VERSIONS_MAX_LIMIT = 100;
+
+function documentBlockCount(document: unknown): number {
+  const blocks = (document as { blocks?: unknown } | null)?.blocks;
+  return Array.isArray(blocks) ? blocks.length : 0;
+}
+
+/**
+ * Saved versions of a page, newest first, without their blocks (the list stays small; a version's blocks are read one at a
+ * time with getPageVersion). `before` is the createdAt of the last row already loaded, for "load more".
+ */
+export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: { id: string; limit?: number | undefined; before?: string | undefined }) {
   assertPermission(ctx, "content.write");
-  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+  const limit = Math.min(Math.max(input.limit ?? PAGE_VERSIONS_DEFAULT_LIMIT, 1), PAGE_VERSIONS_MAX_LIMIT);
+  const before = input.before ? new Date(input.before) : undefined;
+  if (before && Number.isNaN(before.getTime())) throw new Error("Bad Request: invalid cursor");
+  const { page, rows } = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
     if (!p) throw new Error(`Not Found: Page not found: "${input.id}"`);
-    const rows = await tx
+    const found = await tx
       .select({
         id: schema.pageVersions.id,
         note: schema.pageVersions.note,
         createdAt: schema.pageVersions.createdAt,
+        createdBy: schema.pageVersions.createdBy,
+        document: schema.pageVersions.document,
       })
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.pageId, input.id))
+      .where(before ? and(eq(schema.pageVersions.pageId, input.id), lt(schema.pageVersions.createdAt, before)) : eq(schema.pageVersions.pageId, input.id))
       .orderBy(desc(schema.pageVersions.createdAt))
-      .limit(30);
-    return rows.map((r) => ({
-      id: r.id,
-      note: r.note,
-      createdAt: r.createdAt.toISOString(),
-      isPublished: r.id === p.publishedVersionId,
-      isDraft: r.id === p.draftVersionId,
-    }));
+      .limit(limit);
+    return { page: p, rows: found };
+  });
+  // Staff names live in the global users table; older versions have no author.
+  const authorIds = [...new Set(rows.map((r) => r.createdBy).filter((v): v is string => Boolean(v)))];
+  const names = new Map<string, string>();
+  if (authorIds.length > 0) {
+    const users = await rt._db.db.select({ id: schema.users.id, name: schema.users.name, email: schema.users.email }).from(schema.users).where(inArray(schema.users.id, authorIds));
+    for (const u of users) names.set(u.id, u.name || u.email);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    createdBy: r.createdBy ? (names.get(r.createdBy) ?? null) : null,
+    blockCount: documentBlockCount(r.document),
+    isPublished: r.id === page.publishedVersionId,
+    isDraft: r.id === page.draftVersionId,
+  }));
+}
+
+/** One saved version's blocks, for previewing it before a restore. The version must belong to this page. */
+export async function getPageVersion(rt: Runtime, ctx: TenantContext, input: { id: string; versionId: string }) {
+  assertPermission(ctx, "content.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document, createdAt: schema.pageVersions.createdAt })
+      .from(schema.pageVersions)
+      .where(and(eq(schema.pageVersions.id, input.versionId), eq(schema.pageVersions.pageId, input.id)))
+      .limit(1);
+    if (!row) throw new Error(`Not Found: Version not found: "${input.versionId}"`);
+    const blocks = (row.document as { blocks?: unknown[] } | null)?.blocks;
+    return { id: row.id, createdAt: row.createdAt.toISOString(), blocks: Array.isArray(blocks) ? blocks : [] };
   });
 }
 
@@ -1076,6 +1117,7 @@ export async function savePageDraft(rt: Runtime, ctx: TenantContext, input: Save
         tenantId: ctx.tenantId,
         pageId: input.id,
         document: validation.data,
+        createdBy: ctx.actor.type === "staff" ? ctx.actor.userId : null,
       })
       .returning();
 
@@ -1157,38 +1199,45 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
   return { success: true, publishedVersionId: finalVersionId };
 }
 
+/**
+ * Restores an old version of a page as the live page. The restore is itself a new version (a copy of the old one), so it can be
+ * undone like any other change, and the old row stays as it was. The version must belong to this page: a version id from another
+ * page (Header, Home...) is refused, because pointing a page at another page's blocks is exactly how a store lost its header.
+ */
 export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: RollbackPageInput) {
   assertPermission(ctx, "theme.publish");
   const db = rt._db.db;
 
-  const updatedPage = await withTenant(db, ctx.tenantId, async (tx) => {
+  const { updatedPage, restoredVersionId } = await withTenant(db, ctx.tenantId, async (tx) => {
     const [targetVer] = await tx
-      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document })
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document, createdAt: schema.pageVersions.createdAt })
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.id, input.targetVersionId))
+      .where(and(eq(schema.pageVersions.id, input.targetVersionId), eq(schema.pageVersions.pageId, input.id)))
       .limit(1);
+    if (!targetVer) throw new Error(`Not Found: Version not found for this page: "${input.targetVersionId}"`);
 
-    if (targetVer?.document) {
-      // Restoring history must not fail because a file was trashed or deleted since: that content was valid when saved.
-      await syncDocumentMediaUsages(tx, ctx, {
-        ownerType: "page",
-        ownerId: input.id,
-        field: "published",
+    const [restored] = await tx
+      .insert(schema.pageVersions)
+      .values({
+        tenantId: ctx.tenantId,
+        pageId: input.id,
         document: targetVer.document,
-      }, { tolerant: true });
-      await syncDocumentMediaUsages(tx, ctx, {
-        ownerType: "page",
-        ownerId: input.id,
-        field: "draft",
-        document: targetVer.document,
-      }, { tolerant: true });
+        createdBy: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        note: `Restored from ${targetVer.createdAt.toISOString()}`,
+      })
+      .returning({ id: schema.pageVersions.id });
+    if (!restored) throw new Error("Failed to create the restored version");
+
+    // Restoring history must not fail because a file was trashed or deleted since: that content was valid when saved.
+    for (const field of ["published", "draft"] as const) {
+      await syncDocumentMediaUsages(tx, ctx, { ownerType: "page", ownerId: input.id, field, document: targetVer.document }, { tolerant: true });
     }
 
     const updateQuery = tx
       .update(schema.pages)
       .set({
-        publishedVersionId: input.targetVersionId,
-        draftVersionId: input.targetVersionId,
+        publishedVersionId: restored.id,
+        draftVersionId: restored.id,
         status: "published",
         updatedAt: new Date(),
       })
@@ -1197,12 +1246,22 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
     const rows = typeof updateQuery.returning === "function"
       ? await updateQuery.returning()
       : await updateQuery;
-    return Array.isArray(rows) ? rows[0] : undefined;
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "page.restored",
+      targetType: "page",
+      targetId: input.id,
+      diff: { fromVersionId: input.targetVersionId, newVersionId: restored.id },
+    });
+    return { updatedPage: Array.isArray(rows) ? rows[0] : undefined, restoredVersionId: restored.id };
   });
 
   await invalidatePageCache(rt, ctx, updatedPage);
 
-  return { success: true, publishedVersionId: input.targetVersionId };
+  return { success: true, publishedVersionId: restoredVersionId };
 }
 
 // --- Menu Services ---

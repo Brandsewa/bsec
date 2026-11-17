@@ -108,6 +108,7 @@ import {
   listMemberships,
   listMenus,
   listPages,
+  getPageVersion,
   listPageVersions,
   listThemeLibrary,
   activateTheme,
@@ -2356,6 +2357,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listPageVersions(context.rt, context.tenantCtx, input);
+        }),
+      version: os.admin.pages.version
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPageVersion(context.rt, context.tenantCtx, input);
         }),
       blockData: os.admin.pages.blockData
         .use(requireAdmin)
