@@ -12,7 +12,7 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 describe("page editor page switching", () => {
   it("remounts the editor for every page id", () => {
     expect(read("../src/routes/_editor/online-store/editor/$pageId.tsx")).toMatch(/<PageVisualEditor\s+key=\{pageId\}/);
-    expect(read("../src/components/page-editor/PageVisualEditor.tsx")).toMatch(/<BlockEditor\s+key=\{page\.id\}/);
+    expect(read("../src/components/page-editor/PageVisualEditor.tsx")).toMatch(/<BlockEditor\s+key=\{`\$\{page\.id\}:\$\{epoch\}`\}/);
   });
 
   it("does not render the editor with another page's data", () => {

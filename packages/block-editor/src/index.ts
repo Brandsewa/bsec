@@ -1,6 +1,7 @@
 export { BlockEditor, type BlockEditorProps } from "./BlockEditor.tsx";
 export { buildPuckConfig, blockAllowed, BLOCK_SPECS, RETIRED_FROM_PICKER, type EditorPageKind } from "./config.tsx";
 export { ThemeSettingsEditor, ThemeSettingsPanel, readThemeSettings, type ThemeSettingsPanelProps, type ThemeSettingsEditorProps, type ThemeTokens } from "./ThemeSettings.tsx";
+export type { HistoryHost, HistoryVersion } from "./HistoryPanel.tsx";
 export { BlocksPreview, type BlocksPreviewProps } from "./BlocksPreview.tsx";
 export { useFontLink } from "./fonts.ts";
 export { dataSignature } from "./signature.ts";

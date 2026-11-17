@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Puck, blocksPlugin, outlinePlugin, useGetPuck } from "@puckeditor/core";
+import { Puck, blocksPlugin, outlinePlugin, useGetPuck, type Plugin } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "@bs/blocks/blocks.css";
 import "@bs/blocks/marketing.css";
@@ -15,6 +15,7 @@ import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./Edi
 import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
 import { GeneralPanel, WebsiteThemePanel } from "./GeneralPanel.tsx";
 import { ROOT_ZONE, wrapDroppedWidget } from "./wrap-on-drop.ts";
+import { HistoryPanelContext, HistoryPanelFromContext, type HistoryHost, type HistoryPanelState } from "./HistoryPanel.tsx";
 
 export interface BlockEditorProps {
   title: string;
@@ -69,6 +70,8 @@ export interface BlockEditorProps {
   onFrameChange?: ((part: "header" | "footer", blocks: BlockInstance[]) => void) | undefined;
   /** A page switcher in the toolbar for hosts that edit several pages in one workspace. */
   pages?: { value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void } | undefined;
+  /** Gives the rail a History tab: saved versions of this page, a canvas preview of any of them, and restore (docs/PAGE-VERSION-HISTORY-PLAN.md). */
+  history?: HistoryHost | undefined;
 }
 
 /**
@@ -105,6 +108,16 @@ function GeneralIcon() {
     <svg {...railIcon}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg {...railIcon}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v5h5" />
+      <path d="M12 7v5l3 2" />
     </svg>
   );
 }
@@ -150,7 +163,7 @@ function PuckBridge({ onReady }: { onReady: (get: PuckGetter) => void }) {
   return null;
 }
 
-export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps, onFrameChange }: BlockEditorProps) {
+export function BlockEditor({ title, initialBlocks: initialFromProps, host, themeVars, onSaveDraft, onPublish, onExit, previewHref, onPreview, publishLabel, pageKind, fontsHref, onBlocksChange, externalDirty, height, storeName, themeTokens, onThemeTokensChange, themeSettingsDisabled, themeSettingsNote, exitLabel, pages, frame: frameFromProps, onFrameChange, history }: BlockEditorProps) {
   useFontLink(fontsHref);
   // The canvas owns the document once mounted: a refetch after saving must not reset it.
   const [initialBlocks] = useState(initialFromProps);
@@ -172,6 +185,12 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     [setPuckGetter],
   );
   const [dirty, setDirty] = useState(false);
+  // History preview: the canvas shows an old version while this is set. Edits, saves and publishes are refused meanwhile,
+  // so an old version can never be saved over the page by accident; leaving the preview puts the page's own data back.
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const previewRef = useRef<string | null>(null);
+  const snapshotRef = useRef<{ data: PuckData; dirty: boolean } | null>(null);
+  const skipDirtyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [renderData, setRenderData] = useState<EditorRenderData>({ data: {}, media: {} });
@@ -195,7 +214,12 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const themeEnabled = Boolean(themeTokens && onThemeTokensChange);
   const frameEditable = Boolean(onFrameChange);
   const website = pageKind === "marketing" || pageKind === "marketingHeader" || pageKind === "marketingFooter" || pageKind === "marketingBlogArchive" || pageKind === "marketingBlogPost";
-  const plugins = useMemo(
+  const historyEnabled = Boolean(history);
+  const withHistory = useCallback(
+    (list: Plugin[]): Plugin[] => (historyEnabled ? [...list, { name: "history", label: "History", icon: <HistoryIcon />, render: HistoryPanelFromContext }] : list),
+    [historyEnabled],
+  );
+  const basePlugins = useMemo<Plugin[] | undefined>(
     () =>
       website && frameEditable
         ? [
@@ -221,6 +245,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
         : undefined,
     [themeEnabled, frameEditable, website],
   );
+  const plugins = useMemo(() => (basePlugins ? withHistory(basePlugins) : historyEnabled ? withHistory([blocksPlugin(), outlinePlugin()]) : undefined), [basePlugins, withHistory, historyEnabled]);
   // Header and Footer tabs: a change goes to the host as the whole new block list for that part.
   const frameEdit = useMemo(
     () =>
@@ -294,8 +319,43 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     onExit();
   };
 
-  const save = useCallback(() => void run(() => onSaveDraft(blocksRef.current), "Draft saved"), [run, onSaveDraft]);
-  const publish = useCallback(() => void run(() => onPublish(blocksRef.current), "Published"), [run, onPublish]);
+  const refusePreview = useCallback(() => {
+    if (!previewRef.current) return false;
+    setStatus({ kind: "error", text: "You are previewing an old version. Go back to the current page first." });
+    return true;
+  }, []);
+  const save = useCallback(() => {
+    if (refusePreview()) return;
+    void run(() => onSaveDraft(blocksRef.current), "Draft saved");
+  }, [run, onSaveDraft, refusePreview]);
+  const publish = useCallback(() => {
+    if (refusePreview()) return;
+    void run(() => onPublish(blocksRef.current), "Published");
+  }, [run, onPublish, refusePreview]);
+  const previewVersion = useCallback((id: string, blocks: BlockInstance[]) => {
+    const api = puckRef.current?.();
+    if (!api) return;
+    if (!previewRef.current) snapshotRef.current = { data: api.appState.data as unknown as PuckData, dirty };
+    previewRef.current = id;
+    setPreviewingId(id);
+    api.dispatch({ type: "setData", data: documentToPuck({ version: 1, blocks }) as never, recordHistory: false });
+  }, [dirty]);
+  const exitPreview = useCallback(() => {
+    const api = puckRef.current?.();
+    const snap = snapshotRef.current;
+    if (api && snap) {
+      skipDirtyRef.current = true;
+      api.dispatch({ type: "setData", data: snap.data as never, recordHistory: false });
+      setDirty(snap.dirty);
+    }
+    snapshotRef.current = null;
+    previewRef.current = null;
+    setPreviewingId(null);
+  }, []);
+  const historyState = useMemo<HistoryPanelState | null>(
+    () => (history ? { host: history, dirty: dirty || Boolean(externalDirty), previewingId, preview: previewVersion, exitPreview } : null),
+    [history, dirty, externalDirty, previewingId, previewVersion, exitPreview],
+  );
   /** A fresh query value per click, so the browser and any edge cache fetch the page again (a hard refresh). */
   const fresh = (url: string) => {
     try {
@@ -307,6 +367,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     }
   };
   const preview = useCallback(async () => {
+    if (refusePreview()) return;
     if (onPreview) {
       const win = window.open("", "_blank");
       if (win) win.opener = null;
@@ -336,7 +397,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
     }
     const ok = !dirty || (await run(() => onSaveDraft(blocksRef.current), "Draft saved"));
     if (ok && previewHref) window.open(fresh(previewHref), "_blank", "noopener");
-  }, [dirty, externalDirty, run, onSaveDraft, onPreview, previewHref]);
+  }, [dirty, externalDirty, run, onSaveDraft, onPreview, previewHref, refusePreview]);
   const headerState: EditorHeaderState = {
     backLabel: exitLabel ?? "Exit",
     onBack: exit,
@@ -361,6 +422,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
       <FrameContext.Provider value={frame}>
       <FrameEditContext.Provider value={frameEdit}>
       <RenderDataContext.Provider value={{ ...renderData, storeName }}>
+      <HistoryPanelContext.Provider value={historyState}>
         <div style={{ height: height ?? "100vh" }}>
           <Puck
             config={config}
@@ -374,15 +436,16 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             {...(plugins ? { plugins } : {})}
             headerTitle={title}
             onChange={(d) => {
+              // The canvas is showing an old version: nothing it reports may reach the page's own blocks.
+              if (previewRef.current) return;
               const blocks = puckToDocument(d as unknown as PuckData).blocks;
               blocksRef.current = blocks;
               onBlocksChange?.(blocks);
-              setDirty(true);
+              if (skipDirtyRef.current) skipDirtyRef.current = false;
+              else setDirty(true);
               setSig(dataSignature(blocks));
             }}
-            onPublish={() => {
-              void run(() => onPublish(blocksRef.current), "Published");
-            }}
+            onPublish={publish}
             overrides={overrides as never}
             onAction={(action, newState) => {
               // A store widget dropped on the page itself arrives inside Section > Container (new drops only; moves, duplicates
@@ -398,6 +461,7 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
             }}
           />
         </div>
+      </HistoryPanelContext.Provider>
       </RenderDataContext.Provider>
       </FrameEditContext.Provider>
       </FrameContext.Provider>

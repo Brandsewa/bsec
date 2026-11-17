@@ -1126,10 +1126,19 @@ export const PageVersionItem = z.object({
   id: z.string().uuid(),
   note: z.string().nullable(),
   createdAt: z.string(),
+  /** Display name (or email) of the staff member who saved it; null for versions saved before authors were recorded. */
+  createdBy: z.string().nullable(),
+  blockCount: z.number().int(),
   isPublished: z.boolean(),
   isDraft: z.boolean(),
 });
 export type PageVersionItem = z.infer<typeof PageVersionItem>;
+
+export const PageVersionDetail = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string(),
+  blocks: z.array(z.unknown()),
+});
 
 export const MenuKind = z.enum(["navigation", "filter"]);
 export type MenuKind = z.infer<typeof MenuKind>;
@@ -3631,8 +3640,13 @@ export const adminContract = {
       .output(PageDetail),
     versions: oc
       .route({ method: "GET", path: "/admin/pages/{id}/versions" })
-      .input(z.object({ id: z.string().uuid() }))
+      .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(100).optional(), before: z.string().optional() }))
       .output(z.array(PageVersionItem)),
+    // One saved version's blocks, for previewing it before a restore.
+    version: oc
+      .route({ method: "GET", path: "/admin/pages/{id}/versions/{versionId}" })
+      .input(z.object({ id: z.string().uuid(), versionId: z.string().uuid() }))
+      .output(PageVersionDetail),
     // Resolves store data (products, collections) for data-driven blocks in the visual editor.
     blockData: oc
       .route({ method: "POST", path: "/admin/pages/block-data" })

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlockEditor, type BlockEditorHost, type EditorPageKind, type MediaAsset, type ThemeTokens } from "@bs/block-editor";
+import { BlockEditor, type BlockEditorHost, type EditorPageKind, type HistoryHost, type MediaAsset, type ThemeTokens } from "@bs/block-editor";
 import { googleFontsHref, type BlockInstance } from "@bs/blocks";
 import type { MediaKind } from "@bs/contracts";
 import { Button, EmptyState, PageContainer, PageSkeleton, toast } from "@bs/ui";
@@ -68,6 +68,31 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
       });
     },
   }), []);
+
+  // History tab (docs/PAGE-VERSION-HISTORY-PLAN.md). After a restore the page is read again and the editor is mounted afresh
+  // (it copies its blocks once), which the epoch in its key does.
+  const [epoch, setEpoch] = useState(0);
+  const pageType0 = pageQuery.data?.type;
+  const refetchPage = pageQuery.refetch;
+  const history = useMemo<HistoryHost>(
+    () => ({
+      list: (before) => client.admin.pages.versions({ id: pageId, limit: 30, ...(before ? { before } : {}) }),
+      read: async (versionId) => (await client.admin.pages.version({ id: pageId, versionId })).blocks as BlockInstance[],
+      restore: async (versionId) => {
+        await client.admin.pages.rollback({ id: pageId, targetVersionId: versionId });
+        setFrameEdits({});
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() }),
+          refetchPage(),
+        ]);
+        setEpoch((e) => e + 1);
+        toast.success("Version restored and published");
+      },
+      canRestore: canPublish,
+      restoreWarning: pageType0 === "header" || pageType0 === "footer" ? `This is the store's ${pageType0}: it appears on every page.` : undefined,
+    }),
+    [pageId, canPublish, pageType0, queryClient, refetchPage],
+  );
 
   const tokens = editedTokens ?? ((themeQuery.data?.tokens ?? null) as ThemeTokens | null);
   const themeVars = useMemo(
@@ -197,7 +222,8 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   return (
     <>
       <BlockEditor
-        key={page.id}
+        key={`${page.id}:${epoch}`}
+        history={history}
         title={`Editing: ${page.title}`}
         initialBlocks={page.blocks as BlockInstance[]}
         host={host}
