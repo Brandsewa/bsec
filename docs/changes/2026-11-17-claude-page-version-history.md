@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-17
 - **Agent:** claude
-- **Branch:** `feat/page-version-history` (not merged yet)
+- **Branch:** `feat/page-version-history` (merged in #284, 6bff0ea)
 - **Area:** admin, block-editor, domain, contracts, web
 - **Type:** feature
 - **Supersedes:** none
