@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-17
 - **Agent:** claude
-- **Branch:** `fix/editor-page-switch-stale-blocks` (not merged yet)
+- **Branch:** `fix/editor-page-switch-stale-blocks` (merged in #282, b6018b9)
 - **Area:** admin
 - **Type:** fix
 - **Supersedes:** none
