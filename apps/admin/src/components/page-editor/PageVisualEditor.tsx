@@ -153,7 +153,8 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   }
   // Branding/theme only style the canvas: wait for them to settle, but never block editing if they fail.
   const stylingSettled = !brandQuery.isPending && !themeQuery.isPending;
-  if (!pageQuery.data || !stylingSettled) return <PageSkeleton />;
+  // Never mount the editor on another page's data: it copies the blocks once and would save them into this page.
+  if (!pageQuery.data || pageQuery.data.id !== pageId || !stylingSettled) return <PageSkeleton />;
 
   const page = pageQuery.data;
   // "Preview" opens the store's own storefront on this page (after saving the draft). Draft changes appear there once
@@ -196,6 +197,7 @@ export default function PageVisualEditor({ pageId, canPublish, storeName }: { pa
   return (
     <>
       <BlockEditor
+        key={page.id}
         title={`Editing: ${page.title}`}
         initialBlocks={page.blocks as BlockInstance[]}
         host={host}

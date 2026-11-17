@@ -16,7 +16,9 @@ function EditorRoute() {
   const canPublish = store?.permissions.includes("theme.publish") ?? false;
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <PageVisualEditor pageId={pageId} canPublish={canPublish} storeName={store?.name} />
+      {/* key: the route component survives a page switch, and the editor copies its blocks once on mount. Without a fresh
+          instance per page it kept the previous page's blocks and saved them into the new page (Header and Home were overwritten). */}
+      <PageVisualEditor key={pageId} pageId={pageId} canPublish={canPublish} storeName={store?.name} />
     </Suspense>
   );
 }
