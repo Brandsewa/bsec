@@ -23,8 +23,10 @@ Open questions in the plan were not answered before the build, so the plan's pro
 ## Verification
 - Typecheck: contracts, domain, web, block-editor, admin pass. Lint: block-editor and admin have no errors (pre-existing warnings only).
 - Unit: `packages/block-editor/test/history-panel.test.tsx`.
-- Real-database tests written in `packages/domain/test/page-versions.int.test.ts` and `isolation.int.test.ts` (new `pages.version` case). **Not run locally**: Docker was not running on the dev machine, so these run first in CI.
-- NOT verified: a browser walkthrough of the tab (list, preview, back to current, restore, restore at 375 px). Needs the local stack or a preview deploy.
+- Real-database tests in `packages/domain/test/page-versions.int.test.ts` (6) and `isolation.int.test.ts` (new `pages.version` case) were run locally against Postgres once Docker was started: `page-versions`, `isolation`, `media-document-usages` and `themes` suites pass (1873 tests).
+- Browser walkthrough done on the local stack (real Postgres, seeded demo store, "About us" page), read through the DOM because screenshots timed out with the window hidden: the History tab lists versions with author, block count and Live marker; previewing shows the old version, disables Save draft and a click on Publish is refused with "You are previewing an old version" (Publish and Preview stay enabled, the guard is in the handlers); Back to current returns the canvas to the page's own blocks; restore asks for confirmation, creates a new "Restored" version by the signed-in owner and keeps the old ones; restoring the earlier version again undoes it.
+- At 375 px the version list fits with no horizontal scroll, but the History button in the editor's side rail sits off-screen (x=462), so on a phone it is not tappable. Likely how the editor lays out the rail at that width; not fixed here.
+- NOT tested: editing then previewing (dirty snapshot), "Preview on store" during a preview, many versions (paging in the UI), the Header/Footer restore warning, a restore by a user without `theme.publish`.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (API list, theme flow paragraph)
@@ -34,7 +36,8 @@ Open questions in the plan were not answered before the build, so the plan's pro
 
 ## Follow-ups and open questions
 - Block-level diff in the confirm step; version labels; retention (all open in the plan, section 7).
-- Walk through the tab in a browser before relying on it.
+- Make the History rail button reachable at phone width (see Verification).
+- Cover the untested cases listed under Verification.
 
 ## Definition of done
-No secrets or generated files; real-DB tests added but not yet run (CI will); browser check outstanding.
+No secrets or generated files; real-DB tests added and run locally; browser walkthrough done at desktop width, phone-width rail access open.
