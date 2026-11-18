@@ -12,6 +12,9 @@ const RequestQuoteDialog = dynamic(() => import("./RequestQuoteDialog.tsx").then
 import { ShareButton } from "./ShareButton.tsx";
 import { buyModel } from "@/lib/buy-model.ts";
 
+// Only a store that picks the Cards style loads this chunk; the product page's initial JS stays under its budget.
+const VariantCards = dynamic(() => import("./VariantCards.tsx").then((m) => m.VariantCards));
+
 /** Formats minor units into the store currency format (defaults to INR) */
 export function formatInr(paise: number, currency = "INR"): string {
   return formatMinor(paise, currency, currency === "INR" ? "en-IN" : "en-US");
@@ -32,7 +35,7 @@ interface BuyState {
 }
 const BuyContext = createContext<BuyState | null>(null);
 
-function useBuy(): BuyState {
+export function useBuy(): BuyState {
   const ctx = useContext(BuyContext);
   if (!ctx) throw new Error("Product buy parts must be inside ProductBuyProvider");
   return ctx;
@@ -88,7 +91,10 @@ export function SkuLine({ className = "" }: { className?: string }) {
 }
 
 /** The product's options (size, colour...) as small pills, plain buttons or dropdowns. Combinations with nothing in stock look struck through. */
-export function VariantOptions({ style = "pills" }: { style?: "pills" | "buttons" | "dropdown" | undefined }) {
+export type { VariantCardStyle } from "./VariantCards.tsx";
+import type { VariantCardStyle } from "./VariantCards.tsx";
+
+export function VariantOptions({ style = "pills", card }: { style?: "pills" | "buttons" | "dropdown" | "cards" | undefined; card?: VariantCardStyle | undefined }) {
   const { options, variants, selectedOptions, pick } = useBuy();
   if (options.length === 0) return null;
 
@@ -116,6 +122,8 @@ export function VariantOptions({ style = "pills" }: { style?: "pills" | "buttons
                 </option>
               ))}
             </select>
+          ) : style === "cards" ? (
+            <VariantCards optionName={opt.name} values={opt.values} card={card} />
           ) : (
             <div className="flex flex-wrap gap-2" role="group" aria-label={opt.name}>
               {opt.values.map((val) => {

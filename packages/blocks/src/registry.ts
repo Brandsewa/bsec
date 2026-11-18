@@ -509,7 +509,7 @@ export const ProductDetailSchema = z.object({
   thumbPosition: z.enum(["bottom", "left", "right"]).default("bottom"),
   /** The short description stops after two lines with a "Read more" link that opens the full description in a popup. */
   showReadMore: z.boolean().default(false),
-  variantStyle: z.enum(["buttons", "pills", "dropdown"]).default("buttons"),
+  variantStyle: z.enum(["buttons", "pills", "dropdown", "cards"]).default("buttons"),
   /** Small print under the price, e.g. "Tax and shipping calculated at checkout." Empty hides it. */
   priceNote: z.string().max(80).default(""),
   showBuyNow: z.boolean().default(false),
@@ -519,6 +519,12 @@ export const ProductDetailSchema = z.object({
   addToCartText: hexColorSchema.optional(),
   buyNowBg: hexColorSchema.optional(),
   buyNowText: hexColorSchema.optional(),
+  /** Card style of the variant picker (variantStyle "cards"). Empty colours use the theme's. */
+  showVariantBadge: z.boolean().default(true),
+  variantCardBg: hexColorSchema.optional(),
+  variantCardActive: hexColorSchema.optional(),
+  variantBadgeBg: hexColorSchema.optional(),
+  variantBadgeText: hexColorSchema.optional(),
   showPaymentImage: z.boolean().default(false),
   /** A picture from the media library, e.g. a row of accepted payment methods. Empty uses the built-in "secure payment" badge. */
   paymentImageMediaId: z.string().uuid().optional(),
@@ -575,6 +581,7 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     thumbPosition: "left",
     showReadMore: true,
     variantStyle: "pills",
+    showVariantBadge: true,
     priceNote: "Tax and shipping calculated at checkout.",
     showBuyNow: true,
     addToCartLabel: "Add to cart",

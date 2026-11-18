@@ -107,5 +107,6 @@
   "0111_order_tracking.sql": "12be4dd95dacf353bf75371a13b41f0dad01062f7cd26334c721fcb0ccc629ea",
   "0112_conversion_events.sql": "a50cfb52c44f182a3640db099faa6ea7b6c4b2cd09ec0fb86375171e8632d7ae",
   "0113_order_attribution.sql": "629ca2890244fc10de72af91c48f861aea81c3cdebca1d501e381fd09472c2fe",
-  "0114_hot_path_indexes.sql": "da3aa6632864ca0c88ea402a6e1b1d3cd6b94fcb24a12063bb67fdd110a1bd84"
+  "0114_hot_path_indexes.sql": "da3aa6632864ca0c88ea402a6e1b1d3cd6b94fcb24a12063bb67fdd110a1bd84",
+  "0115_platform_login_panel.sql": "7da92926b99f74c2210fa73e29e0da9d32c04789950b491e445a2a5fdb2e6681"
 }

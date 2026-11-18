@@ -310,7 +310,7 @@ export interface ProductDetailOptions {
   showSku?: boolean | undefined;
   thumbPosition?: "bottom" | "left" | "right" | undefined;
   showReadMore?: boolean | undefined;
-  variantStyle?: "buttons" | "pills" | "dropdown" | undefined;
+  variantStyle?: "buttons" | "pills" | "dropdown" | "cards" | undefined;
   priceNote?: string | undefined;
   showBuyNow?: boolean | undefined;
   addToCartLabel?: string | undefined;
@@ -319,6 +319,11 @@ export interface ProductDetailOptions {
   addToCartText?: string | undefined;
   buyNowBg?: string | undefined;
   buyNowText?: string | undefined;
+  showVariantBadge?: boolean | undefined;
+  variantCardBg?: string | undefined;
+  variantCardActive?: string | undefined;
+  variantBadgeBg?: string | undefined;
+  variantBadgeText?: string | undefined;
   showPaymentImage?: boolean | undefined;
   paymentImageMediaId?: string | undefined;
   paymentImageAlt?: string | undefined;

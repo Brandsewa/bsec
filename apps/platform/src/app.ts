@@ -132,6 +132,7 @@ import {
   duplicatePage,
   getPage,
   listPageVersions,
+  getPageVersion,
   publishPage,
   rollbackPage,
   savePlatformSiteDraft,
@@ -159,6 +160,8 @@ import {
   verifyExportSignature,
   getPlatformSystemData,
   updatePlatformSettings,
+  getLoginPanelForStaff,
+  updateLoginPanel,
   retryFailedJob,
   retryFailedWebhook,
   listThemeTemplates,
@@ -507,6 +510,7 @@ export const platformRouter = os.router({
       list: os.marketing.pages.list.use(siteRead).handler(({ context }) => listPages(context.content.rt, context.content.ctx)),
       get: os.marketing.pages.get.use(siteRead).handler(({ context, input }) => getPage(context.content.rt, context.content.ctx, input)),
       versions: os.marketing.pages.versions.use(siteRead).handler(({ context, input }) => listPageVersions(context.content.rt, context.content.ctx, input)),
+      version: os.marketing.pages.version.use(siteRead).handler(({ context, input }) => getPageVersion(context.content.rt, context.content.ctx, input)),
       blockData: os.marketing.pages.blockData.use(siteRead).handler(({ context, input }) => previewPlatformSiteRenderData(context.content.rt, context.content.ctx, input)),
       ensureTemplate: os.marketing.pages.ensureTemplate.use(siteWrite).handler(({ context, input }) => ensureThemeTemplatePage(context.content.rt, context.content.ctx, input)),
       ensureChrome: os.marketing.pages.ensureChrome.use(siteWrite).handler(({ context, input }) => ensurePlatformSiteChrome(context.content.rt, context.content.ctx, input)),
@@ -1018,6 +1022,12 @@ export const platformRouter = os.router({
     update: os.settings.update.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
       return updatePlatformSettings(context.rt, staffUserId, input, context.meta);
+    }),
+    getLoginPanel: os.settings.getLoginPanel.use(requirePlatformStaff).handler(async ({ context }) => {
+      return getLoginPanelForStaff(context.rt, actor(context));
+    }),
+    updateLoginPanel: os.settings.updateLoginPanel.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      return updateLoginPanel(context.rt, actor(context), input, context.meta);
     }),
   },
   branding: {

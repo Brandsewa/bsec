@@ -1,6 +1,8 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
+import { AuthCardSkeleton, Button, Field, FieldError, FieldGroup } from "@bs/ui";
+import { FloatingInput } from "../components/floating-input.tsx";
+import { SplitAuthShell } from "../components/split-auth-shell.tsx";
 import { fetchMe, requestPasswordReset } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -34,49 +36,40 @@ function ForgotPasswordPage() {
   }
 
   return (
-    <AuthShell
-      variant="platform"
-      brand={{ name: "Bs Commerce" }}
-      title={submitted ? "Check your email" : "Reset password"}
-      description={
-        submitted
-          ? `If an account exists for ${email}, we have sent a link to reset your password. The link will expire in 1 hour.`
-          : "Enter your email address and we will send you a link to reset your password."
-      }
-      footer={
-        <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-          Back to sign in
-        </Link>
-      }
+    <SplitAuthShell
+      {...(submitted
+        ? {
+            title: "Check your email",
+            description: `If an account exists for ${email}, we have sent a link to reset your password. The link will expire in 1 hour.`,
+          }
+        : {})}
     >
       {submitted ? (
-        <div className="pt-2 text-center">
-          <Link to="/login" className="text-sm font-medium text-primary hover:underline">
+        <div className="text-center text-sm">
+          <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline">
             Back to sign in
           </Link>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-5">
           <FieldGroup>
+            <div className="flex items-center justify-between text-sm">
+              <h1 className="font-semibold text-foreground">Reset your password</h1>
+              <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline">
+                Back to sign in
+              </Link>
+            </div>
             <Field>
-              <FieldLabel htmlFor="email">Email</FieldLabel>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="username"
-                required
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <FloatingInput id="email" label="Email" type="email" autoComplete="username" required value={email} onChange={setEmail} />
             </Field>
             {error ? <FieldError>{error}</FieldError> : null}
-            <Button type="submit" size="md" className="w-full" disabled={busy || !email} loading={busy}>
+            <Button type="submit" size="lg" className="h-14 w-full text-base" disabled={busy || !email} loading={busy}>
               {busy ? "Sending link…" : "Send reset link"}
             </Button>
+            <p className="text-sm text-muted-foreground">Enter your email address and we will send you a link to reset your password.</p>
           </FieldGroup>
         </form>
       )}
-    </AuthShell>
+    </SplitAuthShell>
   );
 }

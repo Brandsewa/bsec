@@ -1659,6 +1659,16 @@ export const platformIntegrationsContract = {
     ),
 };
 
+const loginPanelSchema = z.object({
+  heading: z.string(),
+  body: z.string(),
+  textColor: z.string(),
+  backgroundFrom: z.string(),
+  backgroundTo: z.string(),
+  imageUrl: z.string().nullable(),
+  verticalAlign: z.enum(["top", "middle", "bottom"]).default("middle"),
+});
+
 /** Platform-wide operational settings (Super Admin toggle). Security posture: owner-only updates. */
 export const platformSettingsContract = {
   get: oc
@@ -1680,6 +1690,9 @@ export const platformSettingsContract = {
       }),
     )
     .output(z.object({ ok: z.boolean(), requireStaffMfa: z.boolean() })),
+  /** The panel beside the admin sign-in form. Admins and owners edit it; the page reads it through a public endpoint. */
+  getLoginPanel: oc.route({ method: "GET", path: "/platform/settings/login-panel" }).output(loginPanelSchema.extend({ explicit: z.boolean() })),
+  updateLoginPanel: oc.route({ method: "POST", path: "/platform/settings/login-panel" }).input(loginPanelSchema).output(loginPanelSchema),
 };
 
 const BrandAssetSchema = z.object({

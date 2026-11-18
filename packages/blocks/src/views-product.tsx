@@ -68,7 +68,7 @@ export function ProductDetailSample({ props, ctx }: BlockRenderArgs<ProductDetai
         {props.showReadMore ? <span className="bsb-pd-more">Read more</span> : null}
       </div>
     ) : null,
-    options: <SampleOptions style={props.variantStyle} />,
+    options: <SampleOptions style={props.variantStyle} card={{ showBadge: props.showVariantBadge, bg: props.variantCardBg, active: props.variantCardActive, badgeBg: props.variantBadgeBg, badgeText: props.variantBadgeText }} />,
     price: <SamplePrice note={props.priceNote} />,
     actions: (
       <div className="bsb-pd-actions">
