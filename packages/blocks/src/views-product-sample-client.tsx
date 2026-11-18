@@ -29,7 +29,15 @@ function useSample() {
   return useContext(Ctx) ?? { index: 0, setIndex: () => undefined };
 }
 
-export function SampleOptions({ style }: { style: "pills" | "buttons" | "dropdown" }) {
+export interface SampleCardStyle {
+  showBadge?: boolean | undefined;
+  bg?: string | undefined;
+  active?: string | undefined;
+  badgeBg?: string | undefined;
+  badgeText?: string | undefined;
+}
+
+export function SampleOptions({ style, card }: { style: "pills" | "buttons" | "dropdown" | "cards"; card?: SampleCardStyle | undefined }) {
   const { index, setIndex } = useSample();
   return (
     <div className="bsb-pd-opt">
@@ -44,6 +52,35 @@ export function SampleOptions({ style }: { style: "pills" | "buttons" | "dropdow
             </option>
           ))}
         </select>
+      ) : style === "cards" ? (
+        <div className="bsb-pd-cards" role="group" aria-label="Size">
+          {SAMPLE_VARIANTS.map((v, i) => (
+            <button
+              key={v.label}
+              type="button"
+              aria-pressed={i === index}
+              onClick={() => setIndex(i)}
+              className={cx("bsb-pd-card", i === index && "bsb-pd-card-on")}
+              style={{
+                ...(card?.bg ? { background: card.bg } : null),
+                ...(i === index && card?.active ? { borderColor: card.active, boxShadow: `0 0 0 1px ${card.active}` } : null),
+              }}
+            >
+              {card?.showBadge === false ? null : (
+                <span className="bsb-pd-card-save" style={{ ...(card?.badgeBg ? { background: card.badgeBg } : null), ...(card?.badgeText ? { color: card.badgeText } : null) }}>
+                  Save {Math.round(((v.compareAt - v.price) / v.compareAt) * 100)}%
+                </span>
+              )}
+              <span className="bsb-pd-card-img" aria-hidden="true" />
+              <span className="bsb-pd-card-body">
+                <strong>{v.label}</strong>
+                <span>
+                  {money(v.price)} <s className="bsb-muted">{money(v.compareAt)}</s>
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="bsb-pd-opt-row">
           {SAMPLE_VARIANTS.map((v, i) => (

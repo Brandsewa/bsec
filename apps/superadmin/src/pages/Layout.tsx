@@ -24,6 +24,7 @@ import {
   Menu,
   Palette,
   Layers,
+  LogIn,
   LogOut,
   Mail,
   MessageSquare,
@@ -113,6 +114,7 @@ const navGroups: NavGroup[] = [
     label: "Administration",
     items: [
       { label: "Platform Staff", href: "/staff", icon: UserCheck },
+      { label: "Sign-in page", href: "/login-page", icon: LogIn },
       { label: "Branding", href: "/branding", icon: Palette },
       { label: "Audit Log", href: "/audit", icon: FileSpreadsheet },
     ],

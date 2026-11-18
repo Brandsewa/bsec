@@ -1,7 +1,8 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { AuthCardSkeleton, AuthShell, Button, buttonVariants, Field, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
-import { PasswordInput } from "@bs/ui";
+import { AuthCardSkeleton, Button, buttonVariants, Field, FieldError, FieldGroup } from "@bs/ui";
+import { FloatingPassword } from "../components/floating-input.tsx";
+import { SplitAuthShell } from "../components/split-auth-shell.tsx";
 import { fetchMe, resetPassword } from "../lib/auth.ts";
 
 export const Route = createFileRoute("/reset-password")({
@@ -27,23 +28,18 @@ function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <AuthShell
-        variant="platform"
-        brand={{ name: "Bs Commerce" }}
-        title="Invalid or missing token"
-        description="This password reset link is invalid or has expired. Please request a new one."
-        footer={
-          <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-            Back to sign in
-          </Link>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <Link to="/forgot-password" className={buttonVariants({ size: "md", className: "w-full text-center" })}>
+      <SplitAuthShell title="Invalid or missing link" description="This password reset link is invalid or has expired. Please request a new one.">
+        <div className="space-y-5">
+          <Link to="/forgot-password" className={buttonVariants({ size: "lg", className: "h-14 w-full text-center text-base" })}>
             Request a new link
           </Link>
+          <div className="text-sm">
+            <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline">
+              Back to sign in
+            </Link>
+          </div>
         </div>
-      </AuthShell>
+      </SplitAuthShell>
     );
   }
 
@@ -77,70 +73,45 @@ function ResetPasswordPage() {
   }
 
   return (
-    <AuthShell
-      variant="platform"
-      brand={{ name: "Bs Commerce" }}
-      title={success ? "Password reset successful" : "Set new password"}
+    <SplitAuthShell
+      title={success ? "Password reset" : "Set a new password"}
       description={
         success
-          ? "Your password has been reset successfully. You can now sign in with your new credentials."
+          ? "Your password has been reset. You can now sign in with your new credentials."
           : "Choose a strong password with at least 10 characters."
-      }
-      footer={
-        <Link to="/login" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-          Back to sign in
-        </Link>
       }
     >
       {success ? (
-        <div className="pt-2">
-          <Button onClick={() => void navigate({ to: "/login" })} size="md" className="w-full">
-            Sign in
-          </Button>
-        </div>
+        <Button onClick={() => void navigate({ to: "/login" })} size="lg" className="h-14 w-full text-base">
+          Sign in
+        </Button>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-5">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="new-password">New password</FieldLabel>
-              <PasswordInput
-                id="new-password"
-                
-                autoComplete="new-password"
-                required
-                autoFocus
-                minLength={10}
-                maxLength={128}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <FloatingPassword id="new-password" label="New password" autoComplete="new-password" required value={newPassword} onChange={setNewPassword} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="confirm-password">Confirm new password</FieldLabel>
-              <PasswordInput
-                id="confirm-password"
-                
-                autoComplete="new-password"
-                required
-                minLength={10}
-                maxLength={128}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+              <FloatingPassword id="confirm-password" label="Confirm new password" autoComplete="new-password" required value={confirmPassword} onChange={setConfirmPassword} />
             </Field>
             {error ? <FieldError>{error}</FieldError> : null}
             {error && error.includes("expired") ? (
-              <Link to="/forgot-password" className={buttonVariants({ variant: "outline", size: "md", className: "w-full text-center" })}>
+              <Link to="/forgot-password" className={buttonVariants({ variant: "outline", size: "lg", className: "h-14 w-full text-center text-base" })}>
                 Request a new link
               </Link>
             ) : (
-              <Button type="submit" size="md" className="w-full" disabled={busy || !newPassword || !confirmPassword} loading={busy}>
+              <Button type="submit" size="lg" className="h-14 w-full text-base" disabled={busy || !newPassword || !confirmPassword} loading={busy}>
                 {busy ? "Resetting password…" : "Reset password"}
               </Button>
             )}
+            <div className="text-sm">
+              <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline">
+                Back to sign in
+              </Link>
+            </div>
           </FieldGroup>
         </form>
       )}
-    </AuthShell>
+    </SplitAuthShell>
   );
 }

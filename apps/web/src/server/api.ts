@@ -427,6 +427,7 @@ import {
   getBlogSettings,
   updateBlogSettings,
   getPublicGoogleSignin,
+  getPublicLoginPanel,
   getStoreGoogleSignin,
   setStoreGoogleClientId,
   updateStoreGoogleSignin,
@@ -3877,6 +3878,12 @@ api.use("*", async (c, next) => {
 api.get("/public/google-signin", async (c) => {
   const cfg = await getPublicGoogleSignin(server().rt._db.db);
   return c.json(cfg, 200, { "cache-control": "no-store" });
+});
+
+/** Public content for the panel beside the admin sign-in form (text, colours, picture). */
+api.get("/public/login-panel", async (c) => {
+  const panel = await getPublicLoginPanel(server().rt._db.db);
+  return c.json(panel, 200, { "cache-control": "public, max-age=60" });
 });
 
 api.all("/auth/*", async (c) => {

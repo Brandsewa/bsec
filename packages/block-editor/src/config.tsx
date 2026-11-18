@@ -357,7 +357,12 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         fields: {
           galleryPosition: select("Images side", { left: "Left", right: "Right" }),
           thumbPosition: select("Thumbnails", { bottom: "Below the picture", left: "Left of the picture", right: "Right of the picture" }),
-          variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns" }),
+          variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns", cards: "Cards (picture, price, saving)" }),
+          showVariantBadge: toggle("Cards: show the Save % badge") as Field,
+          variantCardBg: colorField("Cards: background colour") as Field,
+          variantCardActive: colorField("Cards: selected highlight colour") as Field,
+          variantBadgeBg: colorField("Cards: badge colour") as Field,
+          variantBadgeText: colorField("Cards: badge text colour") as Field,
           stickyBuyBox: toggle("Keep buy box in view while scrolling") as Field,
         },
       },

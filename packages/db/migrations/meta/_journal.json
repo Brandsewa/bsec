@@ -764,6 +764,13 @@
       "when": 1794765393825,
       "tag": "0114_hot_path_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1794765500000,
+      "tag": "0115_platform_login_panel",
+      "breakpoints": true
     }
   ]
 }

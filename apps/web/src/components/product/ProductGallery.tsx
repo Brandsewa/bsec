@@ -2,6 +2,7 @@
 
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { StorefrontMedia } from "@bs/domain";
 // Subpath import: this is a client component. The package barrel would put every block, zod schema and view into the
 // browser bundle (the /products/[slug] budget in perf-budget-bundle.int.test.ts is 100 KB gzipped).
@@ -29,12 +30,19 @@ function Chevron({ d, className = "h-4 w-4" }: { d: string; className?: string }
   );
 }
 
+/** PNG, WebP, GIF and SVG can have transparent areas; a placeholder colour behind them would show through (it is black for them). */
+const mayBeTransparent = (url: string | undefined) => /\.(png|webp|gif|svg)(\?|#|$)/i.test(url ?? "");
+
 const ROUND_BUTTON =
   "inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/95 text-foreground shadow-md ring-1 ring-black/5 transition hover:bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40";
 
 export function ProductGallery({ media, title, thumbPosition = "bottom" }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // The dominant colour is only a loading placeholder. A transparent picture has a black "dominant" colour, so it must go
+  // once the picture is there, or the transparency shows black.
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const mainImg = useRef<HTMLImageElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const touchX = useRef<number | null>(null);
 
@@ -71,6 +79,11 @@ export function ProductGallery({ media, title, thumbPosition = "bottom" }: Produ
       : null,
     { sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 600px" },
   );
+
+  const mainSrc = imgInfo.src;
+  useEffect(() => {
+    if (mainImg.current?.complete && mainImg.current.naturalWidth > 0) setLoadedSrc(mainSrc);
+  }, [mainSrc]);
 
   if (count === 0) {
     return (
@@ -112,7 +125,6 @@ export function ProductGallery({ media, title, thumbPosition = "bottom" }: Produ
               className={`relative h-[4.5rem] w-[4.5rem] flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all lg:h-20 lg:w-20 ${
                 isSelected ? "border-primary ring-2 ring-primary/20" : "border-border/60 opacity-80 hover:border-border hover:opacity-100"
               }`}
-              style={{ backgroundColor: thumbInfo.dominantColor ?? undefined }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={thumbInfo.src} srcSet={thumbInfo.srcSet} alt="" loading="lazy" style={{ objectPosition: thumbInfo.objectPosition }} className="h-full w-full object-cover" />
@@ -171,7 +183,7 @@ export function ProductGallery({ media, title, thumbPosition = "bottom" }: Produ
       <div className="relative min-w-0 flex-1">
         <div
           className="group relative aspect-square w-full overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs"
-          style={{ backgroundColor: imgInfo.dominantColor ?? undefined }}
+          style={{ backgroundColor: loadedSrc === mainSrc || mayBeTransparent(activeItem?.url) ? undefined : (imgInfo.dominantColor ?? undefined) }}
           onTouchStart={(e) => {
             touchX.current = e.touches[0]?.clientX ?? null;
           }}
@@ -191,6 +203,8 @@ export function ProductGallery({ media, title, thumbPosition = "bottom" }: Produ
             <button type="button" onClick={() => setLightbox(true)} aria-label="Open larger picture" aria-haspopup="dialog" className="block h-full w-full cursor-zoom-in">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
+                ref={mainImg}
+                onLoad={() => setLoadedSrc(mainSrc)}
                 src={imgInfo.src}
                 srcSet={imgInfo.srcSet}
                 sizes={imgInfo.sizes}
@@ -279,13 +293,15 @@ function Lightbox({ items, index, title, onIndex, onClose }: { items: Storefront
     }
   }, [index, items, count]);
 
-  return (
+  // Rendered on <body>: inside the page a transformed or sticky ancestor becomes the "fixed" box, which put the viewer
+  // under the header with the product details showing through.
+  return createPortal(
     <div
       ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-label={`${title}, enlarged pictures`}
-      className="fixed inset-0 z-[80] flex flex-col bg-black/90"
+      className="fixed inset-0 z-[1000] flex h-dvh w-screen flex-col bg-black/90"
       onTouchStart={(e) => {
         touchX.current = e.touches[0]?.clientX ?? null;
       }}
@@ -325,6 +341,7 @@ function Lightbox({ items, index, title, onIndex, onClose }: { items: Storefront
           </>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

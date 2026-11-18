@@ -198,6 +198,8 @@ export const exportFiles = pgTable("export_files", {
 export const platformSettings = pgTable("platform_settings", {
   id: text("id").primaryKey().default("default"), // Enforces single row
   requireStaffMfa: boolean("require_staff_mfa").notNull().default(true),
+  /** Content panel beside the admin sign-in form (validated in domain/platform/login-panel.ts). NULL = built-in default. */
+  loginPanel: jsonb("login_panel"),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

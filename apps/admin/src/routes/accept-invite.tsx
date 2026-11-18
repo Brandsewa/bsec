@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageSkeleton } from "@bs/ui";
-import { PasswordInput } from "@bs/ui";
 import { Button } from "@bs/ui";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@bs/ui";
-import { Input } from "@bs/ui";
+import { Field, FieldDescription, FieldError, FieldGroup } from "@bs/ui";
+import { FloatingInput, FloatingPassword } from "../components/floating-input.tsx";
+import { SplitAuthShell } from "../components/split-auth-shell.tsx";
 import { client } from "../lib/orpc.ts";
 import { errorMessage } from "../lib/errors.ts";
 import { apiBase } from "../lib/config.ts";
@@ -96,7 +96,7 @@ export function AcceptInvitePage() {
 
   return (
     <Shell title="Join the store">
-      <form onSubmit={onSubmit}>
+      <form onSubmit={onSubmit} className="space-y-5">
         <FieldGroup>
           {!showPassword ? (
             <FieldDescription>
@@ -105,22 +105,19 @@ export function AcceptInvitePage() {
           ) : (
             <>
               <Field>
-                <FieldLabel htmlFor="name">Your name</FieldLabel>
-                <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+                <FloatingInput id="name" label="Your name" required value={name} onChange={setName} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="password">Choose a password</FieldLabel>
-                <PasswordInput id="password" autoComplete="new-password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <FloatingPassword id="password" label="Choose a password" autoComplete="new-password" required value={password} onChange={setPassword} />
                 <FieldDescription>At least 10 characters.</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="confirm">Repeat password</FieldLabel>
-                <PasswordInput id="confirm" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                <FloatingPassword id="confirm" label="Repeat password" autoComplete="new-password" required value={confirm} onChange={setConfirm} />
               </Field>
             </>
           )}
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" size="lg" disabled={busy}>
+          <Button type="submit" size="lg" className="h-14 w-full text-base" disabled={busy}>
             {busy ? "Working…" : !showPassword ? "Accept invitation" : "Create account and join"}
           </Button>
           {store ? (
@@ -135,12 +132,5 @@ export function AcceptInvitePage() {
 }
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="grid min-h-dvh place-items-center bg-canvas p-4">
-      <div className="grid w-full max-w-sm gap-4 rounded-lg border border-border bg-background p-6 shadow-sm">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {children}
-      </div>
-    </div>
-  );
+  return <SplitAuthShell title={title}>{children}</SplitAuthShell>;
 }

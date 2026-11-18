@@ -50,6 +50,7 @@ import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
 import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
+import { LoginPageSettings } from "./pages/LoginPageSettings.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { StorageSettings } from "./pages/StorageSettings.tsx";
 import { Branding } from "./pages/Branding.tsx";
@@ -502,6 +503,13 @@ const staffRoute = createRoute({
   ),
 });
 
+const loginPageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/login-page",
+  component: LoginPageSettings,
+  pendingComponent: () => <PageSkeleton />,
+});
+
 const auditRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/audit",
@@ -733,6 +741,7 @@ export const routeTree = rootRoute.addChildren([
     quotasRoute,
     featuresRoute,
     staffRoute,
+    loginPageRoute,
     auditRoute,
     emailRoute,
     storageRoute,
