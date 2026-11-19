@@ -1786,7 +1786,7 @@
 .bsb-pd-card { position: relative; display: flex; align-items: center; gap: 0.5rem; scroll-snap-align: start; text-align: left; font: inherit; cursor: pointer; border: 1px solid var(--b); border-radius: var(--r); background: var(--s); padding: 0.35rem; }
 .bsb-pd-card-on { border-color: var(--p); box-shadow: 0 0 0 1px var(--p); }
 .bsb-pd-card-img { flex: none; width: 2.25rem; height: 2.25rem; border-radius: calc(var(--r) - 4px); background: var(--b); }
-.bsb-pd-card-body { display: flex; flex-direction: column; gap: 0; font-size: 0.72rem; line-height: 1.25; min-width: 0; }
+.bsb-pd-card-body { display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem; line-height: 1.25; min-width: 0; }
 .bsb-pd-card-save { position: absolute; top: -0.55rem; right: 0.5rem; background: #bbf7d0; color: #14532d; font-size: 0.65rem; font-weight: 600; padding: 0.05rem 0.4rem; border-radius: 999px; }
 @media (min-width: 640px) { .bsb-pd-cards { grid-auto-columns: calc(33.333% - 0.34rem); } }
 .bsb-pd-opt-on { background: var(--p); color: var(--pf); border-color: var(--p); }

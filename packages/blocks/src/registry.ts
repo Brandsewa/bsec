@@ -521,6 +521,8 @@ export const ProductDetailSchema = z.object({
   buyNowText: hexColorSchema.optional(),
   /** Card style of the variant picker (variantStyle "cards"). Empty colours use the theme's. */
   showVariantBadge: z.boolean().default(true),
+  /** Cards: show the price (and compare-at price) under the name; off shows the name only. */
+  showVariantPrice: z.boolean().default(true),
   variantCardBg: hexColorSchema.optional(),
   variantCardActive: hexColorSchema.optional(),
   variantBadgeBg: hexColorSchema.optional(),
@@ -582,6 +584,7 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     showReadMore: true,
     variantStyle: "pills",
     showVariantBadge: true,
+    showVariantPrice: true,
     priceNote: "Tax and shipping calculated at checkout.",
     showBuyNow: true,
     addToCartLabel: "Add to cart",

@@ -34,6 +34,11 @@ describe("product page settings", () => {
     });
   });
 
+  it("variant cards show prices and the badge unless switched off", () => {
+    expect(parse("ProductDetail", {})).toMatchObject({ showVariantPrice: true, showVariantBadge: true });
+    expect(parse("ProductDetail", { variantStyle: "cards", showVariantPrice: false })).toMatchObject({ variantStyle: "cards", showVariantPrice: false });
+  });
+
   it("accepts the choices and rejects bad colours, hours, icons and too many cards", () => {
     expect(parse("ProductDetail", { thumbPosition: "right", variantStyle: "dropdown", addToCartBg: "#1f3a5f", cutoffHour: 17, usps: [{ icon: "truck", text: "Free delivery" }] })).toMatchObject({
       thumbPosition: "right",

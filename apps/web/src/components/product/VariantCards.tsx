@@ -7,6 +7,8 @@ import { useBuy } from "./VariantSelector.tsx";
 
 export interface VariantCardStyle {
   /** Show the "Save N%" badge on discounted cards (default true). */
+  /** Show the price and compare-at price under the name (default true). */
+  showPrice?: boolean | undefined;
   showBadge?: boolean | undefined;
   /** Card background, selected border/ring and badge colours; empty uses the theme's. */
   bg?: string | undefined;
@@ -96,9 +98,9 @@ export function VariantCards({ optionName, values, card }: { optionName: string;
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={img.src} srcSet={img.srcSet} sizes="64px" alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-md object-cover" />
               ) : null}
-              <span className="flex min-w-0 flex-col">
+              <span className="flex min-w-0 flex-col gap-[3px]">
                 <span className={`truncate text-[13px] font-semibold leading-tight ${available ? "" : "line-through"}`}>{val}</span>
-                {v && !product.priceOnRequest ? (
+                {v && !product.priceOnRequest && card?.showPrice !== false ? (
                   <span className="flex flex-wrap items-baseline gap-x-1.5 text-[11px] leading-tight">
                     <span className="font-semibold">{money(v.price)}</span>
                     {compare ? <span className="text-muted-foreground line-through">{money(compare)}</span> : null}

@@ -30,6 +30,7 @@ function useSample() {
 }
 
 export interface SampleCardStyle {
+  showPrice?: boolean | undefined;
   showBadge?: boolean | undefined;
   bg?: string | undefined;
   active?: string | undefined;
@@ -74,9 +75,11 @@ export function SampleOptions({ style, card }: { style: "pills" | "buttons" | "d
               <span className="bsb-pd-card-img" aria-hidden="true" />
               <span className="bsb-pd-card-body">
                 <strong>{v.label}</strong>
-                <span>
-                  {money(v.price)} <s className="bsb-muted">{money(v.compareAt)}</s>
-                </span>
+                {card?.showPrice === false ? null : (
+                  <span>
+                    {money(v.price)} <s className="bsb-muted">{money(v.compareAt)}</s>
+                  </span>
+                )}
               </span>
             </button>
           ))}
