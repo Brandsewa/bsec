@@ -43,7 +43,7 @@ export function SampleOptions({ style, card }: { style: "pills" | "buttons" | "d
   return (
     <div className="bsb-pd-opt">
       <span className="bsb-pd-opt-label">
-        Size: <span className="bsb-muted">{SAMPLE_VARIANTS[index]?.label}</span>
+        Size:
       </span>
       {style === "dropdown" ? (
         <select className="bsb-pd-select" aria-label="Size" value={index} onChange={(e) => setIndex(Number((e.target as unknown as { value: string }).value))}>

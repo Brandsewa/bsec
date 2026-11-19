@@ -20,7 +20,7 @@ export interface VariantCardStyle {
 /**
  * One card per value of an option: the variant's own picture when it has one, the value, its price, the compare-at price and a
  * "Save N%" badge. The card shows the first variant that has this value and fits the other chosen options (in stock first).
- * Two cards fit the row on a phone, three on a tablet and on desktop; more become a swipe row, with arrows on
+ * Two cards fit the row on a phone and on desktop, three on a tablet; more become a swipe row, with arrows on
  * desktop that appear on hover or keyboard focus.
  */
 export function VariantCards({ optionName, values, card }: { optionName: string; values: string[]; card?: VariantCardStyle | undefined }) {
@@ -62,7 +62,7 @@ export function VariantCards({ optionName, values, card }: { optionName: string;
         onScroll={measure}
         role="group"
         aria-label={optionName}
-        className="-mx-0.5 grid auto-cols-[calc(50%-0.25rem)] grid-flow-col gap-2 overflow-x-auto scroll-smooth px-0.5 pb-0.5 pt-2.5 [scrollbar-width:none] snap-x snap-mandatory sm:auto-cols-[calc(33.333%-0.34rem)] [&::-webkit-scrollbar]:hidden"
+        className="-mx-0.5 grid auto-cols-[calc(50%-0.25rem)] grid-flow-col gap-2 overflow-x-auto scroll-smooth px-0.5 pb-0.5 pt-2.5 [scrollbar-width:none] snap-x snap-mandatory sm:max-lg:auto-cols-[calc(33.333%-0.34rem)] [&::-webkit-scrollbar]:hidden"
       >
         {values.map((val) => {
           const fits = variants.filter((v) => (v.optionValues as Record<string, string> | null)?.[optionName] === val && Object.entries(selectedOptions).every(([k, o]) => k === optionName || (v.optionValues as Record<string, string> | null)?.[k] === o));
@@ -96,7 +96,7 @@ export function VariantCards({ optionName, values, card }: { optionName: string;
               ) : null}
               {img ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={img.src} srcSet={img.srcSet} sizes="64px" alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+                <img src={img.src} srcSet={img.srcSet} sizes="64px" alt="" loading="lazy" className="h-7 w-7 shrink-0 rounded-md object-cover" />
               ) : null}
               <span className="flex min-w-0 flex-col gap-[3px]">
                 <span className={`truncate text-[13px] font-semibold leading-tight ${available ? "" : "line-through"}`}>{val}</span>
