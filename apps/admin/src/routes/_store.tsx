@@ -1,6 +1,7 @@
 import { useStorefrontUrl } from "../lib/storefront-url.ts";
 import { StoreNotifications } from "../components/notifications/StoreNotifications.tsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { loadRuttlForStore } from "../lib/ruttl.ts";
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 import {
@@ -179,6 +180,7 @@ function StoreShell() {
   const { me, store } = Route.useRouteContext();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const storefrontUrl = useStorefrontUrl();
+  useEffect(() => loadRuttlForStore(storefrontUrl), [storefrontUrl]);
   const canManageApps = (store?.permissions ?? []).includes("apps.manage");
   const appsQuery = useQuery({ ...orpc.admin.apps.list.queryOptions(), enabled: canManageApps, staleTime: 30_000 });
   const pinnedApps = (appsQuery.data ?? []).filter((a) => a.pinned && isAppOn(a) && appHref(a.key));
