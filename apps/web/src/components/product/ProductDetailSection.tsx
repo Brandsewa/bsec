@@ -122,7 +122,7 @@ export function ProductDetailSection({
     description: options.showDescription ? (
       <ProductDescription title={product.title} short={product.shortDescription?.trim() ?? ""} full={longDescription} clamp={options.showReadMore === true} />
     ) : null,
-    options: <VariantOptions style={options.variantStyle ?? "buttons"} card={{ showBadge: options.showVariantBadge, bg: options.variantCardBg, active: options.variantCardActive, badgeBg: options.variantBadgeBg, badgeText: options.variantBadgeText }} />,
+    options: <VariantOptions style={options.variantStyle ?? "buttons"} card={{ showPrice: options.showVariantPrice, showBadge: options.showVariantBadge, bg: options.variantCardBg, active: options.variantCardActive, badgeBg: options.variantBadgeBg, badgeText: options.variantBadgeText }} />,
     price: <PriceBlock note={options.priceNote} />,
     actions: (
       <>

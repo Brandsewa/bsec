@@ -320,6 +320,7 @@ export interface ProductDetailOptions {
   buyNowBg?: string | undefined;
   buyNowText?: string | undefined;
   showVariantBadge?: boolean | undefined;
+  showVariantPrice?: boolean | undefined;
   variantCardBg?: string | undefined;
   variantCardActive?: string | undefined;
   variantBadgeBg?: string | undefined;
