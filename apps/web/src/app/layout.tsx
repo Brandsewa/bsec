@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { RuttlWidget } from "@/components/RuttlWidget.tsx";
 import { cookies, headers } from "next/headers";
 import { cacheTag } from "next/cache";
 import { evaluateStorefrontAccess, brandLogoPair, getPublicPlatformBrand, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
@@ -117,9 +118,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // bcom.si and www.bcom.si are the platform's marketing site and signup, not a store: no store gate,
   // header, footer or "coming soon" screen. (Without this the page was always hidden behind "Opening Soon".)
   let isMarketing = false;
+  let marketingHost = "";
   try {
     const h = await headers();
-    isMarketing = isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"));
+    marketingHost = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+    isMarketing = isPlatformMarketingHost(marketingHost);
   } catch {
     // no request context (static build): treat as a store host, as before
   }
@@ -146,6 +149,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <WebThemeProvider always>
             <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement} brandLogo={brand?.explicit ? brandLogoPair(brand.tokens) : null}>{children}</SiteNavProvider>
           </WebThemeProvider>
+          <RuttlWidget host={marketingHost} />
         </body>
       </html>
     );
@@ -316,6 +320,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           </MiniCartConfigProvider>
           </MarketProvider>
         </WebThemeProvider>
+        <RuttlWidget host={requestHost} />
       </body>
     </html>
   );
