@@ -11,7 +11,7 @@
 The owner wants Ruttl (third-party visual bug reporting) on a fixed set of surfaces so the team can file bugs while reviewing: the platform site, the Super Admin, the brandsewa store with its customer and merchant dashboards. It must never appear on other tenants.
 
 ## What changed
-- `apps/web/src/components/RuttlWidget.tsx`: renders `<ruttl-widget>` plus the Ruttl script (`lazyOnload`) only when the request host is `bcom.si`, `www.bcom.si` or `brandsewa.bcom.si`. Used in both branches of `apps/web/src/app/layout.tsx` (marketing and store). The customer dashboard (`/account`) is part of the storefront, so it is covered.
+- `apps/web/src/components/RuttlWidget.tsx`: renders `<ruttl-widget>` plus the Ruttl script as a plain async `<script>` (not `next/script`, whose client code pushed the product page past its 50 KB JS budget in CI) only when the request host is `bcom.si`, `www.bcom.si` or `brandsewa.bcom.si`. Used in both branches of `apps/web/src/app/layout.tsx` (marketing and store). The customer dashboard (`/account`) is part of the storefront, so it is covered.
 - `apps/superadmin/src/lib/ruttl.ts`, called from `main.tsx`: loads only when the hostname is `superadmin.bcom.si`.
 - `apps/admin/src/lib/ruttl.ts`, called from `routes/_store.tsx`: the store admin is one app for every merchant, so it loads only when the active store's storefront URL host is `brandsewa.bcom.si`.
 - No env vars; the project id and host lists are constants (the id is public in the page HTML anyway).
