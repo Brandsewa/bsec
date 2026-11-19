@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-19
 - **Agent:** claude
-- **Branch:** `feat/ruttl-bug-widget`  (not merged yet)
+- **Branch:** `feat/ruttl-bug-widget`  (merged in #291, d0f39c5)
 - **Area:** web, admin, superadmin
 - **Type:** feature
 - **Supersedes:** none
