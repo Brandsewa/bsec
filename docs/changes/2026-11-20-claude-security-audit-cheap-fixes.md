@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `fix/security-audit-cheap-fixes` (not merged yet)
+- **Branch:** `fix/security-audit-cheap-fixes` (merged in #297, d28faf76)
 - **Area:** web, docs
 - **Type:** fix
 - **Supersedes:** none

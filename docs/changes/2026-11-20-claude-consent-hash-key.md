@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `fix/security-audit-followups` (not merged yet)
+- **Branch:** `fix/security-audit-followups` (merged in #298, 2ce72397)
 - **Area:** domain
 - **Type:** fix
 - **Supersedes:** none
