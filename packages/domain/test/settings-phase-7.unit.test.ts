@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { validatePolicyContent, type PolicyBlock } from "../src/policies/validator.ts";
 import { hasStarterPlaceholders, POLICY_STARTERS } from "../src/policies/starters.ts";
 import { hashConsentIp } from "../src/customers/consent.ts";
@@ -134,6 +134,31 @@ describe("Phase 7 Unit Tests", () => {
       const hashA = hashConsentIp(ip, tenantA, secret);
       const hashB = hashConsentIp(ip, tenantB, secret);
       expect(hashA).not.toBe(hashB);
+    });
+
+    describe("SEC-006: no fixed salt in production", () => {
+      afterEach(() => vi.unstubAllEnvs());
+      const tenant = "0199a099-0000-7000-8000-000000000001";
+
+      it("throws in production when no key is configured", () => {
+        vi.stubEnv("NODE_ENV", "production");
+        vi.stubEnv("TENANT_SECRETS_KEY", "");
+        vi.stubEnv("ENCRYPTION_KEY", "");
+        expect(() => hashConsentIp("203.0.113.195", tenant)).toThrow(/TENANT_SECRETS_KEY is required/);
+      });
+
+      it("works in production with the key from the environment", () => {
+        vi.stubEnv("NODE_ENV", "production");
+        vi.stubEnv("TENANT_SECRETS_KEY", "k".repeat(64));
+        expect(hashConsentIp("203.0.113.195", tenant)).toMatch(/^[a-f0-9]{64}$/);
+      });
+
+      it("keeps working without a key outside production (local runs, tests)", () => {
+        vi.stubEnv("NODE_ENV", "test");
+        vi.stubEnv("TENANT_SECRETS_KEY", "");
+        vi.stubEnv("ENCRYPTION_KEY", "");
+        expect(hashConsentIp("203.0.113.195", tenant)).toMatch(/^[a-f0-9]{64}$/);
+      });
     });
   });
 
