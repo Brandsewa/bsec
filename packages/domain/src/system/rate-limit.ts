@@ -1,5 +1,7 @@
 import { type Db } from "@bs/db";
+import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
+import { isCloudflareAddress } from "./cloudflare-ips.ts";
 
 export class RateLimitExceededError extends Error {
   readonly status = 429;
@@ -96,7 +98,10 @@ const DEFAULT_TIER_QUOTAS: Record<QuotaKey, { XS: number; S: number; M: number; 
  * Extracts verified client IP behind reverse proxy (PLAN §14 / M7).
  * - Never trusts the first X-Forwarded-For hop (which can be client-forged).
  * - Takes the last hop added by trusted reverse proxy (Caddy / Coolify).
- * - Reads CF-Connecting-IP ONLY if TRUST_CLOUDFLARE=true is explicitly set.
+ * - Reads CF-Connecting-IP ONLY if TRUST_CLOUDFLARE=true is set AND the request really came from Cloudflare: the last
+ *   X-Forwarded-For hop (the address Traefik saw connecting, which a client cannot forge) must be a Cloudflare edge
+ *   address. A caller who reaches the origin directly is believed by their own connecting address, never by a header
+ *   they typed (SEC-001).
  */
 export function getClientIp(
   headers: Headers | Record<string, string | string[] | undefined>,
@@ -111,25 +116,26 @@ export function getClientIp(
     return val ?? undefined;
   };
 
-  // 1. Guarded Cloudflare check: only trust CF-Connecting-IP when explicitly configured
-  if (process.env.TRUST_CLOUDFLARE === "true") {
-    const cfIp = getHeader("cf-connecting-ip");
-    if (cfIp && cfIp.trim()) {
-      return cfIp.trim();
+  const xForwardedFor = getHeader("x-forwarded-for");
+  const hops = xForwardedFor
+    ? xForwardedFor
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean)
+    : [];
+  const lastHop = hops[hops.length - 1];
+
+  // 1. Guarded Cloudflare check: only when configured, only from a Cloudflare peer, only a well-formed address
+  if (process.env.TRUST_CLOUDFLARE === "true" && lastHop && isCloudflareAddress(lastHop)) {
+    const cfIp = getHeader("cf-connecting-ip")?.trim();
+    if (cfIp && isIP(cfIp) !== 0) {
+      return cfIp;
     }
   }
 
-  // 2. Reverse proxy hop parsing: take the last untrusted hop
-  const xForwardedFor = getHeader("x-forwarded-for");
-  if (xForwardedFor) {
-    const hops = xForwardedFor
-      .split(",")
-      .map((h) => h.trim())
-      .filter(Boolean);
-    const lastHop = hops[hops.length - 1];
-    if (lastHop) {
-      return lastHop;
-    }
+  // 2. Reverse proxy hop parsing: take the last hop added by the trusted reverse proxy
+  if (lastHop) {
+    return lastHop;
   }
 
   // 3. Fallback to X-Real-IP
