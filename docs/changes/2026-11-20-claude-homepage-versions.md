@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `feat/homepage-versions`  (not merged yet)
+- **Branch:** `feat/homepage-versions`  (merged in #294, ba1192e)
 - **Area:** domain, contracts, web, admin
 - **Type:** feature
 - **Supersedes:** none
