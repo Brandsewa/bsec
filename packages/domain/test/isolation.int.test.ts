@@ -258,6 +258,7 @@ import {
   uploadMediaDirect,
   rollbackPage,
   duplicatePage,
+  activateHomePage,
   unpublishPage,
   savePageDraft,
   updateAdminDiscount,
@@ -1337,6 +1338,22 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         const p = await createPage(rt, ctx, { title: "To Unpublish", slug: `unpub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
         await publishPage(rt, ctx, { id: p.id });
         return await unpublishPage(rt, ctx, { id: p.id });
+      }
+      case "pages.activateHome": {
+        // This tenant has no home page row, so seed one homepage version directly, then make it active.
+        const versionId = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [v] = await tx
+            .insert(schema.pages)
+            .values({ tenantId: ctx.tenantId, title: "Home (Version 9)", slug: `home-version-${Date.now()}`, type: "home_variant", status: "draft" })
+            .returning({ id: schema.pages.id });
+          const [ver] = await tx
+            .insert(schema.pageVersions)
+            .values({ tenantId: ctx.tenantId, pageId: v!.id, document: { version: 1, blocks: [] } })
+            .returning({ id: schema.pageVersions.id });
+          await tx.update(schema.pages).set({ draftVersionId: ver!.id }).where(eq(schema.pages.id, v!.id));
+          return v!.id;
+        });
+        return await activateHomePage(rt, ctx, { id: versionId });
       }
       case "pages.duplicate": {
         const p = await createPage(rt, ctx, { title: "To Duplicate", slug: `dup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });

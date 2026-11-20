@@ -16,6 +16,7 @@ configureContentHost({
     menu: (handle) => `/online-store/menus/${handle}`,
     pageEditor: (id) => `/online-store/editor/${id}`,
   },
+  homeVersions: true,
   pagesIntro: "Manage informational and marketing pages on your store. Customize their layout and content with the visual editor.",
   proxyUploadUrl: () => `${apiBase()}/api/admin/media/upload`,
   uploadHeaders: () => {
