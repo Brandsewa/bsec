@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `fix/client-ip-cloudflare-peer` (not merged yet)
+- **Branch:** `fix/client-ip-cloudflare-peer` (merged in #299, d0551ab9)
 - **Area:** domain, docs
 - **Type:** fix
 - **Supersedes:** none
