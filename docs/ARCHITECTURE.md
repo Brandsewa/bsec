@@ -76,7 +76,7 @@ Production root domain is `bcom.si` (web, `admin.`, `platform.`, `superadmin.`, 
         bsec-migrate (one-shot before each deploy, app_owner)
 ```
 
-- **bsec-web** serves the storefront (server-rendered, Cache Components), the marketing/signup pages, the customer account, and the **Store API** (oRPC at `/api/rpc`, REST-ish routes under `/api/storefront`, Better Auth at `/api/auth`, webhooks at `/api/webhooks`).
+- **bsec-web** serves the storefront (server-rendered, Cache Components), the marketing/signup pages, the customer account, and the **Store API** (oRPC at `/api/rpc`, REST-ish routes under `/api/storefront`, Better Auth at `/api/auth`, webhooks at `/api/webhooks`; an unsigned or forged event gets 401 and is never stored or queued).
 - **bsec-admin** is a static SPA that talks to the Store API on `<root>` with cookies shared across `.bcom.si` (ADR-014 admin auth).
 - **bsec-platform** is the only service holding `BYPASSRLS` credentials. The Super Admin SPA talks to it. Its session cookie is host-only.
 - **bsec-worker** runs side effects (email, reservation expiry, sweeps) after a business transaction commits, via pg-boss (transactional outbox, ADR-006).

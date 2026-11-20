@@ -203,6 +203,12 @@ export async function POST(
       }
     }
 
+    // An unsigned or forged event is refused here and never stored or queued, so an attacker cannot grow
+    // webhook_inbox or the job queue (SEC-003). The per-IP limit above still throttles the attempts.
+    if (!signatureValid) {
+      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+    }
+
     // 5. Ingest into inbox (decoupled, returns immediately)
     const result = await receiveWebhook(
       rt._db.db,
