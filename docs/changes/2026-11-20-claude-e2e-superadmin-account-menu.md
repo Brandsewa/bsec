@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `fix/e2e-superadmin-no-banner`  (not merged yet)
+- **Branch:** `fix/e2e-superadmin-no-banner`  (merged in #295, 46bb7f6)
 - **Area:** e2e
 - **Type:** fix
 - **Supersedes:** none

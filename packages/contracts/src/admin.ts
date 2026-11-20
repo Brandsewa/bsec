@@ -1090,7 +1090,7 @@ export const PageItem = z.object({
   childCount: z.number().int().optional(),
   seo: PageSeo.nullable().optional(),
   status: z.enum(["draft", "published"]).optional(),
-  /** home, landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
+  /** home, home_variant (an unpublished homepage version), landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
   type: z.string().optional(),
   description: z.string().nullable().optional(),
   publishedVersionId: z.string().uuid().nullable().optional(),
@@ -3721,6 +3721,11 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/pages/{id}/duplicate" })
       .input(z.object({ id: z.string().uuid() }))
       .output(PageItem),
+    /** Makes a homepage version (type `home_variant`) the live home page; the old one becomes a version. */
+    activateHome: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/activate-home" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), id: z.string().uuid() })),
   },
 
   // Menus

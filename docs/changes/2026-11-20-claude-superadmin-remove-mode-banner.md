@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-20
 - **Agent:** claude
-- **Branch:** `fix/superadmin-remove-mode-banner`  (not merged yet)
+- **Branch:** `fix/superadmin-remove-mode-banner`  (merged in #293, 273e4ff)
 - **Area:** superadmin
 - **Type:** removal
 - **Supersedes:** none

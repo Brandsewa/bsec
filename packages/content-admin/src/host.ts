@@ -33,6 +33,8 @@ export interface ContentHost {
   hiddenMenuLinkTypes?: readonly string[];
   /** Line under the Pages heading. */
   pagesIntro: string;
+  /** Store admin only: the home page can be duplicated into homepage versions and one made active (needs `pages.activateHome`). */
+  homeVersions?: boolean;
 }
 
 export let client: ContentClient;
@@ -43,6 +45,7 @@ export let uploadHeaders: ContentHost["uploadHeaders"];
 export let hiddenMenuLinkTypes: readonly string[] = [];
 export let contentWriteAllowed = false;
 export let pagesIntro = "";
+export let homeVersions = false;
 
 export function configureContentHost(host: ContentHost): void {
   client = host.client;
@@ -53,4 +56,5 @@ export function configureContentHost(host: ContentHost): void {
   hiddenMenuLinkTypes = host.hiddenMenuLinkTypes ?? [];
   contentWriteAllowed = host.contentWriteAllowed ?? false;
   pagesIntro = host.pagesIntro;
+  homeVersions = host.homeVersions ?? false;
 }

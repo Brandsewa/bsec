@@ -86,6 +86,7 @@ import {
   deletePage,
   deleteProduct,
   duplicatePage,
+  activateHomePage,
   findDuplicates,
   unpublishPage,
   getBrandSettings,
@@ -2435,6 +2436,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return duplicatePage(context.rt, context.tenantCtx, input);
+        }),
+      activateHome: os.admin.pages.activateHome
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return activateHomePage(context.rt, context.tenantCtx, input);
         }),
     },
 

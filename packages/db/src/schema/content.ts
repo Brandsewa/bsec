@@ -44,7 +44,7 @@ export const pages = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     parentId: uuid("parent_id"),
-    type: text("type").notNull().default("custom"), // home, landing, custom, product_template, collection_template
+    type: text("type").notNull().default("custom"), // home, home_variant (an unpublished homepage version), landing, custom, product_template, collection_template
     title: text("title").notNull(),
     slug: citext("slug").notNull(),
     seo: jsonb("seo"),
