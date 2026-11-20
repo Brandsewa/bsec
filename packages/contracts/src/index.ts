@@ -65,9 +65,11 @@ export const storeContract = {
   storefront: storefrontContract,
 };
 
-// The website has no theme templates to create.
+// The website has no theme templates to create and no homepage versions (those are a store-admin feature, so
+// `activateHome` is left out; the platform handler in apps/platform has nothing to run for it).
+const { activateHome: _storeOnlyActivateHome, ...sharedPagesContract } = adminContract.pages;
 const sitePagesContract = {
-  ...adminContract.pages,
+  ...sharedPagesContract,
   // The website's header and footer are pages of their own; this creates the missing one from today's layout.
   ensureChrome: oc
     .route({ method: "POST", path: "/marketing/pages/chrome/{key}" })

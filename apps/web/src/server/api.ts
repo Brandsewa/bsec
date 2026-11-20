@@ -440,6 +440,7 @@ import {
 import { server } from "./runtime.ts";
 import { allowedApiOrigins, ensureStaffAuthFresh, getStaffAuth, readAuthSettings, resolveStaffSession } from "./auth.ts";
 import { isForbiddenStaffOrigin } from "./csrf.ts";
+import { escapeCsv, quoteCsv } from "./csv.ts";
 import { clientIp } from "./client-ip.ts";
 
 /**
@@ -4215,14 +4216,6 @@ api.get("/admin/finance/export", async (c) => {
 
   const MAX_EXPORT_ROWS = 20_000;
   const BOM = "\uFEFF";
-  const escapeCsv = (val: unknown): string => {
-    if (val === null || val === undefined) return "";
-    const str = String(val);
-    if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
 
   if (exportType === "expenses") {
     const res = await listExpenses(server().rt._db, tenantCtx, {
@@ -4246,7 +4239,7 @@ api.get("/admin/finance/export", async (c) => {
           escapeCsv(exp.category),
           escapeCsv(exp.paidFrom),
           escapeCsv(exp.payee),
-          escapeCsv((exp.amount / 100).toFixed(2)),
+          quoteCsv((exp.amount / 100).toFixed(2)),
           escapeCsv(exp.currency),
           escapeCsv(exp.settlement ? `Yes (${exp.settlement.settledAt})` : "No"),
           escapeCsv(exp.note),
@@ -4289,7 +4282,7 @@ api.get("/admin/finance/export", async (c) => {
         escapeCsv(entry.date),
         escapeCsv(entry.accountDebit),
         escapeCsv(entry.accountCredit),
-        escapeCsv((entry.amount / 100).toFixed(2)),
+        quoteCsv((entry.amount / 100).toFixed(2)),
         escapeCsv(entry.currency),
         escapeCsv(entry.sourceKind),
         escapeCsv(entry.sourceId),

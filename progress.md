@@ -4,6 +4,7 @@ Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md
 
 ## In flight
 - claude · `fix/client-ip-cloudflare-peer` · getClientIp believes CF-Connecting-IP only from Cloudflare peers; change record `docs/changes/2026-11-20-claude-client-ip-cloudflare-peer.md` (2026-11-20)
+- claude · `fix/security-audit-cheap-fixes` · cheap fixes from the Antigravity security audit: CSV formula guard, next 16.4.5, platform typecheck fix; change record `docs/changes/2026-11-20-claude-security-audit-cheap-fixes.md` (2026-11-20)
 - claude · `feat/cashfree-gateway` · Cashfree as a second gateway: platform plan billing (alongside Razorpay) and store-side connection; built on top of `feat/platform-billing-b5-b6`, awaiting owner sandbox run; ADR-037, change record `docs/changes/2026-10-19-claude-cashfree-gateway.md` · 2026-10-19
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 
