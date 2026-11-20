@@ -15,9 +15,10 @@ Antigravity audited the repo (report: SEC-001 to SEC-009). Each finding was chec
 - **SEC-005:** new `apps/web/src/server/csv.ts`. Free-text cells in the finance export that start with `=`, `+`, `-`, `@`, tab or CR get a leading `'`. Amount columns use `quoteCsv` (quoting only) so negative amounts stay numbers. `api.ts` imports the helpers.
 - **SEC-008:** `next` 16.4.3 to 16.4.5 in `apps/web/package.json` and the lockfile. `hono` 4.13.16 and `@hono/node-server` 2.1.6 were already on `main`. `pnpm audit --prod`: no known vulnerabilities.
 - **Gate fix, not from the audit:** `@bs/platform` typecheck failed on a clean `main` in my worktree (`activateHome` missing from the Super Admin pages handler, added to the shared pages contract by the homepage-versions work). `packages/contracts/src/index.ts` now leaves `activateHome` out of `sitePagesContract`, since homepage versions are store-admin only. `@bs/contracts`, `@bs/platform`, `@bs/superadmin`, `@bs/content-admin` typecheck clean. CI on `main` was green for #296, so this may show only with a fresh install; the fix is correct either way.
-- **SEC-001 (docs only):** `DEPLOYMENT.md` documents `TRUST_CLOUDFLARE` and the warning not to enable it before the origin firewall is Cloudflare-only.
 
 ## Decisions and trade-offs
+- **Owner decision D17 (`docs/audit/2026-11-DECISIONS.md`) is settled by this PR, in favour of 401.** The earlier audit left "keep storing webhooks that fail their signature?" open and noted that rejecting at the route would rewrite three security tests. This PR does that rewrite. If the owner prefers to keep storing them (the 24-hour purge already limits growth), revert the route change and the three test edits; the rest of the PR is independent.
+- Overlap found late: the internal audit in `docs/audit/` (A2-05, A3-04, A4-02) already covers SEC-001, SEC-002 and SEC-003, and `main` already has per-IP and per-phone limits on place-order and pay. The external report was written against an older checkout.
 - 401 instead of 200 for bad signatures: providers retry on non-2xx, which is correct for a forged or misconfigured event, and a store with a wrong secret now sees failures at the provider instead of silent "received".
 - `@next/eslint-plugin-next` stays at 16.4.3 (lint tooling, not shipped, not flagged by audit).
 
@@ -30,7 +31,7 @@ Antigravity audited the repo (report: SEC-001 to SEC-009). Each finding was chec
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (web webhook line)
 - [x] ADR: not needed
-- [x] `DEPLOYMENT.md` (`TRUST_CLOUDFLARE`)
+- [x] `DEPLOYMENT.md`: not changed, `TRUST_CLOUDFLARE` is already documented on `main` (audit A2-05)
 - [x] `progress.md` (in flight)
 
 ## Follow-ups and open questions
