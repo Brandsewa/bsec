@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `fix/superadmin-remove-mode-banner` · Ruttl ticket: remove the Super Admin mode banner; change record `docs/changes/2026-11-20-claude-superadmin-remove-mode-banner.md` · 2026-11-20
 - claude · `feat/cashfree-gateway` · Cashfree as a second gateway: platform plan billing (alongside Razorpay) and store-side connection; built on top of `feat/platform-billing-b5-b6`, awaiting owner sandbox run; ADR-037, change record `docs/changes/2026-10-19-claude-cashfree-gateway.md` · 2026-10-19
 - claude · `fix/admin-polish-phase-1` · admin and Super Admin polish round, all three phases built (menus bug, auth forms, drawers, friendly IDs, variant builder, shipping zones and tiers, custom fields, promotions, flags, audit log, tenant purge, payments and domains pages, policy rich text); awaiting owner check and commit; plan `docs/ADMIN-SUPERADMIN-POLISH-PLAN.md`, ADR-034, ADR-035, change records `docs/changes/2026-10-17-claude-admin-polish-phase-1.md` and `...-phases-2-3.md` · 2026-10-17
 

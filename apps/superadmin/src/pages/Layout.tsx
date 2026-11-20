@@ -319,12 +319,6 @@ export function Layout({ user, onLogout }: LayoutProps) {
             </DropdownMenu>
           </div>
         }
-        banner={
-          <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 border-b border-amber-500/20">
-            <span>Super Admin Mode · Every privileged action is audited under platform BYPASSRLS</span>
-            <span className="text-muted-foreground">Staff: <strong className="font-semibold text-foreground">{user.email}</strong> · {user.role.replace("platform_", "")}</span>
-          </div>
-        }
       >
         <Outlet />
       </AppShell>
