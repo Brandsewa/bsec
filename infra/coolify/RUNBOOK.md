@@ -63,8 +63,8 @@ One Coolify "Docker Image" resource per image (see the table above for images/po
 
 | Resource | Env vars |
 |---|---|
-| web | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=10`, `LOG_LEVEL=info`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>` |
-| platform | `DATABASE_URL_PLATFORM=postgres://app_platform:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=3`, `LOG_LEVEL=info`, `PORT=4000`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>` |
+| web | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=10`, `LOG_LEVEL=info`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>`, `TRUST_CLOUDFLARE=true` (set in Coolify 2026-11-20, see DEPLOYMENT.md) |
+| platform | `DATABASE_URL_PLATFORM=postgres://app_platform:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=3`, `LOG_LEVEL=info`, `PORT=4000`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>`, `TRUST_CLOUDFLARE=true` (set in Coolify 2026-11-20, see DEPLOYMENT.md) |
 | worker | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `WORKER_CONCURRENCY=4`, `APP_ENV=production`, `LOG_LEVEL=info`, `PORT=4100`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>` |
 | admin | none (static nginx SPA; build-arg VITE_SENTRY_DSN optional) |
 
