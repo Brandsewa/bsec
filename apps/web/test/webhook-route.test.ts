@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { POST } from "../src/app/api/webhooks/[provider]/route.ts";
+import { processWebhookInboxItem } from "@bs/domain";
 
 // Mock server-only before importing runtime
 vi.mock("server-only", () => ({}));
@@ -55,7 +56,7 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
     });
   });
 
-  it("SECURITY: rejects forged Razorpay webhook at the route, before the inbox", async () => {
+  it("SECURITY: rejects forged Razorpay webhook through route -> inbox -> processor chain", async () => {
     const rawBody = JSON.stringify({
       event: "payment.captured",
       event_id: "evt_rzp_forged_999",
@@ -81,11 +82,46 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
       body: rawBody,
     });
 
-    // The route runs the real RazorpayProvider HMAC check and refuses the forged event outright (SEC-003).
+    // 1. Route handler executes real RazorpayProvider HMAC verification
     const res = await POST(req, { params: Promise.resolve({ provider: "razorpay" }) });
-    expect(res.status).toBe(401);
-    expect((await res.json()).error).toBe("Invalid webhook signature");
-    expect(mockReceiveWebhook).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.received).toBe(true);
+
+    // 2. Inbox receives the record with signatureValid = false (SECURITY GATE)
+    expect(mockReceiveWebhook).toHaveBeenCalledTimes(1);
+    const receivedInput = mockReceiveWebhook.mock.calls[0]?.[1];
+    expect(receivedInput).toBeDefined();
+    expect(receivedInput.provider).toBe("razorpay");
+    expect(receivedInput.signatureValid).toBe(false);
+    expect(receivedInput.eventId).toBe("evt_rzp_forged_999");
+    expect(receivedInput.tenantId).toBe(TENANT_ID);
+
+    // 3. Processor rejects items with signatureValid = false before touching business logic
+    const mockDb = {
+      execute: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: "inbox_rec_001",
+            provider: "razorpay",
+            event_id: "evt_rzp_forged_999",
+            tenant_id: TENANT_ID,
+            signature_valid: false,
+            payload_sanitized: JSON.parse(rawBody),
+            status: "processing",
+          },
+        ],
+      }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    };
+
+    const processRes = await processWebhookInboxItem(mockDb as never, "inbox_rec_001");
+    expect(processRes.success).toBe(false);
+    expect(processRes.error).toBe("Invalid webhook signature");
   });
 
   it("SECURITY: rejects forged COD webhook through route before touching business logic", async () => {
@@ -108,9 +144,43 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
       body: rawBody,
     });
 
+    // 1. Route handler executes real CODProvider HMAC verification
     const res = await POST(req, { params: Promise.resolve({ provider: "cod" }) });
-    expect(res.status).toBe(401);
-    expect(mockReceiveWebhook).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+
+    // 2. Verified signatureValid is false
+    expect(mockReceiveWebhook).toHaveBeenCalledTimes(1);
+    const receivedInput = mockReceiveWebhook.mock.calls[0]?.[1];
+    expect(receivedInput).toBeDefined();
+    expect(receivedInput.provider).toBe("cod");
+    expect(receivedInput.signatureValid).toBe(false);
+    expect(receivedInput.eventId).toBe("evt_cod_forged_888");
+
+    // 3. Processor rejects item before touching business logic
+    const mockDb = {
+      execute: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: "inbox_rec_002",
+            provider: "cod",
+            event_id: "evt_cod_forged_888",
+            tenant_id: TENANT_ID,
+            signature_valid: false,
+            payload_sanitized: JSON.parse(rawBody),
+            status: "processing",
+          },
+        ],
+      }),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    };
+
+    const processRes = await processWebhookInboxItem(mockDb as never, "inbox_rec_002");
+    expect(processRes.success).toBe(false);
+    expect(processRes.error).toBe("Invalid webhook signature");
   });
 
   it("processes valid COD webhook: verifies signature and sets signatureValid = true", async () => {
@@ -178,7 +248,7 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
     expect(receivedInput.provider).toBe("razorpay");
   });
 
-  it("SECURITY: rejects unknown provider without storing anything", async () => {
+  it("SECURITY: rejects unknown provider with signatureValid = false", async () => {
     const req = new Request(`http://localhost:3000/api/webhooks/unknown_provider?tenantId=${TENANT_ID}`, {
       method: "POST",
       headers: {
@@ -189,8 +259,11 @@ describe("Webhook Route Handler End-to-End Signature Verification & Processing C
     });
 
     const res = await POST(req, { params: Promise.resolve({ provider: "unknown_provider" }) });
-    expect(res.status).toBe(401);
-    expect(mockReceiveWebhook).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+
+    expect(mockReceiveWebhook).toHaveBeenCalledTimes(1);
+    const receivedInput = mockReceiveWebhook.mock.calls[0]?.[1];
+    expect(receivedInput.signatureValid).toBe(false);
   });
 
   it("returns 429 when checkWebhookRateLimit throws RateLimitExceededError", async () => {

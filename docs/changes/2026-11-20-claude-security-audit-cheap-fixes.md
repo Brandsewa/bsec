@@ -8,28 +8,26 @@
 - **Supersedes:** none
 
 ## Summary
-Antigravity audited the repo (report: SEC-001 to SEC-009). Each finding was checked against the code first; this change fixes the ones that were confirmed and cheap. The rest are left for the owner (see follow-ups).
+Antigravity audited the repo (report: SEC-001 to SEC-009). Each finding was checked against the code first; this change fixes the confirmed, cheap ones that the owner approved. The rest are left for the owner (see follow-ups).
 
 ## What changed
-- **SEC-003:** `apps/web/src/app/api/webhooks/[provider]/route.ts` now answers 401 `Invalid webhook signature` for an unsigned or forged event, after the per-IP rate limit, and no longer writes `webhook_inbox` or enqueues a job. Valid events are untouched. `receiveWebhook` and the inbox processor are unchanged.
 - **SEC-005:** new `apps/web/src/server/csv.ts`. Free-text cells in the finance export that start with `=`, `+`, `-`, `@`, tab or CR get a leading `'`. Amount columns use `quoteCsv` (quoting only) so negative amounts stay numbers. `api.ts` imports the helpers.
 - **SEC-008:** `next` 16.4.3 to 16.4.5 in `apps/web/package.json` and the lockfile. `hono` 4.13.16 and `@hono/node-server` 2.1.6 were already on `main`. `pnpm audit --prod`: no known vulnerabilities.
 - **Gate fix, not from the audit:** `@bs/platform` typecheck failed on a clean `main` in my worktree (`activateHome` missing from the Super Admin pages handler, added to the shared pages contract by the homepage-versions work). `packages/contracts/src/index.ts` now leaves `activateHome` out of `sitePagesContract`, since homepage versions are store-admin only. `@bs/contracts`, `@bs/platform`, `@bs/superadmin`, `@bs/content-admin` typecheck clean. CI on `main` was green for #296, so this may show only with a fresh install; the fix is correct either way.
 
 ## Decisions and trade-offs
-- **Owner decision D17 (`docs/audit/2026-11-DECISIONS.md`) is settled by this PR, in favour of 401.** The earlier audit left "keep storing webhooks that fail their signature?" open and noted that rejecting at the route would rewrite three security tests. This PR does that rewrite. If the owner prefers to keep storing them (the 24-hour purge already limits growth), revert the route change and the three test edits; the rest of the PR is independent.
+- **Webhooks that fail their signature are still stored (owner decision D17, 2026-11-20: keep storing).** The audit finding SEC-003 suggested a 401 and no storage; the owner chose to keep the current behaviour, which a 24-hour purge already bounds. The route and its tests are unchanged.
 - Overlap found late: the internal audit in `docs/audit/` (A2-05, A3-04, A4-02) already covers SEC-001, SEC-002 and SEC-003, and `main` already has per-IP and per-phone limits on place-order and pay. The external report was written against an older checkout.
-- 401 instead of 200 for bad signatures: providers retry on non-2xx, which is correct for a forged or misconfigured event, and a store with a wrong secret now sees failures at the provider instead of silent "received".
 - `@next/eslint-plugin-next` stays at 16.4.3 (lint tooling, not shipped, not flagged by audit).
 
 ## Verification
 - Ran in the worktree: `pnpm --filter @bs/web typecheck` pass; `pnpm --filter @bs/web lint` 0 errors (6 existing warnings); `pnpm --filter @bs/web build` pass on next 16.4.5; `pnpm docs:check` ok; `pnpm audit --prod` no known vulnerabilities.
 - `vitest run` in `apps/web`: 39 files, 282 tests pass on two reruns. One earlier full run showed 3 failures that did not repeat and that I did not identify; main alone passed 272/272. Treat as a possible flake and watch CI.
-- New tests: `apps/web/test/csv.test.ts`; `webhook-route.test.ts` rewritten so forged, unsigned and unknown-provider events get 401 and `receiveWebhook` is not called.
+- New tests: `apps/web/test/csv.test.ts`.
 - NOT run: `@bs/domain` heavy tests (no domain code changed), e2e (CI only), a real webhook or export against a running app.
 
 ## Docs updated
-- [x] `docs/ARCHITECTURE.md` (web webhook line)
+- [x] `docs/ARCHITECTURE.md`: not needed
 - [x] ADR: not needed
 - [x] `DEPLOYMENT.md`: not changed, `TRUST_CLOUDFLARE` is already documented on `main` (audit A2-05)
 - [x] `progress.md` (in flight)
