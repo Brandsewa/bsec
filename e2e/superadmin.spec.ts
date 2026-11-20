@@ -84,6 +84,8 @@ test.describe.serial("Super Admin (M9)", () => {
     await page.getByLabel("Authenticator Code (6 digits)").fill(totp(secret));
     await page.getByRole("button", { name: "Verify & Complete Login" }).click();
     await expect(page.getByRole("heading", { name: "Platform Overview" })).toBeVisible();
+    // The signed-in staff email lives in the account menu (the top banner that used to show it was removed on 2026-11-20).
+    await page.getByRole("button", { name: "Staff account menu" }).click();
     await expect(page.getByText(STAFF_EMAIL)).toBeVisible();
   });
 
