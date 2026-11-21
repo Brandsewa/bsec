@@ -11,6 +11,8 @@ export interface CustomerProfile {
   acceptsMarketing: boolean;
   /** True while the email is still the placeholder made at OTP sign-in. */
   emailIsPlaceholder: boolean;
+  emailVerified: boolean;
+  phoneVerified: boolean;
 }
 
 export interface ProfileInput {
@@ -35,6 +37,8 @@ export async function getCustomerProfile(db: Db, tenantId: string, customerId: s
       phone: c.phone,
       acceptsMarketing: c.acceptsMarketing,
       emailIsPlaceholder: isPlaceholderCustomerEmail(c.email),
+      emailVerified: c.emailVerified,
+      phoneVerified: c.phoneVerified,
     };
   });
 }
@@ -92,6 +96,8 @@ export async function updateCustomerProfile(db: Db, tenantId: string, customerId
           phone: c.phone,
           acceptsMarketing: c.acceptsMarketing,
           emailIsPlaceholder: isPlaceholderCustomerEmail(c.email),
+          emailVerified: c.emailVerified,
+          phoneVerified: c.phoneVerified,
         }
       : null;
   });

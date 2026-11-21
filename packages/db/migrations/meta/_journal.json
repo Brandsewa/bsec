@@ -771,6 +771,27 @@
       "when": 1794765500000,
       "tag": "0115_platform_login_panel",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1794769200000,
+      "tag": "0116_account_profile_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1794772800000,
+      "tag": "0117_customer_account_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1794776400000,
+      "tag": "0118_staff_two_factors",
+      "breakpoints": true
     }
   ]
 }

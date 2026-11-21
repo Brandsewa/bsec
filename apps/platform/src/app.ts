@@ -38,6 +38,15 @@ import {
   restorePlatformFeatureFlag,
   assertPlatformStaff,
   assertRoleAtLeast,
+  getPlatformAccount,
+  updatePlatformAccount,
+  listSessions,
+  revokePlatformSession,
+  revokeOtherPlatformSessions,
+  listSecurityEvents,
+  listMyPlatformActivity,
+  recordPlatformAccountChange,
+  recordSecurityEvent,
   checkHealth,
   checkInviteAcceptRateLimit,
   completePlatformMfaEnrollment,
@@ -247,6 +256,8 @@ export interface PlatformContext {
     type?: string;
     /** When the Better Auth session was created. Must be after MFA enrolment completed. */
     createdAt?: Date;
+    /** The Better Auth session id, so the account page can mark "this device" and never sign it out. */
+    sessionId?: string | undefined;
   } | null | undefined;
   /** Set by requirePlatformStaff once the session, MFA and active-staff checks passed. */
   staff?: PlatformStaffIdentity;
@@ -846,6 +857,15 @@ export const platformRouter = os.router({
       return reactivatePlatformStaffMember(context.rt, staffUserId, input.userId, context.meta);
     }),
   },
+  account: {
+    get: os.account.get.use(requirePlatformStaff).handler(({ context }) => getPlatformAccount(context.rt, actor(context))),
+    update: os.account.update.use(requirePlatformStaff).handler(({ context, input }) => updatePlatformAccount(context.rt, actor(context), input, context.meta)),
+    sessions: os.account.sessions.use(requirePlatformStaff).handler(({ context }) => listSessions(context.rt, actor(context), context.session?.sessionId)),
+    revokeSession: os.account.revokeSession.use(requirePlatformStaff).handler(({ context, input }) => revokePlatformSession(context.rt, actor(context), input.id, context.session?.sessionId, context.meta)),
+    revokeOtherSessions: os.account.revokeOtherSessions.use(requirePlatformStaff).handler(({ context }) => revokeOtherPlatformSessions(context.rt, actor(context), context.session?.sessionId, context.meta)),
+    securityEvents: os.account.securityEvents.use(requirePlatformStaff).handler(({ context }) => listSecurityEvents(context.rt, actor(context))),
+    activity: os.account.activity.use(requirePlatformStaff).handler(({ context }) => listMyPlatformActivity(context.rt, actor(context))),
+  },
   audit: {
     list: os.audit.list.use(requirePlatformStaff).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
@@ -1045,7 +1065,7 @@ export const platformRouter = os.router({
 type Env = { Variables: { log: Logger } };
 
 /** Better Auth session for the platform cookie, or null. The cookie prefix keeps store cookies out of this path. */
-async function readPlatformSession(rt: Runtime, headers: Headers): Promise<{ user: { id: string; email: string; name: string | null }; createdAt: Date } | null> {
+async function readPlatformSession(rt: Runtime, headers: Headers): Promise<{ user: { id: string; email: string; name: string | null }; createdAt: Date; sessionId: string } | null> {
   const cookieHeader = headers.get("cookie") ?? "";
   if (!cookieHeader.includes(PLATFORM_COOKIE_PREFIX)) return null;
   try {
@@ -1054,6 +1074,7 @@ async function readPlatformSession(rt: Runtime, headers: Headers): Promise<{ use
     return {
       user: { id: result.user.id, email: result.user.email, name: result.user.name ?? null },
       createdAt: new Date(result.session.createdAt),
+      sessionId: result.session.id,
     };
   } catch {
     return null;
@@ -1126,6 +1147,9 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
       const res = await getPlatformAuth(rt).handler(req);
       if (res.status === 200) {
         const session = await readPlatformSession(rt, c.req.raw.headers);
+        if (session?.user?.id) {
+          await recordPlatformAccountChange(rt, session.user.id, "password_changed", { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? undefined });
+        }
         if (session?.user?.email) {
           const email = session.user.email;
           const superadminUrl = platformAllowedOrigins()[0] ?? "https://superadmin.bcom.si";
@@ -1146,6 +1170,25 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
             }
           });
         }
+      }
+      return res;
+    }
+    // Backup codes made through Better Auth: leave an audit row and a security event (same as the staff admin).
+    if (req.method === "POST" && path.endsWith("/two-factor/generate-backup-codes")) {
+      const before = await readPlatformSession(rt, req.headers);
+      const res = await getPlatformAuth(rt).handler(req);
+      if (res.ok && before) {
+        await recordPlatformAccountChange(rt, before.user.id, "backup_codes_regenerated", { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? undefined });
+      }
+      return res;
+    }
+    // The second step of a sign-in (a session that already exists means the authenticator is being enrolled, not signing in).
+    if (req.method === "POST" && /\/two-factor\/(verify-totp|verify-backup-code)$/.test(path)) {
+      const before = await readPlatformSession(rt, req.headers);
+      const res = await getPlatformAuth(rt).handler(req);
+      if (res.ok && !before) {
+        const body = (await res.clone().json().catch(() => ({}))) as { user?: { id?: string } };
+        if (body.user?.id) await recordSecurityEvent(rt._db.db, { userId: body.user.id, type: "sign_in", ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") });
       }
       return res;
     }
@@ -1258,7 +1301,7 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
       session = { user: { id: testStaffId }, type: "platform_staff", createdAt: new Date() };
     } else {
       const s = await readPlatformSession(rt, c.req.raw.headers);
-      if (s) session = { user: { id: s.user.id, email: s.user.email }, type: "platform_staff", createdAt: s.createdAt };
+      if (s) session = { user: { id: s.user.id, email: s.user.email }, type: "platform_staff", createdAt: s.createdAt, sessionId: s.sessionId };
     }
 
     return { rt, contentRt, log: c.get("log"), session, meta };

@@ -2542,7 +2542,18 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
 
   // me.get needs a signed-in staff session but no store; acceptInvite is public (invite token + IP rate limit).
   // Both are covered by dedicated tests below instead of the store-scoped permission checks.
-  const SESSION_ONLY = new Set(["me.get"]);
+  // account.* acts only on the signed-in user's own row (covered by account.int.test.ts).
+  const SESSION_ONLY = new Set([
+    "me.get",
+    "account.get",
+    "account.update",
+    "account.sessions",
+    "account.revokeSession",
+    "account.revokeOtherSessions",
+    "account.securityEvents",
+    "account.alerts",
+    "account.setAlertMuted",
+  ]);
   const PUBLIC = new Set(["memberships.acceptInvite"]);
 
   describe("Session-only and public admin procedures", () => {

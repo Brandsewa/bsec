@@ -197,6 +197,18 @@ export async function changePassword(currentPassword: string, newPassword: strin
   }
 }
 
+/** Replaces the whole backup code set (the old codes stop working). Needs the password again. */
+export async function regenerateBackupCodes(password: string): Promise<{ ok: true; codes: string[] } | { ok: false; message: string }> {
+  try {
+    const res = await post("/api/auth/two-factor/generate-backup-codes", { password });
+    if (!res.ok) return { ok: false, message: await errorMessage(res, "Could not make new codes. Check your password.") };
+    const data = (await res.json()) as { backupCodes: string[] };
+    return { ok: true, codes: data.backupCodes };
+  } catch (err) {
+    return { ok: false, message: messageOf(err, "Could not reach the platform server.") };
+  }
+}
+
 export interface GoogleSignin {
   enabled: boolean;
   clientId: string | null;

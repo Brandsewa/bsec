@@ -90,6 +90,14 @@ const MIN_ROLE: Record<string, Role | "public"> = {
   "promotions.cancelGrant": "platform_owner",
   "promotions.quote": "platform_support",
   "features.restore": "platform_owner",
+  // Account: any signed-in platform staff member, acting only on their own record.
+  "account.get": "platform_support",
+  "account.update": "platform_support",
+  "account.sessions": "platform_support",
+  "account.revokeSession": "platform_support",
+  "account.revokeOtherSessions": "platform_support",
+  "account.securityEvents": "platform_support",
+  "account.activity": "platform_support",
   "staff.list": "platform_admin",
   "staff.invite": "platform_admin",
   "staff.updateRole": "platform_owner",
@@ -151,6 +159,8 @@ const MIN_ROLE: Record<string, Role | "public"> = {
 
 /** Valid-shaped inputs, so the role check (which runs first) is what decides the outcome. */
 const INPUT: Record<string, unknown> = {
+  "account.update": {},
+  "account.revokeSession": { id: "no-such-session" },
   "system.retryJob": { jobId: "x" },
   "system.retryWebhook": { webhookId: U },
   "tenants.get": { id: U },

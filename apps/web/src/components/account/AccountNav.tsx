@@ -16,6 +16,7 @@ const links: { href: string; label: string; icon: keyof typeof ICONS }[] = [
   { href: "/account/addresses", label: "Address", icon: "address" },
   { href: "/account/profile", label: "Profile", icon: "profile" },
   { href: "/account/notifications", label: "Notifications", icon: "notifications" },
+  { href: "/account/security", label: "Security", icon: "security" },
 ];
 
 /** Sidebar on desktop, a scrolling row of pills on phones. */

@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button, Alert, AlertDescription, ConfirmDialog } from "@bs/ui";
+import { Button, Alert, AlertDescription } from "@bs/ui";
 import { FloatingField } from "./FloatingField.tsx";
 
 export function CustomerChangePassword() {
-  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -14,7 +12,6 @@ export function CustomerChangePassword() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,19 +41,6 @@ export function CustomerChangePassword() {
       setError(err instanceof Error ? err.message : "Failed to change password");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function handleSignOutAll() {
-    try {
-      await fetch("/api/storefront/customer/logout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      router.push("/account/login");
-      router.refresh();
-    } catch {
-      router.push("/account/login");
     }
   }
 
@@ -135,30 +119,6 @@ export function CustomerChangePassword() {
           {busy ? "Updating…" : "Update password"}
         </Button>
       </form>
-
-      <div className="border-t border-[var(--border)] pt-6">
-        <h3 className="text-sm font-semibold text-[var(--foreground)]">Active sessions</h3>
-        <p className="mt-1 text-xs text-[var(--muted-foreground)]">Sign out of all other browsers and devices.</p>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => setShowConfirmLogout(true)}
-          className="mt-3"
-        >
-          Sign out of all devices
-        </Button>
-      </div>
-
-      <ConfirmDialog
-        open={showConfirmLogout}
-        onOpenChange={setShowConfirmLogout}
-        title="Sign out of all devices?"
-        description="Are you sure you want to sign out of all active sessions across all devices?"
-        confirmLabel="Sign out everywhere"
-        destructive
-        onConfirm={handleSignOutAll}
-      />
     </div>
   );
 }

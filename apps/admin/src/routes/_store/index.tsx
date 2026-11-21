@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import {
   CheckCircle2,
   Circle,
@@ -26,9 +26,24 @@ import { Button } from "@bs/ui";
 import { Card } from "@bs/ui";
 import { Progress } from "@bs/ui";
 import { Skeleton } from "@bs/ui";
-import { orpc } from "../../lib/orpc.ts";
+import { client, orpc } from "../../lib/orpc.ts";
+
+const LANDING_ROUTES = { orders: "/orders", products: "/products", analytics: "/analytics" } as const;
+const LANDED_KEY = "bs-admin-landed";
 
 export const Route = createFileRoute("/_store/")({
+  // "Open the admin on" (Account, My profile): applied once per browser tab, so the Home link still goes Home afterwards.
+  beforeLoad: async ({ context }) => {
+    try {
+      if (sessionStorage.getItem(LANDED_KEY)) return;
+      sessionStorage.setItem(LANDED_KEY, "1");
+    } catch {
+      return;
+    }
+    const profile = await context.queryClient.fetchQuery({ queryKey: ["admin", "account"], queryFn: () => client.admin.account.get(), staleTime: 60_000 }).catch(() => null);
+    const to = profile?.defaultLanding ? LANDING_ROUTES[profile.defaultLanding as keyof typeof LANDING_ROUTES] : undefined;
+    if (to) throw redirect({ to });
+  },
   pendingComponent: () => (
     <PageSkeleton>
       <div className="grid gap-4 sm:grid-cols-3">
@@ -71,6 +86,16 @@ function HomePage() {
 
   // Only owners/admins can read the storefront mode; for everyone else the query fails quietly and no banner shows.
   const storefront = useQuery({ ...orpc.admin.storefront.getStatus.queryOptions(), retry: false });
+
+  // Gentle nudge to turn on two-step verification (optional). Hidden once on, or once dismissed on this device.
+  const account = useQuery({ queryKey: ["admin", "account"], queryFn: () => client.admin.account.get(), retry: false });
+  const [mfaDismissed, setMfaDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("bs-mfa-nudge") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const steps = onboarding?.steps ?? {
     store_created: true,
@@ -137,6 +162,34 @@ function HomePage() {
         title="Home"
         description="Welcome to your store control center. Manage products, orders, and storefront setup."
       />
+
+      {account.data && !account.data.twoFactorEnabled && !mfaDismissed && (
+        <Alert className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="mfa-nudge">
+          <div>
+            <p className="font-semibold text-foreground">Protect your account with two-step verification</p>
+            <p className="text-sm text-muted-foreground">Add an authenticator app so a stolen password is not enough to get into your store. It takes a minute.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" nativeButton={false} render={<Link to="/account" search={{ tab: "security" }} />}>
+              Set it up
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                try {
+                  localStorage.setItem("bs-mfa-nudge", "1");
+                } catch {
+                  /* private mode: hide for this visit only */
+                }
+                setMfaDismissed(true);
+              }}
+            >
+              Not now
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       {storefront.data && storefront.data.mode !== "live" && (
         <Alert

@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -24,8 +25,18 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   phone: text("phone"),
   image: text("image"),
+  /** Platform (Super Admin) authenticator. The tenant runtime never touches this or `two_factors`. */
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  /** Store-admin authenticator (optional), backed by `staff_two_factors` (migration 0118). */
+  storeTwoFactorEnabled: boolean("store_two_factor_enabled").default(false),
   locale: text("locale").default("en"),
+  /** Profile preferences (account page); NULL means the default. */
+  jobTitle: text("job_title"),
+  timezone: text("timezone"),
+  dateFormat: text("date_format"),
+  timeFormat: text("time_format"),
+  defaultLanding: text("default_landing"),
+  uiDensity: text("ui_density"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
@@ -98,6 +109,47 @@ export const twoFactors = pgTable("two_factors", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
+
+/**
+ * Store staff authenticator credentials (TOTP seed and backup codes, encrypted by Better Auth). Separate from
+ * `two_factors` on purpose: that table is platform-only (migration 0014) and must stay invisible to app_rw.
+ */
+export const staffTwoFactors = pgTable("staff_two_factors", {
+  id: text("id").primaryKey(),
+  secret: text("secret").notNull(),
+  backupCodes: text("backup_codes").notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  verified: boolean("verified").default(false),
+  failedVerificationCount: integer("failed_verification_count").default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Sign-in security trail for a staff or platform user (account page "Recent security activity"). Global; no RLS;
+ * app_rw may insert and read only (migration 0116 revokes update and delete).
+ */
+export const securityEvents = pgTable("security_events", {
+  id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/** Alerts a user muted for themselves (never adds an alert the store did not route to them). Global; no RLS. */
+export const userNotificationMutes = pgTable(
+  "user_notification_mutes",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.eventKey] })],
+);
 
 /**
  * Roles: system roles seeded per store + custom roles (PLAN §5.3).

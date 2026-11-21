@@ -1,9 +1,9 @@
 import { useStorefrontUrl } from "../lib/storefront-url.ts";
 import { StoreNotifications } from "../components/notifications/StoreNotifications.tsx";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { loadRuttlForStore } from "../lib/ruttl.ts";
 import { useQuery } from "@tanstack/react-query";
-import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Puzzle,
   BadgePercent,
@@ -16,6 +16,7 @@ import {
   Home,
   Images,
   KeyRound,
+  UserRound,
   Layers,
   MapPin,
   Menu,
@@ -61,7 +62,6 @@ import { appHref, appIcon, isAppOn } from "../lib/app-meta.ts";
 import { getActiveStoreId, setActiveStoreId } from "../lib/session.ts";
 import { clearSupportSession } from "../lib/support.ts";
 import { ActivateStore } from "../components/billing/activate-store.tsx";
-import { ChangePasswordDialog } from "../components/settings/change-password-dialog.tsx";
 
 interface GatedItem {
   label: string;
@@ -178,7 +178,7 @@ export const Route = createFileRoute("/_store")({
 function StoreShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { me, store } = Route.useRouteContext();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const navigate = useNavigate();
   const storefrontUrl = useStorefrontUrl();
   useEffect(() => loadRuttlForStore(storefrontUrl), [storefrontUrl]);
   const canManageApps = (store?.permissions ?? []).includes("apps.manage");
@@ -288,9 +288,13 @@ function StoreShell() {
                     <p className="text-[11px] text-muted-foreground truncate">{me.user.email}</p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                  <DropdownMenuItem onClick={() => void navigate({ to: "/account" })}>
+                    <UserRound className="size-3.5 mr-2" />
+                    <span>My account</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void navigate({ to: "/account", search: { tab: "security" } })}>
                     <KeyRound className="size-3.5 mr-2" />
-                    <span>Password</span>
+                    <span>Password and security</span>
                   </DropdownMenuItem>
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>
@@ -313,7 +317,6 @@ function StoreShell() {
       >
         <Outlet />
       </AppShell>
-      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </>
   );
 }

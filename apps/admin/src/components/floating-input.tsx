@@ -16,6 +16,7 @@ export function FloatingInput({
   autoComplete,
   required = false,
   trailing,
+  inputMode,
 }: {
   id: string;
   label: string;
@@ -25,10 +26,11 @@ export function FloatingInput({
   autoComplete?: string;
   required?: boolean;
   trailing?: ReactNode;
+  inputMode?: "text" | "numeric";
 }) {
   return (
     <div className="relative">
-      <input id={id} type={type} value={value} required={required} autoComplete={autoComplete} placeholder=" " onChange={(e) => onChange(e.target.value)} className={`${FIELD}${trailing ? " pr-12" : ""}`} />
+      <input id={id} type={type} value={value} required={required} autoComplete={autoComplete} inputMode={inputMode} placeholder=" " onChange={(e) => onChange(e.target.value)} className={`${FIELD}${trailing ? " pr-12" : ""}`} />
       <label htmlFor={id} className={LABEL}>
         {label}
       </label>

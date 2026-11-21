@@ -32,6 +32,7 @@ import {
   Search,
   Sliders,
   UserCheck,
+  UserRound,
   Users,
 } from "lucide-react";
 import {
@@ -292,6 +293,10 @@ export function Layout({ user, onLogout }: LayoutProps) {
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate({ to: "/account" })}>
+                  <UserRound className="size-3.5 mr-2" />
+                  <span>My account</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     resetPasswordForm();

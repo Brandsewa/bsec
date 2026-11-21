@@ -55,6 +55,6 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [046](046-embedded-checkout-and-billing-gateway-order.md) | Embedded checkout and the gateway order for platform billing | Accepted (Stripe part superseded by 048) |
 | [047](047-first-party-analytics.md) | First-party merchant analytics, cookieless collector, orders as the source of truth | Accepted |
 | [048](048-stripe-payment-element.md) | Stripe Payment Element inline at the store checkout | Accepted |
+| [049](049-account-security-model.md) | Account and sign-in security model (profile, sessions, authenticator, security trail) | Proposed |
 
 **Next number: 049.**
-
