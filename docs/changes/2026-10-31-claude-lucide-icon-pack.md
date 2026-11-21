@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-31
 - **Agent:** claude
-- **Branch:** `feat/lucide-icon-pack` (not merged yet)
+- **Branch:** `feat/lucide-icon-pack` (merged in #163, 2abe5fd)
 - **Area:** blocks, block-editor, config, docs
 - **Type:** feature
 - **Supersedes:** none
