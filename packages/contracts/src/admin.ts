@@ -1494,6 +1494,8 @@ export const AccountProfile = z.object({
       permissions: z.array(z.string()),
       joinedAt: z.string().nullable(),
       invitedBy: z.string().nullable(),
+      /** The store owner to ask for more access; null for the owner themselves or when none is found. */
+      owner: z.object({ name: z.string(), email: z.string() }).nullable(),
     }),
   ),
 });
