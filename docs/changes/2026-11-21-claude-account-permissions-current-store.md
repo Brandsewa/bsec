@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `fix/account-permissions-current-store` (not merged)
+- **Branch:** `fix/account-permissions-current-store` (merged in #309, 040fd1ab)
 - **Area:** admin, docs
 - **Type:** fix
 - **Supersedes:** none (refines `2026-11-21-claude-account-tabs-permissions.md`)
