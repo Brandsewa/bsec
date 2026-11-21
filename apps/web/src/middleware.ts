@@ -54,7 +54,9 @@ export async function middleware(request: NextRequest) {
     // The platform brand (logos, colours, share image, manifest) is public and not about any store: the dashboards' sign-in
     // pages read it from the platform root host, which the gate would otherwise answer "Store Not Found".
     pathname === "/api/brand" ||
-    pathname.startsWith("/api/brand/")
+    pathname.startsWith("/api/brand/") ||
+    // The checkout bot-check frame (audit A3-04): served from the platform host for stores on their own domain, about no store.
+    pathname === "/challenge-frame"
   ) {
     return NextResponse.next();
   }

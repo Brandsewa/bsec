@@ -4,6 +4,7 @@ import { payWithRazorpay } from "@/lib/razorpay-client.ts";
 import type { StripeConfig, StripePaymentApi } from "@/lib/stripe-client.ts";
 import { StripePaymentElement } from "./StripePaymentElement.tsx";
 import { TurnstileWidget } from "@/components/marketing/TurnstileWidget.tsx";
+import { TurnstileBridge } from "./TurnstileBridge.tsx";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -149,6 +150,8 @@ export interface CheckoutFormProps {
   onShippingStateChange?: (state: string, country: string) => void;
   /** Public Cloudflare Turnstile key; set only when the platform has both keys, which is when the server asks for a token. */
   turnstileSiteKey?: string | null | undefined;
+  /** Set for a store on its own domain: the origin that serves the challenge frame (Cloudflare lists only a few hostnames). */
+  turnstileBridgeOrigin?: string | null | undefined;
 }
 
 export function CheckoutForm({
@@ -168,6 +171,7 @@ export function CheckoutForm({
   onShippingMethodChange,
   onShippingStateChange,
   turnstileSiteKey = null,
+  turnstileBridgeOrigin = null,
 }: CheckoutFormProps) {
   const router = useRouter();
   const money = useMoney();
@@ -858,16 +862,28 @@ export function CheckoutForm({
 
       {turnstileSiteKey ? (
         <div>
-          <TurnstileWidget
-            key={turnstileNonce}
-            siteKey={turnstileSiteKey}
-            appearance="interaction-only"
-            onToken={(token) => {
-              setTurnstileToken(token);
-              if (token) setTurnstileFailed(false);
-            }}
-            onFailure={() => setTurnstileFailed(true)}
-          />
+          {turnstileBridgeOrigin ? (
+            <TurnstileBridge
+              key={turnstileNonce}
+              origin={turnstileBridgeOrigin}
+              onToken={(token) => {
+                setTurnstileToken(token);
+                if (token) setTurnstileFailed(false);
+              }}
+              onFailure={() => setTurnstileFailed(true)}
+            />
+          ) : (
+            <TurnstileWidget
+              key={turnstileNonce}
+              siteKey={turnstileSiteKey}
+              appearance="interaction-only"
+              onToken={(token) => {
+                setTurnstileToken(token);
+                if (token) setTurnstileFailed(false);
+              }}
+              onFailure={() => setTurnstileFailed(true)}
+            />
+          )}
           {turnstileFailed ? (
             <p role="alert" className="mt-2 text-sm text-foreground">
               The security check could not load, so the order cannot be placed yet.{" "}
