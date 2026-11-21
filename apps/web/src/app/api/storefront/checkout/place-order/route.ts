@@ -17,6 +17,7 @@ import {
   conversionCredentialStatus,
   decideOrderTracking,
   resolveOrderAttribution,
+  verifyCheckoutChallenge,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
@@ -37,6 +38,8 @@ const PlaceOrderSchema = z.object({
   shippingMethod: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(["cod", "razorpay", "stripe", "paypal", "online"]).default("cod"),
   notes: z.string().optional(),
+  // Cloudflare Turnstile token; checked only when the store platform has both Turnstile keys set (audit A3-04).
+  turnstileToken: z.string().max(4096).optional(),
   termsConsent: z.boolean().optional(),
   marketingConsent: z.boolean().optional(),
   // A business buyer: company name, and the GSTIN when they want it on the invoice.
@@ -114,6 +117,12 @@ export async function POST(req: Request) {
     // Who is signed in, from the session cookie only (never from the body). A store that turned guest checkout off needs this
     // to let its signed-in customers order, and the order is then linked to that account (audit A3-03).
     const signedIn = await getCustomerBySession(rt._db.db, access.tenantId, await getCookieValue(CUSTOMER_COOKIE_NAME, req));
+
+    // Bot check before anything is created. A refused order has made no cart change, so the shopper can solve it again.
+    const challenge = await verifyCheckoutChallenge(parsed.data.turnstileToken, getClientIp(req.headers));
+    if (!challenge.ok) {
+      return NextResponse.json({ error: challenge.reason ?? "Security check failed.", code: "challenge_failed" }, { status: 400 });
+    }
 
     const tenantCtx = {
       tenantId: access.tenantId,

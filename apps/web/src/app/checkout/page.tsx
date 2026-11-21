@@ -2,7 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { buildBeginCheckoutEvent, getClientIp, recordServerEvent, getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent } from "@bs/domain";
+import { buildBeginCheckoutEvent, getClientIp, recordServerEvent, getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent, getCheckoutTurnstileSiteKey } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
@@ -10,6 +10,7 @@ import { CheckoutContainer } from "@/components/checkout/CheckoutContainer.tsx";
 import { CART_COOKIE_NAME } from "@/app/api/storefront/cart/route.ts";
 import { getMarketContext } from "@/server/market.ts";
 import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
+import { checkoutChallengeMode } from "@/lib/turnstile-bridge.ts";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -89,6 +90,10 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
 
   const copy = (await getCachedDefaultPages(access.tenantId)).checkout;
 
+  // Cloudflare lists only a few hostnames per Turnstile widget, so a store on its own domain gets the challenge from a frame on the platform host.
+  const turnstileSiteKey = getCheckoutTurnstileSiteKey();
+  const challenge = checkoutChallengeMode(host);
+
   // Meta Conversions API InitiateCheckout (ADR-047, slice 5c). One per cart (a refresh is the same event); the id also goes to the
   // browser pixel so Meta counts it once. Recorded only for visitors who accepted marketing cookies, on stores that saved a token.
   const checkoutEvent = buildBeginCheckoutEvent(cart);
@@ -120,7 +125,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         </p>
       ) : null}
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} display={options.display} countryPicker={countryPicker} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} display={options.display} countryPicker={countryPicker} turnstileSiteKey={turnstileSiteKey} turnstileBridgeOrigin={turnstileSiteKey && challenge.mode === "bridge" ? challenge.origin : null} />
 
       {copy.showTrustBadges ? (
         <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">

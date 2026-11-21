@@ -151,6 +151,65 @@ export async function verifyTurnstileToken(
 }
 
 /**
+ * Checkout bot check (audit A3-04). The check is on only when BOTH Turnstile keys are set on the server, so the page
+ * never shows a widget the server will not verify, nor demands a token the page cannot produce. Returns the public
+ * site key to render, or null when the check is off.
+ */
+export function getCheckoutTurnstileSiteKey(): string | null {
+  const siteKey = process.env.TURNSTILE_SITE_KEY?.trim();
+  const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+  return siteKey && secretKey ? siteKey : null;
+}
+
+export interface CheckoutChallengeResult {
+  ok: boolean;
+  /** True when the check is switched off (no keys), so nothing was verified. */
+  skipped?: boolean;
+  /** True when Cloudflare could not be reached and the order was let through on purpose. */
+  unreachable?: boolean;
+  reason?: string;
+}
+
+/**
+ * Verifies the Turnstile token sent with an order. Policy:
+ * - keys not configured: skipped, checkout is never blocked by a missing setup;
+ * - token missing, expired, reused or rejected by Cloudflare: refused;
+ * - Cloudflare itself unreachable (network error, timeout, 5xx): the order is let through. A third-party outage must not
+ *   stop a store taking orders; the per-IP and per-phone limits on place-order remain the backstop.
+ * The non-production bypass tokens that signup accepts are never accepted here.
+ */
+export async function verifyCheckoutChallenge(token: string | undefined, remoteIp?: string): Promise<CheckoutChallengeResult> {
+  if (!getCheckoutTurnstileSiteKey()) return { ok: true, skipped: true };
+  const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim() ?? "";
+  const cleaned = token?.trim();
+  if (!cleaned || cleaned.length > 4096) {
+    return { ok: false, reason: "Please complete the security check and try again." };
+  }
+  try {
+    const form = new URLSearchParams({ secret: secretKey, response: cleaned });
+    if (remoteIp) form.append("remoteip", remoteIp);
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: form,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status >= 500) {
+      console.warn(`[WARN] Turnstile siteverify answered ${res.status}; letting the order through.`);
+      return { ok: true, unreachable: true };
+    }
+    if (!res.ok) {
+      return { ok: false, reason: "The security check could not be verified. Please try again." };
+    }
+    const body = (await res.json()) as { success?: boolean };
+    return body.success === true ? { ok: true } : { ok: false, reason: "The security check expired or failed. Please try again." };
+  } catch (err: unknown) {
+    console.warn(`[WARN] Turnstile siteverify unreachable; letting the order through. ${err instanceof Error ? err.message : String(err)}`);
+    return { ok: true, unreachable: true };
+  }
+}
+
+/**
  * Abuse Protection: Enforces maximum 3 active trial stores per user email (PLAN §7).
  */
 export async function assertTrialStoreLimit(db: Db, email: string): Promise<void> {

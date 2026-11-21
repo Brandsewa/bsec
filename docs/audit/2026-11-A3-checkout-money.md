@@ -15,7 +15,7 @@ Two defects are confirmed by test, one more by reading the code. A shopper canno
 | A3-01 | High | An order is charged the price saved when the item entered the cart, not the current price | fixed in `fix/checkout-revalidate-cart`, test `checkout-cart-revalidation.int.test.ts` |
 | A3-02 | Medium | A product that was unpublished or deleted can still be ordered from an old cart | fixed in `fix/checkout-revalidate-cart`, same test file |
 | A3-03 | Medium | Turning off guest checkout blocks every order, including signed-in customers | fixed in `fix/checkout-signed-in-customer`; tests `checkout-guest-off.int.test.ts` and `cart-checkout.test.ts` |
-| A3-04 | Medium | Order placement has no per-visitor limit and no bot check | partly fixed in `fix/payment-on-cancelled-order`: per-IP (60 per 10 min) and per-phone (10 per 10 min) limits on place-order, per-IP on pay; no bot check |
+| A3-04 | Medium | Order placement has no per-visitor limit and no bot check | partly fixed in `fix/payment-on-cancelled-order`: per-IP (60 per 10 min) and per-phone (10 per 10 min) limits on place-order, per-IP on pay; bot check (Turnstile) built in `feat/checkout-turnstile`, 2026-11-21 |
 | A3-05 | Low (owner decision) | "For these customers only" discounts go to anyone who types that customer's email or phone | by design today |
 | A3-06 | Low | The order-created job is sent after the payment transaction commits, not inside it | open, from code |
 | A3-07 | Low | Cart quantity has no upper limit | fixed in `fix/payment-on-cancelled-order` (limit 9,999 per line) |
