@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/ai-access-mcp` · AI access over MCP: Settings > AI access (consent, permission matrix, connections, usage), OAuth for Claude, stateless MCP endpoint at `/api/mcp`, capability layer; plan `docs/MCP-PLAN.md`, ADR-050, change record `docs/changes/2026-11-21-claude-ai-access-mcp.md` · 2026-11-21
 - claude · `fix/account-permissions-current-store` · Account, Permissions tab shows only the active store's access; change record `docs/changes/2026-11-21-claude-account-permissions-current-store.md` · 2026-11-21
 - claude · `feat/account-tabs-permissions` · store Account page: five tabs with icons (Profile, Security, Notifications, Permissions, Activity) and a grouped, plain-language Permissions summary; change record `docs/changes/2026-11-21-claude-account-tabs-permissions.md` · 2026-11-21
 - claude · `feat/accounts-profile` · Account pages for store staff, platform staff and shoppers (profile, sessions, authenticator, security activity); plan `docs/ACCOUNTS-PROFILE-PLAN.md`, ADR-049 (Proposed), change record `docs/changes/2026-11-21-claude-accounts-profile.md` · 2026-11-21

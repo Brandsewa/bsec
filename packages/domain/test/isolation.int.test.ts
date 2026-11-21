@@ -402,6 +402,16 @@ import {
   updateStoreGoogleSignin,
   startStoreGoogleVerification,
   disconnectStoreGoogle,
+  getAiSettings,
+  updateAiSettings,
+  listAiConnections,
+  revokeAiConnection,
+  getAiUsage,
+  listAiActivity,
+  listAiChanges,
+  getAiAuthorization,
+  approveAuthorizationRequest,
+  denyAuthorizationRequest,
 } from "../src/index.ts";
 import { createR2Client } from "../src/media/storage.ts";
 
@@ -997,6 +1007,11 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   const notAvailable = (e: Error) => {
     if (/^Forbidden/.test(e.message)) throw e;
     return { error: e.message };
+  };
+  /** The harness stores have no Growth plan subscription, so a write behind the plan check reports that instead of succeeding. */
+  const aiNotEntitled = (e: Error) => {
+    if (/Growth plan/.test(e.message)) return { error: e.message };
+    return notAvailable(e);
   };
 
   /** Gives the context's store a base market and one extra market (the plan limit), and returns the extra market's id. */
@@ -2535,6 +2550,28 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         const v = await isoVariant(ctx);
         return await setMarketProductVisibility(rt, ctx, id, [{ productId: v.productId, published: true }]);
       }
+      // --- AI access (ADR-050): every procedure checks ai.manage first; the request id below does not exist, so the happy path stops at "not found" ---
+      case "ai.settings.get":
+      case "ai.setupCheck":
+        return await getAiSettings(rt, ctx);
+      case "ai.settings.update":
+        return await updateAiSettings(rt, ctx, { allowPublishing: false }).catch(aiNotEntitled);
+      case "ai.connections.list":
+        return await listAiConnections(rt, ctx);
+      case "ai.connections.revoke":
+        return await revokeAiConnection(rt, ctx, "00000000-0000-4000-8000-000000000000").catch(notAvailable);
+      case "ai.usage":
+        return await getAiUsage(rt, ctx);
+      case "ai.activity":
+        return await listAiActivity(rt, ctx, 10);
+      case "ai.changes":
+        return await listAiChanges(rt, ctx, 10);
+      case "ai.authorization.get":
+        return await getAiAuthorization(rt, ctx, "00000000-0000-4000-8000-000000000000").catch(notAvailable);
+      case "ai.authorization.approve":
+        return await approveAuthorizationRequest(rt, ctx, "00000000-0000-4000-8000-000000000000").catch(aiNotEntitled);
+      case "ai.authorization.deny":
+        return await denyAuthorizationRequest(rt, ctx, "00000000-0000-4000-8000-000000000000").catch(notAvailable);
       default:
         throw new Error(`Unmapped procedure in isolation test: ${procPath}`);
     }
@@ -2828,6 +2865,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           // Maintenance mutations additionally require the store_owner role (decision 10), not just the family.
           const maintenanceOwnerOnly = proc === "settingsUpdate.apply" || proc === "storefront.scheduleMaintenance" || proc === "storefront.cancelScheduledMaintenance" || proc === "storefront.endMaintenance";
           const marketsOnly = false;
+          // ai.manage is a standalone permission (owner and admin): the legacy settings.write does not stand in for it.
+          const aiOnly = proc.startsWith("ai.");
           if (ownerOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/payments\.manage/);
           }
@@ -2848,6 +2887,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
             ? { ...authCtx!, roles: ["store_owner"], permissions: [...authCtx!.permissions, "exports.run"] }
             : marketsOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }
+            : aiOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "ai.manage"] }
             : ownerOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "payments.manage"] }
             : maintenanceOwnerOnly

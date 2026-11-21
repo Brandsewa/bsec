@@ -14,10 +14,12 @@
     "test:heavy": "vitest run int.test.ts"
   },
   "dependencies": {
+    "@bs/agent-capabilities": "workspace:*",
     "@bs/auth": "workspace:*",
     "@bs/blocks": "workspace:*",
     "@bs/contracts": "workspace:*",
     "@bs/domain": "workspace:*",
+    "@bs/mcp": "workspace:*",
     "@bs/payments": "workspace:*",
     "@bs/ui": "workspace:*",
     "@orpc/openapi": "1.16.1",

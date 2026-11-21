@@ -1530,7 +1530,7 @@ export async function createCategory(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "category.created",
       targetType: "category",
       targetId: row.id,
@@ -1638,7 +1638,7 @@ export async function updateCategory(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "category.updated",
       targetType: "category",
       targetId: row.id,
@@ -1696,7 +1696,7 @@ export async function deleteCategory(rt: Runtime, ctx: TenantContext, input: { i
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "category.deleted",
       targetType: "category",
       targetId: row.id,
@@ -2019,7 +2019,7 @@ export async function createCollection(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "collection.created",
       targetType: "collection",
       targetId: row.id,
@@ -2117,7 +2117,7 @@ export async function updateCollection(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "collection.updated",
       targetType: "collection",
       targetId: row.id,
@@ -2155,7 +2155,7 @@ export async function deleteCollection(rt: Runtime, ctx: TenantContext, input: {
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "collection.deleted",
       targetType: "collection",
       targetId: row.id,
@@ -2337,7 +2337,7 @@ export async function createBrand(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "brand.created",
       targetType: "brand",
       targetId: row.id,
@@ -2389,7 +2389,7 @@ export async function updateBrand(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "brand.updated",
       targetType: "brand",
       targetId: row.id,
@@ -2442,7 +2442,7 @@ export async function deleteBrand(rt: Runtime, ctx: TenantContext, input: { id: 
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "brand.deleted",
       targetType: "brand",
       targetId: row.id,
@@ -2612,7 +2612,7 @@ export async function createLocation(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "location.created",
       targetType: "location",
       targetId: row.id,
@@ -2699,7 +2699,7 @@ export async function updateLocation(
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "location.updated",
       targetType: "location",
       targetId: row.id,
@@ -2758,7 +2758,7 @@ export async function deleteLocation(rt: Runtime, ctx: TenantContext, input: { i
     await tx.insert(schema.auditLogs).values({
       tenantId: ctx.tenantId,
       actorType: ctx.actor.type,
-      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      actorId: ctx.actor.type === "staff" || ctx.actor.type === "agent" ? ctx.actor.userId : null,
       action: "location.deleted",
       targetType: "location",
       targetId: row.id,

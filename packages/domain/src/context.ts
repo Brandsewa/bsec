@@ -38,6 +38,7 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
   "audit.read",
   "markets.manage",
   "apps.manage",
+  "ai.manage",
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
@@ -62,6 +63,8 @@ export type Actor =
   | { type: "customer"; customerId: string }
   | { type: "staff"; userId: string }
   | { type: "platform_support"; userId: string; supportSessionId: string }
+  /** An AI app connected through OAuth (ADR-050): acts as the staff user who approved the connection. */
+  | { type: "agent"; userId: string; connectionId: string }
   | { type: "system" };
 
 export type StoreStatus = "live" | "coming_soon" | "maintenance" | "password";

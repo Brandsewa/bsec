@@ -33,6 +33,7 @@ import { platformNotificationsContract } from "./notifications.ts";
 export * from "./admin.ts";
 export * from "./markets.ts";
 export * from "./apps.ts";
+export * from "./ai.ts";
 export * from "./finance.ts";
 export * from "./analytics.ts";
 export * from "./consent.ts";

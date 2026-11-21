@@ -21,7 +21,7 @@ export async function fetchGoogleSignin(): Promise<GoogleSignin> {
 }
 
 /** Starts Google sign-in for an existing account; the browser goes to Google and returns signed in. */
-export async function startGoogleSignIn(): Promise<{ ok: false; message: string }> {
+export async function startGoogleSignIn(returnTo?: string): Promise<{ ok: false; message: string }> {
   try {
     const res = await fetch(`${apiBase()}/api/auth/sign-in/social`, {
       method: "POST",
@@ -29,7 +29,7 @@ export async function startGoogleSignIn(): Promise<{ ok: false; message: string 
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         provider: "google",
-        callbackURL: `${window.location.origin}/`,
+        callbackURL: `${window.location.origin}${returnTo ?? "/"}`,
         errorCallbackURL: `${window.location.origin}/login?google_error=1`,
       }),
     });

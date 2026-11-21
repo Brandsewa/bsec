@@ -2,6 +2,7 @@
   "extends": "@bs/config/tsconfig/base.json",
   "include": [
     "src",
-    "test"
+    "test",
+    "test-support"
   ]
 }

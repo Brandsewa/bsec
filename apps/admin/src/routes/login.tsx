@@ -7,6 +7,7 @@ import { SplitAuthShell } from "../components/split-auth-shell.tsx";
 import { apiBase } from "../lib/config.ts";
 import { fetchMe, signIn, verifyBackupCode, verifyTotp } from "../lib/auth.ts";
 import { fetchGoogleSignin, startGoogleSignIn, startOneTap } from "../lib/google.ts";
+import { safeReturnTo } from "../lib/return-to.ts";
 
 function googleErrorMessage(search: string): string | null {
   const params = new URLSearchParams(search);
@@ -22,16 +23,33 @@ function googleErrorMessage(search: string): string | null {
 }
 
 export const Route = createFileRoute("/login")({
+  // Where to go after sign-in (for example the AI app authorize screen). Only a path inside this app is kept.
+  validateSearch: (s: Record<string, unknown>): { returnTo?: string; store?: string } => {
+    const returnTo = safeReturnTo(s.returnTo);
+    return { ...(returnTo ? { returnTo } : {}), ...(typeof s.store === "string" ? { store: s.store } : {}) };
+  },
   pendingComponent: () => <AuthCardSkeleton />,
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, search }) => {
     const me = await context.queryClient.fetchQuery({ queryKey: ["me"], queryFn: fetchMe, staleTime: 0 }).catch(() => null);
-    if (me) throw redirect({ to: "/" });
+    if (me) {
+      if (search.returnTo) window.location.assign(search.returnTo);
+      throw redirect({ to: "/" });
+    }
   },
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { returnTo } = Route.useSearch();
+  /** After sign-in: back to where the user was heading, else the dashboard. */
+  const afterSignIn = async () => {
+    if (returnTo) {
+      window.location.assign(returnTo);
+      return;
+    }
+    await navigate({ to: "/" });
+  };
   const { queryClient } = Route.useRouteContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,7 +69,8 @@ function LoginPage() {
     let cancelled = false;
     void startOneTap(google.clientId, () => {
       queryClient.clear();
-      void navigate({ to: "/" });
+      if (returnTo) window.location.assign(returnTo);
+      else void navigate({ to: "/" });
     }).then((stop) => {
       if (cancelled) stop();
       else cleanup = stop;
@@ -60,11 +79,11 @@ function LoginPage() {
       cancelled = true;
       cleanup?.();
     };
-  }, [google, navigate, queryClient]);
+  }, [google, navigate, queryClient, returnTo]);
 
   async function onGoogle() {
     setError(null);
-    const res = await startGoogleSignIn();
+    const res = await startGoogleSignIn(returnTo);
     if (res.message) setError(res.message);
   }
 
@@ -84,7 +103,7 @@ function LoginPage() {
       return;
     }
     queryClient.clear();
-    await navigate({ to: "/" });
+    await afterSignIn();
   }
 
   async function onSubmitCode(e: FormEvent) {
@@ -98,7 +117,7 @@ function LoginPage() {
       return;
     }
     queryClient.clear();
-    await navigate({ to: "/" });
+    await afterSignIn();
   }
 
   if (needCode) {
