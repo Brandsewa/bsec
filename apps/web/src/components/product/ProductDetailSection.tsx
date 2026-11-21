@@ -1,8 +1,9 @@
 import React from "react";
-import Link from "next/link";
-import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail } from "@bs/domain";
+import Link from "@/components/storefront/IntentLink.tsx";
+import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail, StorefrontProductOffer } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";
+import { OfferSlot } from "./OfferSlot.tsx";
 import { SvgIcon, normalizeElementOrder, type ProductDetailOptions } from "@bs/blocks";
 import { customFieldBody } from "./ProductCustomField.tsx";
 import { descriptionText } from "@/lib/description-text.ts";
@@ -58,6 +59,7 @@ export function ProductDetailSection({
   paymentImageUrl,
   customFields = [],
   coupons = [],
+  offers = [],
   currency = "INR",
   locale,
 }: {
@@ -66,6 +68,8 @@ export function ProductDetailSection({
   customFields?: StorefrontCustomField[] | undefined;
   /** Coupons the store shows (Discount > Show on the storefront). */
   coupons?: StorefrontCoupon[] | undefined;
+  /** Automatic buy-x-get-y offers on this product, for the promotion bar under Add to cart. */
+  offers?: StorefrontProductOffer[] | undefined;
   options?: ProductDetailOptions | undefined;
   /** Resolved URL of the theme's secure-payment picture (media library); the built-in badge is used when absent. */
   paymentImageUrl?: string | undefined;
@@ -80,7 +84,7 @@ export function ProductDetailSection({
   const usps = options.showUsps ? (options.usps ?? []).slice(0, 4) : [];
 
   const gallery = (
-    <div className={options.galleryPosition === "right" ? "lg:order-2" : undefined}>
+    <div className={`lg:sticky lg:top-24 ${options.galleryPosition === "right" ? "lg:order-2" : ""}`}>
       <ProductGallery media={product.media} title={product.title} thumbPosition={options.thumbPosition ?? "bottom"} />
     </div>
   );
@@ -98,6 +102,12 @@ export function ProductDetailSection({
 
   // The elements of the buy-box column, in the order the theme sets (the old fixed order when it sets none). Rating, title
   // and SKU that follow each other stay together as one block.
+  // Offers that apply by themselves are listed as the same cards as coupon codes; those made for this product come first, the
+  // others are in the "View all" drawer.
+  const cards: StorefrontCoupon[] = [
+    ...offers.map((o): StorefrontCoupon => ({ code: "", title: o.name, benefit: o.headline, condition: o.autoAdd ? "Free item is added to your cart" : "", endsAt: o.endsAt, automatic: true, appliesHere: o.appliesHere })),
+    ...coupons,
+  ].sort((a, b) => Number(b.appliesHere !== false) - Number(a.appliesHere !== false));
   const elements: Record<string, React.ReactNode> = {
     rating: options.showRating ? <RatingSummary average={product.ratingAvg} count={Number(product.ratingCount)} /> : null,
     title: (
@@ -112,9 +122,10 @@ export function ProductDetailSection({
     description: options.showDescription ? (
       <ProductDescription title={product.title} short={product.shortDescription?.trim() ?? ""} full={longDescription} clamp={options.showReadMore === true} />
     ) : null,
-    options: <VariantOptions style={options.variantStyle ?? "buttons"} />,
+    options: <VariantOptions style={options.variantStyle ?? "buttons"} card={{ showPrice: options.showVariantPrice, showBadge: options.showVariantBadge, bg: options.variantCardBg, active: options.variantCardActive, badgeBg: options.variantBadgeBg, badgeText: options.variantBadgeText }} />,
     price: <PriceBlock note={options.priceNote} />,
     actions: (
+      <>
       <PurchaseActions
         addToCartLabel={options.addToCartLabel}
         buyNowLabel={options.buyNowLabel}
@@ -125,6 +136,7 @@ export function ProductDetailSection({
         buyNowText={options.buyNowText}
         trustPoints={options.showTrustPoints ? options.trustPoints : undefined}
       />
+      </>
     ),
     payment: options.showPaymentImage ? (
       // eslint-disable-next-line @next/next/no-img-element
@@ -179,8 +191,8 @@ export function ProductDetailSection({
         </div>
       ) : null,
     coupons:
-      options.showCoupons !== false && coupons.length > 0 ? (
-        <CouponCards inline coupons={coupons} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
+      options.showCoupons !== false && cards.length > 0 ? (
+        <CouponCards inline coupons={cards} title="Available offers" showCount={options.couponCount ?? 2} showViewAll viewAllLabel="View all" />
       ) : null,
     tags:
       options.showTags && product.tags && product.tags.length > 0 ? (
@@ -234,7 +246,11 @@ export function ProductDetailSection({
         {gallery}
 
         <ProductBuyProvider product={product}>
-          <div className={`flex flex-col gap-5 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>{orderedNodes}</div>
+          <div className={`flex flex-col gap-5 ${options.stickyBuyBox ? "lg:sticky lg:top-24" : ""}`}>
+            {/* Once the offer is earned, the "Offer unlocked" card shows right at the top, above the title. */}
+            {offers.some((o) => o.autoAdd) ? <OfferSlot /> : null}
+            {orderedNodes}
+          </div>
         </ProductBuyProvider>
       </div>
       {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}

@@ -11,6 +11,7 @@
  * 6. True PostgreSQL Row Level Security (RLS) enforcement: direct queries across tenants
  *    return 0 rows, and queries without tenant context return 0 rows under app_rw.
  */
+import { DEFAULT_CONSENT_SETTINGS } from "@bs/contracts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -64,6 +65,7 @@ import {
   getCookieInventory,
   previewShippingRate,
   getStorageUsage,
+  getSeoHealth,
   scheduleMaintenance,
   cancelScheduledMaintenance,
   endMaintenance,
@@ -98,6 +100,7 @@ import {
   unsubscribeAdminLead,
   createAdminReview,
   importAdminReviews,
+  getPageVersion,
   listPageVersions,
   listThemeLibrary,
   previewPageRenderData,
@@ -132,6 +135,18 @@ import {
   clearRazorpayCredentials,
   listStorePaymentProviders,
   listMarkets,
+  listStoreApps,
+  installApp,
+  setAppStatus,
+  uninstallApp,
+  updateAppSettings,
+  listIndianStates,
+  getProductStatePricing,
+  setVariantStatePrices,
+  setAppPinned,
+  listStatePricingGrid,
+  setStatePricesBulk,
+  lookupVariantsBySku,
   getMarketDetail,
   createMarket,
   updateMarket,
@@ -152,6 +167,9 @@ import {
   setPaymentProviderActive,
   createRuntime,
   deleteAdminDiscount,
+  generateDiscountCodes,
+  getAdminDiscountStats,
+  listDiscountCodes,
   deleteBrand,
   deleteCategory,
   deleteCollection,
@@ -240,6 +258,7 @@ import {
   uploadMediaDirect,
   rollbackPage,
   duplicatePage,
+  activateHomePage,
   unpublishPage,
   savePageDraft,
   updateAdminDiscount,
@@ -253,6 +272,10 @@ import {
   updateMenu,
   updatePage,
   updateProduct,
+  bulkUpdateProducts,
+  bulkUpdateCategories,
+  bulkUpdateCollections,
+  getProductsForBulkEdit,
   updateStoreSettings,
   updateTheme,
   updateVariant,
@@ -303,6 +326,10 @@ import {
   restoreMedia,
   deleteMediaPermanent,
   getAdminAbandonedCheckoutStats,
+  getAnalyticsOverview,
+  getAnalyticsReport,
+  saveConversionCredentials,
+  clearConversionCredentials,
   listAdminAbandonedCheckouts,
   createAdminCustomer,
   getOrderSettings,
@@ -932,6 +959,9 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
     expect(adminProcedures).toContain("discounts.get");
     expect(adminProcedures).toContain("discounts.update");
     expect(adminProcedures).toContain("discounts.delete");
+    expect(adminProcedures).toContain("discounts.stats");
+    expect(adminProcedures).toContain("discounts.codes.generate");
+    expect(adminProcedures).toContain("discounts.codes.list");
   });
 
   it("dynamically discovers all registered platform procedures", () => {
@@ -970,6 +1000,13 @@ describe("Generated Isolation Test Suite (M1 Real Postgres 18 Proof)", () => {
   };
 
   /** Gives the context's store a base market and one extra market (the plan limit), and returns the extra market's id. */
+async function isoApp(rt: Runtime, ctx: TenantContext): Promise<void> {
+  await listStoreApps(rt, ctx); // permission check first, so a caller without apps.manage is refused before anything is changed
+  await rtPlatform._db.db.execute(sql`UPDATE platform_apps SET allowed_tenant_ids = array_append(allowed_tenant_ids, ${ctx.tenantId}::uuid)
+    WHERE key = 'state-pricing' AND NOT (${ctx.tenantId}::uuid = ANY(allowed_tenant_ids))`);
+  await installApp(rt, ctx, "state-pricing");
+}
+
 async function isoMarket(rt: Runtime, ctx: TenantContext): Promise<string> {
   await listMarkets(rt, ctx); // permission check first, so a caller without markets.manage is refused before anything is created
   await rtPlatform._db.db.execute(sql`INSERT INTO markets (tenant_id, name, handle, is_base, currency, tax_display)
@@ -1089,6 +1126,10 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         });
         return await deleteProduct(rt, ctx, { id: p.id });
       }
+      case "products.getMany":
+        return await getProductsForBulkEdit(rt, ctx, { ids: [testProductA] });
+      case "products.bulkUpdate":
+        return await bulkUpdateProducts(rt, ctx, { items: [{ id: testProductA, product: { title: "Bulk Updated Product A" } }] });
       case "variants.update":
         return await updateVariant(rt, ctx, { id: testVariantA, price: 2500 });
       case "customFields.listDefinitions":
@@ -1125,6 +1166,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await createCategory(rt, ctx, { name: `Cat-${Date.now()}` });
       case "categories.update":
         return await updateCategory(rt, ctx, { id: testCategoryA, name: "Updated Category" });
+      case "categories.bulkUpdate":
+        return await bulkUpdateCategories(rt, ctx, { items: [{ id: testCategoryA, name: "Bulk Category" }] });
       case "categories.delete": {
         const c = await createCategory(rt, ctx, { name: `Del Cat-${Date.now()}` });
         return await deleteCategory(rt, ctx, { id: c.id });
@@ -1137,6 +1180,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await createCollection(rt, ctx, { title: `Col-${Date.now()}` });
       case "collections.update":
         return await updateCollection(rt, ctx, { id: testCollectionA, title: "Updated Collection" });
+      case "collections.bulkUpdate":
+        return await bulkUpdateCollections(rt, ctx, { items: [{ id: testCollectionA, title: "Bulk Collection" }] });
       case "collections.delete": {
         const col = await createCollection(rt, ctx, { title: `Del Col-${Date.now()}` });
         return await deleteCollection(rt, ctx, { id: col.id });
@@ -1265,6 +1310,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await activateTheme(rt, ctx, { code: "essential-commerce" });
       case "pages.versions":
         return await listPageVersions(rt, ctx, { id: testPageA });
+      case "pages.version":
+        return await getPageVersion(rt, ctx, { id: testPageA, versionId: testVersionA });
       case "pages.blockData":
         return await previewPageRenderData(rt, ctx, { blocks: [] });
       case "pages.list":
@@ -1291,6 +1338,22 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         const p = await createPage(rt, ctx, { title: "To Unpublish", slug: `unpub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
         await publishPage(rt, ctx, { id: p.id });
         return await unpublishPage(rt, ctx, { id: p.id });
+      }
+      case "pages.activateHome": {
+        // This tenant has no home page row, so seed one homepage version directly, then make it active.
+        const versionId = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+          const [v] = await tx
+            .insert(schema.pages)
+            .values({ tenantId: ctx.tenantId, title: "Home (Version 9)", slug: `home-version-${Date.now()}`, type: "home_variant", status: "draft" })
+            .returning({ id: schema.pages.id });
+          const [ver] = await tx
+            .insert(schema.pageVersions)
+            .values({ tenantId: ctx.tenantId, pageId: v!.id, document: { version: 1, blocks: [] } })
+            .returning({ id: schema.pageVersions.id });
+          await tx.update(schema.pages).set({ draftVersionId: ver!.id }).where(eq(schema.pages.id, v!.id));
+          return v!.id;
+        });
+        return await activateHomePage(rt, ctx, { id: versionId });
       }
       case "pages.duplicate": {
         const p = await createPage(rt, ctx, { title: "To Duplicate", slug: `dup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
@@ -1550,6 +1613,17 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         });
         return await deleteAdminDiscount(rt, ctx, { id: disc.id });
       }
+      case "discounts.stats":
+        return await getAdminDiscountStats(rt, ctx, { id: testDiscountA });
+      case "discounts.codes.generate": {
+        const list = await createAdminDiscount(rt, ctx, { title: `Code list ${Date.now()}`, type: "percent", value: 10, usesCodeList: true });
+        return await generateDiscountCodes(rt, ctx, { id: list.id, count: 3, prefix: "ISO" });
+      }
+      case "discounts.codes.list": {
+        const list = await createAdminDiscount(rt, ctx, { title: `Code list ${Date.now()}`, type: "percent", value: 10, usesCodeList: true });
+        await generateDiscountCodes(rt, ctx, { id: list.id, count: 2 });
+        return await listDiscountCodes(rt, ctx, { id: list.id });
+      }
       // --- M7 Shipping Settings Admin ---
       case "shipping.get":
         return await getAdminShippingSettings(rt, ctx);
@@ -1804,6 +1878,12 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
       case "onboarding.dismiss":
         assertPermission(ctx, "settings.write");
         return await dismissOnboardingProgress(rt, ctx);
+
+      // --- Analytics ---
+      case "analytics.overview":
+        return await getAnalyticsOverview(rt, ctx, { from: "2026-01-01", to: "2026-01-31" });
+      case "analytics.report":
+        return await getAnalyticsReport(rt, ctx, { id: "sales_over_time", from: "2026-01-01", to: "2026-01-31" });
 
       // --- Abandoned checkouts ---
       case "abandonedCheckouts.list":
@@ -2130,6 +2210,16 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getPrivacySettings(rt, ctx);
       case "customerPrivacy.updateSettings":
         return await updatePrivacySettings(rt, ctx, { requestSlaDays: 30 });
+      case "customerPrivacy.saveConversionCredentials": {
+        // Saving needs a Pixel ID and the server encryption key; both are set up here so the authorised path can succeed.
+        process.env.TENANT_SECRETS_KEY ??= "isolation-test-secret-key-32-chars!!";
+        await updatePrivacySettings(rt, { ...ctx, permissions: [...ctx.permissions, "privacy.manage"] }, {
+          consent: { ...DEFAULT_CONSENT_SETTINGS, enabled: true, integrations: { ga4MeasurementId: null, metaPixelId: "1234567890123456", metaTestEventCode: null } },
+        });
+        return await saveConversionCredentials(rt, ctx, { metaAccessToken: "isolation-token-0123456789-abcdef" });
+      }
+      case "customerPrivacy.clearConversionCredentials":
+        return await clearConversionCredentials(rt, ctx, "meta");
       case "customerPrivacy.listRequests":
         return await listPrivacyRequests(rt, ctx);
       case "customerPrivacy.cookieInventory":
@@ -2182,6 +2272,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
       }
       case "storageUsage.get":
         return await getStorageUsage(rt, ctx);
+      case "seo.health":
+        return await getSeoHealth(rt, ctx);
       case "storefront.listTransitions":
         return await listStoreStatusTransitions(rt, ctx, { limit: 5 });
       case "storefront.scheduleMaintenance":
@@ -2357,6 +2449,51 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getBlogSettings(rt, ctx);
       case "blog.settings.update":
         return await updateBlogSettings(rt, ctx, { postsPerPage: 9 });
+      // --- Apps and State Pricing (ADR-043, ADR-044) ---
+      case "apps.list":
+        return await listStoreApps(rt, ctx);
+      case "apps.install": {
+        await isoApp(rt, ctx);
+        return await installApp(rt, ctx, "state-pricing");
+      }
+      case "apps.setStatus": {
+        await isoApp(rt, ctx);
+        return await setAppStatus(rt, ctx, "state-pricing", "installed");
+      }
+      case "apps.uninstall": {
+        await isoApp(rt, ctx);
+        return await uninstallApp(rt, ctx, "state-pricing");
+      }
+      case "apps.updateSettings": {
+        await isoApp(rt, ctx);
+        return await updateAppSettings(rt, ctx, "state-pricing", { mode: "auto" });
+      }
+      case "apps.setPinned": {
+        await isoApp(rt, ctx);
+        return await setAppPinned(rt, ctx, "state-pricing", true);
+      }
+      case "apps.listGrid":
+        return await listStatePricingGrid(rt, ctx, { limit: 10, offset: 0 });
+      case "apps.setPricesBulk": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setStatePricesBulk(rt, ctx, [{ variantId: v.variantId, state: "MH", price: 1234 }]);
+      }
+      case "apps.lookupSkus":
+        return await lookupVariantsBySku(rt, ctx, ["ISO-SKU"]);
+      case "apps.states":
+        await listStoreApps(rt, ctx);
+        return await listIndianStates(rt);
+      case "apps.getProductPricing": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await getProductStatePricing(rt, ctx, v.productId);
+      }
+      case "apps.setVariantPricing": {
+        await isoApp(rt, ctx);
+        const v = await isoVariant(ctx);
+        return await setVariantStatePrices(rt, ctx, { variantId: v.variantId, prices: [{ state: "MH", price: 1234 }] });
+      }
       // --- Markets (ADR-040) ---
       case "markets.list":
         return await listMarkets(rt, ctx);
@@ -2557,10 +2694,13 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
       const resA = await listSettingsActivity(rtApp, ctxA!);
       expect(resA.items.length).toBeGreaterThanOrEqual(2);
       expect(resA.total).toBeGreaterThanOrEqual(2);
+      // The property that matters: nothing of tenant B shows up for tenant A. (Rows may also be about other actors of tenant A,
+      // for example the person who accepted an invitation, so "the actor is userA" is not a valid test of ownership.)
       for (const item of resA.items) {
-        expect(item.targetId === tenantA || item.actorId === userA).toBe(true);
         expect(item.targetId).not.toBe(tenantB);
+        expect(item.actorId).not.toBe(userB);
       }
+      expect(resA.items.some((i) => i.action === "store_settings.update" && i.diff?.storeName && JSON.stringify(i.diff.storeName).includes("Beta"))).toBe(false);
 
       // Check redaction of secret key
       const storeUpdateItem = resA.items.find((i) => i.action === "store_settings.update");
@@ -2633,9 +2773,11 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           expect(limitedCtx).not.toBeNull();
           expect(limitedCtx!.permissions).toEqual(["analytics.read"]);
 
-          // Procedure execution fails because userLimited lacks required permissions
+          // Procedure execution fails because userLimited lacks required permissions.
+          // Analytics procedures need exactly analytics.read, so for those the denial is proven with a different single permission.
+          const deniedCtx = proc.startsWith("analytics.") ? { ...limitedCtx!, permissions: ["orders.read" as const] } : limitedCtx!;
           await expect(
-            executeAdminProcedure(proc, rtApp, limitedCtx!),
+            executeAdminProcedure(proc, rtApp, deniedCtx),
           ).rejects.toThrow(/forbidden: missing required permission/i);
         });
 
@@ -2685,7 +2827,13 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
           if (exportOnly) {
             await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/exports.run/);
           }
-          const runCtx = exportOnly
+          const analyticsOnly = proc.startsWith("analytics.");
+          if (analyticsOnly) {
+            await expect(executeAdminProcedure(proc, rtApp, authCtx!)).rejects.toThrow(/analytics\.read/);
+          }
+          const runCtx = analyticsOnly
+            ? { ...authCtx!, permissions: [...authCtx!.permissions, "analytics.read"] }
+            : exportOnly
             ? { ...authCtx!, roles: ["store_owner"], permissions: [...authCtx!.permissions, "exports.run"] }
             : marketsOnly
             ? { ...authCtx!, permissions: [...authCtx!.permissions, "markets.manage"] }

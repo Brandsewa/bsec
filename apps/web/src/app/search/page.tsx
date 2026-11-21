@@ -1,4 +1,5 @@
 import React from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -57,7 +58,7 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
 
       return {
         title: metaTitle,
-        description: `Search our catalog at ${storeName}. Find the best mechanical keyboards, accessories, and components.`,
+        description: `Search the ${storeName} catalog by product name, category or keyword.`,
         robots: {
           index: false, // Prevent indexing of dynamic internal search results pages
           follow: true,
@@ -108,6 +109,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           permissions: ["products.read", "settings.write"],
           requestId: crypto.randomUUID(),
           marketId: marketCtx.marketId,
+          priceRegion: marketCtx.region,
         };
 
         results = await searchStorefrontProducts(rt, tenantCtx, q, { page, limit });
@@ -139,10 +141,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Schema.org Structured Data */}
       {itemListJsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
-        />
+        <JsonLd data={itemListJsonLd} />
       )}
 
       {/* Breadcrumbs Navigation */}

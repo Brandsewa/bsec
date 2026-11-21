@@ -7,12 +7,14 @@ import { server } from "@/server/runtime.ts";
  * trade-off as the host resolver: a new market answers on its prefix within half a minute.
  */
 const PREFIX_TTL_MS = 30_000;
-const prefixCache = new Map<string, { at: number; prefixes: { prefix: string; handle: string }[] }>();
-async function marketPrefixes(tenantId: string): Promise<{ prefix: string; handle: string }[]> {
+const prefixCache = new Map<string, { at: number; prefixes: PrefixEntry[] }>();
+type PrefixEntry = { prefix: string; handle: string; isBase: boolean; countries: string[] };
+async function marketPrefixes(tenantId: string): Promise<PrefixEntry[]> {
   const hit = prefixCache.get(tenantId);
   if (hit && Date.now() - hit.at < PREFIX_TTL_MS) return hit.prefixes;
   const { rt } = server();
-  const prefixes = (await listStorefrontMarkets(rt, tenantId).catch(() => [])).flatMap((m) => (m.pathPrefix ? [{ prefix: m.pathPrefix, handle: m.handle }] : []));
+  // Every market, base included (its prefix is empty): the middleware needs the countries to detect a visitor's market.
+  const prefixes = (await listStorefrontMarkets(rt, tenantId).catch(() => [])).map((m) => ({ prefix: m.isBase ? "" : (m.pathPrefix ?? ""), handle: m.handle, isBase: m.isBase, countries: m.countries }));
   prefixCache.set(tenantId, { at: Date.now(), prefixes });
   return prefixes;
 }

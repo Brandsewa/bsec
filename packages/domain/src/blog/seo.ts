@@ -31,6 +31,11 @@ const trimTo = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 
 export const blogBase = (host: string): string => `https://${host.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
 const feedLink = (host: string) => ({ "application/rss+xml": `${blogBase(host)}/blog/feed.xml` });
 
+/** Appends the store name unless the title already carries it (an SEO title of "Tea | Ricwell" must not become "Tea | Ricwell | ricwell"). */
+export function brandedTitle(title: string, storeName: string): string {
+  return title.toLowerCase().includes(storeName.toLowerCase()) ? title : `${title} | ${storeName}`;
+}
+
 export function buildBlogPostMetadata(opts: {
   post: BlogPostPage;
   storeName: string;
@@ -51,7 +56,7 @@ export function buildBlogPostMetadata(opts: {
   const imageUrl = img?.url ?? opts.fallbackImageUrl;
   const index = !(opts.storeNoindex || post.noindex || opts.preview);
   return {
-    title: `${title} | ${storeName}`,
+    title: brandedTitle(title, storeName),
     description,
     // A hidden post still lets crawlers follow its links; a closed store (coming soon, password) asks for neither.
     robots: { index, follow: !opts.storeNoindex },
@@ -96,7 +101,7 @@ export function buildBlogArchiveMetadata(opts: {
   const index = !(opts.storeNoindex || list.total === 0);
   const title = `${seoTitle}${pageSuffix}`;
   return {
-    title: `${title} | ${storeName}`,
+    title: brandedTitle(title, storeName),
     description,
     robots: { index, follow: true },
     alternates: { canonical: url, types: feedLink(host) },

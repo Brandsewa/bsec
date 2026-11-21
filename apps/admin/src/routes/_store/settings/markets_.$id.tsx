@@ -13,6 +13,7 @@ import {
 import { HeaderActions, SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { MarketBadge } from "../../../components/markets/market-badge.tsx";
 import { MarketReadinessCard } from "../../../components/markets/market-readiness.tsx";
+import { useWideSettings } from "../../../components/settings/settings-layout.tsx";
 import { MarketGeneralTab } from "../../../components/markets/market-general-tab.tsx";
 import { MarketPricingTab } from "../../../components/markets/market-pricing-tab.tsx";
 import { MarketCatalogTab } from "../../../components/markets/market-catalog-tab.tsx";
@@ -45,6 +46,8 @@ export function MarketDetailPage() {
   const canManageMarkets = (store?.permissions ?? []).includes("markets.manage");
 
   const [activeTab, setActiveTab] = useState<string>("general");
+  // Only the pricing tab (a wide variant table) breaks out of the centred settings column.
+  useWideSettings(activeTab === "pricing");
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [statusConfirmOpen, setStatusConfirmOpen] = useState(false);
 
@@ -105,7 +108,7 @@ export function MarketDetailPage() {
   return (
     <SettingsPageFrame
       title={market.name}
-      description={`Market configuration for ${market.countries.join(", ") || "unassigned countries"} (${market.currency})`}
+      description={`${market.countries.length} ${market.countries.length === 1 ? "country" : "countries"}, sold in ${market.currency}`}
     >
       <HeaderActions>
         <div className="flex items-center gap-2">

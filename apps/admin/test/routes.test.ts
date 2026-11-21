@@ -186,6 +186,8 @@ describe("Admin M5 Routes (Orders, Customers, Discounts) oRPC Integration", () =
           title: "Real Diwali 50% Off",
           type: "percent",
           value: 50,
+          appliesTo: { type: "all" },
+          usesCodeList: false,
           usageLimit: 100,
           usedCount: 15,
           status: "active",

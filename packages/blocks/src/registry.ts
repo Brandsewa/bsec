@@ -509,7 +509,7 @@ export const ProductDetailSchema = z.object({
   thumbPosition: z.enum(["bottom", "left", "right"]).default("bottom"),
   /** The short description stops after two lines with a "Read more" link that opens the full description in a popup. */
   showReadMore: z.boolean().default(false),
-  variantStyle: z.enum(["buttons", "pills", "dropdown"]).default("buttons"),
+  variantStyle: z.enum(["buttons", "pills", "dropdown", "cards"]).default("buttons"),
   /** Small print under the price, e.g. "Tax and shipping calculated at checkout." Empty hides it. */
   priceNote: z.string().max(80).default(""),
   showBuyNow: z.boolean().default(false),
@@ -519,6 +519,14 @@ export const ProductDetailSchema = z.object({
   addToCartText: hexColorSchema.optional(),
   buyNowBg: hexColorSchema.optional(),
   buyNowText: hexColorSchema.optional(),
+  /** Card style of the variant picker (variantStyle "cards"). Empty colours use the theme's. */
+  showVariantBadge: z.boolean().default(true),
+  /** Cards: show the price (and compare-at price) under the name; off shows the name only. */
+  showVariantPrice: z.boolean().default(true),
+  variantCardBg: hexColorSchema.optional(),
+  variantCardActive: hexColorSchema.optional(),
+  variantBadgeBg: hexColorSchema.optional(),
+  variantBadgeText: hexColorSchema.optional(),
   showPaymentImage: z.boolean().default(false),
   /** A picture from the media library, e.g. a row of accepted payment methods. Empty uses the built-in "secure payment" badge. */
   paymentImageMediaId: z.string().uuid().optional(),
@@ -575,6 +583,8 @@ export const ProductDetailBlock: BlockDefinition<ProductDetailProps> = {
     thumbPosition: "left",
     showReadMore: true,
     variantStyle: "pills",
+    showVariantBadge: true,
+    showVariantPrice: true,
     priceNote: "Tax and shipping calculated at checkout.",
     showBuyNow: true,
     addToCartLabel: "Add to cart",
@@ -907,8 +917,10 @@ export const HeroSliderBlock: BlockDefinition<HeroSliderProps> = {
 export const ShowcaseTabSchema = z.object({
   label: z.string().max(40).default(""),
   /** "related" is for the product page: products from the same collections or categories as the product being viewed (newest elsewhere). */
-  source: z.enum(["newest", "featured", "collection", "related"]).default("collection"),
+  source: z.enum(["newest", "featured", "collection", "related", "manual"]).default("collection"),
   collectionSlug: z.string().max(120).default(""),
+  /** For "manual": the products the merchant hand-picked, shown in this order. */
+  productSlugs: z.array(z.string().max(200)).max(24).default([]),
 });
 export type ShowcaseTab = z.infer<typeof ShowcaseTabSchema>;
 
@@ -930,7 +942,7 @@ export const ProductShowcaseSchema = z.object({
   headerAlign: alignSchema.default("left"),
   tone: toneSchema.default("default"),
   // Products. More than one tab turns the tab bar on; one tab shows no tabs.
-  tabs: z.array(ShowcaseTabSchema).min(1).max(6).default([{ label: "New arrivals", source: "newest", collectionSlug: "" }]),
+  tabs: z.array(ShowcaseTabSchema).min(1).max(6).default([{ label: "New arrivals", source: "newest", collectionSlug: "", productSlugs: [] }]),
   limit: z.number().int().min(2).max(24).default(10),
   tabsStyle: z.enum(["text", "pill"]).default("text"),
   // Card: the order of the rows below the image is the order of this list (drag to reorder in the editor).

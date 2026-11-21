@@ -32,6 +32,7 @@ import { Domains } from "./pages/Domains.tsx";
 import { Plans } from "./pages/Plans.tsx";
 import { Ledger } from "./pages/Ledger.tsx";
 import { Promotions } from "./pages/Promotions.tsx";
+import { Marketplace } from "./pages/Marketplace.tsx";
 import { Signups } from "./pages/Signups.tsx";
 import { Templates } from "./pages/Templates.tsx";
 import { SettingsShell } from "./pages/Marketing.tsx";
@@ -49,8 +50,10 @@ import { System } from "./pages/System.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
 import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
+import { LoginPageSettings } from "./pages/LoginPageSettings.tsx";
 import { AuditLog } from "./pages/AuditLog.tsx";
 import { StorageSettings } from "./pages/StorageSettings.tsx";
+import { Branding } from "./pages/Branding.tsx";
 import { NotificationManager } from "./pages/NotificationManager.tsx";
 import { IntegrationsHub } from "./pages/integrations/IntegrationsHub.tsx";
 import { NotificationsHub } from "./pages/integrations/NotificationsHub.tsx";
@@ -257,6 +260,18 @@ const ledgerRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/ledger",
   component: Ledger,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={4} />
+    </PageContainer>
+  ),
+});
+
+const marketplaceRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/marketplace",
+  component: Marketplace,
   pendingComponent: () => (
     <PageContainer>
       <PageHeaderSkeleton />
@@ -488,6 +503,13 @@ const staffRoute = createRoute({
   ),
 });
 
+const loginPageRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/login-page",
+  component: LoginPageSettings,
+  pendingComponent: () => <PageSkeleton />,
+});
+
 const auditRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/audit",
@@ -596,6 +618,18 @@ const integrationsWhatsAppRoute = createRoute({
   ),
 });
 
+const brandingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/branding",
+  component: Branding,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <MetricCardsSkeleton count={3} />
+    </PageContainer>
+  ),
+});
+
 const integrationsStorageRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/integrations/storage",
@@ -699,6 +733,7 @@ export const routeTree = rootRoute.addChildren([
     plansRoute,
     ledgerRoute,
     promotionsRoute,
+    marketplaceRoute,
     signupsRoute,
     templatesRoute,
     supportRoute,
@@ -706,6 +741,7 @@ export const routeTree = rootRoute.addChildren([
     quotasRoute,
     featuresRoute,
     staffRoute,
+    loginPageRoute,
     auditRoute,
     emailRoute,
     storageRoute,
@@ -716,6 +752,7 @@ export const routeTree = rootRoute.addChildren([
     integrationsSmsRoute,
     integrationsWhatsAppRoute,
     integrationsStorageRoute,
+    brandingRoute,
     integrationsPaymentsRoute,
     integrationsAuthRoute,
     integrationsBillingRoute,

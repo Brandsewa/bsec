@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { addVariantToCart } from "@/components/product/AddToCartButton.tsx";
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
@@ -166,8 +167,11 @@ export function QuickBuyDialog({ product, showViewProduct, onClose }: { product:
   const hasSale = selected?.compareAtPrice !== undefined && selected.compareAtPrice > selected.price;
   const money = useMoney();
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4" data-testid="quick-buy">
+  // Portalled to <body>: inside a card or carousel, a transformed or stacked ancestor traps the dialog's z-index and
+  // lets later page sections paint over it.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center sm:p-4" data-testid="quick-buy">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
@@ -256,6 +260,7 @@ export function QuickBuyDialog({ product, showViewProduct, onClose }: { product:
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

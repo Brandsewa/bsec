@@ -1,4 +1,5 @@
 import { getMarketContext } from "@/server/market.ts";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
 import { ProductShowcaseSchema, type ProductCouponsOptions } from "@bs/blocks";
@@ -17,11 +18,13 @@ import {
   generateBreadcrumbJsonLd,
   buildProductSeoMetadata,
   tenantTag,
+  buildViewItemEvent,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedProductCustomFields, getCachedStorefrontCoupons, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedStoreName, getCachedOfferExtras, getCachedProductCustomFields,getCachedStorefrontCoupons, getCachedProductOffers, getCachedRelatedShowcaseData, getCachedStorefrontHomePage, getCachedStorefrontProduct, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection.tsx";
+import { ShopEvent } from "@/components/analytics/ShopEvent.tsx";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -69,6 +72,12 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
           description: seoMeta.description,
           robots: seoMeta.robots,
           openGraph: seoMeta.openGraph,
+          twitter: {
+            card: seoMeta.openGraph.images ? "summary_large_image" : "summary",
+            title: seoMeta.openGraph.title,
+            description: seoMeta.openGraph.description,
+            ...(seoMeta.openGraph.images ? { images: seoMeta.openGraph.images.map((i) => i.url) } : {}),
+          },
           alternates: seoMeta.alternates,
         };
       }
@@ -126,7 +135,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
     tenantId = access.tenantId;
     marketCtx = await getMarketContext(tenantId);
-    marketId = marketCtx.marketId;
+    marketId = marketCtx.scope;
     marketCurrency = marketCtx.currency;
     marketLocale = marketCtx.locale;
     product = await getCachedStorefrontProduct(tenantId, slug, marketId);
@@ -149,11 +158,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const productCacheTag = tenantTag(tenantId, "product", product.id);
 
   const storeUrl = `https://${host}`;
-  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency);
+  const storeName = await getCachedStoreName(tenantId).catch(() => undefined);
+  // Return policy, shipping options and reviews from the store's own settings; a failure only drops these extras.
+  const offerExtras = await getCachedOfferExtras(tenantId, product.id, marketCtx?.market ? { id: marketCtx.market.id, isBase: marketCtx.market.isBase } : null).catch(() => undefined);
+  const productJsonLd = generateProductJsonLd(product, storeUrl, marketCtx?.currency, { storeName, urlPrefix: marketCtx?.prefix, extras: offerExtras });
+  // There is no /products index page (it is a 404), so a "Products" crumb would point crawlers at a dead URL.
   const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: storeUrl },
-    { name: "Products", url: `${storeUrl}/products` },
-    { name: product.title, url: `${storeUrl}/products/${product.slug}` },
+    { name: product.title, url: `${storeUrl}${marketCtx?.prefix ? (marketCtx.prefix.startsWith("/") ? marketCtx.prefix : `/${marketCtx.prefix}`) : ""}/products/${product.slug}` },
   ]);
 
   // The theme's own product page layout, when the store has one; the built-in layout otherwise.
@@ -175,7 +187,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const relatedData = template ? await getCachedRelatedShowcaseData(tenantId, product.id, adaptedBlocks, marketId).catch(() => ({})) : {};
   const renderData = template ? { ...template.renderData, data: { ...template.renderData.data, ...relatedData } } : undefined;
   const detail = (options?: Parameters<typeof ProductDetailSection>[0]["options"]) => (
-    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} currency={marketCurrency} locale={marketLocale} />
+    <ProductDetailSection product={product} options={options} customFields={customFields} coupons={coupons} offers={offers} paymentImageUrl={options?.paymentImageMediaId ? media[options.paymentImageMediaId] : undefined} currency={marketCurrency} locale={marketLocale} />
   );
   // Custom fields (ADR-034): loaded once for the product and handed to the theme's "Custom field" blocks.
   const customFields = await getCachedProductCustomFields(tenantId, product.id).catch(() => []);
@@ -183,7 +195,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     <ProductCustomField field={customFields.find((f) => f.key === o.fieldKey)} showLabel={o.showLabel} label={o.label} locale={marketLocale} />
   );
   // Coupon cards: the discounts the store chose to show (Discount > Show on the storefront).
-  const coupons = await getCachedStorefrontCoupons(tenantId).catch(() => []);
+  const coupons = await getCachedStorefrontCoupons(tenantId, product.id).catch(() => []);
+  // The promotion bar under Add to cart ("Buy 2 Get 1 Free").
+  const offers = await getCachedProductOffers(tenantId, product.id).catch(() => []);
   const couponCards = (o: ProductCouponsOptions) => (
     <CouponCards coupons={coupons} title={o.title} showCount={o.showCount} showViewAll={o.showViewAll} viewAllLabel={o.viewAllLabel} />
   );
@@ -208,8 +222,9 @@ const templateContext = {
   return (
     <div data-cache-tag={productCacheTag} className="bs-skin">
       {/* Schema.org Structured Data */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      <JsonLd data={productJsonLd} />
+      <JsonLd data={breadcrumbsJsonLd} />
+      <ShopEvent tenantId={tenantId} build={() => buildViewItemEvent(product, marketCtx?.currency ?? "INR")} />
       {template ? (
         <>
           <BlockRenderer blocks={beforeReviews} renderData={renderData} context={templateContext} />

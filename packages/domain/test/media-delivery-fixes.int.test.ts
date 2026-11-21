@@ -281,6 +281,30 @@ describe("Media delivery: Phase 4 review fixes (real Postgres)", () => {
     expect(again.processed).toBe(0);
   });
 
+  it("derivative backfill ends when the original files are missing, instead of retrying them forever", async () => {
+    // Rows whose stored file does not exist: nothing can be derived, and they used to be selected again on every pass
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      ids.push(
+        await insertRow({ storageKey: `${tenantId}/products/${crypto.randomUUID()}-gone.png`, mime: "image/png", bytes: 100, kind: "image", folder: "products", filename: `gone-${i}.png` }),
+      );
+    }
+    const sent: Array<{ queue: string; data: object }> = [];
+    const jobs = { send: async (queue: string, data: object) => void sent.push({ queue, data }) };
+
+    let guard = 0;
+    let last = await backfillMediaDerivatives(rt._db.db, { tenantId, batchSize: 2, jobs });
+    while (last.hasMore && guard++ < 10) last = await backfillMediaDerivatives(rt._db.db, { tenantId, batchSize: 2, jobs });
+    expect(last.hasMore).toBe(false);
+    for (const id of ids) expect((await rowOf(id))?.derivatives).toEqual({});
+
+    // A further pass finds nothing to do and queues nothing
+    sent.length = 0;
+    const again = await backfillMediaDerivatives(rt._db.db, { tenantId, batchSize: 2, jobs });
+    expect(again).toEqual({ processed: 0, hasMore: false });
+    expect(sent).toHaveLength(0);
+  });
+
   it("hash backfill pages by cursor: unreadable rows cannot starve the readable ones", async () => {
     const { driver } = await getActiveStorageDriver(rt._db.db, "public_media");
 

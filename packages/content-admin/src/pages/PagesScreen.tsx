@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Copy, Edit, Image as ImageIcon, MoreHorizontal, Plus, Trash2, Undo2, Upload, X } from "lucide-react";
+import { Copy, Edit, Home, Image as ImageIcon, MoreHorizontal, Plus, Trash2, Undo2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
@@ -36,7 +36,7 @@ import { useBulkRunner } from "../use-bulk-runner.ts";
 import { useTableSelection } from "../use-table-selection.ts";
 import { SeoCard } from "../seo-card.tsx";
 import { errorMessage } from "../errors.ts";
-import { client, orpc, pagesIntro, paths } from "../host.ts";
+import { client, homeVersions, orpc, pagesIntro, paths } from "../host.ts";
 import { uploadMedia } from "../media/upload-media.ts";
 
 const RESERVED_SLUGS = new Set([
@@ -186,6 +186,7 @@ export function PagesScreen() {
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<PageItem | null>(null);
+  const [activateTarget, setActivateTarget] = useState<PageItem | null>(null);
 
   // Form setup
   const {
@@ -213,7 +214,8 @@ export function PagesScreen() {
   const watchedSeoDescription = useWatch({ control, name: "seoDescription" });
   const watchedImageMediaId = useWatch({ control, name: "imageMediaId" });
 
-  const isHome = editingPage?.slug === "home";
+  const isVariant = editingPage?.type === "home_variant";
+  const isHome = editingPage?.slug === "home" || isVariant;
 
   // When title changes and user hasn't manually edited slug, auto-slugify
   useEffect(() => {
@@ -252,7 +254,7 @@ export function PagesScreen() {
     const forbiddenIds = editingPage ? getDescendantIds(editingPage.id, rawPages) : new Set<string>();
     if (editingPage) forbiddenIds.add(editingPage.id);
 
-    const eligible = displayPages.filter((p) => p.slug !== "home" && !forbiddenIds.has(p.id));
+    const eligible = displayPages.filter((p) => p.slug !== "home" && p.type !== "home_variant" && !forbiddenIds.has(p.id));
 
     return [
       { value: "none", label: "No parent (top level)" },
@@ -298,10 +300,23 @@ export function PagesScreen() {
     }),
   );
 
+  const activateMutation = useMutation(
+    orpc.admin.pages.activateHome.mutationOptions({
+      onSuccess: () => {
+        toast.success("Homepage switched. The new homepage is live.");
+        setActivateTarget(null);
+        void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
+      },
+      onError: (err) => {
+        toast.error(errorMessage(err, "Failed to make the homepage active"));
+      },
+    }),
+  );
+
   const duplicateMutation = useMutation(
     orpc.admin.pages.duplicate.mutationOptions({
       onSuccess: (duplicated) => {
-        toast.success(`Page duplicated: ${duplicated.title}`);
+        toast.success(duplicated.type === "home_variant" ? `Homepage version created: ${duplicated.title}` : `Page duplicated: ${duplicated.title}`);
         void queryClient.invalidateQueries({ queryKey: orpc.admin.pages.list.key() });
       },
       onError: (err) => {
@@ -456,7 +471,12 @@ export function PagesScreen() {
           <span>{page.title}</span>
           {page.slug === "home" && (
             <Badge variant="outline" className="text-[10px] font-normal">
-              Home
+              {homeVersions ? "Active homepage" : "Home"}
+            </Badge>
+          )}
+          {page.type === "home_variant" && (
+            <Badge variant="secondary" className="text-[10px] font-normal">
+              Homepage version
             </Badge>
           )}
         </div>
@@ -467,7 +487,7 @@ export function PagesScreen() {
       header: "URL",
       className: "font-mono text-xs text-muted-foreground",
       cell: (page) => (
-        <span>{page.path ?? (page.slug === "home" ? "/" : `/pages/${page.slug}`)}</span>
+        <span>{page.type === "home_variant" ? "Not live" : (page.path ?? (page.slug === "home" ? "/" : `/pages/${page.slug}`))}</span>
       ),
     },
     {
@@ -615,7 +635,13 @@ export function PagesScreen() {
                   }
                 />
                 <DropdownMenuContent align="end">
-                  {page.slug !== "home" && (
+                  {page.type === "home_variant" && (
+                    <DropdownMenuItem onClick={() => setActivateTarget(page)} disabled={activateMutation.isPending}>
+                      <Home className="mr-2 size-3.5" />
+                      Make active homepage
+                    </DropdownMenuItem>
+                  )}
+                  {(page.slug !== "home" || homeVersions) && (
                     <DropdownMenuItem
                       onClick={() => duplicateMutation.mutate({ id: page.id })}
                       disabled={duplicateMutation.isPending}
@@ -692,7 +718,7 @@ export function PagesScreen() {
                   <FieldLabel htmlFor="page-slug">
                     URL handle {!isHome && <span className="text-destructive">*</span>}
                   </FieldLabel>
-                  {isHome && <span className="text-xs text-muted-foreground">Home URL is locked to /</span>}
+                  {isHome && <span className="text-xs text-muted-foreground">{isVariant ? "A homepage version uses / once it is made active" : "Home URL is locked to /"}</span>}
                 </div>
                 <Input
                   id="page-slug"
@@ -850,6 +876,23 @@ export function PagesScreen() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Make active confirmation: this changes what every visitor sees at / */}
+      <ConfirmDialog
+        open={Boolean(activateTarget)}
+        onOpenChange={(open) => !open && setActivateTarget(null)}
+        title="Make this the active homepage?"
+        description={
+          <span>
+            <strong>{activateTarget?.title}</strong> goes live at <code>/</code> right away, using its latest saved content. Your current homepage
+            stays here as a homepage version, so you can switch back at any time.
+          </span>
+        }
+        confirmLabel="Make active"
+        onConfirm={() => {
+          if (activateTarget) activateMutation.mutate({ id: activateTarget.id });
+        }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

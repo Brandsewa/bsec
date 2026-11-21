@@ -1,11 +1,15 @@
 import { oc } from "@orpc/contract";
 import { marketsContract } from "./markets.ts";
+import { appsContract } from "./apps.ts";
 import { z } from "zod";
 import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
+import { analyticsContract } from "./analytics.ts";
+import { ConsentSettings } from "./consent.ts";
 import { blogContract } from "./blog.ts";
 import { storeNotificationsContract } from "./notifications.ts";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "./units.ts";
+import { DiscountAppliesTo, DiscountEligibility, DiscountRules } from "./discount-rules.ts";
 
 // --- Existing M1 Models ---
 export const Membership = z.object({
@@ -323,6 +327,21 @@ export const SettingsUpdateView = z.object({
 });
 export type SettingsUpdateView = z.infer<typeof SettingsUpdateView>;
 
+const PaymentLogo = z.object({ url: z.string().min(1).max(2000), alt: z.string().max(80).default("") });
+const PaymentOptionDisplay = z.object({
+  title: z.string().max(80).default(""),
+  subtitle: z.string().max(160).default(""),
+  logos: z.array(PaymentLogo).max(6).default([]),
+});
+/** Wording of the checkout's shipping and payment sections, and per-gateway payment text and logos. */
+export const CheckoutDisplay = z.object({
+  shippingTitle: z.string().min(1).max(80).default("Shipping Method"),
+  shippingFreeLabel: z.string().min(1).max(40).default("Free"),
+  paymentTitle: z.string().min(1).max(80).default("Payment Method"),
+  payment: z.record(z.string(), PaymentOptionDisplay).default({}),
+});
+export type CheckoutDisplay = z.infer<typeof CheckoutDisplay>;
+
 export const CheckoutSettings = z.object({
   v: z.literal(1).default(1),
   guestCheckout: z.boolean().default(true),
@@ -344,6 +363,7 @@ export const CheckoutSettings = z.object({
     recoveryEnabled: z.boolean().default(false),
     steps: z.array(AbandonedCheckoutStep).max(3).default([]),
   }),
+  display: CheckoutDisplay.default({ shippingTitle: "Shipping Method", shippingFreeLabel: "Free", paymentTitle: "Payment Method", payment: {} }),
   updatedAt: z.string().optional(),
 });
 export type CheckoutSettings = z.infer<typeof CheckoutSettings>;
@@ -368,6 +388,15 @@ export const UpdateCheckoutSettingsInput = z.object({
     recoveryEnabled: z.boolean(),
     steps: z.array(AbandonedCheckoutStep).max(3),
   }).optional(),
+  /** Only the keys sent change; `payment` entries replace that gateway's text and logos (send empty values to clear). */
+  display: z
+    .object({
+      shippingTitle: z.string().min(1).max(80).optional(),
+      shippingFreeLabel: z.string().min(1).max(40).optional(),
+      paymentTitle: z.string().min(1).max(80).optional(),
+      payment: z.record(z.string(), PaymentOptionDisplay).optional(),
+    })
+    .optional(),
   expectedUpdatedAt: z.string().optional(),
 });
 export type UpdateCheckoutSettingsInput = z.infer<typeof UpdateCheckoutSettingsInput>;
@@ -626,6 +655,7 @@ export const Collection = z.object({
   sortOrder: z.string(),
   published: z.boolean(),
   indexable: z.boolean(),
+  seo: CollectionSeo.nullable().optional(),
   productCount: z.number().int().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -873,6 +903,25 @@ export const StorageUsageBreakdownItem = z.object({
 });
 export type StorageUsageBreakdownItem = z.infer<typeof StorageUsageBreakdownItem>;
 
+/** One line of the store's SEO health report (docs/SEO-GEO-AEO-PLAN.md Phase 2). `count` is how many items are affected. */
+export const SeoHealthCheck = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["ok", "warn", "fail"]),
+  detail: z.string(),
+  count: z.number().int().nonnegative().optional(),
+  /** Admin path where the merchant fixes it. */
+  fixHref: z.string().optional(),
+});
+export type SeoHealthCheck = z.infer<typeof SeoHealthCheck>;
+
+export const SeoHealthView = z.object({
+  /** Pages listed in the store's sitemap right now. */
+  indexablePageCount: z.number().int().nonnegative(),
+  checks: z.array(SeoHealthCheck),
+});
+export type SeoHealthView = z.infer<typeof SeoHealthView>;
+
 export const StorageUsageView = z.object({
   usedBytes: z.number(),
   limitBytes: z.number().nullable(),
@@ -911,6 +960,18 @@ export const APPROVED_BRAND_FONTS = [
 
 export type BrandFont = (typeof APPROVED_BRAND_FONTS)[number];
 
+const AdminHex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a 6-digit hex color code (#rrggbb)");
+/** Sidebar and navigation colours of the store admin for one colour mode; null or absent means the default. */
+const AdminModeColors = z.object({
+  sidebar: AdminHex.nullable().optional(),
+  sidebarText: AdminHex.nullable().optional(),
+  /** Background and text of a hovered or current navigation row. */
+  hover: AdminHex.nullable().optional(),
+  hoverText: AdminHex.nullable().optional(),
+});
+export const AdminDashboardColors = z.object({ light: AdminModeColors.optional(), dark: AdminModeColors.optional() });
+export type AdminDashboardColors = z.infer<typeof AdminDashboardColors>;
+
 export const BrandSettings = z.object({
   // "default" until the store saves branding for the first time (no row yet), so not a uuid.
   id: z.string(),
@@ -933,6 +994,8 @@ export const BrandSettings = z.object({
   colorMode: z.enum(["light", "dark", "auto"]),
   cornerRadius: z.enum(["none", "small", "medium", "large", "full"]),
   buttonStyle: z.enum(["solid", "outline", "pill"]),
+  /** Colours of the admin dashboard sidebar and navigation, per mode (only the store team sees them). */
+  adminColors: AdminDashboardColors.optional(),
   version: z.number(),
   publishedAt: z.string().nullable().optional(),
 });
@@ -960,6 +1023,8 @@ export const UpdateBrandSettingsInput = z.object({
   colorMode: z.enum(["light", "dark", "auto"]).optional(),
   cornerRadius: z.enum(["none", "small", "medium", "large", "full"]).optional(),
   buttonStyle: z.enum(["solid", "outline", "pill"]).optional(),
+  /** Replaces the admin dashboard colours; send null values to go back to the default. */
+  adminColors: AdminDashboardColors.optional(),
 });
 export type UpdateBrandSettingsInput = z.infer<typeof UpdateBrandSettingsInput>;
 
@@ -1025,7 +1090,7 @@ export const PageItem = z.object({
   childCount: z.number().int().optional(),
   seo: PageSeo.nullable().optional(),
   status: z.enum(["draft", "published"]).optional(),
-  /** home, landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
+  /** home, home_variant (an unpublished homepage version), landing, custom, or a theme system page (header, footer, product_template, collection_template, cart_template). */
   type: z.string().optional(),
   description: z.string().nullable().optional(),
   publishedVersionId: z.string().uuid().nullable().optional(),
@@ -1061,10 +1126,19 @@ export const PageVersionItem = z.object({
   id: z.string().uuid(),
   note: z.string().nullable(),
   createdAt: z.string(),
+  /** Display name (or email) of the staff member who saved it; null for versions saved before authors were recorded. */
+  createdBy: z.string().nullable(),
+  blockCount: z.number().int(),
   isPublished: z.boolean(),
   isDraft: z.boolean(),
 });
 export type PageVersionItem = z.infer<typeof PageVersionItem>;
+
+export const PageVersionDetail = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string(),
+  blocks: z.array(z.unknown()),
+});
 
 export const MenuKind = z.enum(["navigation", "filter"]);
 export type MenuKind = z.infer<typeof MenuKind>;
@@ -1264,6 +1338,80 @@ export const ResourceCustomFields = z.object({
   fields: z.array(ResourceCustomField),
 });
 export type ResourceCustomFields = z.infer<typeof ResourceCustomFields>;
+
+// --- Bulk editor (docs/BULK-EDITOR-PLAN.md) ---
+export const BulkResult = z.object({ id: z.string().uuid(), ok: z.boolean(), error: z.string().optional() });
+export const BulkResults = z.object({ results: z.array(BulkResult) });
+const BulkSeo = z.object({ title: z.string().max(200).nullable().optional(), description: z.string().max(500).nullable().optional() });
+export const BulkVariantPatch = z.object({
+  id: z.string().uuid(),
+  sku: z.string().min(1).max(64).optional(),
+  barcode: z.string().max(64).nullable().optional(),
+  price: z.number().int().min(0).optional(),
+  compareAtPrice: z.number().int().min(0).nullable().optional(),
+  costPrice: z.number().int().min(0).nullable().optional(),
+  trackInventory: z.boolean().optional(),
+  allowBackorder: z.boolean().optional(),
+  preorderEnabled: z.boolean().optional(),
+  preorderShipsOn: z.string().nullable().optional(),
+  preorderMessage: z.string().max(200).nullable().optional(),
+  weightGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  dimensions: z.object({ lengthCm: z.number().min(0).max(1000).optional(), widthCm: z.number().min(0).max(1000).optional(), heightCm: z.number().min(0).max(1000).optional() }).nullable().optional(),
+  /** Wanted on-hand quantity at the default location (saved as a correction movement). */
+  stockOnHand: z.number().int().min(0).max(10_000_000).optional(),
+});
+export const BulkProductPatch = z.object({
+  title: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  status: z.enum(["draft", "active", "unlisted", "archived"]).optional(),
+  descriptionJson: z.unknown().optional(),
+  shortDescription: z.string().max(1000).optional(),
+  brandId: z.string().uuid().nullable().optional(),
+  productType: z.string().max(100).optional(),
+  tags: z.array(z.string().max(60)).max(100).optional(),
+  requiresShipping: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  priceOnRequest: z.boolean().optional(),
+  returnable: z.boolean().optional(),
+  taxClassId: z.string().uuid().nullable().optional(),
+  hsn: z.string().max(20).nullable().optional(),
+  seo: BulkSeo.nullable().optional(),
+  primaryCategoryId: z.string().uuid().nullable().optional(),
+  extraCategoryIds: z.array(z.string().uuid()).optional(),
+  collectionIds: z.array(z.string().uuid()).optional(),
+});
+export const BulkProductItem = z.object({
+  id: z.string().uuid(),
+  product: BulkProductPatch.optional(),
+  variants: z.array(BulkVariantPatch).max(250).optional(),
+  customFields: z.record(z.string().uuid(), z.unknown()).optional(),
+});
+export const BulkCategoryItem = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  description: z.string().max(500).nullable().optional(),
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
+  parentId: z.string().uuid().nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  position: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  sortOrder: z.string().optional(),
+  seo: BulkSeo.nullable().optional(),
+});
+export const BulkCollectionItem = z.object({
+  id: z.string().uuid(),
+  title: z.string().min(1).max(250).optional(),
+  slug: z.string().max(250).optional(),
+  description: z.string().max(300).nullable().optional(),
+  descriptionJson: z.lazy(() => RichDescription).nullable().optional(),
+  imageMediaId: z.string().uuid().nullable().optional(),
+  sortOrder: z.enum(["manual", "best_selling", "title_asc", "title_desc", "price_asc", "price_desc", "created_desc", "created_asc"]).optional(),
+  published: z.boolean().optional(),
+  indexable: z.boolean().optional(),
+  seo: BulkSeo.nullable().optional(),
+});
 
 // --- Admin oRPC Contract ---
 export const PaymentsStatus = z.object({
@@ -2035,6 +2183,12 @@ export const PrivacySettings = z.object({
   privacyContactEmail: z.string().email().nullable(),
   grievanceOfficerName: z.string().nullable(),
   requestSlaDays: z.number().int().min(7).max(90),
+  /** Cookie banner and optional tracking integrations (ADR-047). */
+  consent: ConsentSettings,
+  /** Server-side conversion credentials: only whether they are set, never the values. */
+  conversionCredentials: z.object({ metaAccessTokenSet: z.boolean(), ga4ApiSecretSet: z.boolean() }),
+  /** Server-side purchase events of the last 7 days, by outcome. */
+  conversionStats: z.object({ sent: z.number().int(), failed: z.number().int(), pending: z.number().int(), skipped: z.number().int() }),
   version: z.number().int(),
 });
 
@@ -2042,6 +2196,7 @@ export const UpdatePrivacySettingsInput = z.object({
   privacyContactEmail: z.string().email().nullable().optional(),
   grievanceOfficerName: z.string().max(120).nullable().optional(),
   requestSlaDays: z.number().int().min(7).max(90).optional(),
+  consent: ConsentSettings.optional(),
   expectedVersion: z.number().int().optional(),
 });
 
@@ -2168,6 +2323,7 @@ const ProductImportRunSchema = z.object({
 
 export const adminContract = {
   markets: marketsContract,
+  apps: appsContract,
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
     approve: oc
@@ -2223,8 +2379,9 @@ export const adminContract = {
       .input(
         z.object({
           provider: z.enum(["razorpay", "stripe", "cashfree", "paypal"]),
-          /** Razorpay key id (rzp_test_...) or Cashfree App ID; not used for Stripe. */
-          keyId: z.string().min(6).max(100).optional(),
+          /** Razorpay key id (rzp_test_...), Cashfree App ID, PayPal Client ID, or the Stripe publishable key (pk_test_..., optional, needed for the card fields inside the checkout page). */
+          // A Stripe publishable key is over 100 characters (pk_test_51 plus about 100 more), so the cap leaves room.
+          keyId: z.string().min(6).max(300).optional(),
           /** Razorpay key secret, the Stripe secret key (sk_test_...), or the Cashfree secret key (cfsk_ma_test_...). */
           keySecret: z.string().min(6).max(300),
           webhookSecret: z.string().min(6).max(200).optional(),
@@ -2443,6 +2600,14 @@ export const adminContract = {
       .route({ method: "PUT", path: "/admin/settings/privacy" })
       .input(UpdatePrivacySettingsInput)
       .output(PrivacySettings),
+    saveConversionCredentials: oc
+      .route({ method: "PUT", path: "/admin/settings/privacy/conversion-credentials" })
+      .input(z.object({ metaAccessToken: z.string().trim().min(20).max(600).optional(), ga4ApiSecret: z.string().trim().min(8).max(100).optional() }))
+      .output(PrivacySettings),
+    clearConversionCredentials: oc
+      .route({ method: "DELETE", path: "/admin/settings/privacy/conversion-credentials" })
+      .input(z.object({ provider: z.enum(["meta", "ga4"]) }))
+      .output(PrivacySettings),
     listRequests: oc
       .route({ method: "GET", path: "/admin/settings/privacy/requests" })
       .input(z.object({ status: z.enum(["pending_verification", "open", "in_progress", "completed", "rejected"]).optional() }).optional())
@@ -2644,6 +2809,23 @@ export const adminContract = {
         }),
       )
       .output(ProductDetail),
+    /** Bulk editor: up to 250 products with variants, stock at the default location and custom fields. */
+    getMany: oc
+      .route({ method: "POST", path: "/admin/products/bulk/get" })
+      .input(z.object({ ids: z.array(z.string().uuid()).min(1).max(250) }))
+      .output(
+        z.object({
+          items: z.array(ProductDetail),
+          locationId: z.string().uuid().nullable(),
+          stock: z.record(z.string(), z.number()),
+          customFields: z.object({ enabled: z.boolean(), definitions: z.array(CustomFieldDefinition), values: z.record(z.string(), z.record(z.string(), z.unknown())) }),
+        }),
+      ),
+    /** Bulk editor save: up to 100 products, one result per product (a failure never blocks the others). */
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/products/bulk/update" })
+      .input(z.object({ items: z.array(BulkProductItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/products/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2848,6 +3030,10 @@ export const adminContract = {
         }),
       )
       .output(CategoryDetail),
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/categories/bulk/update" })
+      .input(z.object({ items: z.array(BulkCategoryItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/categories/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -2938,6 +3124,10 @@ export const adminContract = {
         }),
       )
       .output(CollectionDetail),
+    bulkUpdate: oc
+      .route({ method: "POST", path: "/admin/collections/bulk/update" })
+      .input(z.object({ items: z.array(BulkCollectionItem).min(1).max(100) }))
+      .output(BulkResults),
     delete: oc
       .route({ method: "DELETE", path: "/admin/collections/{id}" })
       .input(z.object({ id: z.string().uuid() }))
@@ -3450,8 +3640,13 @@ export const adminContract = {
       .output(PageDetail),
     versions: oc
       .route({ method: "GET", path: "/admin/pages/{id}/versions" })
-      .input(z.object({ id: z.string().uuid() }))
+      .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(100).optional(), before: z.string().optional() }))
       .output(z.array(PageVersionItem)),
+    // One saved version's blocks, for previewing it before a restore.
+    version: oc
+      .route({ method: "GET", path: "/admin/pages/{id}/versions/{versionId}" })
+      .input(z.object({ id: z.string().uuid(), versionId: z.string().uuid() }))
+      .output(PageVersionDetail),
     // Resolves store data (products, collections) for data-driven blocks in the visual editor.
     blockData: oc
       .route({ method: "POST", path: "/admin/pages/block-data" })
@@ -3526,6 +3721,11 @@ export const adminContract = {
       .route({ method: "POST", path: "/admin/pages/{id}/duplicate" })
       .input(z.object({ id: z.string().uuid() }))
       .output(PageItem),
+    /** Makes a homepage version (type `home_variant`) the live home page; the old one becomes a version. */
+    activateHome: oc
+      .route({ method: "POST", path: "/admin/pages/{id}/activate-home" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.boolean(), id: z.string().uuid() })),
   },
 
   // Menus
@@ -3654,6 +3854,19 @@ export const adminContract = {
             archivedBy: z.string().nullable().optional(),
             tags: z.array(z.string()).default([]),
           }),
+          /** What each discount did to this order (ADR-045): copied at checkout, so it survives later edits to the discount. */
+          discounts: z
+            .array(
+              z.object({
+                code: z.string().nullable(),
+                title: z.string(),
+                discountClass: z.string(),
+                type: z.string(),
+                amount: z.number(),
+                shippingAmount: z.number(),
+              }),
+            )
+            .default([]),
           items: z.array(
             z.object({
               id: z.string().uuid(),
@@ -4637,7 +4850,7 @@ export const adminContract = {
           .object({
             search: z.string().optional(),
             status: z.string().optional(),
-            type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+            type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]).optional(),
             sort: z.enum(["created_desc", "created_asc", "title_asc", "title_desc", "used_desc", "used_asc"]).default("created_desc"),
             limit: z.number().int().min(1).max(100).default(50),
             offset: z.number().int().min(0).default(0),
@@ -4653,6 +4866,10 @@ export const adminContract = {
               title: z.string(),
               type: z.string(),
               value: z.number(),
+              /** What it applies to: the whole order, or chosen products / collections. */
+              appliesTo: DiscountAppliesTo.default({ type: "all" }),
+              /** Redeemed through a generated list of single-use codes. */
+              usesCodeList: z.boolean().default(false),
               usageLimit: z.number().nullable(),
               usedCount: z.number(),
               status: z.string(),
@@ -4671,8 +4888,14 @@ export const adminContract = {
         z.object({
           code: z.string().min(1).optional(),
           title: z.string().min(1),
-          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]),
           value: z.number().int().min(0),
+          appliesTo: DiscountAppliesTo.optional(),
+          rules: DiscountRules.optional(),
+          /** Who it is for. Anything but everyone needs a code (or a code list). */
+          customerEligibility: DiscountEligibility.optional(),
+          /** Redeem through a generated list of single-use codes instead of one code. Set when it is created. */
+          usesCodeList: z.boolean().optional(),
           minSubtotal: z.number().int().min(0).optional(),
           usageLimit: z.number().int().min(1).optional(),
           perCustomerLimit: z.number().int().min(1).optional(),
@@ -4702,6 +4925,14 @@ export const adminContract = {
           title: z.string(),
           type: z.string(),
           value: z.number(),
+          appliesTo: DiscountAppliesTo.default({ type: "all" }),
+          /** Names of the chosen products or collections, for showing them on the edit screen. */
+          appliesToItems: z.array(z.object({ id: z.string().uuid(), title: z.string() })).default([]),
+          rules: DiscountRules.default({}),
+          customerEligibility: DiscountEligibility.default({ type: "all" }),
+          /** Names of the customers a "chosen customers" discount is for. */
+          eligibleCustomers: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string() })).default([]),
+          usesCodeList: z.boolean().default(false),
           minSubtotal: z.number(),
           usageLimit: z.number().nullable(),
           perCustomerLimit: z.number().nullable(),
@@ -4721,8 +4952,11 @@ export const adminContract = {
           id: z.string().uuid(),
           title: z.string().min(1).optional(),
           code: z.string().min(1).nullable().optional(),
-          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y"]).optional(),
+          type: z.enum(["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"]).optional(),
           value: z.number().int().min(0).optional(),
+          appliesTo: DiscountAppliesTo.optional(),
+          rules: DiscountRules.optional(),
+          customerEligibility: DiscountEligibility.optional(),
           minSubtotal: z.number().int().min(0).optional(),
           perCustomerLimit: z.number().int().min(1).nullable().optional(),
           combinable: z.boolean().optional(),
@@ -4744,6 +4978,58 @@ export const adminContract = {
       .input(z.object({ id: z.string().uuid() }))
       // `archived` is true when the discount had been used, so it was archived instead (order history keeps pointing at it).
       .output(z.object({ success: z.boolean(), archived: z.boolean().optional() })),
+    /** How a discount has performed: uses, what it gave away, what those orders were worth, by day. */
+    stats: oc
+      .route({ method: "GET", path: "/admin/discounts/{id}/stats" })
+      .input(z.object({ id: z.string().uuid(), days: z.number().int().min(1).max(365).default(30) }))
+      .output(
+        z.object({
+          /** Orders (not cancelled) that used the discount. */
+          uses: z.number(),
+          customers: z.number(),
+          /** In the store's own currency: orders in another market's currency are counted in `otherCurrencyUses` only. */
+          totalGivenAway: z.number(),
+          revenue: z.number(),
+          averageOrderValue: z.number(),
+          otherCurrencyUses: z.number(),
+          byDay: z.array(z.object({ date: z.string(), uses: z.number(), amount: z.number() })),
+        }),
+      ),
+    /** The generated single-use codes of a discount made for a list of codes. */
+    codes: {
+      generate: oc
+        .route({ method: "POST", path: "/admin/discounts/{id}/codes" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            count: z.number().int().min(1).max(5000),
+            prefix: z.string().max(12).optional(),
+            length: z.number().int().min(6).max(16).optional(),
+          }),
+        )
+        .output(z.object({ created: z.number() })),
+      list: oc
+        .route({ method: "GET", path: "/admin/discounts/{id}/codes" })
+        .input(
+          z.object({
+            id: z.string().uuid(),
+            filter: z.enum(["all", "used", "unused"]).default("all"),
+            search: z.string().optional(),
+            limit: z.number().int().min(1).max(5000).default(100),
+            offset: z.number().int().min(0).default(0),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(z.object({ id: z.string().uuid(), code: z.string(), usedAt: z.string().nullable() })),
+            /** Codes matching the filter. */
+            total: z.number(),
+            /** All codes of the discount, and how many are used. */
+            codeCount: z.number(),
+            usedCount: z.number(),
+          }),
+        ),
+    },
   },
 
   // --- M7 Shipping Settings Admin ---
@@ -4839,6 +5125,13 @@ export const adminContract = {
     get: oc
       .route({ method: "GET", path: "/admin/storage/usage" })
       .output(StorageUsageView),
+  },
+
+  // --- SEO health: what search engines and AI assistants can and cannot see (docs/SEO-GEO-AEO-PLAN.md Phase 2) ---
+  seo: {
+    health: oc
+      .route({ method: "GET", path: "/admin/seo/health" })
+      .output(SeoHealthView),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---
@@ -4940,8 +5233,10 @@ export const adminContract = {
       )
       .output(
         z.object({
-          /** Razorpay: a hosted page to open. */
+          /** A hosted page to open (PayPal, or Razorpay if its window cannot load). */
           checkoutUrl: z.string().nullable(),
+          /** Razorpay: what the admin app needs to open Razorpay's checkout window on the page (the key id is public). */
+          razorpayCheckout: z.object({ keyId: z.string(), subscriptionId: z.string() }).nullable(),
           /** Cashfree: a session the admin app opens with Cashfree's checkout script. */
           checkoutSession: z.object({ gateway: z.literal("cashfree"), sessionId: z.string(), mode: z.enum(["test", "live"]) }).nullable(),
           firstChargeAt: z.string().nullable(),
@@ -5068,6 +5363,7 @@ export const adminContract = {
   },
 
   finance: financeContract,
+  analytics: analyticsContract,
   blog: blogContract,
   notifications: storeNotificationsContract,
 };

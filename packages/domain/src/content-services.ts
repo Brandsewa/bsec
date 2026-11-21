@@ -1,4 +1,4 @@
-import { and, desc, eq, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
@@ -119,6 +119,23 @@ async function invalidatePageCache(
     await invalidateCache(rt, ctx, { type: "home_page_published" });
   } else {
     await invalidateCache(rt, ctx, { type: "page_published", slug: page.slug });
+  }
+}
+
+/**
+ * A homepage version: a copy of the home page that is not live. It is a `pages` row of this type, always a draft, so the public page
+ * lookup and the sitemap (published rows only) never see it. "Make active" swaps it with the live home page (`activateHomePage`).
+ */
+export const HOME_VARIANT_TYPE = "home_variant";
+
+async function assertNotHomeVariant(tx: Parameters<Parameters<typeof withTenant>[2]>[0], tenantId: string, id: string) {
+  const [row] = await tx
+    .select({ type: schema.pages.type })
+    .from(schema.pages)
+    .where(and(eq(schema.pages.tenantId, tenantId), eq(schema.pages.id, id)))
+    .limit(1);
+  if (row?.type === HOME_VARIANT_TYPE) {
+    throw new Error("Bad Request: A homepage version goes live through \"Make active\", not Publish.");
   }
 }
 
@@ -284,7 +301,7 @@ function validateHierarchyAndDepth(
     throw new Error("Bad Request: Parent page not found.");
   }
 
-  if (parent.type === "home" || parent.slug === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(parent.type ?? "")) {
+  if (parent.type === "home" || parent.type === HOME_VARIANT_TYPE || parent.slug === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(parent.type ?? "")) {
     throw new Error("Bad Request: Cannot set home or system page as parent.");
   }
 
@@ -504,29 +521,70 @@ export async function getPage(
   });
 }
 
-/** Saved versions of a page, newest first (for rollback, including after a theme switch). */
-export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+const PAGE_VERSIONS_DEFAULT_LIMIT = 30;
+const PAGE_VERSIONS_MAX_LIMIT = 100;
+
+function documentBlockCount(document: unknown): number {
+  const blocks = (document as { blocks?: unknown } | null)?.blocks;
+  return Array.isArray(blocks) ? blocks.length : 0;
+}
+
+/**
+ * Saved versions of a page, newest first, without their blocks (the list stays small; a version's blocks are read one at a
+ * time with getPageVersion). `before` is the createdAt of the last row already loaded, for "load more".
+ */
+export async function listPageVersions(rt: Runtime, ctx: TenantContext, input: { id: string; limit?: number | undefined; before?: string | undefined }) {
   assertPermission(ctx, "content.write");
-  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+  const limit = Math.min(Math.max(input.limit ?? PAGE_VERSIONS_DEFAULT_LIMIT, 1), PAGE_VERSIONS_MAX_LIMIT);
+  const before = input.before ? new Date(input.before) : undefined;
+  if (before && Number.isNaN(before.getTime())) throw new Error("Bad Request: invalid cursor");
+  const { page, rows } = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [p] = await tx.select().from(schema.pages).where(eq(schema.pages.id, input.id));
     if (!p) throw new Error(`Not Found: Page not found: "${input.id}"`);
-    const rows = await tx
+    const found = await tx
       .select({
         id: schema.pageVersions.id,
         note: schema.pageVersions.note,
         createdAt: schema.pageVersions.createdAt,
+        createdBy: schema.pageVersions.createdBy,
+        document: schema.pageVersions.document,
       })
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.pageId, input.id))
+      .where(before ? and(eq(schema.pageVersions.pageId, input.id), lt(schema.pageVersions.createdAt, before)) : eq(schema.pageVersions.pageId, input.id))
       .orderBy(desc(schema.pageVersions.createdAt))
-      .limit(30);
-    return rows.map((r) => ({
-      id: r.id,
-      note: r.note,
-      createdAt: r.createdAt.toISOString(),
-      isPublished: r.id === p.publishedVersionId,
-      isDraft: r.id === p.draftVersionId,
-    }));
+      .limit(limit);
+    return { page: p, rows: found };
+  });
+  // Staff names live in the global users table; older versions have no author.
+  const authorIds = [...new Set(rows.map((r) => r.createdBy).filter((v): v is string => Boolean(v)))];
+  const names = new Map<string, string>();
+  if (authorIds.length > 0) {
+    const users = await rt._db.db.select({ id: schema.users.id, name: schema.users.name, email: schema.users.email }).from(schema.users).where(inArray(schema.users.id, authorIds));
+    for (const u of users) names.set(u.id, u.name || u.email);
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    createdBy: r.createdBy ? (names.get(r.createdBy) ?? null) : null,
+    blockCount: documentBlockCount(r.document),
+    isPublished: r.id === page.publishedVersionId,
+    isDraft: r.id === page.draftVersionId,
+  }));
+}
+
+/** One saved version's blocks, for previewing it before a restore. The version must belong to this page. */
+export async function getPageVersion(rt: Runtime, ctx: TenantContext, input: { id: string; versionId: string }) {
+  assertPermission(ctx, "content.write");
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document, createdAt: schema.pageVersions.createdAt })
+      .from(schema.pageVersions)
+      .where(and(eq(schema.pageVersions.id, input.versionId), eq(schema.pageVersions.pageId, input.id)))
+      .limit(1);
+    if (!row) throw new Error(`Not Found: Version not found: "${input.versionId}"`);
+    const blocks = (row.document as { blocks?: unknown[] } | null)?.blocks;
+    return { id: row.id, createdAt: row.createdAt.toISOString(), blocks: Array.isArray(blocks) ? blocks : [] };
   });
 }
 
@@ -644,7 +702,7 @@ export async function updatePage(rt: Runtime, ctx: TenantContext, input: UpdateP
 
       if (!existing) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
-      const isHome = existing.type === "home" || existing.slug === "home";
+      const isHome = existing.type === "home" || existing.slug === "home" || existing.type === HOME_VARIANT_TYPE;
 
       let validSlug: string | undefined = undefined;
       if (input.slug !== undefined) {
@@ -896,13 +954,15 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
 
     if (!page) throw new Error(`Not Found: Page not found: "${input.id}"`);
 
-    if (page.type === "home" || (THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(page.type ?? "")) {
-      throw new Error("Bad Request: Cannot duplicate home or system pages.");
+    if ((THEME_SYSTEM_PAGE_TYPES as readonly string[]).includes(page.type ?? "")) {
+      throw new Error("Bad Request: Cannot duplicate system pages.");
     }
+    // Duplicating the home page (or one of its versions) makes another homepage version, not a normal page.
+    const isHomeSource = page.type === "home" || page.type === HOME_VARIANT_TYPE;
 
-    const baseSlug = `${page.slug}-copy`;
-    let candidateSlug = baseSlug;
-    let counter = 2;
+    const baseSlug = isHomeSource ? "home-version" : `${page.slug}-copy`;
+    let candidateSlug = isHomeSource ? `${baseSlug}-2` : baseSlug;
+    let counter = 3;
 
     const existingSlugs = await tx
       .select({ slug: schema.pages.slug })
@@ -932,11 +992,11 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
       .insert(schema.pages)
       .values({
         tenantId: ctx.tenantId,
-        title: `${page.title} (Copy)`,
+        title: isHomeSource ? `Home (Version ${candidateSlug.slice(baseSlug.length + 1)})` : `${page.title} (Copy)`,
         slug: candidateSlug,
-        parentId: page.parentId,
+        parentId: isHomeSource ? null : page.parentId,
         seo: page.seo,
-        type: page.type,
+        type: isHomeSource ? HOME_VARIANT_TYPE : page.type,
         status: "draft",
       })
       .returning();
@@ -995,6 +1055,102 @@ export async function duplicatePage(rt: Runtime, ctx: TenantContext, input: { id
       updatedAt: newPage.updatedAt.toISOString(),
     };
   });
+}
+
+/**
+ * Makes a homepage version the live home page. The two rows trade places: the version becomes `type = "home"`, slug `home`,
+ * published from its latest draft; the old home page becomes a version (draft, slug `home-version-N`) that keeps its content, so
+ * nothing is lost and it can be made active again. One transaction, so there is never no home page or two. Needs `theme.publish`.
+ */
+export async function activateHomePage(rt: Runtime, ctx: TenantContext, input: { id: string }) {
+  assertPermission(ctx, "theme.publish");
+  const db = rt._db.db;
+
+  const result = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(schema.pages)
+      .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.id, input.id)))
+      .limit(1);
+    if (!target) throw new Error(`Not Found: Page not found: "${input.id}"`);
+    if (target.type !== HOME_VARIANT_TYPE) throw new Error("Bad Request: Only a homepage version can be made active.");
+
+    const [current] = await tx
+      .select()
+      .from(schema.pages)
+      // The rest of the code treats type "home" or slug "home" as the home page, so the swap does too.
+      .where(and(eq(schema.pages.tenantId, ctx.tenantId), or(eq(schema.pages.type, "home"), eq(schema.pages.slug, "home"))))
+      .limit(1);
+
+    const targetVersionId = target.draftVersionId ?? target.publishedVersionId;
+    if (!targetVersionId) throw new Error("Bad Request: This homepage version has no content to publish.");
+    const [targetVer] = await tx
+      .select({ document: schema.pageVersions.document })
+      .from(schema.pageVersions)
+      .where(eq(schema.pageVersions.id, targetVersionId))
+      .limit(1);
+
+    // 1. The old home page steps aside first, so the slug "home" is free (unique per store).
+    let demotedSlug: string | null = null;
+    if (current) {
+      const taken = new Set(
+        (await tx.select({ slug: schema.pages.slug }).from(schema.pages).where(eq(schema.pages.tenantId, ctx.tenantId))).map((r) => r.slug.toLowerCase()),
+      );
+      let n = 2;
+      while (taken.has(`home-version-${n}`)) n++;
+      demotedSlug = `home-version-${n}`;
+      const keepVersionId = current.draftVersionId ?? current.publishedVersionId;
+      await tx
+        .update(schema.pages)
+        .set({
+          type: HOME_VARIANT_TYPE,
+          slug: demotedSlug,
+          title: current.title === "Home" ? `Home (Version ${n})` : current.title,
+          status: "draft",
+          publishedVersionId: null,
+          draftVersionId: keepVersionId,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.pages.id, current.id));
+      await clearDocumentMediaUsages(tx, ctx, { ownerType: "page", ownerId: current.id, field: "published" });
+    }
+
+    // 2. The chosen version takes the home slot and goes live.
+    const [row] = await tx
+      .update(schema.pages)
+      .set({
+        type: "home",
+        slug: "home",
+        title: target.title.startsWith("Home (Version") ? "Home" : target.title,
+        parentId: null,
+        status: "published",
+        publishedVersionId: targetVersionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.pages.id, target.id))
+      .returning();
+    if (!row) throw new Error("Failed to make the homepage active");
+
+    if (targetVer?.document) {
+      await syncDocumentMediaUsages(tx, ctx, { ownerType: "page", ownerId: target.id, field: "published", document: targetVer.document }, { tolerant: true });
+    }
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "page.home_activated",
+      targetType: "page",
+      targetId: target.id,
+      diff: { previousHomeId: current?.id ?? null, newHomeId: target.id, previousHomeNowSlug: demotedSlug },
+    });
+    return row;
+  });
+
+  // After commit: the home page content changed, so the home page and the store shell caches refresh.
+  await invalidatePageCache(rt, ctx, result);
+
+  return { success: true, id: result.id };
 }
 
 /** Block each ensurable theme template starts with: the built-in layout the storefront already draws. */
@@ -1076,6 +1232,7 @@ export async function savePageDraft(rt: Runtime, ctx: TenantContext, input: Save
         tenantId: ctx.tenantId,
         pageId: input.id,
         document: validation.data,
+        createdBy: ctx.actor.type === "staff" ? ctx.actor.userId : null,
       })
       .returning();
 
@@ -1105,6 +1262,7 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
   const db = rt._db.db;
 
   const { updatedPage, targetVersionId: finalVersionId } = await withTenant(db, ctx.tenantId, async (tx) => {
+    await assertNotHomeVariant(tx, ctx.tenantId, input.id);
     let targetVersionId = input.versionId;
 
     if (!targetVersionId) {
@@ -1157,38 +1315,46 @@ export async function publishPage(rt: Runtime, ctx: TenantContext, input: Publis
   return { success: true, publishedVersionId: finalVersionId };
 }
 
+/**
+ * Restores an old version of a page as the live page. The restore is itself a new version (a copy of the old one), so it can be
+ * undone like any other change, and the old row stays as it was. The version must belong to this page: a version id from another
+ * page (Header, Home...) is refused, because pointing a page at another page's blocks is exactly how a store lost its header.
+ */
 export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: RollbackPageInput) {
   assertPermission(ctx, "theme.publish");
   const db = rt._db.db;
 
-  const updatedPage = await withTenant(db, ctx.tenantId, async (tx) => {
+  const { updatedPage, restoredVersionId } = await withTenant(db, ctx.tenantId, async (tx) => {
+    await assertNotHomeVariant(tx, ctx.tenantId, input.id);
     const [targetVer] = await tx
-      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document })
+      .select({ id: schema.pageVersions.id, document: schema.pageVersions.document, createdAt: schema.pageVersions.createdAt })
       .from(schema.pageVersions)
-      .where(eq(schema.pageVersions.id, input.targetVersionId))
+      .where(and(eq(schema.pageVersions.id, input.targetVersionId), eq(schema.pageVersions.pageId, input.id)))
       .limit(1);
+    if (!targetVer) throw new Error(`Not Found: Version not found for this page: "${input.targetVersionId}"`);
 
-    if (targetVer?.document) {
-      // Restoring history must not fail because a file was trashed or deleted since: that content was valid when saved.
-      await syncDocumentMediaUsages(tx, ctx, {
-        ownerType: "page",
-        ownerId: input.id,
-        field: "published",
+    const [restored] = await tx
+      .insert(schema.pageVersions)
+      .values({
+        tenantId: ctx.tenantId,
+        pageId: input.id,
         document: targetVer.document,
-      }, { tolerant: true });
-      await syncDocumentMediaUsages(tx, ctx, {
-        ownerType: "page",
-        ownerId: input.id,
-        field: "draft",
-        document: targetVer.document,
-      }, { tolerant: true });
+        createdBy: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+        note: `Restored from ${targetVer.createdAt.toISOString()}`,
+      })
+      .returning({ id: schema.pageVersions.id });
+    if (!restored) throw new Error("Failed to create the restored version");
+
+    // Restoring history must not fail because a file was trashed or deleted since: that content was valid when saved.
+    for (const field of ["published", "draft"] as const) {
+      await syncDocumentMediaUsages(tx, ctx, { ownerType: "page", ownerId: input.id, field, document: targetVer.document }, { tolerant: true });
     }
 
     const updateQuery = tx
       .update(schema.pages)
       .set({
-        publishedVersionId: input.targetVersionId,
-        draftVersionId: input.targetVersionId,
+        publishedVersionId: restored.id,
+        draftVersionId: restored.id,
         status: "published",
         updatedAt: new Date(),
       })
@@ -1197,12 +1363,22 @@ export async function rollbackPage(rt: Runtime, ctx: TenantContext, input: Rollb
     const rows = typeof updateQuery.returning === "function"
       ? await updateQuery.returning()
       : await updateQuery;
-    return Array.isArray(rows) ? rows[0] : undefined;
+
+    await tx.insert(schema.auditLogs).values({
+      tenantId: ctx.tenantId,
+      actorType: ctx.actor.type,
+      actorId: ctx.actor.type === "staff" ? ctx.actor.userId : null,
+      action: "page.restored",
+      targetType: "page",
+      targetId: input.id,
+      diff: { fromVersionId: input.targetVersionId, newVersionId: restored.id },
+    });
+    return { updatedPage: Array.isArray(rows) ? rows[0] : undefined, restoredVersionId: restored.id };
   });
 
   await invalidatePageCache(rt, ctx, updatedPage);
 
-  return { success: true, publishedVersionId: input.targetVersionId };
+  return { success: true, publishedVersionId: restoredVersionId };
 }
 
 // --- Menu Services ---

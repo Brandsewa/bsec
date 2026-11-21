@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -39,7 +40,10 @@ export const domains = pgTable("domains", {
   routingCheckedAt: timestamp("routing_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  // A store's own domains (list, primary, quota count) are read by tenant (audit A10-02, migration 0114).
+  index("domains_tenant_id_idx").on(t.tenantId),
+]);
 
 /**
  * Feature flags catalog: global flag definitions (PLAN §5.1, M1).
@@ -194,6 +198,29 @@ export const exportFiles = pgTable("export_files", {
 export const platformSettings = pgTable("platform_settings", {
   id: text("id").primaryKey().default("default"), // Enforces single row
   requireStaffMfa: boolean("require_staff_mfa").notNull().default(true),
+  /** Content panel beside the admin sign-in form (validated in domain/platform/login-panel.ts). NULL = built-in default. */
+  loginPanel: jsonb("login_panel"),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Platform Branding (single row, id = 'default'): validated brand tokens (logos, favicon, colours, buttons).
+ * Created empty by migration 0099; absence means built-in defaults. Platform-level: no tenant column, no RLS.
+ */
+export const platformBranding = pgTable("platform_branding", {
+  id: text("id").primaryKey().default("default"),
+  tokens: jsonb("tokens").notNull().default(sql`'{}'::jsonb`),
+  version: integer("version").notNull().default(0),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/** Append-only brand history (migration 0100). Platform-level: no tenant column. */
+export const platformBrandingVersions = pgTable("platform_branding_versions", {
+  version: integer("version").primaryKey(),
+  tokens: jsonb("tokens").notNull(),
+  action: text("action").notNull().default("update"),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });

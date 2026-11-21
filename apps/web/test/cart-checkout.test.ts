@@ -74,6 +74,9 @@ vi.mock("@bs/domain", async (importOriginal) => {
       email: "buyer@example.in",
       phone: "9876543210",
     })),
+    getCustomerBySession: vi.fn(async (_db: unknown, _tenantId: string, token?: string) =>
+      token === "valid-customer-token" ? { id: "cust-signed-in", phone: "9876543210", email: "member@example.in", name: "Member", phoneVerified: true, emailVerified: true } : null,
+    ),
     placeOrder: vi.fn(async () => ({
       success: true,
       orderId: "ord-test-1",
@@ -86,7 +89,6 @@ vi.mock("@bs/domain", async (importOriginal) => {
 
 import { CartView } from "../src/components/cart/CartView.tsx";
 import { CartItemRow } from "../src/components/cart/CartItemRow.tsx";
-import { ShippingEstimator } from "../src/components/cart/ShippingEstimator.tsx";
 import { CheckoutForm } from "../src/components/checkout/CheckoutForm.tsx";
 import { OrderSummary } from "../src/components/checkout/OrderSummary.tsx";
 import { CheckoutContainer } from "../src/components/checkout/CheckoutContainer.tsx";
@@ -153,23 +155,11 @@ describe("Storefront Cart & Checkout Flow", () => {
 
       expect(html).toContain("KeyCraft Custom Switch Lubing Station");
       expect(html).toContain("Matte Black");
-      expect(html).toContain("KC-LUBE-STN-01");
+      expect(html).not.toContain("KC-LUBE-STN-01"); // the SKU is left out to keep the line compact
+      expect(html.replace(/<!-- -->/g, "")).toContain("₹1,499 × 2"); // the price each, then how many
       expect(html).toContain("₹2,998");
       expect(html).toContain("2");
       expect(html).toContain("Remove");
-    });
-  });
-
-  describe("ShippingEstimator", () => {
-    it("renders pincode input with Indian pincode placeholder, a11y label, and estimate button", () => {
-      const html = renderToString(React.createElement(ShippingEstimator));
-
-      expect(html).toContain("Estimate Shipping");
-      expect(html).toContain('aria-label="6-digit Indian Pincode"');
-      expect(html).toContain('id="shipping-pincode"');
-      expect(html).toContain('for="shipping-pincode"');
-      expect(html).toContain("Pincode");
-      expect(html).toContain("Calculate");
     });
   });
 
@@ -526,6 +516,29 @@ const noConsent = { termsRequired: false, marketing: null };
         }
         expect(vi.mocked(domain.placeOrder).mock.calls.every((c) => c[2].paymentMethod === "razorpay")).toBe(true);
         expect(domain.startRazorpayPayment).toHaveBeenCalled();
+      });
+
+      it("passes the signed-in customer from the session cookie to placeOrder, and ignores a customerId sent in the body (audit A3-03)", async () => {
+        const domain = await import("@bs/domain");
+        const { POST } = await import("../src/app/api/storefront/checkout/place-order/route.ts");
+        const post = (cookie: string, extra: Record<string, unknown> = {}) =>
+          POST(
+            new Request("https://demo.bcom.si/api/storefront/checkout/place-order", {
+              method: "POST",
+              headers: { host: "demo.bcom.si", "content-type": "application/json", cookie },
+              body: JSON.stringify({
+                email: "buyer@example.in", phone: "9876543210", fullName: "Aarav Sharma", addressLine1: "123 MG Road",
+                city: "Bengaluru", state: "Karnataka", pincode: "560001", paymentMethod: "cod", ...extra,
+              }),
+            }),
+          );
+        vi.mocked(domain.placeOrder).mockClear();
+        expect((await post("bs_cart_token=cart-token-1234; bs_customer_token=valid-customer-token")).status).toBe(200);
+        expect(vi.mocked(domain.placeOrder).mock.calls.at(-1)?.[2].customerId).toBe("cust-signed-in");
+
+        // No session, or a session that is not valid: no customer, and a customerId in the body changes nothing.
+        expect((await post("bs_cart_token=cart-token-1234; bs_customer_token=forged", { customerId: "cust-someone-else" })).status).toBe(200);
+        expect(vi.mocked(domain.placeOrder).mock.calls.at(-1)?.[2].customerId).toBeUndefined();
       });
 
       it("returns 503 Service Unavailable when checkout feature flag is disabled", async () => {

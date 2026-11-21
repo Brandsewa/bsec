@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { isPlaceholderCustomerEmail } from "./placeholder-email.ts";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { checkRateLimit, RateLimitExceededError } from "../system/rate-limit.ts";
 import { type Db, orders, orderItems, orderEvents, fulfillments, fulfillmentItems, trackingEvents, returns, actionTokens, customers, withTenant } from "@bs/db";
@@ -192,7 +193,7 @@ export async function ownedBy(tx: Db, tenantId: string, customerId: string) {
   if (c.phone && c.phoneVerified) {
     conditions.push(eq(orders.phone, c.phone));
   }
-  if (c.email && c.emailVerified && !c.email.endsWith("@customer.store")) {
+  if (c.email && c.emailVerified && !isPlaceholderCustomerEmail(c.email)) {
     conditions.push(eq(orders.email, c.email));
   }
   const primary = conditions[0] ?? eq(orders.customerId, customerId);

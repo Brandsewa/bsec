@@ -8,6 +8,7 @@ import {
   MoveDown,
   MoveUp,
   Package,
+  Pencil,
   Plus,
   Sparkles,
   Trash2,
@@ -23,6 +24,7 @@ import { ConfirmDialog } from "@bs/ui";
 import { ScrollTabs } from "@bs/ui";
 import { TableToolbar } from "../../components/data-table/table-toolbar.tsx";
 import { errorMessage } from "../../lib/errors.ts";
+import { openBulkEditor } from "../../lib/bulk-edit-entry.ts";
 import { orpc } from "../../lib/orpc.ts";
 
 type CategoryStatusFilter = "all" | "active" | "featured" | "inactive";
@@ -183,10 +185,16 @@ export function CategoriesPage() {
         title="Categories"
         description="Organize your products into a clean, searchable hierarchy for storefront navigation."
         aside={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" disabled={categories.length === 0} onClick={() => openBulkEditor("categories", categories.map((r) => r.id), () => void navigate({ to: "/categories/bulk-edit" }))}>
+              <Pencil className="mr-1.5 size-4" aria-hidden />
+              Bulk edit
+            </Button>
           <Button render={<Link to="/categories/new" />} size="default">
             <Plus className="mr-1.5 size-4" aria-hidden />
             Add category
           </Button>
+          </div>
         }
       />
 

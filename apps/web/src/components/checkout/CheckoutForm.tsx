@@ -1,12 +1,17 @@
 "use client";
 
 import { payWithRazorpay } from "@/lib/razorpay-client.ts";
-import { priceOrder } from "@bs/domain/pricing";
-import React, { useEffect, useState } from "react";
+import type { StripeConfig, StripePaymentApi } from "@/lib/stripe-client.ts";
+import { StripePaymentElement } from "./StripePaymentElement.tsx";
+import { TurnstileWidget } from "@/components/marketing/TurnstileWidget.tsx";
+import { TurnstileBridge } from "./TurnstileBridge.tsx";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
 import { phoneProblem, postalCodeProblem, regionsFor } from "@bs/domain/addresses";
-import { useMoney } from "@/components/market/MarketProvider.tsx";
+import { countryName } from "@bs/contracts/countries";
+import { useMarket, useMoney } from "@/components/market/MarketProvider.tsx";
 
 export const INDIAN_STATES_AND_UTS = [
   "Andaman and Nicobar Islands",
@@ -64,6 +69,8 @@ export interface CheckoutPaymentOptions {
   onlineAvailable: boolean;
   /** What this market offers, in order (ADR-040). When absent the store has only COD and Razorpay, as before markets. */
   methods?: Array<"cod" | "razorpay" | "stripe" | "paypal"> | undefined;
+  /** Set when Stripe is offered and the store saved a publishable key: the card fields show inside this page (ADR-048). */
+  stripeElements?: StripeConfig | null | undefined;
 }
 
 /** The countries the shopper's market sells to. One country: the checkout fixes it and shows no country field. */
@@ -72,7 +79,22 @@ export interface CheckoutRegion {
   defaultCountry: string;
 }
 
-const COUNTRY_LABELS: Record<string, string> = { IN: "India", US: "United States", CA: "Canada" };
+/** Wording the merchant set for the shipping and payment sections (Settings > Checkout and the payment gateway screen). */
+export interface CheckoutDisplay {
+  shippingTitle: string;
+  shippingFreeLabel: string;
+  paymentTitle: string;
+  /** Keyed by provider: cod, razorpay, stripe, paypal. */
+  payment: Record<string, { title: string; subtitle: string; logos: Array<{ url: string; alt: string }> }>;
+}
+
+/** Every country the store sells to, across its markets, so the shopper picks the country first and the market follows. */
+export interface CheckoutCountryPicker {
+  options: Array<{ code: string; marketHandle: string }>;
+  currentMarketHandle: string;
+}
+
+const DEFAULT_DISPLAY: CheckoutDisplay = { shippingTitle: "Shipping Method", shippingFreeLabel: "Free", paymentTitle: "Payment Method", payment: {} };
 const PHONE_PREFIX: Record<string, string> = { IN: "+91", US: "+1", CA: "+1" };
 
 type PaymentChoice = "cod" | "online" | "stripe" | "paypal";
@@ -118,12 +140,18 @@ export interface CheckoutFormProps {
   paymentOptions: CheckoutPaymentOptions;
   consent: StorefrontCheckoutConsent;
   region?: CheckoutRegion | undefined;
+  display?: CheckoutDisplay | undefined;
+  countryPicker?: CheckoutCountryPicker | undefined;
   paymentMethod?: PaymentChoice;
   onPaymentMethodChange?: (method: PaymentChoice) => void;
   shippingMethod?: string;
   onShippingMethodChange?: (method: string) => void;
   /** Called with the state and country the order ships to, on first render and whenever they change, so shipping options can follow. */
   onShippingStateChange?: (state: string, country: string) => void;
+  /** Public Cloudflare Turnstile key; set only when the platform has both keys, which is when the server asks for a token. */
+  turnstileSiteKey?: string | null | undefined;
+  /** Set for a store on its own domain: the origin that serves the challenge frame (Cloudflare lists only a few hostnames). */
+  turnstileBridgeOrigin?: string | null | undefined;
 }
 
 export function CheckoutForm({
@@ -135,14 +163,19 @@ export function CheckoutForm({
   paymentOptions,
   consent,
   region = { countries: ["IN"], defaultCountry: "IN" },
+  display = DEFAULT_DISPLAY,
+  countryPicker,
   paymentMethod: controlledPaymentMethod,
   onPaymentMethodChange,
   shippingMethod: controlledShippingMethod,
   onShippingMethodChange,
   onShippingStateChange,
+  turnstileSiteKey = null,
+  turnstileBridgeOrigin = null,
 }: CheckoutFormProps) {
   const router = useRouter();
   const money = useMoney();
+  const { currency } = useMarket();
 
   // A saved address (the default one, else the first that fits) is chosen up front when the shopper has any.
   const initialSaved = savedAddresses.find((a) => addressFields(a).state) ?? null;
@@ -150,6 +183,10 @@ export function CheckoutForm({
   const [selectedId, setSelectedId] = useState<string | null>(initialSaved?.id ?? null);
   const [addrMode, setAddrMode] = useState<"saved" | "form">(initialSaved ? "saved" : "form");
   const [chooseOpen, setChooseOpen] = useState(false);
+  // Stripe's card fields (Payment Element). Once the order is placed its payment is kept here, so a declined card can be retried
+  // without placing a second order.
+  const stripeApi = useRef<StripePaymentApi | null>(null);
+  const [pendingStripe, setPendingStripe] = useState<{ clientSecret: string; orderToken: string } | null>(null);
 
   // Contact
   const [email, setEmail] = useState(customerEmail);
@@ -226,9 +263,41 @@ export function CheckoutForm({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bot check (audit A3-04). A token works once, so the widget is remounted (nonce) after every refused attempt.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileNonce, setTurnstileNonce] = useState(0);
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
 
   // The price comes from the store's own shipping rates (the same ones the order is charged with).
   const currentShippingPaise = (shippingRates.find((r) => r.method === shippingMethod) ?? shippingRates[0])?.amount ?? 0;
+  const orderTotal = priceOrder({ subtotal: cart.subtotal, shipping: currentShippingPaise, codFee: codFeePaise, discounts: toPricingDiscounts(cart.discounts) }).grandTotal;
+  const stripeElementsConfig = paymentMethod === "stripe" ? (paymentOptions.stripeElements ?? null) : null;
+
+  /** Confirms the Stripe payment. On success Stripe sends the window to our return route, which settles the order. */
+  const confirmStripe = async (clientSecret: string, orderToken: string) => {
+    const returnUrl = `${window.location.origin}/api/storefront/checkout/return?provider=stripe&ot=${encodeURIComponent(orderToken)}`;
+    const failure = stripeApi.current ? await stripeApi.current.pay(clientSecret, returnUrl) : "The payment form is not ready. Please try again.";
+    if (failure) {
+      setError(failure);
+      setLoading(false);
+    }
+  };
+
+  /** Gives the held order up (same as closing the Razorpay window): it is cancelled and the cart restored. */
+  const abandonStripeOrder = () => {
+    if (!pendingStripe) return;
+    void fetch("/api/storefront/checkout/abandon", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderToken: pendingStripe.orderToken, reason: "cancelled" }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({}))
+      .then((back: { redirectUrl?: string }) => {
+        window.dispatchEvent(new Event("cart-updated"));
+        window.location.assign(back.redirectUrl ?? "/checkout?payment=cancelled");
+      });
+  };
 
   // Shipping options follow the state the order ships to (the separate shipping address when one is used).
   const shippingState = shipDifferent ? shipState : state;
@@ -249,6 +318,19 @@ export function CheckoutForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // The order is already placed and only the card was refused: try the same payment again, do not place another order.
+    if (stripeElementsConfig && pendingStripe) {
+      setLoading(true);
+      const issue = (await stripeApi.current?.validate()) ?? null;
+      if (issue) {
+        setError(issue);
+        setLoading(false);
+        return;
+      }
+      await confirmStripe(pendingStripe.clientSecret, pendingStripe.orderToken);
+      return;
+    }
 
     // Phone and postal code are checked for the country being shipped to (India keeps its exact rules).
     const cleanPhone = phone.replace(/\D/g, "");
@@ -303,6 +385,24 @@ export function CheckoutForm({
       return;
     }
 
+    // Stripe's fields are checked before the order is placed, so a typo never leaves an unpaid order behind.
+    if (stripeElementsConfig) {
+      if (!stripeApi.current) {
+        setError("The payment form is still loading. Please wait a moment and try again.");
+        return;
+      }
+      const issue = await stripeApi.current.validate();
+      if (issue) {
+        setError(issue);
+        return;
+      }
+    }
+
+    if (turnstileSiteKey && !turnstileToken) {
+      setError(turnstileFailed ? "The security check could not load. Please reload the page or try another browser." : "The security check is still running. Please wait a moment and try again.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -337,6 +437,7 @@ export function CheckoutForm({
             : undefined,
           termsConsent: consent.termsRequired ? termsAccepted : undefined,
           marketingConsent: consent.marketing ? marketingAccepted : undefined,
+          turnstileToken: turnstileSiteKey ? (turnstileToken ?? undefined) : undefined,
         }),
       });
 
@@ -355,6 +456,14 @@ export function CheckoutForm({
         // Stripe and PayPal: the shopper pays on the provider's own page and comes back to the order page.
         if (data.checkoutUrl) {
           window.location.assign(data.checkoutUrl);
+          return;
+        }
+        // Stripe with a publishable key: the card fields are already on this page; confirm the payment with them. Stripe sends
+        // the window on when the shopper has paid.
+        if (data.stripe && data.orderToken && stripeElementsConfig) {
+          const orderToken = data.orderToken as string;
+          setPendingStripe({ clientSecret: (data.stripe as { clientSecret: string }).clientSecret, orderToken });
+          await confirmStripe((data.stripe as { clientSecret: string }).clientSecret, orderToken);
           return;
         }
         if (data.razorpay && data.orderToken) {
@@ -381,6 +490,10 @@ export function CheckoutForm({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error placing order");
       setLoading(false);
+      if (turnstileSiteKey) {
+        setTurnstileToken(null);
+        setTurnstileNonce((n) => n + 1);
+      }
     }
   };
 
@@ -423,6 +536,43 @@ export function CheckoutForm({
           </div>
         ) : null}
       </section>
+
+      {/* 2a. Country first: the market (currency, shipping, payment methods) follows the country */}
+      {countryPicker ? (
+        <section className={CARD} data-testid="checkout-country">
+          <h2 className="mb-2.5 text-base font-semibold tracking-tight text-foreground sm:text-lg">Country</h2>
+          <div className="relative">
+            <select
+              id="checkout-market-country"
+              value={country}
+              onChange={(e) => {
+                const next = countryPicker.options.find((o) => o.code === e.target.value);
+                if (!next) return;
+                if (next.marketHandle === countryPicker.currentMarketHandle) {
+                  changeCountry(next.code, setCountry, setState);
+                  return;
+                }
+                // Another market: prices, shipping and payment methods all change, so the server switches market and reloads this page.
+                window.location.assign(`/api/storefront/market/select?handle=${encodeURIComponent(next.marketHandle)}&next=${encodeURIComponent(`/checkout?country=${next.code}`)}`);
+              }}
+              className={`${FIELD_CLASS} appearance-none pr-8`}
+            >
+              {countryPicker.options.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {countryName(o.code)}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="checkout-market-country" className={LABEL_TOP}>
+              Country / region *
+            </label>
+            <svg aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Shipping options, prices and payment methods depend on where you are ordering from.</p>
+        </section>
+      ) : null}
 
       {/* 2. Billing and shipping address; one form, or two when the order ships elsewhere */}
       <section className={CARD}>
@@ -489,7 +639,7 @@ export function CheckoutForm({
           idPrefix="checkout"
           showName={false}
           country={country}
-          countries={region.countries}
+          countries={countryPicker ? [country] : region.countries}
           onCountryChange={(c) => changeCountry(c, setCountry, setState)}
           values={{ fullName, addressLine1, city, state, pincode }}
           onChange={(k, v) => {
@@ -536,7 +686,7 @@ export function CheckoutForm({
 
       {/* 3. Shipping Method: the store's own options and prices */}
       <section className={CARD}>
-        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Shipping Method</h2>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">{display.shippingTitle}</h2>
         <div className="grid grid-cols-1 gap-2">
           {shippingRates.map((rate) => (
             <label
@@ -558,7 +708,7 @@ export function CheckoutForm({
                 </div>
               </div>
               <span className="text-sm font-bold text-foreground">
-                {rate.amount === 0 ? "Free" : money(rate.amount)}
+                {rate.amount === 0 ? display.shippingFreeLabel : money(rate.amount)}
               </span>
             </label>
           ))}
@@ -567,7 +717,7 @@ export function CheckoutForm({
 
       {/* 4. Payment Method: only what this store can really take */}
       <section className={CARD}>
-        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">Payment Method</h2>
+        <h2 className="mb-3 text-base font-semibold tracking-tight text-foreground sm:text-lg">{display.paymentTitle}</h2>
         <div className="space-y-2">
           {available.includes("cod") && (
             <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
@@ -581,23 +731,25 @@ export function CheckoutForm({
                   className="text-primary focus:ring-primary"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Cash on Delivery (COD)</p>
+                  <p className="text-sm font-semibold text-foreground">{display.payment.cod?.title || "Cash on Delivery (COD)"}</p>
                   <p className="text-xs text-muted-foreground">
-                    Pay with cash or UPI upon delivery
+                    {display.payment.cod?.subtitle || "Pay with cash or UPI upon delivery"}
                     {paymentOptions.codFeePaise > 0 ? ` (${money(paymentOptions.codFeePaise)} handling fee)` : ""}
                   </p>
                 </div>
               </div>
+              <PaymentLogos logos={display.payment.cod?.logos} />
             </label>
           )}
 
           {([
             ["online", "UPI / Card / NetBanking", "Pay securely online"],
-            ["stripe", "Credit or debit card", "Pay securely on Stripe's payment page"],
+            ["stripe", "Credit or debit card", paymentOptions.stripeElements ? "Pay securely with your card or a wallet" : "Pay securely on Stripe's payment page"],
             ["paypal", "PayPal", "Pay with your PayPal account or card"],
           ] as const).map(([value, title, hint]) =>
             available.includes(value) ? (
-              <label key={value} className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+              <React.Fragment key={value}>
+              <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3.5 py-2.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
@@ -608,11 +760,18 @@ export function CheckoutForm({
                     className="text-primary focus:ring-primary"
                   />
                   <div>
-                    <p className="text-sm font-semibold text-foreground">{title}</p>
-                    <p className="text-xs text-muted-foreground">{hint}</p>
+                    <p className="text-sm font-semibold text-foreground">{display.payment[value === "online" ? "razorpay" : value]?.title || title}</p>
+                    <p className="text-xs text-muted-foreground">{display.payment[value === "online" ? "razorpay" : value]?.subtitle || hint}</p>
                   </div>
                 </div>
+                <PaymentLogos logos={display.payment[value === "online" ? "razorpay" : value]?.logos} />
               </label>
+              {value === "stripe" && stripeElementsConfig ? (
+                <div className="rounded-lg border border-border bg-background p-3.5">
+                  <StripePaymentElement config={stripeElementsConfig} mode={{ kind: "deferred", amount: orderTotal, currency }} amount={orderTotal} apiRef={stripeApi} />
+                </div>
+              ) : null}
+              </React.Fragment>
             ) : null,
           )}
 
@@ -693,22 +852,62 @@ export function CheckoutForm({
       {error && (
         <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive font-medium">
           {error}
+          {pendingStripe ? (
+            <button type="button" onClick={abandonStripeOrder} className="mt-2 block text-sm font-medium underline">
+              Cancel this order and start over
+            </button>
+          ) : null}
         </div>
       )}
 
+      {turnstileSiteKey ? (
+        <div>
+          {turnstileBridgeOrigin ? (
+            <TurnstileBridge
+              key={turnstileNonce}
+              origin={turnstileBridgeOrigin}
+              onToken={(token) => {
+                setTurnstileToken(token);
+                if (token) setTurnstileFailed(false);
+              }}
+              onFailure={() => setTurnstileFailed(true)}
+            />
+          ) : (
+            <TurnstileWidget
+              key={turnstileNonce}
+              siteKey={turnstileSiteKey}
+              appearance="interaction-only"
+              onToken={(token) => {
+                setTurnstileToken(token);
+                if (token) setTurnstileFailed(false);
+              }}
+              onFailure={() => setTurnstileFailed(true)}
+            />
+          )}
+          {turnstileFailed ? (
+            <p role="alert" className="mt-2 text-sm text-foreground">
+              The security check could not load, so the order cannot be placed yet.{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setTurnstileFailed(false);
+                  setTurnstileNonce((n) => n + 1);
+                }}
+              >
+                Try again
+              </button>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <button
         type="submit"
-        disabled={loading || noPaymentMethod}
+        disabled={loading || noPaymentMethod || (Boolean(turnstileSiteKey) && !turnstileToken)}
         className="w-full rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {loading ? "Processing Order..." : `Place Order (${money(
-          priceOrder({
-            subtotal: cart.subtotal,
-            shipping: currentShippingPaise,
-            codFee: codFeePaise,
-            discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
-          }).grandTotal,
-        )})`}
+        {loading ? "Processing Order..." : turnstileSiteKey && !turnstileToken && !turnstileFailed ? "Checking security..." : `${pendingStripe ? "Try payment again" : "Place Order"} (${money(orderTotal)})`}
       </button>
     </form>
   );
@@ -770,6 +969,19 @@ function PhoneField({ id, label, value, onChange, required = true, country = "IN
   );
 }
 
+/** Small card and wallet images the merchant uploaded, on the right of a payment option. */
+function PaymentLogos({ logos }: { logos?: Array<{ url: string; alt: string }> | undefined }) {
+  if (!logos || logos.length === 0) return null;
+  return (
+    <span className="ml-3 flex shrink-0 flex-wrap items-center justify-end gap-1.5" data-testid="payment-logos">
+      {logos.map((l) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={l.url} src={l.url} alt={l.alt} loading="lazy" className="h-5 w-auto max-w-[3.25rem] object-contain" />
+      ))}
+    </span>
+  );
+}
+
 type AddressKey = "fullName" | "addressLine1" | "city" | "state" | "pincode";
 
 /** Name, street, city, state and postal code: used once for the billing and shipping address, and again for a separate shipping address. */
@@ -801,7 +1013,7 @@ function AddressFields({
           <select id={`${idPrefix}-country`} value={country} onChange={(e) => onCountryChange?.(e.target.value)} className={`${FIELD_CLASS} appearance-none pr-8`}>
             {countries.map((c) => (
               <option key={c} value={c}>
-                {COUNTRY_LABELS[c] ?? c}
+                {countryName(c)}
               </option>
             ))}
           </select>

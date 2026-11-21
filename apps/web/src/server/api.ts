@@ -86,6 +86,7 @@ import {
   deletePage,
   deleteProduct,
   duplicatePage,
+  activateHomePage,
   findDuplicates,
   unpublishPage,
   getBrandSettings,
@@ -108,6 +109,7 @@ import {
   listMemberships,
   listMenus,
   listPages,
+  getPageVersion,
   listPageVersions,
   listThemeLibrary,
   activateTheme,
@@ -162,6 +164,10 @@ import {
   updateMenu,
   updatePage,
   updateProduct,
+  bulkUpdateProducts,
+  bulkUpdateCategories,
+  bulkUpdateCollections,
+  getProductsForBulkEdit,
   updateStoreSettings,
   updateTheme,
   updateVariant,
@@ -185,6 +191,18 @@ import {
   searchStorefrontProducts,
   getSearchSuggestions,
   getOrCreateCart,
+  listStoreApps,
+  installApp,
+  setAppStatus,
+  uninstallApp,
+  updateAppSettings,
+  listIndianStates,
+  getProductStatePricing,
+  setVariantStatePrices,
+  setAppPinned,
+  listStatePricingGrid,
+  setStatePricesBulk,
+  lookupVariantsBySku,
   addToCart,
   updateCartItemQuantity,
   removeCartItem,
@@ -276,6 +294,9 @@ import {
   updateAdminDiscount,
   getAdminDiscount,
   deleteAdminDiscount,
+  getAdminDiscountStats,
+  generateDiscountCodes,
+  listDiscountCodes,
   checkAdminApiRateLimit,
   checkStorefrontRateLimit,
   RateLimitExceededError,
@@ -357,11 +378,16 @@ import {
   endMaintenance,
   listStoreStatusTransitions,
   getStorageUsage,
+  getSeoHealth,
   getSettingsUpdate,
   applySettingsUpdate,
   getCookieInventory,
   resolvePeriod,
   getFinanceOverview,
+  getAnalyticsOverview,
+  getAnalyticsReport,
+  saveConversionCredentials,
+  clearConversionCredentials,
   getDistinctCurrencies,
   listLedgerEntriesForAdmin,
   getTrialBalanceForAdmin,
@@ -402,6 +428,7 @@ import {
   getBlogSettings,
   updateBlogSettings,
   getPublicGoogleSignin,
+  getPublicLoginPanel,
   getStoreGoogleSignin,
   setStoreGoogleClientId,
   updateStoreGoogleSignin,
@@ -413,6 +440,7 @@ import {
 import { server } from "./runtime.ts";
 import { allowedApiOrigins, ensureStaffAuthFresh, getStaffAuth, readAuthSettings, resolveStaffSession } from "./auth.ts";
 import { isForbiddenStaffOrigin } from "./csrf.ts";
+import { escapeCsv, quoteCsv } from "./csv.ts";
 import { clientIp } from "./client-ip.ts";
 
 /**
@@ -706,6 +734,111 @@ export const storeRouter = os.router({
           return disconnectStoreGoogle(context.rt, context.tenantCtx);
         }),
     },
+    apps: {
+      list: os.admin.apps.list
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStoreApps(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      install: os.admin.apps.install
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return installApp(context.rt, context.tenantCtx, input.key).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setStatus: os.admin.apps.setStatus
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAppStatus(context.rt, context.tenantCtx, input.key, input.status).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      uninstall: os.admin.apps.uninstall
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return uninstallApp(context.rt, context.tenantCtx, input.key).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      updateSettings: os.admin.apps.updateSettings
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return updateAppSettings(context.rt, context.tenantCtx, input.key, input.settings).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPinned: os.admin.apps.setPinned
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setAppPinned(context.rt, context.tenantCtx, input.key, input.pinned).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      listGrid: os.admin.apps.listGrid
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listStatePricingGrid(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setPricesBulk: os.admin.apps.setPricesBulk
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setStatePricesBulk(context.rt, context.tenantCtx, input.items).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      lookupSkus: os.admin.apps.lookupSkus
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return lookupVariantsBySku(context.rt, context.tenantCtx, input.skus).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      states: os.admin.apps.states
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context }) => listIndianStates(context.rt)),
+      getProductPricing: os.admin.apps.getProductPricing
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProductStatePricing(context.rt, context.tenantCtx, input.productId).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setVariantPricing: os.admin.apps.setVariantPricing
+        .use(requireAdmin)
+        .use(requirePermission("apps.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return setVariantStatePrices(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
     markets: {
       list: os.admin.markets.list
         .use(requireAdmin)
@@ -853,6 +986,7 @@ export const storeRouter = os.router({
               return await saveStripeCredentials(context.rt, context.tenantCtx, {
                 secretKey: input.keySecret,
                 webhookSecret: input.webhookSecret,
+                publishableKey: input.keyId,
               });
             }
             if (input.provider === "paypal") {
@@ -1266,6 +1400,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getPrivacySettings(context.rt, context.tenantCtx);
         }),
+      saveConversionCredentials: os.admin.customerPrivacy.saveConversionCredentials
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return saveConversionCredentials(context.rt, context.tenantCtx, input);
+        }),
+      clearConversionCredentials: os.admin.customerPrivacy.clearConversionCredentials
+        .use(requireAdmin)
+        .use(requirePermission("privacy.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return clearConversionCredentials(context.rt, context.tenantCtx, input.provider);
+        }),
       updateSettings: os.admin.customerPrivacy.updateSettings
         .use(requireAdmin)
         .use(requirePermission("privacy.manage"))
@@ -1446,6 +1594,20 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateProduct(context.rt, context.tenantCtx, input);
         }),
+      getMany: os.admin.products.getMany
+        .use(requireAdmin)
+        .use(requirePermission("products.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getProductsForBulkEdit(context.rt, context.tenantCtx, input);
+        }),
+      bulkUpdate: os.admin.products.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateProducts(context.rt, context.tenantCtx, input);
+        }),
       delete: os.admin.products.delete
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -1570,6 +1732,13 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCategory(context.rt, context.tenantCtx, input);
         }),
+      bulkUpdate: os.admin.categories.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateCategories(context.rt, context.tenantCtx, input);
+        }),
       delete: os.admin.categories.delete
         .use(requireAdmin)
         .use(requirePermission("products.write"))
@@ -1615,6 +1784,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return updateCollection(context.rt, context.tenantCtx, input);
+        }),
+      bulkUpdate: os.admin.collections.bulkUpdate
+        .use(requireAdmin)
+        .use(requirePermission("products.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return bulkUpdateCollections(context.rt, context.tenantCtx, input);
         }),
       delete: os.admin.collections.delete
         .use(requireAdmin)
@@ -2185,6 +2361,13 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listPageVersions(context.rt, context.tenantCtx, input);
         }),
+      version: os.admin.pages.version
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getPageVersion(context.rt, context.tenantCtx, input);
+        }),
       blockData: os.admin.pages.blockData
         .use(requireAdmin)
         .use(requirePermission("content.write"))
@@ -2254,6 +2437,13 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return duplicatePage(context.rt, context.tenantCtx, input);
+        }),
+      activateHome: os.admin.pages.activateHome
+        .use(requireAdmin)
+        .use(requirePermission("theme.publish"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return activateHomePage(context.rt, context.tenantCtx, input);
         }),
     },
 
@@ -2896,6 +3086,29 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return deleteAdminDiscount(context.rt, context.tenantCtx, input);
         }),
+      stats: os.admin.discounts.stats
+        .use(requireAdmin)
+        .use(requirePermission("discounts.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAdminDiscountStats(context.rt, context.tenantCtx, input);
+        }),
+      codes: {
+        generate: os.admin.discounts.codes.generate
+          .use(requireAdmin)
+          .use(requirePermission("discounts.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return generateDiscountCodes(context.rt, context.tenantCtx, input);
+          }),
+        list: os.admin.discounts.codes.list
+          .use(requireAdmin)
+          .use(requirePermission("discounts.write"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listDiscountCodes(context.rt, context.tenantCtx, input);
+          }),
+      },
     },
     shipping: {
       get: os.admin.shipping.get
@@ -3013,6 +3226,17 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return applySettingsUpdate(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    seo: {
+      health: os.admin.seo.health
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getSeoHealth(context.rt, context.tenantCtx).catch((e) => {
             throw mapAuthError(e);
           });
         }),
@@ -3287,6 +3511,22 @@ export const storeRouter = os.router({
         .handler(({ context, input }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return listAdminAbandonedCheckouts(context.rt, context.tenantCtx, input);
+        }),
+    },
+    analytics: {
+      overview: os.admin.analytics.overview
+        .use(requireAdmin)
+        .use(requirePermission("analytics.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAnalyticsOverview(context.rt, context.tenantCtx, input);
+        }),
+      report: os.admin.analytics.report
+        .use(requireAdmin)
+        .use(requirePermission("analytics.read"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAnalyticsReport(context.rt, context.tenantCtx, input);
         }),
     },
     finance: {
@@ -3649,6 +3889,12 @@ api.get("/public/google-signin", async (c) => {
   return c.json(cfg, 200, { "cache-control": "no-store" });
 });
 
+/** Public content for the panel beside the admin sign-in form (text, colours, picture). */
+api.get("/public/login-panel", async (c) => {
+  const panel = await getPublicLoginPanel(server().rt._db.db);
+  return c.json(panel, 200, { "cache-control": "public, max-age=60" });
+});
+
 api.all("/auth/*", async (c) => {
   await ensureStaffAuthFresh();
   const cfg = getStaffAuth();
@@ -3970,14 +4216,6 @@ api.get("/admin/finance/export", async (c) => {
 
   const MAX_EXPORT_ROWS = 20_000;
   const BOM = "\uFEFF";
-  const escapeCsv = (val: unknown): string => {
-    if (val === null || val === undefined) return "";
-    const str = String(val);
-    if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
 
   if (exportType === "expenses") {
     const res = await listExpenses(server().rt._db, tenantCtx, {
@@ -4001,7 +4239,7 @@ api.get("/admin/finance/export", async (c) => {
           escapeCsv(exp.category),
           escapeCsv(exp.paidFrom),
           escapeCsv(exp.payee),
-          escapeCsv((exp.amount / 100).toFixed(2)),
+          quoteCsv((exp.amount / 100).toFixed(2)),
           escapeCsv(exp.currency),
           escapeCsv(exp.settlement ? `Yes (${exp.settlement.settledAt})` : "No"),
           escapeCsv(exp.note),
@@ -4044,7 +4282,7 @@ api.get("/admin/finance/export", async (c) => {
         escapeCsv(entry.date),
         escapeCsv(entry.accountDebit),
         escapeCsv(entry.accountCredit),
-        escapeCsv((entry.amount / 100).toFixed(2)),
+        quoteCsv((entry.amount / 100).toFixed(2)),
         escapeCsv(entry.currency),
         escapeCsv(entry.sourceKind),
         escapeCsv(entry.sourceId),

@@ -6,6 +6,7 @@ import { galleryImagesField } from "./GalleryImagesField.tsx";
 import { iconField } from "./IconField.tsx";
 import { menuField } from "./MenuField.tsx";
 import { collectionsField } from "./CollectionsField.tsx";
+import { productsField } from "./ProductsField.tsx";
 import { trustStylesField } from "./TrustStripField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
@@ -344,7 +345,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   Reviews: { label: "Reviews", category: "store", fields: { title: text("Heading"), showAggregate: radio("Show average"), limit: num("How many", 1, 20) } },
   Gallery: { label: "Gallery", category: "bcom", fields: { title: text("Heading"), description: area("Description under the heading"), headerAlign: rsel("Heading and description alignment", { left: "Left", center: "Middle", right: "Right" }), titleGap: rnum("Space between heading and description (px)", 0, 80), headerGap: rnum("Space between the heading area and the pictures (px)", 0, 120), images: galleryImagesField("Pictures (pick many, drag to reorder)") as Field, layout: rsel("Style", { masonry: "Masonry (each picture keeps its shape)", grid: "Even grid" }), columnsDesktop: rsel("Pictures per row: desktop", { "2": "2", "3": "3", "4": "4", "5": "5", "6": "6" }), columnsTablet: rsel("Pictures per row: tablet", { "1": "1", "2": "2", "3": "3", "4": "4" }), columnsMobile: rsel("Pictures per row: phone", { "1": "1", "2": "2", "3": "3" }), gap: rnum("Space between pictures (px)", 0, 48), radius: rnum("Corner radius (px)", 0, 48), heightMode: rsel("Picture height", { auto: "Automatic", manual: "Fixed height" }), manualHeight: rnum("Fixed height (px)", 80, 800), lightbox: radio("Open in a viewer with arrows and thumbnails when clicked") } },
   SiteHeader: { label: "Header", category: "store", fields: { menuHandle: menuField("Navigation menu") as Field, logoText: text("Logo text (empty = store logo / name)"), logoMediaId: mediaField("Custom logo image (overrides brand logo)") as Field, logoSize: logoSizeField("Logo size") as Field, layout: select("Layout", { left: "Logo left, menu next to it", navCenter: "Logo left, menu in the middle", logoCenter: "Menu left, logo in the middle", logoRight: "Logo right, menu left", center: "Stacked: logo in the middle, menu below" }), links: { type: "array", label: "Fallback menu links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field, showSearch: radio("Search icon"), showAccount: radio("Account icon"), showCart: radio("Cart icon"), sticky: radio("Stay at top while scrolling"), tone: select("Background", TONE) } },
-  SiteFooter: { label: "Footer", category: "store", fields: { layout: select("Layout", { columns: "Columns: brand, link columns, newsletter", centered: "Centred: brand on top, link columns in a row", compact: "Compact: brand and links side by side" }), logoMediaId: mediaField("Logo image (empty = brand name)") as Field, logoSize: logoSizeField("Logo size") as Field, logoText: text("Brand name (empty = store name)"), about: area("About text"), mobileAccordion: radio("Fold link columns into an accordion on phones"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), menuHandle: menuField("Navigation menu") as Field, links: { type: "array", label: "Fallback links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, socials: { type: "array", label: "Social links", getItemSummary: (i: { network?: string }) => i.network ?? "Social link", arrayFields: { network: select("Network", { instagram: "Instagram", facebook: "Facebook", x: "X (Twitter)", youtube: "YouTube", linkedin: "LinkedIn", whatsapp: "WhatsApp", email: "Email", website: "Website" }), url: link("Link") }, defaultItemProps: { network: "instagram", url: "https://" } } as Field, socialStyle: select("Social icon style", { plain: "Plain icon", filled: "Filled circle", outline: "Outlined circle" }), socialColor: select("Social icon colour", { text: "Text colour", brand: "Brand colour" }), socialSize: num("Social icon size (px)", 14, 40), showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), tone: select("Background", TONE), bgColor: colorField("Footer background colour (empty uses the choice above)") as Field, textColor: colorField("Footer text colour (empty follows the background)") as Field } },
+  SiteFooter: { label: "Footer", category: "store", fields: { layout: select("Layout", { columns: "Columns: brand, link columns, newsletter", centered: "Centred: brand on top, link columns in a row", compact: "Compact: brand and links side by side" }), logoMediaId: mediaField("Logo image (empty = brand name)") as Field, logoSize: logoSizeField("Logo size") as Field, logoText: text("Brand name (empty = store name)"), about: area("About text"), mobileAccordion: radio("Fold link columns into an accordion on phones"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), menuHandle: menuField("Navigation menu") as Field, links: { type: "array", label: "Fallback links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, socials: { type: "array", label: "Social links", getItemSummary: (i: { network?: string }) => i.network ?? "Social link", arrayFields: { network: select("Network", { instagram: "Instagram", facebook: "Facebook", x: "X (Twitter)", youtube: "YouTube", linkedin: "LinkedIn", whatsapp: "WhatsApp", email: "Email", website: "Website" }), url: link("Link") }, defaultItemProps: { network: "instagram", url: "https://" } } as Field, socialStyle: select("Social icon style", { plain: "Plain icon", filled: "Filled circle", outline: "Outlined circle" }), socialColor: select("Social icon colour", { text: "Text colour", brand: "Brand colour" }), socialSize: num("Social icon size (px)", 14, 40), showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), bgColor: colorField("Footer background colour (empty keeps the theme's soft background)") as Field, textColor: colorField("Footer text colour (empty is chosen for contrast)") as Field } },
   ProductDetail: {
     label: "Product details",
     category: "store",
@@ -356,7 +357,13 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         fields: {
           galleryPosition: select("Images side", { left: "Left", right: "Right" }),
           thumbPosition: select("Thumbnails", { bottom: "Below the picture", left: "Left of the picture", right: "Right of the picture" }),
-          variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns" }),
+          variantStyle: select("Options as", { pills: "Small pills", buttons: "Buttons", dropdown: "Dropdowns", cards: "Cards (picture, price, saving)" }),
+          showVariantPrice: toggle("Cards: show prices (off shows the name only)") as Field,
+          showVariantBadge: toggle("Cards: show the Save % badge") as Field,
+          variantCardBg: colorField("Cards: background colour") as Field,
+          variantCardActive: colorField("Cards: selected highlight colour") as Field,
+          variantBadgeBg: colorField("Cards: badge colour") as Field,
+          variantBadgeText: colorField("Cards: badge text colour") as Field,
           stickyBuyBox: toggle("Keep buy box in view while scrolling") as Field,
         },
       },
@@ -893,10 +900,11 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
             getItemSummary: (i: { label?: string; source?: string; collectionSlug?: string }, idx?: number) => i.label || i.collectionSlug || i.source || `Tab ${(idx ?? 0) + 1}`,
             arrayFields: {
               label: text("Tab name"),
-              source: select("Products", { newest: "Newest products", featured: "Featured products", collection: "From a collection", related: "Related to the product (product page)" }),
+              source: select("Products", { newest: "Newest products", featured: "Featured products", collection: "From a collection", manual: "Custom (pick products)", related: "Related to the product (product page)" }),
               collectionSlug: text("Collection slug (for \u201cFrom a collection\u201d)"),
+              productSlugs: productsField("Products (for \u201cCustom\u201d)") as Field,
             },
-            defaultItemProps: { label: "New tab", source: "collection", collectionSlug: "" },
+            defaultItemProps: { label: "New tab", source: "collection", collectionSlug: "", productSlugs: [] },
           } as Field,
           limit: num("Products per tab", 2, 24),
           tabsStyle: select("Tab style", { text: "Underlined text", pill: "Pills" }),
@@ -1114,18 +1122,18 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       styles: trustStylesField("Look on each screen size") as Field,
     },
   },
-  MkHero: { label: "Hero", category: "website", fields: { stamp: text("Small label"), title: text("Headline"), lead: area("Introduction"), showNameChecker: radio("Store name checker"), fine: text("Small print") } },
-  MkIncluded: { label: "Included strip", category: "website", fields: { label: text("Label"), items: { type: "array", label: "Points", getItemSummary: (i: { label?: string }) => i.label || "Point", arrayFields: { icon: iconField("Icon") as Field, label: text("Text") }, defaultItemProps: { icon: "check", label: "A point" } } as Field } },
-  MkStatement: { label: "Statement", category: "website", fields: { text: area("Statement"), muted: area("Quieter second part") } },
-  MkFeatures: { label: "Feature grid", category: "website", fields: { eyebrow: text("Small label"), title: text("Heading"), intro: area("Introduction"), tone: select("Background", { soft: "Tinted", default: "Plain" }), items: { type: "array", label: "Features", getItemSummary: (i: { title?: string }) => i.title || "Feature", arrayFields: { title: text("Heading"), body: area("Text") }, defaultItemProps: { title: "A feature", body: "What it does for the store." } } as Field } },
-  MkSteps: { label: "Steps", category: "website", fields: { label: text("Name for screen readers"), items: { type: "array", label: "Steps", getItemSummary: (i: { title?: string }) => i.title || "Step", arrayFields: { icon: iconField("Icon") as Field, title: text("Heading"), body: area("Text") }, defaultItemProps: { icon: "check", title: "A step", body: "What happens in this step." } } as Field } },
-  MkBand: { label: "Dark band", category: "website", fields: { title: text("Heading"), items: { type: "array", label: "Items", getItemSummary: (i: { name?: string }) => i.name || "Item", arrayFields: { name: text("Name"), note: text("Note") }, defaultItemProps: { name: "Name", note: "A short note" } } as Field } },
+  MkHero: { label: "Hero", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), stamp: text("Small label"), title: text("Headline"), lead: area("Introduction"), showNameChecker: radio("Store name checker"), fine: text("Small print") } },
+  MkIncluded: { label: "Included strip", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), label: text("Label"), items: { type: "array", label: "Points", getItemSummary: (i: { label?: string }) => i.label || "Point", arrayFields: { icon: iconField("Icon") as Field, label: text("Text") }, defaultItemProps: { icon: "check", label: "A point" } } as Field } },
+  MkStatement: { label: "Statement", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), text: area("Statement"), muted: area("Quieter second part") } },
+  MkFeatures: { label: "Feature grid", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), eyebrow: text("Small label"), title: text("Heading"), intro: area("Introduction"), tone: select("Background", { soft: "Tinted", default: "Plain" }), items: { type: "array", label: "Features", getItemSummary: (i: { title?: string }) => i.title || "Feature", arrayFields: { icon: iconField("Icon (shown above the heading)") as Field, title: text("Heading"), body: area("Text") }, defaultItemProps: { title: "A feature", body: "What it does for the store." } } as Field, mobileAccordion: radio("Phones: fold each card to its title"), iconPosition: select("Drop-down icon", { right: "After the title", left: "In front of the title" }), iconStyle: select("Drop-down icon shape", { plus: "Plus / minus", chevron: "Arrow" }), iconSize: num("Drop-down icon size (px)", 10, 48), rowPadding: num("Row height: space above and below the title (px)", 4, 48), singleOpen: radio("Opening one closes the others"), openFirst: radio("First card open"), cardSidePadding: num("Phones: space inside each card, left and right (px)", 0, 64) } },
+  MkSteps: { label: "Steps", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), label: text("Name for screen readers"), items: { type: "array", label: "Steps", getItemSummary: (i: { title?: string }) => i.title || "Step", arrayFields: { icon: iconField("Icon") as Field, title: text("Heading"), body: area("Text") }, defaultItemProps: { icon: "check", title: "A step", body: "What happens in this step." } } as Field } },
+  MkBand: { label: "Dark band", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), title: text("Heading"), items: { type: "array", label: "Items", getItemSummary: (i: { name?: string }) => i.name || "Item", arrayFields: { name: text("Name"), note: text("Note") }, defaultItemProps: { name: "Name", note: "A short note" } } as Field } },
   MkFaq: { label: "FAQ", category: "website", fields: { eyebrow: text("Small label"), title: text("Heading"), items: { type: "array", label: "Questions", getItemSummary: (i: { question?: string }) => i.question || "Question", arrayFields: { question: text("Question"), answer: area("Answer") }, defaultItemProps: { question: "A question?", answer: "A clear answer." } } as Field } },
-  MkFinalCall: { label: "Final call", category: "website", fields: { title: text("Heading"), text: text("Text"), showPlansLink: radio("Compare plans link") } },
-  MkDocHeader: { label: "Page header", category: "website", fields: { eyebrow: text("Small label"), title: text("Title"), intro: area("Introduction") } },
+  MkFinalCall: { label: "Final call", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), title: text("Heading"), text: text("Text"), showPlansLink: radio("Compare plans link") } },
+  MkDocHeader: { label: "Page header", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), eyebrow: text("Small label"), title: text("Title"), intro: area("Introduction") } },
   MkDocSection: { label: "Text section", category: "website", fields: { heading: text("Heading"), body: area("Text (**bold**, [link](/path), - lists)"), checks: linesField("Tick list (one per line)", 20) as Field, after: area("Text after the list") } },
   MkValues: { label: "Three points", category: "website", fields: { heading: text("Heading"), items: { type: "array", label: "Points", getItemSummary: (i: { text?: string }) => i.text || "Point", arrayFields: { icon: iconField("Icon") as Field, text: text("Text") }, defaultItemProps: { icon: "check", text: "A short point." } } as Field } },
-  MkHeader: { label: "Header", category: "website", fields: { brand: text("Brand name"), menuHandle: menuField("Navigation menu") as Field, loginLabel: text("Log in label"), loginHref: link("Log in link"), ctaLabel: text("Button label"), ctaHref: link("Button link"), showThemeToggle: radio("Light and dark switch") } },
+  MkHeader: { label: "Header", category: "website", fields: { brand: text("Brand name"), menuHandle: menuField("Navigation menu") as Field, loginLabel: text("Log in label"), loginHref: link("Log in link"), ctaLabel: text("Button label"), ctaHref: link("Button link"), showThemeToggle: radio("Light and dark switch"), layout: select("Layout", { left: "Logo left, menu beside it", "nav-center": "Logo left, menu in the middle", "logo-center": "Logo in the middle, menu on the left" }) } },
   MkFooter: {
     label: "Footer",
     category: "website",
@@ -1138,7 +1146,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
     },
   },
   MkTheme: { label: "Website theme", category: "website", fields: {} },
-  MkPricing: { label: "Pricing table", category: "website", fields: { heading: text("Heading"), description: area("Description") } },
+  MkPricing: { label: "Pricing table", category: "website", fields: { defaultPadding: radio("Keep default top and bottom padding"), heading: text("Heading"), description: area("Description") } },
   MkCompany: { label: "Company details", category: "website", fields: { heading: text("Heading"), after: area("Text after the details") } },
 };
 
@@ -1246,6 +1254,8 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "Reviews",
   // Settings of the website, edited in the Theme tab, never a block to place.
   "MkTheme",
+  // The website uses the store FAQ accordion now.
+  "MkFaq",
 ];
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {

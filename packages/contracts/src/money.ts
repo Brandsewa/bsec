@@ -13,7 +13,7 @@ const MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
   JPY: 0,
 };
 
-/** Currencies markets may use at launch (owner scope: India, USA, Canada). */
+/** Where markets first launched (India, USA, Canada). Kept for callers that mean "the launch set"; markets accept any ISO 4217 currency in use (see countries.ts). */
 export const LAUNCH_CURRENCIES = ["INR", "USD", "CAD"] as const;
 export type LaunchCurrency = (typeof LAUNCH_CURRENCIES)[number];
 
@@ -31,8 +31,41 @@ export function normalizeCurrency(currency: string | null | undefined): string {
   return /^[A-Z]{3}$/.test(c) ? c : DEFAULT_CURRENCY;
 }
 
+const exponentCache = new Map<string, number>();
+
+/** Digits after the decimal point: the table above, else what the runtime's ISO 4217 data says (JPY 0, KWD 3), else 2. */
 export function minorUnitExponent(currency: string): number {
-  return MINOR_UNIT_EXPONENT[normalizeCurrency(currency)] ?? 2;
+  const code = normalizeCurrency(currency);
+  const fixed = MINOR_UNIT_EXPONENT[code];
+  if (fixed !== undefined) return fixed;
+  let exp = exponentCache.get(code);
+  if (exp === undefined) {
+    try {
+      exp = new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
+    } catch {
+      exp = 2;
+    }
+    exponentCache.set(code, exp);
+  }
+  return exp;
+}
+
+/** "USD - US Dollar ($)" for a currency picker. */
+export function currencyLabel(currency: string, locale = "en"): string {
+  const code = normalizeCurrency(currency);
+  let name = code;
+  try {
+    name = new Intl.DisplayNames([locale], { type: "currency" }).of(code) ?? code;
+  } catch {
+    /* keep the code */
+  }
+  let symbol = code;
+  try {
+    symbol = currencySymbol(code, locale);
+  } catch {
+    /* keep the code */
+  }
+  return symbol && symbol !== code ? `${code} - ${name} (${symbol})` : `${code} - ${name}`;
 }
 
 export function defaultLocaleForCurrency(currency: string): string {

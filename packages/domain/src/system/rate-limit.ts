@@ -1,5 +1,7 @@
 import { type Db } from "@bs/db";
+import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
+import { isCloudflareAddress } from "./cloudflare-ips.ts";
 
 export class RateLimitExceededError extends Error {
   readonly status = 429;
@@ -96,7 +98,10 @@ const DEFAULT_TIER_QUOTAS: Record<QuotaKey, { XS: number; S: number; M: number; 
  * Extracts verified client IP behind reverse proxy (PLAN §14 / M7).
  * - Never trusts the first X-Forwarded-For hop (which can be client-forged).
  * - Takes the last hop added by trusted reverse proxy (Caddy / Coolify).
- * - Reads CF-Connecting-IP ONLY if TRUST_CLOUDFLARE=true is explicitly set.
+ * - Reads CF-Connecting-IP ONLY if TRUST_CLOUDFLARE=true is set AND the request really came from Cloudflare: the last
+ *   X-Forwarded-For hop (the address Traefik saw connecting, which a client cannot forge) must be a Cloudflare edge
+ *   address. A caller who reaches the origin directly is believed by their own connecting address, never by a header
+ *   they typed (SEC-001).
  */
 export function getClientIp(
   headers: Headers | Record<string, string | string[] | undefined>,
@@ -111,25 +116,26 @@ export function getClientIp(
     return val ?? undefined;
   };
 
-  // 1. Guarded Cloudflare check: only trust CF-Connecting-IP when explicitly configured
-  if (process.env.TRUST_CLOUDFLARE === "true") {
-    const cfIp = getHeader("cf-connecting-ip");
-    if (cfIp && cfIp.trim()) {
-      return cfIp.trim();
+  const xForwardedFor = getHeader("x-forwarded-for");
+  const hops = xForwardedFor
+    ? xForwardedFor
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean)
+    : [];
+  const lastHop = hops[hops.length - 1];
+
+  // 1. Guarded Cloudflare check: only when configured, only from a Cloudflare peer, only a well-formed address
+  if (process.env.TRUST_CLOUDFLARE === "true" && lastHop && isCloudflareAddress(lastHop)) {
+    const cfIp = getHeader("cf-connecting-ip")?.trim();
+    if (cfIp && isIP(cfIp) !== 0) {
+      return cfIp;
     }
   }
 
-  // 2. Reverse proxy hop parsing: take the last untrusted hop
-  const xForwardedFor = getHeader("x-forwarded-for");
-  if (xForwardedFor) {
-    const hops = xForwardedFor
-      .split(",")
-      .map((h) => h.trim())
-      .filter(Boolean);
-    const lastHop = hops[hops.length - 1];
-    if (lastHop) {
-      return lastHop;
-    }
+  // 2. Reverse proxy hop parsing: take the last hop added by the trusted reverse proxy
+  if (lastHop) {
+    return lastHop;
   }
 
   // 3. Fallback to X-Real-IP
@@ -145,7 +151,24 @@ export function getClientIp(
  * Resolves effective quota for a tenant:
  * 1. Tenant Quota Override -> 2. Tenant Size Tier -> 3. Default Tier (XS)
  */
+/** A tenant's quota changes rarely (a plan change or an override), but it was looked up with three queries on every storefront request. */
+const QUOTA_TTL_MS = process.env.VITEST ? 0 : 60_000;
+const quotaCache = new Map<string, { at: number; value: number }>();
+
 export async function resolveTenantQuota(
+  db: Db,
+  tenantId: string,
+  quotaKey: QuotaKey,
+): Promise<number> {
+  const cacheKey = `${tenantId}:${quotaKey}`;
+  const hit = QUOTA_TTL_MS > 0 ? quotaCache.get(cacheKey) : undefined;
+  if (hit && Date.now() - hit.at < QUOTA_TTL_MS) return hit.value;
+  const value = await resolveTenantQuotaUncached(db, tenantId, quotaKey);
+  if (QUOTA_TTL_MS > 0) quotaCache.set(cacheKey, { at: Date.now(), value });
+  return value;
+}
+
+async function resolveTenantQuotaUncached(
   db: Db,
   tenantId: string,
   quotaKey: QuotaKey,
@@ -462,6 +485,43 @@ export async function checkCustomerLoginRateLimit(
       emailRes.limit,
       `cust:login:email:${tenantId}:${email}`,
     );
+  }
+}
+
+/**
+ * Order placement and payment start (audit A3-04): the public routes that create orders and talk to payment providers.
+ * - Per (tenant, IP): 60 / 10 min. Deliberately roomy: behind a shared address (an office, a mobile carrier, or the proxy
+ *   when the client IP cannot be told apart, see getClientIp) many real shoppers share one counter.
+ * - Per (tenant, phone): 10 / 10 min. A real person rarely orders more often; a script cycling addresses is caught here.
+ * A refused request has created nothing yet, so a shopper who waits can simply try again.
+ */
+export async function checkPlaceOrderRateLimit(
+  db: Db,
+  params: { tenantId: string; ip: string; phone?: string | undefined },
+): Promise<void> {
+  try {
+    await enforcePlaceOrderLimits(db, params);
+  } catch (err) {
+    if (err instanceof RateLimitExceededError) throw err;
+    // Same policy as the store-wide limiter: a fault in the limiter itself must not take checkout down.
+    console.warn(`[WARN] Place-order rate limit check failed for tenant ${params.tenantId}. Failing open.`, err instanceof Error ? err.message : err);
+  }
+}
+
+async function enforcePlaceOrderLimits(db: Db, params: { tenantId: string; ip: string; phone?: string | undefined }): Promise<void> {
+  const { tenantId, ip } = params;
+  const ipKey = `checkout:ip:${tenantId}:${ip}`;
+  const ipRes = await checkRateLimit(db, { key: ipKey, limit: 60, windowSeconds: 600 });
+  if (!ipRes.allowed) {
+    throw new RateLimitExceededError(`Too many orders from this connection. Please retry after ${ipRes.retryAfter} seconds.`, ipRes.retryAfter, ipRes.limit, ipKey);
+  }
+  const digits = (params.phone ?? "").replace(/\D/g, "").slice(-10);
+  if (digits.length >= 7) {
+    const phoneKey = `checkout:phone:${tenantId}:${digits}`;
+    const phoneRes = await checkRateLimit(db, { key: phoneKey, limit: 10, windowSeconds: 600 });
+    if (!phoneRes.allowed) {
+      throw new RateLimitExceededError(`Too many orders with this phone number. Please retry after ${phoneRes.retryAfter} seconds.`, phoneRes.retryAfter, phoneRes.limit, phoneKey);
+    }
   }
 }
 

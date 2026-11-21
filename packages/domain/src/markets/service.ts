@@ -4,7 +4,8 @@
  */
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { LAUNCH_CURRENCIES, normalizeCurrency } from "@bs/contracts/money";
+import { normalizeCurrency } from "@bs/contracts/money";
+import { COUNTRY_CURRENCIES, isCountryCode } from "@bs/contracts/countries";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
@@ -177,11 +178,6 @@ export async function enforceExtraMarketsQuota(tx: Db, tenantId: string, maxAllo
     }
   }
   return disabledIds;
-}
-
-async function enabledCountryCodes(tx: Db): Promise<Set<string>> {
-  const rows = await tx.select({ iso2: schema.platformCountries.iso2 }).from(schema.platformCountries).where(eq(schema.platformCountries.enabled, true));
-  return new Set(rows.map((r) => r.iso2));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -412,9 +408,17 @@ export async function readMarketDetail(tx: Db, tenantId: string, marketId: strin
     policyFilled,
     taxChoiceAcknowledged: m.complianceAckAt !== null,
   });
+  // A gateway the store has connected and activated is offered on every market: one that has no row for this market yet (a new
+  // market starts empty) shows as switched off, so the merchant can enable it (e.g. Razorpay for domestic and international).
+  const connected = await tx.select({ provider: schema.paymentMethods.provider, sortOrder: schema.paymentMethods.sortOrder }).from(schema.paymentMethods).where(and(eq(schema.paymentMethods.tenantId, tenantId), eq(schema.paymentMethods.status, "active")));
+  const listed = new Set(methods.map((x) => x.provider));
+  const offered = [
+    ...methods.map((x) => ({ provider: x.provider, enabled: x.enabled, sortOrder: x.sortOrder })),
+    ...connected.filter((c) => !listed.has(c.provider)).sort((a, b) => a.sortOrder - b.sortOrder).map((c, i) => ({ provider: c.provider, enabled: false, sortOrder: methods.length + i })),
+  ];
   return {
     ...record,
-    paymentMethods: methods.map((x) => ({
+    paymentMethods: offered.map((x) => ({
       provider: x.provider,
       enabled: x.enabled,
       sortOrder: x.sortOrder,
@@ -449,7 +453,7 @@ export interface CreateMarketInput {
 
 function checkCurrency(raw: string): string {
   const c = normalizeCurrency(raw);
-  if (!(LAUNCH_CURRENCIES as readonly string[]).includes(c)) fail("Bad Request", `Currency ${c} is not supported yet. Supported: ${LAUNCH_CURRENCIES.join(", ")}`);
+  if (!(COUNTRY_CURRENCIES as readonly string[]).includes(c)) fail("Bad Request", `Currency ${c} is not supported`);
   return c;
 }
 
@@ -477,9 +481,8 @@ export async function createMarket(rt: Runtime, ctx: TenantContext, input: Creat
   if (input.rounding && !ROUNDING_MODES.includes(input.rounding)) fail("Bad Request", "Unknown rounding rule");
 
   const created = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
-    const enabled = await enabledCountryCodes(tx);
-    const bad = countries.find((c) => !enabled.has(c));
-    if (bad) fail("Bad Request", `${bad} is not available yet`);
+    const bad = countries.find((c) => !isCountryCode(c));
+    if (bad) fail("Bad Request", `${bad} is not a known country code`);
     const existing = await readMarkets(tx, ctx.tenantId);
     const base = existing.find((m) => m.isBase);
     if (!base) fail("Conflict", "This store has no base market yet");
@@ -623,9 +626,8 @@ export async function setMarketCountries(rt: Runtime, ctx: TenantContext, market
   if (countries.length === 0) fail("Bad Request", "A market needs at least one country");
   await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     await loadMarket(tx, ctx.tenantId, marketId);
-    const enabled = await enabledCountryCodes(tx);
-    const bad = countries.find((c) => !enabled.has(c));
-    if (bad) fail("Bad Request", `${bad} is not available yet`);
+    const bad = countries.find((c) => !isCountryCode(c));
+    if (bad) fail("Bad Request", `${bad} is not a known country code`);
     await assertCountriesFree(tx, ctx.tenantId, countries, marketId);
     await tx.delete(schema.marketCountries).where(and(eq(schema.marketCountries.tenantId, ctx.tenantId), eq(schema.marketCountries.marketId, marketId)));
     await tx.insert(schema.marketCountries).values(countries.map((country) => ({ tenantId: ctx.tenantId, marketId, country })));

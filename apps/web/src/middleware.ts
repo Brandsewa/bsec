@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { MARKETING_PAGES } from "./components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "./server/hosts.ts";
+import { BOT_UA, decideMarket, type MarketEntry } from "./lib/market-detect.ts";
 import { MARKET_COOKIE, MARKET_PREFIX_HEADER, PATH_HEADER } from "./lib/market-constants.ts";
+
+/** Last market list the evaluation endpoint returned per host, for a moment when it cannot be reached. */
+const lastMarketPrefixes = new Map<string, MarketEntry[]>();
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -46,7 +50,13 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
-    pathname.startsWith("/api/rpc/admin/")
+    pathname.startsWith("/api/rpc/admin/") ||
+    // The platform brand (logos, colours, share image, manifest) is public and not about any store: the dashboards' sign-in
+    // pages read it from the platform root host, which the gate would otherwise answer "Store Not Found".
+    pathname === "/api/brand" ||
+    pathname.startsWith("/api/brand/") ||
+    // The checkout bot-check frame (audit A3-04): served from the platform host for stores on their own domain, about no store.
+    pathname === "/challenge-frame"
   ) {
     return NextResponse.next();
   }
@@ -81,6 +91,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Why the market list may be missing, shown in the x-bs-eval response header (no secrets: a status or an error name).
+  let evalStatus = "ok";
   let access: {
     allowed: boolean;
     httpStatus: 200 | 404 | 503;
@@ -92,7 +104,7 @@ export async function middleware(request: NextRequest) {
     isBypass?: boolean | undefined;
     message?: string | undefined;
     headline?: string | null | undefined;
-    marketPrefixes?: { prefix: string; handle: string }[] | undefined;
+    marketPrefixes?: MarketEntry[] | undefined;
   };
 
   try {
@@ -108,22 +120,43 @@ export async function middleware(request: NextRequest) {
     // Fail-open timeout protection:
     // If the evaluation route times out (e.g. 3s under heavy DB load), abort request
     // and fail open to prevent transient infrastructure hiccups from taking down the storefront.
-    const res = await fetch(evalUrl.toString(), {
-      headers: {
-        ...Object.fromEntries(request.headers.entries()),
-        host,
-      },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (res.ok) {
-      access = await res.json();
-    } else {
-      // Fail open on non-200 responses from the internal evaluation endpoint
-      access = { allowed: true, httpStatus: 200, mode: "live" };
+    const evalHeaders = { ...Object.fromEntries(request.headers.entries()), host };
+    // The address this request arrived on first; if that cannot be reached from inside the server (a proxy, a bind address such as
+    // 0.0.0.0), the server's own loopback port.
+    const targets = [evalUrl.toString()];
+    const port = process.env.PORT ?? request.nextUrl.port;
+    if (port) {
+      const local = new URL(evalUrl.toString());
+      local.protocol = "http:";
+      local.hostname = "127.0.0.1";
+      local.port = port;
+      if (local.toString() !== targets[0]) targets.push(local.toString());
     }
+    let got: typeof access | null = null;
+    for (const target of targets) {
+      try {
+        const res = await fetch(target, { headers: evalHeaders, signal: AbortSignal.timeout(3000) });
+        if (res.ok) {
+          got = await res.json();
+          evalStatus = "ok";
+          break;
+        }
+        evalStatus = `http-${res.status}`;
+      } catch (err) {
+        evalStatus = `error-${err instanceof Error ? err.name : "unknown"}`;
+      }
+    }
+    // Fail open when the evaluation endpoint cannot be reached (a transient DB or network problem must not take the store down).
+    access = got ?? { allowed: true, httpStatus: 200, mode: "live" };
   } catch {
-    // Fail open on fetch network errors or timeout aborts
+    evalStatus = "error-setup";
     access = { allowed: true, httpStatus: 200, mode: "live" };
+  }
+  // The market list only decides URLs and detection, never access, so the last good one keeps market URLs working through a blip.
+  if (access.marketPrefixes) lastMarketPrefixes.set(host, access.marketPrefixes);
+  else if (evalStatus !== "ok") {
+    const known = lastMarketPrefixes.get(host);
+    if (known) access = { ...access, marketPrefixes: known };
   }
 
   // Handle blocked access (maintenance, provisioning, suspended, archived, deleted, not found)
@@ -189,18 +222,19 @@ export async function middleware(request: NextRequest) {
   // A market URL prefix such as /us (ADR-040): strip it before routing and tell the page which market it asked for.
   const firstSegment = pathname.split("/")[1] ?? "";
   const requestedPrefix = firstSegment ? `/${firstSegment.toLowerCase()}` : "";
-  const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix === requestedPrefix) : undefined;
+  const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix && m.prefix === requestedPrefix) : undefined;
   // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
   // so the layout can write hreflang links and the market switcher can return to the same page.
   const forwarded = new Headers(request.headers);
   forwarded.delete(MARKET_PREFIX_HEADER);
-  const hasMarkets = (access.marketPrefixes?.length ?? 0) > 0;
+  const hasMarkets = (access.marketPrefixes?.length ?? 0) > 1;
   if (matchedMarket) {
     const stripped = request.nextUrl.clone();
     stripped.pathname = pathname.slice(firstSegment.length + 1) || "/";
     forwarded.set(MARKET_PREFIX_HEADER, requestedPrefix);
     forwarded.set(PATH_HEADER, stripped.pathname + stripped.search);
     const rewritten = NextResponse.rewrite(stripped, { request: { headers: forwarded } });
+    rewritten.headers.set("x-bs-eval", evalStatus);
     // Remember the choice so links without the prefix keep the shopper in this market (a strictly necessary cookie).
     rewritten.cookies.set({ name: MARKET_COOKIE, value: matchedMarket.handle, path: "/", sameSite: "lax", httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 });
     if (access.noindex) rewritten.headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -208,8 +242,49 @@ export async function middleware(request: NextRequest) {
   }
   if (hasMarkets) forwarded.set(PATH_HEADER, request.nextUrl.pathname + request.nextUrl.search);
 
+  // A visitor with no market in the URL: place a first-time visitor by country (once, silently), and keep a shopper who chose
+  // another market on that market's own address. Only for page loads by real browsers.
+  if (hasMarkets) {
+    const accept = request.headers.get("accept") ?? "";
+    const isDocument = request.method === "GET" && accept.includes("text/html") && !pathname.startsWith("/api/") && !pathname.startsWith("/_next/") && !request.headers.has("rsc") && !request.headers.has("next-router-prefetch");
+    // Cloudflare's country header counts only when the request really came through Cloudflare; ?country=XX is a development aid.
+    const cfCountry = request.headers.get("cf-ray") ? request.headers.get("cf-ipcountry") : null;
+    const devCountry = process.env.NODE_ENV !== "production" ? request.nextUrl.searchParams.get("country") : null;
+    const country = [devCountry, cfCountry].find((c) => c && /^[A-Za-z]{2}$/.test(c) && c.toUpperCase() !== "XX") ?? null;
+    const decision = decideMarket({
+      markets: access.marketPrefixes ?? [],
+      prefixMatched: false,
+      cookieHandle: request.cookies.get(MARKET_COOKIE)?.value ?? null,
+      country,
+      isBot: BOT_UA.test(request.headers.get("user-agent") ?? ""),
+      isDocument,
+    });
+    const cookie = decision.setCookie
+      ? { name: MARKET_COOKIE, value: decision.setCookie, path: "/", sameSite: "lax" as const, httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 90 }
+      : null;
+    if (decision.redirectPrefix) {
+      const proto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || request.nextUrl.protocol.replace(":", "");
+      const search = new URLSearchParams(request.nextUrl.search);
+      search.delete("country");
+      const qs = search.toString();
+      const moved = NextResponse.redirect(new URL(`${decision.redirectPrefix}${pathname === "/" ? "" : pathname}${qs ? `?${qs}` : ""}` || "/", `${proto}://${host}`), 307);
+      if (cookie) moved.cookies.set(cookie);
+      moved.headers.set("x-bs-eval", evalStatus);
+      moved.headers.set("Vary", "Cookie, Accept");
+      return moved;
+    }
+    if (cookie) {
+      const placed = NextResponse.next({ request: { headers: forwarded } });
+      placed.cookies.set(cookie);
+      placed.headers.set("x-bs-eval", evalStatus);
+      if (access.noindex) placed.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return placed;
+    }
+  }
+
   // Allowed request (live, bypass, unlocked password)
   const response = NextResponse.next({ request: { headers: forwarded } });
+  response.headers.set("x-bs-eval", evalStatus);
   if (access.noindex) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }

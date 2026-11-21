@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Edit2, Search, Trash2, Upload } from "lucide-react";
-import { Badge, Button, Field, FormSkeleton, InfoTip, Input, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, toast } from "@bs/ui";
+import { Badge, Button, Field, FormSkeleton, InfoTip, Input, SimpleSelect, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, toast } from "@bs/ui";
 import { formatMoney, toMajorUnits, toMinorUnits } from "@bs/contracts/money";
 import type { MarketDetail } from "@bs/contracts";
 import { client, orpc } from "../../lib/orpc.ts";
@@ -27,16 +27,22 @@ export function MarketPricingTab({
   const [inlinePrice, setInlinePrice] = useState<string>("");
   const [inlineCompareAt, setInlineCompareAt] = useState<string>("");
   const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
 
-  const pricesQuery = useQuery(
-    orpc.admin.markets.listPrices.queryOptions({
+  const pricesQuery = useQuery({
+    ...orpc.admin.markets.listPrices.queryOptions({
       input: {
         id: market.id,
         search: search.trim() ? search.trim() : undefined,
-        limit: 100,
+        limit: pageSize,
+        offset: page * pageSize,
       },
     }),
-  );
+    placeholderData: (prev) => prev,
+  });
+  const total = pricesQuery.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   async function handleSaveRate(e: React.FormEvent) {
     e.preventDefault();
@@ -292,7 +298,10 @@ export function MarketPricingTab({
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               placeholder="Search product or SKU..."
               className="pl-8 h-8"
             />
@@ -424,6 +433,34 @@ export function MarketPricingTab({
                 )}
               </TableBody>
             </Table>
+            <div className="flex flex-col gap-2 border-t border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] text-muted-foreground">
+                {total === 0 ? "No variants" : `${page * pageSize + 1}–${Math.min(total, (page + 1) * pageSize)} of ${total}`}
+              </p>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  Rows
+                  <SimpleSelect
+                    value={String(pageSize)}
+                    onChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(0);
+                    }}
+                    options={[25, 50, 100, 200].map((n) => ({ value: String(n), label: String(n) }))}
+                    className="h-7 w-20 text-xs"
+                  />
+                </label>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                  Previous
+                </Button>
+                <span className="text-[11px] text-muted-foreground">
+                  Page {page + 1} of {pageCount}
+                </span>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Db } from "@bs/db";
+import { schema, type Db } from "@bs/db";
 import type {
   Runtime,
   TenantContext,
@@ -18,6 +18,7 @@ import {
   generateArticleJsonLd,
   generateLocalBusinessJsonLd,
   generateRobotsTxt,
+  DEFAULT_AI_CRAWLERS,
   getStorefrontSeoSettings,
   generateSitemapXml,
   getStorefrontSitemapUrls,
@@ -198,12 +199,13 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       expect(jsonLd.offers).toHaveLength(2);
       expect(jsonLd.offers![0]).toEqual({
         "@type": "Offer",
-        price: 7999,
+        price: 79.99, // variants store minor units (7999 paise); the schema carries the amount a shopper sees
         priceCurrency: "INR",
         availability: "https://schema.org/InStock",
         url: "https://acme.com/products/mechanical-keyboard?variant=var-1",
         sku: "KEY-BLUE",
         itemCondition: "https://schema.org/NewCondition",
+        gtin: "1234567890123",
       });
       expect(jsonLd.offers![1]?.availability).toBe("https://schema.org/OutOfStock");
     });
@@ -255,7 +257,7 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       const jsonLd = generateProductJsonLd(product, "https://acme.com", "USD");
       expect(jsonLd.offers).toHaveLength(1);
       expect(jsonLd.offers![0]).toMatchObject({
-        price: 9900,
+        price: 99,
         priceCurrency: "USD",
         availability: "https://schema.org/InStock",
       });
@@ -452,10 +454,25 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
       expect(robots).toContain("User-agent: ClaudeBot\nDisallow: /");
       expect(robots).toContain("User-agent: Google-Extended\nDisallow: /");
       expect(robots).toContain("User-agent: CCBot\nDisallow: /");
-      expect(robots).toContain("User-agent: PerplexityBot\nAllow: /");
+      // An allowed bot gets no group of its own: a group of its own would ignore the "*" rules above and let it into the cart.
+      expect(robots).not.toContain("User-agent: PerplexityBot");
 
       // Sitemap directive
       expect(robots).toContain("Sitemap: https://shop.mysite.com/sitemap.xml");
+    });
+
+    it("keeps private and per-customer paths out of search, allows AI search agents by default, blocks only bulk scrapers", () => {
+      const robots = generateRobotsTxt(null, "live", "shop.mysite.com");
+      for (const path of ["/cart", "/checkout", "/orders/", "/account", "/search", "/track", "/preview/", "/cod/", "/address/", "/o/", "/privacy-request", "/unsubscribe/", "/api/"]) {
+        expect(robots).toContain(`Disallow: ${path}\n`);
+      }
+      for (const bot of ["OAI-SearchBot", "ChatGPT-User", "GPTBot", "Claude-SearchBot", "ClaudeBot", "PerplexityBot", "Google-Extended"]) {
+        expect(robots).not.toContain(`User-agent: ${bot}`);
+      }
+      expect(robots).toContain("User-agent: CCBot\nDisallow: /");
+      expect(robots).toContain("User-agent: Bytespider\nDisallow: /");
+      // _next assets must stay crawlable so Google can render the page.
+      expect(robots).not.toContain("/_next");
     });
   });
 
@@ -488,16 +505,14 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
         organizationSchema: null,
         localBusiness: null,
         robotsExtra: null,
-        aiCrawlers: {
-          GPTBot: "block",
-          ClaudeBot: "block",
-          PerplexityBot: "block",
-          "Google-Extended": "block",
-          CCBot: "block",
-        },
+        aiCrawlers: { ...DEFAULT_AI_CRAWLERS },
         breadcrumbsEnabled: true,
         faqSchemaEnabled: true,
       });
+      // AI answer engines can cite the store by default; only the bulk scrapers are blocked.
+      expect(settings.aiCrawlers?.["OAI-SearchBot"]).toBe("allow");
+      expect(settings.aiCrawlers?.["GPTBot"]).toBe("allow");
+      expect(settings.aiCrawlers?.["CCBot"]).toBe("block");
     });
 
     it("returns database row when seo_settings is configured", async () => {
@@ -585,7 +600,8 @@ describe("Storefront SEO & JSON-LD Structured Data", () => {
         transaction: async (cb: (tx: unknown) => Promise<unknown>) => {
           const createQueryChain = (result: unknown) => {
             const chain: Record<string, unknown> = {
-              from: () => chain,
+              // The sitemap lists only policies the merchant has published; that query is told apart by its table.
+              from: (table?: unknown) => (table === schema.storePolicies ? createQueryChain([{ handle: "privacy" }, { handle: "terms" }]) : chain),
               innerJoin: () => chain,
               where: () => chain,
               orderBy: () => Promise.resolve(result),

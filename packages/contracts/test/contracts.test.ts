@@ -8,6 +8,14 @@ describe("Contracts", () => {
       expect(storeContract.admin.memberships.invite).toBeDefined();
     });
 
+    it("accepts a real-length Stripe publishable key when saving credentials (they run past 100 characters)", () => {
+      const schema = (storeContract.admin.paymentProviders.saveCredentials as unknown as { "~orpc": { inputSchema: { safeParse: (v: unknown) => { success: boolean } } } })["~orpc"].inputSchema;
+      const publishable = `pk_test_51${"A".repeat(99)}`;
+      expect(publishable.length).toBeGreaterThan(100);
+      expect(schema.safeParse({ provider: "stripe", keyId: publishable, keySecret: "sk_test_51abcdefghij" }).success).toBe(true);
+      expect(schema.safeParse({ provider: "stripe", keyId: "x".repeat(301), keySecret: "sk_test_51abcdefghij" }).success).toBe(false);
+    });
+
     it("defines settings get and update procedures", () => {
       expect(storeContract.admin.settings.get).toBeDefined();
       expect(storeContract.admin.settings.update).toBeDefined();

@@ -1,7 +1,8 @@
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
 import type { StorefrontCart } from "@bs/domain";
-import { priceOrder } from "@bs/domain/pricing";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
+import { cartRows, weightLabel } from "@/components/cart/cart-rows.ts";
 import { DiscountCodeBox } from "@/components/cart/DiscountCodeBox.tsx";
 import { useMoney, useMarket } from "@/components/market/MarketProvider.tsx";
 
@@ -18,11 +19,12 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
   const money = useMoney();
   const { locale } = useMarket();
   const formattedSubtotal = money(cart.subtotal);
+  const goodsDiscount = (cart.discounts ?? []).find((d) => !d.freeShipping);
   const pricing = priceOrder({
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: toPricingDiscounts(cart.discounts),
   });
   const totalPaise = pricing.grandTotal;
   const formattedTotal = money(totalPaise);
@@ -40,42 +42,35 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
     <div className="bs-panel p-4 sm:p-6">
       <h2 className="mb-2 hidden text-lg font-semibold tracking-tight text-foreground lg:block">Order Summary</h2>
 
-      <div className="divide-y divide-border/40 max-h-64 overflow-y-auto mb-3 pt-1.5">
-        {cart.items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2.5 py-2">
-            <div className="relative h-11 w-11 flex-shrink-0 rounded-lg bg-background">
-              {item.primaryImage?.url ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={item.primaryImage.url}
-                  alt={item.primaryImage.alt ?? item.product.title}
-                  loading="lazy"
-                  className="h-full w-full rounded-lg object-cover"
-                />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={PLACEHOLDER_IMAGE_URL} alt="" className="h-full w-full rounded-lg object-cover" />
-              )}
-              <span className="absolute -top-1.5 -right-1.5 z-10 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                {item.quantity}
-              </span>
+      <div className="divide-y divide-border/40 max-h-72 overflow-y-auto mb-3 pt-1.5">
+        {cartRows(cart).map((row) => {
+          const { item, qty } = row;
+          const weight = weightLabel(item);
+          return (
+            <div key={row.key} className={`flex items-center gap-2.5 py-2 ${row.free ? "pl-3" : ""}`} data-testid={row.free ? "free-item-row" : undefined}>
+              <div className={`relative flex-shrink-0 rounded-lg bg-background ${row.free ? "h-9 w-9" : "h-11 w-11"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.primaryImage?.url ?? PLACEHOLDER_IMAGE_URL} alt={item.primaryImage?.url ? (item.primaryImage.alt ?? item.product.title) : ""} loading="lazy" className="h-full w-full rounded-lg object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
+                  {row.free ? <span className="shrink-0 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Offer</span> : null}
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {weight ? `${weight} × ${qty}` : `× ${qty}`}
+                  {row.free ? "" : ` · ${money(item.unitPriceSnapshot)} each`}
+                </p>
+                {item.variant.preorderEnabled && !row.free && (
+                  <span className="inline-flex items-center rounded bg-amber-500/10 px-1 py-0.25 text-[9px] font-medium text-amber-700 dark:text-amber-400">
+                    Pre-order
+                  </span>
+                )}
+              </div>
+              <span className={`text-xs font-medium ${row.free ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>{row.free ? "FREE" : money(item.unitPriceSnapshot * qty)}</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground truncate">{item.product.title}</p>
-              {item.variant.title && (
-                <p className="text-[11px] text-muted-foreground truncate">{item.variant.title}</p>
-              )}
-              {item.variant.preorderEnabled && (
-                <span className="inline-flex items-center rounded bg-amber-500/10 px-1 py-0.25 text-[9px] font-medium text-amber-700 dark:text-amber-400">
-                  Pre-order
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-medium text-foreground">
-              {money(item.lineTotal)}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="space-y-1.5 border-t border-border/40 pt-3 text-sm">
@@ -87,9 +82,9 @@ export function OrderSummary({ cart, shippingPaise = 0, codFeePaise = 0, onCartC
           <span>Shipping</span>
           <span className="font-semibold text-foreground">{formattedShipping}</span>
         </div>
-        {pricing.discountTotal > 0 && cart.discount && (
+        {pricing.discountTotal > 0 && goodsDiscount && (
           <div className="flex justify-between text-muted-foreground" data-testid="discount-line">
-            <span>Discount ({cart.discount.code})</span>
+            <span>Discount ({goodsDiscount.automatic ? goodsDiscount.title : goodsDiscount.code})</span>
             <span className="font-semibold text-emerald-700">−{money(pricing.discountTotal)}</span>
           </div>
         )}

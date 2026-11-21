@@ -229,7 +229,7 @@ function OrderDetailPage() {
     );
   }
 
-  const { order, items, fulfillments, invoices, events, notes } = detail.data;
+  const { order, items, fulfillments, invoices, events, notes, discounts } = detail.data;
   const cancelled = order.status === "cancelled";
   const isEligibleForDelete = Boolean(order.archivedAt) && (order.status === "cancelled" || order.status === "draft") && !["captured", "paid", "partially_refunded", "refunded"].includes(order.paymentStatus) && order.fulfillmentStatus === "unfulfilled";
   const today = new Date().toISOString().slice(0, 10);
@@ -444,7 +444,7 @@ function OrderDetailPage() {
             </CardHeader>
             <CardContent className="grid gap-2">
               <Row label="Subtotal" value={money(order.subtotal, order.currency ?? "INR")} />
-              {order.discountTotal > 0 ? <Row label="Discount" value={`−${money(order.discountTotal, order.currency ?? "INR")}`} /> : null}
+              {order.discountTotal > 0 ? <Row label={`Discount${discounts.some((d) => d.amount > 0) ? ` (${discounts.filter((d) => d.amount > 0).map((d) => d.code ?? d.title).join(", ")})` : ""}`} value={`−${money(order.discountTotal, order.currency ?? "INR")}`} /> : null}
               <Row label="Shipping" value={money(order.shippingTotal, order.currency ?? "INR")} />
               {order.codFee > 0 ? <Row label="COD fee" value={money(order.codFee, order.currency ?? "INR")} /> : null}
               <Row label="Tax" value={money(order.taxTotal, order.currency ?? "INR")} />

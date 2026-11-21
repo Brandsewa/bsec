@@ -48,6 +48,13 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [040](040-markets.md) | Markets: one base market plus extra markets, merchant as seller of record | Accepted |
 | [041](041-lucide-icons.md) | Lucide icons: named imports for UI chrome, allowlisted SVG data and lazy picker for content | Accepted |
 | [042](042-platform-site-tenant.md) | bcom.si content lives under one internal tenant, edited from Super Admin | Accepted |
+| [043](043-apps-framework.md) | Apps framework: first-party apps installed per store, managed from a Super Admin marketplace | Accepted |
+| [044](044-state-pricing.md) | State Pricing: per-variant prices by Indian state, detected automatically, locked on the cart | Accepted |
 
-**Next number: 043.**
+| [045](045-discount-engine.md) | Discount engine: classes, stacking and a pure evaluator | Accepted |
+| [046](046-embedded-checkout-and-billing-gateway-order.md) | Embedded checkout and the gateway order for platform billing | Accepted (Stripe part superseded by 048) |
+| [047](047-first-party-analytics.md) | First-party merchant analytics, cookieless collector, orders as the source of truth | Accepted |
+| [048](048-stripe-payment-element.md) | Stripe Payment Element inline at the store checkout | Accepted |
+
+**Next number: 049.**
 

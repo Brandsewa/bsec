@@ -316,7 +316,7 @@ export async function processWebhookInboxItem(
         }
       }
     } else if (provider === "stripe") {
-      // A paid Checkout Session settles the order; the amount and currency Stripe reports are checked against it.
+      // A paid Checkout Session or a succeeded PaymentIntent settles the order; the amount and currency Stripe reports are checked against it.
       const data = (payload.data as { object?: Record<string, unknown> } | undefined)?.object;
       if (
         (payload.type === "checkout.session.completed" || payload.type === "checkout.session.async_payment_succeeded") &&
@@ -333,6 +333,19 @@ export async function processWebhookInboxItem(
           ...(typeof data.currency === "string" ? { currency: data.currency.toUpperCase() } : {}),
           source: "webhook",
             jobs,
+        });
+      }
+      // A confirmed PaymentIntent (Payment Element): its id is the order's provider reference.
+      if (payload.type === "payment_intent.succeeded" && item.tenant_id && data && typeof data.id === "string") {
+        const received = typeof data.amount_received === "number" ? data.amount_received : typeof data.amount === "number" ? data.amount : undefined;
+        await settleProviderPayment(db, item.tenant_id, {
+          provider: "stripe",
+          providerOrderId: data.id,
+          providerPaymentId: data.id,
+          ...(received !== undefined ? { amount: received } : {}),
+          ...(typeof data.currency === "string" ? { currency: data.currency.toUpperCase() } : {}),
+          source: "webhook",
+          jobs,
         });
       }
     } else if (provider === "paypal") {

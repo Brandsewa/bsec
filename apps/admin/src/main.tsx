@@ -5,10 +5,14 @@ import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS, ThemeProvider } from "@bs/ui";
+import { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS, ThemeProvider, loadPlatformBrand } from "@bs/ui";
 import { routeTree } from "./routeTree.gen.ts";
 import { isUnauthorized } from "./lib/auth.ts";
+import { apiBase } from "./lib/config.ts";
 import "./index.css";
+
+// Platform brand (logo on sign-in pages, favicon, primary colour); a failure keeps the built-in look.
+void loadPlatformBrand(`${apiBase()}/api/brand`);
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {

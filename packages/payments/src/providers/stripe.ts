@@ -18,12 +18,19 @@ import { sanitizePaymentPayload } from "./razorpay.ts";
 /**
  * Stripe payment provider (ADR-008, ADMIN-IMPROVEMENTS-PLAN §6.4).
  *
- * Uses Stripe-hosted Checkout (a redirect to stripe.com): card data never touches our pages and no Stripe script
- * is added to the storefront or its CSP. Talks to Stripe's REST API with `fetch` (no SDK dependency), with the API
+ * Two ways to take a card. Without a publishable key the store uses Stripe-hosted Checkout (a redirect to stripe.com).
+ * With one it uses the Payment Element: Stripe's own iframe fields inside our checkout page, on a PaymentIntent
+ * (ADR-048). Either way card data never touches our code. Talks to Stripe's REST API with `fetch` (no SDK dependency), with the API
  * version pinned so Stripe changes cannot alter behaviour under us. Amounts are the smallest currency unit (paise).
  * Per-store keys come from tenant_secrets, never from environment variables.
  */
 export const STRIPE_API_VERSION = "2025-09-30.clover";
+/**
+ * Stripe.js release train that matches STRIPE_API_VERSION. The storefront loads this train explicitly instead of the moving
+ * default, so a Stripe.js change cannot alter behaviour under us. Move both together.
+ */
+export const STRIPE_JS_TRAIN = "clover";
+export const STRIPE_JS_URL = `https://js.stripe.com/${STRIPE_JS_TRAIN}/stripe.js`;
 const STRIPE_BASE = "https://api.stripe.com";
 /** Stripe's own recommendation for webhook replay protection. */
 export const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
@@ -31,9 +38,16 @@ export const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
 export interface StripeProviderOptions {
   secretKey?: string | undefined;
   webhookSecret?: string | undefined;
-  /** Where Stripe sends the shopper after paying or cancelling. Required to create a Checkout Session. */
+  /** Where Stripe sends the shopper after paying or cancelling. Required to create a Checkout Session (hosted mode). */
   successUrl?: string | undefined;
   cancelUrl?: string | undefined;
+  /**
+   * "hosted" (default) redirects the shopper to stripe.com. "elements" creates a PaymentIntent and returns its client secret,
+   * which the checkout page confirms with the Payment Element, so the shopper never leaves the page.
+   */
+  uiMode?: "hosted" | "elements" | undefined;
+  /** Makes the idempotency key unique for a replacement PaymentIntent after the previous one was cancelled. */
+  idempotencySalt?: string | undefined;
   fetchFn?: typeof fetch | undefined;
   /** Injected clock for signature tolerance tests (unix seconds). */
   nowSeconds?: (() => number) | undefined;
@@ -73,6 +87,8 @@ export class StripeProvider implements PaymentProvider {
   private readonly webhookSecret: string | undefined;
   private readonly successUrl: string | undefined;
   private readonly cancelUrl: string | undefined;
+  private readonly uiMode: "hosted" | "elements";
+  private readonly idempotencySalt: string | undefined;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
 
@@ -81,6 +97,8 @@ export class StripeProvider implements PaymentProvider {
     this.webhookSecret = opts.webhookSecret;
     this.successUrl = opts.successUrl;
     this.cancelUrl = opts.cancelUrl;
+    this.uiMode = opts.uiMode ?? "hosted";
+    this.idempotencySalt = opts.idempotencySalt;
     this.fetchFn = opts.fetchFn ?? globalThis.fetch;
     this.now = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
   }
@@ -129,13 +147,38 @@ export class StripeProvider implements PaymentProvider {
     }
   }
 
-  /** Creates a Stripe-hosted Checkout Session for the order total (POST /v1/checkout/sessions). */
+  /**
+   * Creates what the shopper pays: a Stripe-hosted Checkout Session (redirect), or in "elements" mode a PaymentIntent whose
+   * client secret the checkout page confirms with the Payment Element. Both carry the tenant and order ids in metadata.
+   */
   async createIntent(ctx: TenantContext, order: OrderForPayment): Promise<IntentResult> {
-    if (!this.successUrl || !this.cancelUrl) {
-      throw new Error("Stripe success and cancel URLs are required to create a Checkout Session");
-    }
     const amount = Math.round(Number(order.grandTotal));
     const currency = (order.currency ?? "INR").toLowerCase();
+    if (this.uiMode === "elements") {
+      const pi = await this.call<{ id: string; status?: string; client_secret?: string }>(
+        "POST",
+        "/v1/payment_intents",
+        {
+          amount,
+          currency,
+          "automatic_payment_methods[enabled]": "true",
+          description: `Order ${order.number}`,
+          receipt_email: order.email || undefined,
+          "metadata[tenant_id]": ctx.tenantId,
+          "metadata[order_id]": order.id,
+        },
+        `bsec-pi-${order.id}${this.idempotencySalt ? `-${this.idempotencySalt}` : ""}`,
+      );
+      return {
+        providerOrderId: pi.id,
+        amount,
+        currency: currency.toUpperCase(),
+        status: "requires_action",
+        ...(pi.client_secret ? { clientSecret: pi.client_secret } : {}),
+        meta: { checkoutUrl: null, paymentIntentStatus: pi.status ?? null },
+      };
+    }
+    if (!this.successUrl || !this.cancelUrl) throw new Error("Stripe success and cancel URLs are required to create a Checkout Session");
     const session = await this.call<{ id: string; url?: string; status?: string }>(
       "POST",
       "/v1/checkout/sessions",
@@ -165,14 +208,50 @@ export class StripeProvider implements PaymentProvider {
     };
   }
 
+  /**
+   * Reads a PaymentIntent the checkout page confirmed, so the shopper's return can settle the order without waiting for the
+   * webhook. `clientSecret` is returned only while it can still be paid, so a reload can mount the same payment again.
+   */
+  async retrievePaymentIntent(id: string): Promise<{
+    status: string;
+    amount: number;
+    amountReceived: number;
+    currency: string;
+    orderId: string | null;
+    clientSecret: string | null;
+  }> {
+    const p = await this.call<{ status: string; amount: number; amount_received?: number; currency: string; client_secret?: string | null; metadata?: Record<string, string> }>(
+      "GET",
+      `/v1/payment_intents/${encodeURIComponent(id)}`,
+    );
+    const payable = p.status === "requires_payment_method" || p.status === "requires_confirmation" || p.status === "requires_action";
+    return {
+      status: p.status,
+      amount: Number(p.amount),
+      amountReceived: Number(p.amount_received ?? 0),
+      currency: p.currency.toUpperCase(),
+      orderId: p.metadata?.order_id ?? null,
+      clientSecret: payable ? (p.client_secret ?? null) : null,
+    };
+  }
+
   /** Reads a Checkout Session, so the shopper's return can settle the order without waiting for the webhook. */
-  async retrieveSession(sessionId: string): Promise<{ paymentStatus: string; amountTotal: number | null; currency: string | null; paymentIntentId: string | null; orderId: string | null }> {
-    const s = await this.call<{ payment_status?: string; amount_total?: number; currency?: string; payment_intent?: string | null; client_reference_id?: string | null }>(
+  async retrieveSession(sessionId: string): Promise<{
+    paymentStatus: string;
+    /** "open", "complete" or "expired". */
+    status: string;
+    amountTotal: number | null;
+    currency: string | null;
+    paymentIntentId: string | null;
+    orderId: string | null;
+  }> {
+    const s = await this.call<{ status?: string; payment_status?: string; amount_total?: number; currency?: string; payment_intent?: string | null; client_reference_id?: string | null }>(
       "GET",
       `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
     );
     return {
       paymentStatus: s.payment_status ?? "unpaid",
+      status: s.status ?? "open",
       amountTotal: typeof s.amount_total === "number" ? s.amount_total : null,
       currency: s.currency ? s.currency.toUpperCase() : null,
       paymentIntentId: s.payment_intent ?? null,
@@ -203,12 +282,14 @@ export class StripeProvider implements PaymentProvider {
     return { status: "captured", providerPaymentId: payment.id, amountCaptured: received };
   }
 
-  /** Expires an unpaid Checkout Session so the shopper can no longer pay it. */
+  /** Expires an unpaid Checkout Session, or cancels an unpaid PaymentIntent, so the shopper can no longer pay it. */
   async cancel(_ctx: TenantContext, intent: PaymentIntentModel): Promise<CancelResult> {
     const sessionId = intent.providerOrderId;
     if (!sessionId) return { status: "cancelled" };
     try {
-      await this.call("POST", `/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {});
+      // A PaymentIntent (Payment Element) is cancelled; a hosted Checkout Session is expired.
+      const path = sessionId.startsWith("pi_") ? `/v1/payment_intents/${encodeURIComponent(sessionId)}/cancel` : `/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`;
+      await this.call("POST", path, {});
       return { status: "cancelled" };
     } catch (err) {
       return { status: "failed", errorMessage: err instanceof Error ? err.message : String(err) };
@@ -293,7 +374,8 @@ export class StripeProvider implements PaymentProvider {
       eventId: typeof parsed.id === "string" ? parsed.id : "unknown",
       eventType,
       orderId: typeof metadata.order_id === "string" ? metadata.order_id : undefined,
-      providerOrderId: isSession && typeof obj.id === "string" ? obj.id : undefined,
+      // A Checkout Session's own id, or a PaymentIntent's id (the Payment Element saves it as the order's provider reference).
+      providerOrderId: (isSession || eventType.startsWith("payment_intent.")) && typeof obj.id === "string" ? obj.id : undefined,
       providerPaymentId: paymentIntentId,
       amount,
       rawPayload: sanitizePaymentPayload(parsed),

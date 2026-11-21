@@ -8,12 +8,20 @@ import {
   getStoreSettings,
   FeatureDisabledError,
   checkStorefrontRateLimit,
+  checkPlaceOrderRateLimit,
   RateLimitExceededError,
   registerCustomer,
   getClientIp,
+  getCustomerBySession,
+  getStorefrontConsentConfig,
+  conversionCredentialStatus,
+  decideOrderTracking,
+  resolveOrderAttribution,
+  verifyCheckoutChallenge,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
+import { CUSTOMER_COOKIE_NAME } from "@/server/customer-session.ts";
 
 const PlaceOrderSchema = z.object({
   email: z.string().email("Valid email is required"),
@@ -30,6 +38,8 @@ const PlaceOrderSchema = z.object({
   shippingMethod: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(["cod", "razorpay", "stripe", "paypal", "online"]).default("cod"),
   notes: z.string().optional(),
+  // Cloudflare Turnstile token; checked only when the store platform has both Turnstile keys set (audit A3-04).
+  turnstileToken: z.string().max(4096).optional(),
   termsConsent: z.boolean().optional(),
   marketingConsent: z.boolean().optional(),
   // A business buyer: company name, and the GSTIN when they want it on the invoice.
@@ -89,17 +99,38 @@ export async function POST(req: Request) {
       );
     }
 
+    // Per visitor and per phone, on top of the store-wide limit above (audit A3-04).
+    try {
+      await checkPlaceOrderRateLimit(rt._db.db, { tenantId: access.tenantId, ip: getClientIp(req.headers), phone: parsed.data.phone });
+    } catch (err: unknown) {
+      if (err instanceof RateLimitExceededError) {
+        return NextResponse.json({ error: err.message }, { status: 429, headers: { "Retry-After": String(err.retryAfter) } });
+      }
+      throw err;
+    }
+
     const token = await getCookieValue(CART_COOKIE_NAME, req);
     if (!token) {
       return NextResponse.json({ error: "No active shopping cart" }, { status: 400 });
     }
 
+    // Who is signed in, from the session cookie only (never from the body). A store that turned guest checkout off needs this
+    // to let its signed-in customers order, and the order is then linked to that account (audit A3-03).
+    const signedIn = await getCustomerBySession(rt._db.db, access.tenantId, await getCookieValue(CUSTOMER_COOKIE_NAME, req));
+
+    // Bot check before anything is created. A refused order has made no cart change, so the shopper can solve it again.
+    const challenge = await verifyCheckoutChallenge(parsed.data.turnstileToken, getClientIp(req.headers));
+    if (!challenge.ok) {
+      return NextResponse.json({ error: challenge.reason ?? "Security check failed.", code: "challenge_failed" }, { status: 400 });
+    }
+
     const tenantCtx = {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
+      // A storefront request has no staff role and no store permission; the shopper is not store staff (audit A3-08).
       actor: { type: "system" as const },
-      roles: ["store_admin"],
-      permissions: ["products.read"],
+      roles: [] as string[],
+      permissions: [] as string[],
       requestId: crypto.randomUUID(),
     };
 
@@ -108,8 +139,32 @@ export async function POST(req: Request) {
       h.get("idempotency-key") ??
       (typeof bodyObj.idempotencyKey === "string" ? bodyObj.idempotencyKey : undefined);
     const paymentMethod = parsed.data.paymentMethod === "online" ? "razorpay" : parsed.data.paymentMethod;
+    // Server-side conversion APIs (ADR-047): remember the visitor's choice and browser ids only when a platform will actually be used.
+    const tracking = await Promise.all([getStorefrontConsentConfig(rt, access.tenantId), conversionCredentialStatus(rt._db.db, access.tenantId)])
+      .then(([cfg, creds]) =>
+        decideOrderTracking(cfg, creds, {
+          cookieHeader: req.headers.get("cookie"),
+          ip: getClientIp(req.headers),
+          userAgent: req.headers.get("user-agent"),
+          sourceUrl: req.headers.get("referer"),
+        }),
+      )
+      .catch(() => null);
+    // Where the order came from, from the visitor's same-day cookieless page views (ADR-047, Phase 2).
+    const attributionSecret = process.env.BETTER_AUTH_SECRET;
+    const attribution = attributionSecret
+      ? await resolveOrderAttribution(
+          rt,
+          access.tenantId,
+          { ip: getClientIp(req.headers), userAgent: req.headers.get("user-agent") ?? "", doNotTrack: req.headers.get("sec-gpc") === "1" || req.headers.get("dnt") === "1" },
+          { secret: attributionSecret },
+        )
+      : null;
     const orderResult = await placeOrder(rt, tenantCtx, {
+      tracking,
+      attribution,
       cartToken: token,
+      customerId: signedIn?.id,
       idempotencyKey,
       email: parsed.data.email,
       phone: parsed.data.phone,
@@ -143,18 +198,20 @@ export async function POST(req: Request) {
     // the order still exists and its page offers "Pay now", so nothing is lost and the shopper is never double-charged.
     let razorpay: Awaited<ReturnType<typeof startRazorpayPayment>> | undefined;
     let checkoutUrl: string | undefined;
+    let stripe: { clientSecret: string; publishableKey: string; jsUrl: string } | undefined;
     if (paymentMethod === "razorpay") {
       razorpay = await startRazorpayPayment(rt, tenantCtx.tenantId, orderResult.orderId).catch(() => undefined);
     } else if (paymentMethod === "stripe" || paymentMethod === "paypal") {
-      // Stripe and PayPal take the shopper to the provider's own page; the same order page offers "Pay now" if this fails.
+      // PayPal (and Stripe without a publishable key) take the shopper to the provider's own page; Stripe with one returns the
+      // PaymentIntent the checkout page confirms. The same order page offers "Pay now" if this fails.
       const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
       const storeName = (await getStoreSettings(rt, tenantCtx).catch(() => null))?.storeName;
-      checkoutUrl = (
-        await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined)
-      )?.checkoutUrl;
+      const started = await startHostedPayment(rt, tenantCtx.tenantId, orderResult.orderId, paymentMethod, { baseUrl: `${proto}://${host}`, orderToken: orderResult.orderToken, storeName }).catch(() => undefined);
+      checkoutUrl = started?.checkoutUrl;
+      stripe = started?.stripeElements;
     }
 
-    const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl }, { status: 200 });
+    const response = NextResponse.json({ ...orderResult, razorpay, checkoutUrl, stripe }, { status: 200 });
 
     if (paymentMethod !== "cod") {
       // Keep the cart token aside until the payment finishes: an abandoned payment restores the cart from it.

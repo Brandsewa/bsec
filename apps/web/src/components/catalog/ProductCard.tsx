@@ -1,6 +1,6 @@
 import { PLACEHOLDER_IMAGE_URL } from "@/lib/placeholder.ts";
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import type { StorefrontProductSummary } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CardCartButton } from "./CardCartButton.tsx";
@@ -61,7 +61,8 @@ export function ProductCard({
   }
 
   const imageUrl = product.primaryImage?.url;
-  const imageAlt = product.primaryImage?.alt ?? product.title;
+  // A saved alt of "" is "not written yet", not "decorative": fall back to the title so the image is described for search and screen readers.
+  const imageAlt = product.primaryImage?.alt?.trim() || product.title;
   const secondUrl = hoverSecondImage ? product.secondaryImage?.url : undefined;
   const hasRating = showRatings && product.ratingCount > 0;
   const stars = Math.max(0, Math.min(5, Math.round(Number(product.ratingAvg))));

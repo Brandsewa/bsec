@@ -65,12 +65,13 @@ export async function POST(req: Request) {
   }
 }
 
-/** Take the discount code off the cart. */
+/** Take a discount code off the cart: the one named in `?code=`, or all of them. */
 export async function DELETE(req: Request) {
   try {
     const r = await resolveStoreAndCart(req);
     if ("error" in r) return r.error;
-    const cart = await removeCartDiscount(r.rt, r.tenantCtx, { token: r.token });
+    const code = new URL(req.url).searchParams.get("code")?.slice(0, 64);
+    const cart = await removeCartDiscount(r.rt, r.tenantCtx, { token: r.token, ...(code ? { code } : {}) });
     return NextResponse.json({ cart, itemCount: cart.itemCount, subtotal: cart.subtotal });
   } catch (err) {
     return failure(err);

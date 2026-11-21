@@ -6,6 +6,8 @@ import { computeTax, type TaxResult } from "../markets/rules.ts";
 import { gatewayCurrencyCheck } from "../markets/gateways.ts";
 import { addressProblem, phoneProblem, postalCodeProblem } from "../markets/addresses.ts";
 import type { Db } from "@bs/db";
+import type { OrderTrackingRow } from "../analytics/conversions.ts";
+import type { OrderAttributionRow } from "../analytics/attribution.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -26,11 +28,12 @@ import {
 } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
-import { clearCart, getOrCreateCart } from "../storefront/cart.ts";
+import { clearCart, getOrCreateCart, revalidateCartLines } from "../storefront/cart.ts";
 import { reserveInventory } from "../catalog/inventory-reservations.ts";
 import { allocateOrderNumber } from "../admin/order-settings.ts";
-import { redeemDiscount } from "./discounts.ts";
-import { allocateDiscount, priceOrder } from "./pricing.ts";
+import { recordOrderDiscountApplications, redeemDiscount } from "./discounts.ts";
+import { priceOrder, toPricingDiscounts } from "./pricing.ts";
+import { allocateApplications } from "../discounts/engine.ts";
 import { cartWeightGrams, getTenantShippingRates } from "./shipping-rates.ts";
 import { toCountryCode } from "./shipping-rules.ts";
 import { withIdempotencyKey } from "../system/idempotency.ts";
@@ -49,6 +52,10 @@ import { validateGstin } from "./gst-validation.ts";
 import { resolveTaxClass } from "../admin/tax-settings.ts";
 
 export interface PlaceOrderInput {
+  /** What the server-side conversion APIs may remember about this order (decided by `decideOrderTracking`; null = nothing). */
+  tracking?: OrderTrackingRow | null | undefined;
+  /** Where the order came from (decided by `resolveOrderAttribution`; null = direct or unknown). */
+  attribution?: OrderAttributionRow | null | undefined;
   cartToken: string;
   idempotencyKey?: string | undefined;
   email: string;
@@ -174,6 +181,16 @@ export async function placeOrder(
     throw new FeatureDisabledError("checkout", "Checkout is currently disabled for this store");
   }
 
+  // The cart keeps the price a line had when it was added and may hold products that have since been withdrawn.
+  // Bring it up to date first (saved in its own transaction), and ask the shopper to look again if anything moved.
+  const revalidated = await revalidateCartLines(rt, ctx, input.cartToken);
+  if (revalidated.removed.length > 0) {
+    throw new Error(`Bad Request: ${revalidated.removed.join(", ")} is no longer available and was taken out of your cart. Please review your cart and place the order again.`);
+  }
+  if (revalidated.repriced > 0) {
+    throw new Error("Bad Request: The price of an item in your cart has changed. Please review your cart and place the order again.");
+  }
+
   const executeOrderPlacement = async (tx: typeof rt._db.db): Promise<{ status: number; body: PlaceOrderResult }> => {
     // Assert tenant lifecycle allows checkout (PLAN §6.4)
     const [t] = await tx
@@ -204,8 +221,20 @@ export async function placeOrder(
       }
     }
 
-    // 1. Fetch cart
-    const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx);
+    // 1. Fetch cart. Who is ordering decides whether a code made for some customers (new, tagged, chosen) is theirs, so they
+    // are looked up first, the same way they are found again below. A guest who matches nobody is a stranger here.
+    let probeCustomerId = input.customerId ?? null;
+    const probeEmail = input.email?.trim().toLowerCase();
+    const probePhone = input.phone?.trim() ? input.phone.trim().replace(/\D/g, "") : null;
+    if (!probeCustomerId && probeEmail) {
+      const [byEmail] = await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.tenantId, tenantId), eq(customers.email, probeEmail))).limit(1);
+      probeCustomerId = byEmail?.id ?? null;
+    }
+    if (!probeCustomerId && probePhone) {
+      const [byPhone] = await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.tenantId, tenantId), eq(customers.phone, probePhone))).limit(1);
+      probeCustomerId = byPhone?.id ?? null;
+    }
+    const cart = await getOrCreateCart(rt, ctx, input.cartToken, tx, undefined, { customerId: probeCustomerId, strict: true });
     if (!cart || cart.items.length === 0) {
       throw new Error("Cannot place order with empty cart");
     }
@@ -326,14 +355,14 @@ export async function placeOrder(
       subtotal,
       shipping: shippingBase,
       codFee,
-      discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+      discounts: toPricingDiscounts(cart.discounts),
     });
     const { shippingTotal, discountTotal } = pricing;
     const money = (n: number) => formatMoney(n, mkt.currency);
 
     // Merchant-entered tax of the market (ADR-040): added on top for tax-exclusive prices, carved out for inclusive ones.
     // Per-line discounts are allocated first so tax is charged on what the shopper actually pays.
-    const lineDiscounts = allocateDiscount(cart.items.map((it) => it.lineTotal), discountTotal);
+    const lineDiscounts = allocateApplications(cart.items.map((it) => ({ id: it.id, lineTotal: it.lineTotal })), cart.discounts ?? []);
     let marketTax: TaxResult | null = null;
     if (mkt.taxCollect) {
       marketTax = computeTax({
@@ -638,6 +667,7 @@ export async function placeOrder(
       paymentStatus: isCod ? "cod_pending" : "pending",
       fulfillmentStatus: "unfulfilled",
       marketId: mkt.id,
+      priceRegion: cart.priceRegion ?? null,
       baseCurrency: mkt.baseCurrency,
       fxRate: !mkt.isBase && mkt.fxRate ? String(mkt.fxRate) : null,
       baseGrandTotal: mkt.isBase ? grandTotal : toBaseCurrencyAmount(grandTotal, mkt.fxRate, minorUnitExponent(mkt.currency), minorUnitExponent(mkt.baseCurrency)),
@@ -728,17 +758,34 @@ export async function placeOrder(
 
     // 7b. Redeem the code against its usage limit in the same transaction: if someone else just used the last
     // redemption this order (and its stock reservation) is rolled back and the shopper is told.
-    if (cart.discount) {
+    // Every applied discount is redeemed, and recorded on the order so invoices and reports read it from there.
+    const applied = cart.discounts ?? [];
+    for (const d of applied) {
+      const waivedShipping = d.freeShipping ? pricing.shippingDiscount : 0;
       const redeemed = await redeemDiscount(
         rt,
         ctx,
-        { discountId: cart.discount.discountId, orderId, ...(input.customerId ? { customerId: input.customerId } : {}), amount: pricing.discountValue },
+        { discountId: d.discountId, orderId, ...(d.bulkCodeId ? { bulkCodeId: d.bulkCodeId } : {}), ...(effectiveCustomerId ? { customerId: effectiveCustomerId } : {}), amount: d.freeShipping ? waivedShipping : d.amount },
         tx,
       );
       if (!redeemed.success) {
-        throw new Error(`Bad Request: code ${cart.discount.code} is no longer available. Remove it to continue.`);
+        throw new Error(`Bad Request: ${redeemed.reason === "You have already used this code" ? "you have already used this code" : redeemed.reason === "This code has already been used" ? `code ${d.code} has already been used` : `code ${d.code} is no longer available`}. Remove it to continue.`);
       }
     }
+    await recordOrderDiscountApplications(
+      tx as unknown as Db,
+      tenantId,
+      orderId,
+      applied.map((d) => ({
+        discountId: d.discountId,
+        code: d.automatic ? null : d.code,
+        title: d.title,
+        type: d.type,
+        discountClass: d.discountClass,
+        amount: d.freeShipping ? 0 : d.amount,
+        shippingAmount: d.freeShipping ? pricing.shippingDiscount : 0,
+      })),
+    );
 
     // 8. Payment Intent
     const intentId = randomUUID();
@@ -785,7 +832,7 @@ export async function placeOrder(
       type: "order.create",
       message:
         (isCod ? "Order placed via Cash on Delivery" : "Order placed awaiting payment") +
-        (cart.discount ? ` with code ${cart.discount.code}${pricing.shippingDiscount > 0 ? " (free shipping)" : ""}` : ""),
+        ((cart.discounts ?? []).length > 0 ? ` with ${(cart.discounts ?? []).map((d) => (d.automatic ? d.title : `code ${d.code}`)).join(" and ")}${pricing.shippingDiscount > 0 ? " (free shipping)" : ""}` : ""),
       actorType: "customer",
       data: {
         paymentMethod: input.paymentMethod,
@@ -826,6 +873,17 @@ export async function placeOrder(
 
     // Clear cart items
     await clearCart(rt, ctx, input.cartToken, tx);
+    }
+
+    // 11b. Remember the visitor's consent and browser ids for the server-side conversion APIs (ADR-047). Only present when the visitor
+    // accepted the matching category and the store has credentials; cleared once the events are settled.
+    if (input.tracking) {
+      await tx.insert(schema.orderTracking).values({ tenantId, orderId, ...input.tracking });
+    }
+
+    // 11c. Where the order came from, for the sales by referrer reports (ADR-047, Phase 2).
+    if (input.attribution) {
+      await tx.insert(schema.orderAttribution).values({ tenantId, orderId, ...input.attribution });
     }
 
     // 12. Enqueue order.created job if boss runtime is present

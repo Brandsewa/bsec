@@ -1,5 +1,6 @@
 import type { SaveShippingZone, SaveShippingZonesInput, ShippingSettings } from "@bs/contracts";
 import { type WeightUnit, gramsToUnit, unitToGrams } from "@bs/contracts/units";
+import { listCountries } from "@bs/contracts/countries";
 
 /** Editable form state for the shipping zones page. Money is kept as major units and weight in the zone's active unit while typing. */
 export type RateType = "flat" | "free_above_threshold" | "price_tier" | "weight_tier";
@@ -189,10 +190,5 @@ export function draftsToPayload(
   return { payload: { zones: out }, error: null };
 }
 
-/** Countries offered for a zone. Shoppers are matched by two-letter code. */
-export const COUNTRY_OPTIONS: Array<{ value: string; label: string }> = [
-  ["IN", "India"], ["US", "United States"], ["GB", "United Kingdom"], ["AE", "United Arab Emirates"], ["SG", "Singapore"],
-  ["CA", "Canada"], ["AU", "Australia"], ["DE", "Germany"], ["FR", "France"], ["NL", "Netherlands"], ["SA", "Saudi Arabia"],
-  ["QA", "Qatar"], ["KW", "Kuwait"], ["OM", "Oman"], ["BH", "Bahrain"], ["NP", "Nepal"], ["BD", "Bangladesh"], ["LK", "Sri Lanka"],
-  ["MY", "Malaysia"], ["JP", "Japan"], ["IT", "Italy"], ["ES", "Spain"], ["NZ", "New Zealand"], ["ZA", "South Africa"],
-].map(([value, label]) => ({ value: value as string, label: label as string }));
+/** Countries offered for a zone: every country (a zone on a market is narrowed to that market's countries in the screen). */
+export const COUNTRY_OPTIONS: Array<{ value: string; label: string }> = listCountries().map((c) => ({ value: c.code, label: `${c.name} (${c.code})` }));

@@ -3,8 +3,8 @@
 import React, { useCallback, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { StorefrontCart, StorefrontCheckoutConsent } from "@bs/domain";
-import { priceOrder } from "@bs/domain/pricing";
-import { CheckoutForm, type CheckoutRegion, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
+import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
+import { CheckoutForm, type CheckoutCountryPicker, type CheckoutDisplay, type CheckoutRegion, type CheckoutShippingRate, type CheckoutPaymentOptions, type SavedCheckoutAddress } from "./CheckoutForm.tsx";
 import { useMoney } from "@/components/market/MarketProvider.tsx";
 import { OrderSummary } from "./OrderSummary.tsx";
 
@@ -22,9 +22,15 @@ export interface CheckoutContainerProps {
   signedIn?: boolean;
   /** The countries this market ships to (ADR-040); omitted for India-only stores. */
   region?: CheckoutRegion | undefined;
+  display?: CheckoutDisplay | undefined;
+  countryPicker?: CheckoutCountryPicker | undefined;
+  /** Public Turnstile key when the bot check is on for checkout, else null. */
+  turnstileSiteKey?: string | null | undefined;
+  /** Set for a store on its own domain (see CheckoutForm). */
+  turnstileBridgeOrigin?: string | null | undefined;
 }
 
-export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn, region }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn, region, display, countryPicker, turnstileSiteKey, turnstileBridgeOrigin }: CheckoutContainerProps) {
   const router = useRouter();
   const money = useMoney();
   const summaryId = useId();
@@ -61,7 +67,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
     subtotal: cart.subtotal,
     shipping: shippingPaise,
     codFee: codFeePaise,
-    discount: cart.discount ? { type: cart.discount.type, discountAmount: cart.discount.amount } : null,
+    discounts: toPricingDiscounts(cart.discounts),
   }).grandTotal;
   const totalLabel = money(total);
 
@@ -105,6 +111,10 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
           customerEmail={customerEmail ?? ""}
           signedIn={signedIn ?? false}
           region={region}
+          display={display}
+          countryPicker={countryPicker}
+          turnstileSiteKey={turnstileSiteKey}
+          turnstileBridgeOrigin={turnstileBridgeOrigin}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}

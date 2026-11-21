@@ -5,7 +5,7 @@ import { buildBlogPostMetadata, generateBlogPostingJsonLd, generateBreadcrumbJso
 import { getBlockDefinition, type BlockInstance, type BlogPostOptions } from "@bs/blocks";
 import { blogAccess } from "@/server/site-access.ts";
 import { server } from "@/server/runtime.ts";
-import { getCachedBlogPost, getCachedBlogSidebar, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBlogPost, getCachedBlogSidebar, getCachedBrandAssets, getCachedStoreName, getCachedThemePage } from "@/server/cached-storefront.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { BlogPostSection } from "./BlogPostSection.tsx";
 import { JsonLd } from "./JsonLd.tsx";
@@ -27,9 +27,10 @@ function loadPost(tenantId: string, slug: string, previewToken: string | undefin
 export async function blogPostMetadata(slug: string, previewToken?: string): Promise<Metadata> {
   const { host, tenantId, noindex } = await request();
   if (!tenantId) return { title: "Not found" };
-  const [res, storeName] = await Promise.all([loadPost(tenantId, slug, previewToken), getCachedStoreName(tenantId)]);
+  const [res, storeName, assets] = await Promise.all([loadPost(tenantId, slug, previewToken), getCachedStoreName(tenantId), getCachedBrandAssets(tenantId).catch(() => null)]);
   if (res.kind !== "post") return { title: "Not found", robots: { index: false } };
-  const m = buildBlogPostMetadata({ post: res.post, storeName, host, storeNoindex: noindex, preview: res.preview });
+  // A post with no picture of its own shows the store's default share image.
+  const m = buildBlogPostMetadata({ post: res.post, storeName, host, storeNoindex: noindex, preview: res.preview, ...(assets?.shareImage ? { fallbackImageUrl: assets.shareImage.url } : {}) });
   return { title: m.title, description: m.description, robots: m.robots, alternates: m.alternates, openGraph: m.openGraph, twitter: m.twitter };
 }
 

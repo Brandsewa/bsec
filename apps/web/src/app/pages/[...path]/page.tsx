@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import { notFound, permanentRedirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -13,7 +14,8 @@ import {
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { loadLandingPlans } from "@/server/landing-plans.ts";
@@ -67,27 +69,32 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
           }
         }
 
-        return {
-          title,
-          description,
-          alternates: {
-            canonical: canonicalUrl,
-          },
-          openGraph: {
+        // A page with no picture of its own shows the store's default share image.
+        const assets = imageUrl ? null : await getCachedBrandAssets(access.tenantId).catch(() => null);
+        return withShareImage(
+          {
             title,
             description,
-            url: canonicalUrl,
-            images: imageUrl ? [{ url: imageUrl, alt: title }] : undefined,
+            alternates: {
+              canonical: canonicalUrl,
+            },
+            openGraph: {
+              title,
+              description,
+              url: canonicalUrl,
+              images: imageUrl ? [{ url: imageUrl, alt: title }] : undefined,
+            },
+            twitter: imageUrl
+              ? {
+                  card: "summary_large_image",
+                  title,
+                  description,
+                  images: [imageUrl],
+                }
+              : { card: assets?.shareImage ? "summary_large_image" : "summary", title, description },
           },
-          twitter: imageUrl
-            ? {
-                card: "summary_large_image",
-                title,
-                description,
-                images: [imageUrl],
-              }
-            : undefined,
-        };
+          assets?.shareImage,
+        );
       }
     }
   } catch {
@@ -135,7 +142,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
       const marketCtx = await getMarketContext(access.tenantId);
       marketCurrency = marketCtx.currency;
       marketLocale = marketCtx.locale;
-      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, marketCtx.marketId);
+      pageData = await getCachedStorefrontPageByPath(access.tenantId, path, marketCtx.scope);
 
       if (pageData) {
         // Enforce 308 permanent redirect if accessed via non-canonical ancestor path
@@ -178,10 +185,7 @@ export default async function CustomContentPage({ params }: CustomPageProps) {
 
   return (
     <article className="w-full min-h-[60vh]">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }}
-      />
+      <JsonLd data={breadcrumbsJsonLd} />
       {/* The page's own blocks carry the visible heading; keep the title for screen readers and search engines. */}
       <h1 className="sr-only">{pageData.page.title}</h1>
       <BlockRenderer blocks={renderResult.blocks} renderData={pageData.renderData} context={{ currency: marketCurrency, locale: marketLocale }} />

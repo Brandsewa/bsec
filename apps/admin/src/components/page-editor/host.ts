@@ -25,6 +25,15 @@ export const storeHost: BlockEditorHost = {
     }
   },
 
+  async listProducts() {
+    try {
+      const res = await client.admin.products.list({ sort: "title_asc", limit: 100, offset: 0 });
+      return res.items.map((p) => ({ slug: p.slug, title: p.title }));
+    } catch {
+      return [];
+    }
+  },
+
   async listCategories() {
     try {
       const res = await client.admin.categories.list();

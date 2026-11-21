@@ -1,4 +1,4 @@
-import { BellRing, Mail, CreditCard, Globe, ListPlus, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
+import { BellRing, SearchCheck, Mail, CreditCard, Globe, ListPlus, Puzzle, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 import { hasPermission, type StorePermission } from "@bs/auth/permissions";
 
@@ -40,6 +40,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "branding", label: "Branding", href: "/settings/branding", description: "Logo, colours, fonts", icon: Sparkles, perm: "branding.manage" },
       { id: "storefront", label: "Storefront", href: "/settings/storefront", description: "Go live, coming soon, password", icon: Store, perm: "storefront.manage" },
       { id: "domains", label: "Domains", href: "/settings/domains", description: "Custom domains and DNS", icon: Globe, perm: "domains.manage" },
+      { id: "seo", label: "SEO health", href: "/settings/seo", description: "What search engines and AI can see", icon: SearchCheck, perm: "settings.read" },
     ],
   },
   {
@@ -49,6 +50,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "checkout", label: "Checkout", href: "/settings/checkout", description: "Fields, account options, recovery", icon: ShoppingCart, perm: "checkout.manage" },
       { id: "customer-accounts", label: "Customer accounts", href: "/settings/customer-accounts", description: "Sign-in methods, returns, portal", icon: UserCheck, perm: "checkout.manage" },
       { id: "payments", label: "Payments", href: "/settings/payments", description: "COD and online gateways", icon: CreditCard, perm: "payments.manage" },
+      { id: "apps", label: "Apps", href: "/settings/apps", description: "Install features for your store", icon: Puzzle, perm: "apps.manage" },
       { id: "markets", label: "Markets", href: "/settings/markets", description: "Regional pricing, currencies, and countries", icon: Globe, perm: "markets.manage" },
       { id: "shipping", label: "Shipping", href: "/settings/shipping", description: "Zones, rates, free delivery", icon: Truck, perm: "shipping.manage" },
       { id: "taxes", label: "Taxes", href: "/settings/taxes", description: "GST and place of supply", icon: Landmark, perm: "taxes.manage" },

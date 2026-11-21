@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import type { ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 import { adminContract } from "./admin.ts";
+import { platformMarketplaceContract } from "./apps.ts";
 import { blogContract } from "./blog.ts";
 import {
   platformTenantsContract,
@@ -23,13 +24,17 @@ import {
   platformStorageContract,
   platformIntegrationsContract,
   platformSettingsContract,
+  platformBrandingContract,
 } from "./platform.ts";
 import { storefrontContract } from "./storefront.ts";
 import { platformNotificationsContract } from "./notifications.ts";
 
 export * from "./admin.ts";
 export * from "./markets.ts";
+export * from "./apps.ts";
 export * from "./finance.ts";
+export * from "./analytics.ts";
+export * from "./consent.ts";
 export * from "./blog.ts";
 export * from "./notifications.ts";
 export * from "./friendly-ids.ts";
@@ -60,9 +65,11 @@ export const storeContract = {
   storefront: storefrontContract,
 };
 
-// The website has no theme templates to create.
+// The website has no theme templates to create and no homepage versions (those are a store-admin feature, so
+// `activateHome` is left out; the platform handler in apps/platform has nothing to run for it).
+const { activateHome: _storeOnlyActivateHome, ...sharedPagesContract } = adminContract.pages;
 const sitePagesContract = {
-  ...adminContract.pages,
+  ...sharedPagesContract,
   // The website's header and footer are pages of their own; this creates the missing one from today's layout.
   ensureChrome: oc
     .route({ method: "POST", path: "/marketing/pages/chrome/{key}" })
@@ -99,6 +106,7 @@ export const platformContract = {
   quotas: platformQuotasContract,
   features: platformFeaturesContract,
   promotions: platformPromotionsContract,
+  marketplace: platformMarketplaceContract,
   staff: platformStaffContract,
   audit: platformAuditContract,
   email: platformEmailContract,
@@ -106,6 +114,7 @@ export const platformContract = {
   storage: platformStorageContract,
   integrations: platformIntegrationsContract,
   settings: platformSettingsContract,
+  branding: platformBrandingContract,
 };
 
 export type StoreContract = typeof storeContract;
@@ -115,4 +124,5 @@ export type PlatformClient = ContractRouterClient<PlatformContract>;
 export type { ContractRouterClient };
 export type StoreClient = ContractRouterClient<StoreContract>;
 export * from "./money.ts";
+export * from "./countries.ts";
 export * from "./units.ts";

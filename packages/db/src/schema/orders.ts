@@ -33,6 +33,8 @@ export const orders = tenantTable(
     currency: text("currency").notNull().default("INR"),
     /** ADR-040: the market, the store base currency, the rate used and the total in base currency. null on older orders. */
     marketId: uuid("market_id"),
+    /** State Pricing app: the state the order was priced for (snapshot, ADR-044). */
+    priceRegion: text("price_region"),
     baseCurrency: text("base_currency"),
     fxRate: numeric("fx_rate", { precision: 18, scale: 8 }),
     baseGrandTotal: bigint("base_grand_total", { mode: "number" }),
@@ -116,6 +118,8 @@ export const orderItems = tenantTable(
   (t) => [
     unique("order_items_tenant_id_uniq").on(t.tenantId, t.id),
     index("order_items_tenant_order_idx").on(t.tenantId, t.orderId),
+    // Reports and "is this variant ordered" checks read order lines by variant (audit A10-02, migration 0114).
+    index("order_items_tenant_variant_idx").on(t.tenantId, t.variantId),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.orderId,

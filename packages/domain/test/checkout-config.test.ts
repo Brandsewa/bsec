@@ -79,3 +79,42 @@ describe("parseCheckoutSettings", () => {
     expect(parsed.marketingEmail.label.length).toBeLessThanOrEqual(120);
   });
 });
+
+describe("checkout display wording", () => {
+  it("defaults the headings and keeps no payment overrides", () => {
+    const d = parseCheckoutSettings({}).display;
+    expect(d.shippingTitle).toBe("Shipping Method");
+    expect(d.shippingFreeLabel).toBe("Free");
+    expect(d.paymentTitle).toBe("Payment Method");
+    expect(d.payment).toEqual({});
+  });
+
+  it("keeps merchant text and safe logos, drops unsafe URLs and unknown gateways", () => {
+    const d = parseCheckoutSettings({
+      display: {
+        shippingTitle: "  How should we send it?  ",
+        payment: {
+          razorpay: {
+            title: "Cards and UPI",
+            subtitle: "Pay securely",
+            logos: [
+              { url: "https://cdn.example.com/visa.png", alt: "Visa" },
+              { url: "javascript:alert(1)", alt: "bad" },
+              { url: "data:image/png;base64,AAAA", alt: "bad" },
+              { url: "/media/upi.png", alt: "UPI" },
+            ],
+          },
+          bogus: { title: "nope", subtitle: "", logos: [] },
+        },
+      },
+    }).display;
+    expect(d.shippingTitle).toBe("How should we send it?");
+    expect(d.payment.razorpay?.logos.map((l) => l.url)).toEqual(["https://cdn.example.com/visa.png", "/media/upi.png"]);
+    expect(d.payment["bogus"]).toBeUndefined();
+  });
+
+  it("caps logos at six", () => {
+    const logos = Array.from({ length: 9 }, (_, i) => ({ url: `https://cdn.example.com/${i}.png`, alt: "" }));
+    expect(parseCheckoutSettings({ display: { payment: { stripe: { title: "", subtitle: "", logos } } } }).display.payment.stripe?.logos).toHaveLength(6);
+  });
+});

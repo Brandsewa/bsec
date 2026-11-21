@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { schema } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { addCustomDomain } from "../domains/service.ts";
-import { writePlatformAudit, type AuditMeta } from "../platform-services.ts";
+import { assertPlatformStaff, assertRoleAtLeast, writePlatformAudit, type AuditMeta } from "../platform-services.ts";
 
 type Page = { limit?: number | undefined; offset?: number | undefined } | undefined;
 
@@ -167,6 +167,8 @@ export async function updatePlatformFeatureFlag(
   input: { featureKey: string; defaultOn: boolean; killSwitch?: boolean | undefined },
   meta?: AuditMeta,
 ): Promise<{ ok: true }> {
+  // The role is checked here as well as at the route (rule 4, audit A2-01).
+  assertRoleAtLeast((await assertPlatformStaff(rt, staffUserId)).role, "platform_admin", "changing a feature flag");
   return rt._db.db.transaction(async (tx) => {
     const [before] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
     if (!before) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);
@@ -200,6 +202,7 @@ export async function retirePlatformFeatureFlag(
   input: { featureKey: string },
   meta?: AuditMeta,
 ): Promise<{ ok: true }> {
+  assertRoleAtLeast((await assertPlatformStaff(rt, staffUserId)).role, "platform_admin", "retiring a feature flag");
   return rt._db.db.transaction(async (tx) => {
     const [flag] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
     if (!flag) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);
@@ -220,6 +223,7 @@ export async function restorePlatformFeatureFlag(
   input: { featureKey: string },
   meta?: AuditMeta,
 ): Promise<{ ok: true }> {
+  assertRoleAtLeast((await assertPlatformStaff(rt, staffUserId)).role, "platform_owner", "restoring a feature flag");
   return rt._db.db.transaction(async (tx) => {
     const [flag] = await tx.select().from(schema.featureFlags).where(eq(schema.featureFlags.key, input.featureKey)).for("update").limit(1);
     if (!flag) throw new Error(`Not Found: feature flag not found: ${input.featureKey}`);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { DocBody, DocHeader, PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { CompanyBox, GrievanceBox } from "@/components/marketing/landing/LegalBits.tsx";
 import { organizationJsonLd } from "@/components/marketing/landing/seo.ts";
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <PageFrame>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }} />
+      <JsonLd data={organizationJsonLd()} />
       <DocHeader eyebrow="Contact us" title="We are here to help." intro="Write to us and we will reply on business days." />
       <DocBody>
         <div className="cards">

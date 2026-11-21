@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { headers } from "next/headers";
+import { RuttlWidget } from "@/components/RuttlWidget.tsx";
+import { cookies, headers } from "next/headers";
 import { cacheTag } from "next/cache";
-import { evaluateStorefrontAccess, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
+import { evaluateStorefrontAccess, brandLogoPair, getPublicPlatformBrand, platformSiteHeaderLinks, tenantTag, type getBrandSettings } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 import { SiteNavProvider } from "@/components/marketing/home/site-nav.tsx";
 import { isPlatformMarketingHost } from "@/server/hosts.ts";
 import { siteChrome, siteStatus } from "@/server/site-settings.ts";
-import { getCachedBrandSettings, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedBrandSettings, getCachedConsentConfig, getCachedDefaultPages, getCachedStoreName, getCachedThemePage, getCachedThemeTokens } from "@/server/cached-storefront.ts";
 import { MiniCartConfigProvider, type MiniCartCopy } from "@/components/storefront/MiniCartConfig.tsx";
 import { StoreHeader } from "@/components/storefront/StoreHeader.tsx";
 import { StoreFooter } from "@/components/storefront/StoreFooter.tsx";
@@ -30,10 +31,11 @@ import { BannerClient } from "@/components/blocks/BannerClient.tsx";
 import { fontSans, fontMono } from "@/lib/fonts.ts";
 import { makeThemeBootScript } from "@bs/ui/server";
 import { WebThemeProvider } from "@/components/theme/WebThemeProvider.tsx";
+import { countryName } from "@bs/contracts/countries";
 import { MarketProvider } from "@/components/market/MarketProvider.tsx";
-import { MarketBar } from "@/components/market/MarketBar.tsx";
 import { getMarketContext, type MarketContext } from "@/server/market.ts";
-import { PATH_HEADER } from "@/lib/market-constants.ts";
+import { PATH_HEADER, PIN_ERROR_COOKIE } from "@/lib/market-constants.ts";
+import { PincodeGate } from "@/components/market/pincode-gate.tsx";
 import { THEMED_PATH_SOURCE } from "@/lib/themed-paths.ts";
 import "./globals.css";
 
@@ -60,17 +62,42 @@ export async function generateMetadata(): Promise<Metadata> {
       // Website visibility and "hide from search engines" in Super Admin > Storefront > Settings (ADR-042).
       const site = await siteStatus();
       const indexable = site.mode === "live" && !site.hideFromSearchEngines;
-      return { title: "BCOM", description: "Launch your online store in 10 minutes.", robots: { index: indexable, follow: indexable } };
+      const brand = await getPublicPlatformBrand(server().rt).catch(() => null);
+      const icon = brand?.explicit ? brand.tokens.favicon?.url : undefined;
+      return {
+        title: "BCOM",
+        description: "Launch your online store in 10 minutes.",
+        robots: { index: indexable, follow: indexable },
+        ...(icon ? { icons: { icon } } : {}),
+        ...(brand?.explicit
+          ? {
+              manifest: "/api/brand/manifest",
+              openGraph: { title: brand.tokens.identity.name || "BCOM", description: brand.tokens.identity.tagline || "Launch your online store in 10 minutes.", images: [{ url: "/api/brand/og", width: 1200, height: 630 }] },
+              twitter: { card: "summary_large_image" as const, images: ["/api/brand/og"] },
+              other: { "theme-color": brand.tokens.color.primary },
+            }
+          : {}),
+      };
     }
     const { rt } = server();
     const access = await evaluateStorefrontAccess(rt, host, { headers: h });
     const isNoIndex = access.noindex ?? true;
     if (access.tenantId) {
-      const name = await getCachedStoreName(access.tenantId).catch(() => "Store");
+      const [name, assets] = await Promise.all([
+        getCachedStoreName(access.tenantId).catch(() => "Store"),
+        getCachedBrandAssets(access.tenantId).catch(() => null),
+      ]);
+      const share = assets?.shareImage;
+      const icons = assets?.faviconUrl || assets?.appleTouchIconUrl ? { icons: { ...(assets.faviconUrl ? { icon: assets.faviconUrl } : {}), ...(assets.appleTouchIconUrl ? { apple: assets.appleTouchIconUrl } : {}) } } : {};
       return {
         title: name,
         description: `Shop at ${name}.`,
         robots: isNoIndex ? { index: false, follow: false } : { index: true, follow: true },
+        ...icons,
+        manifest: "/manifest.webmanifest",
+        // Pages that set their own openGraph replace this object: they add the share image back with withShareImage.
+        openGraph: { type: "website", siteName: name, ...(share ? { images: [{ url: share.url, ...(share.width ? { width: share.width } : {}), ...(share.height ? { height: share.height } : {}) }] } : {}) },
+        twitter: { card: share ? "summary_large_image" : "summary", ...(share ? { images: [share.url] } : {}) },
       };
     }
     return {
@@ -91,9 +118,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // bcom.si and www.bcom.si are the platform's marketing site and signup, not a store: no store gate,
   // header, footer or "coming soon" screen. (Without this the page was always hidden behind "Opening Soon".)
   let isMarketing = false;
+  let marketingHost = "";
   try {
     const h = await headers();
-    isMarketing = isPlatformMarketingHost(h.get("x-forwarded-host") ?? h.get("host"));
+    marketingHost = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+    isMarketing = isPlatformMarketingHost(marketingHost);
   } catch {
     // no request context (static build): treat as a store host, as before
   }
@@ -101,6 +130,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     // A failed read keeps the built-in links; the marketing site must not depend on this query.
     const chrome = await siteChrome().catch(() => ({ header: null, announcement: null, footer: null, theme: null }));
     const design = websiteThemeCss(chrome.theme);
+    // Validated hex-only CSS built from the Super Admin brand; empty until a brand is saved.
+    const brand = await getPublicPlatformBrand(server().rt).catch(() => null);
+    const brandCss = brand?.explicit ? `${brand.css}${brand.tokens.font !== "system" ? "body{font-family:var(--brand-font)}" : ""}` : "";
     const navLinks = await platformSiteHeaderLinks(server().rt._db.db, chrome.header?.menuHandle ?? "header").catch(() => null);
     const announcement = chrome.announcement
       ? renderBlockTree([{ id: "site-announcement", type: "Banner", version: 1, props: chrome.announcement }], { renderBanner: ({ children }) => <BannerClient>{children}</BannerClient> })
@@ -110,13 +142,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <head>
           <script dangerouslySetInnerHTML={{ __html: marketingThemeBootScript }} />
           {/* The store widgets read --bs-*; on the website they follow its own palette (light and dark). */}
-          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss + design.css }} />
+          <style dangerouslySetInnerHTML={{ __html: websiteBlockCss + design.css + brandCss }} />
           {design.fontsHref ? <link rel="stylesheet" href={design.fontsHref} /> : null}
         </head>
         <body className="min-h-dvh antialiased">
           <WebThemeProvider always>
-            <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement}>{children}</SiteNavProvider>
+            <SiteNavProvider links={navLinks} header={chrome.header} announcement={announcement} brandLogo={brand?.explicit ? brandLogoPair(brand.tokens) : null}>{children}</SiteNavProvider>
           </WebThemeProvider>
+          <RuttlWidget host={marketingHost} />
         </body>
       </html>
     );
@@ -134,7 +167,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   let marketCtx: MarketContext | null = null;
   let requestPath = "/";
   let requestHost = "localhost";
-  let visitorCountryCode: string | null = null;
+  let pinError: string | null = null;
+  let consentConfig: Awaited<ReturnType<typeof getCachedConsentConfig>> = null;
 
   try {
     const h = await headers();
@@ -145,10 +179,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     access = await evaluateStorefrontAccess(rt, host, { headers: h });
     requestHost = host;
     requestPath = h.get(PATH_HEADER) ?? "/";
-    visitorCountryCode = h.get("cf-ray") ? (h.get("cf-ipcountry")?.toUpperCase() ?? null) : null;
 
     if (access.tenantId) {
       marketCtx = await getMarketContext(access.tenantId).catch(() => null);
+      if (marketCtx?.regionState.needsPincode) pinError = (await cookies()).get(PIN_ERROR_COOKIE)?.value ?? null;
       storeName = await getCachedStoreName(access.tenantId).catch(() => "Store");
       // In M3, retrieve published brand settings and theme tokens using tenant context with Cache Components
       try {
@@ -166,6 +200,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         // Fallback to null brand settings
       }
 
+      consentConfig = await getCachedConsentConfig(access.tenantId).catch(() => null);
       miniCartCopy = await getCachedDefaultPages(access.tenantId).then((d) => d.miniCart).catch(() => undefined);
 
       try {
@@ -236,6 +271,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <script dangerouslySetInnerHTML={{ __html: newsletterScript }} />
+        <script src="/bsa.js" async />
+        {consentConfig ? (
+          <>
+            {/* The store's cookie banner (ADR-047). The JSON is escaped so merchant text can never close the tag. */}
+            <script id="bs-consent-cfg" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(consentConfig).replace(/</g, "\\u003c") }} />
+            <script src="/bsc.js" async />
+          </>
+        ) : null}
         {fontsHref ? (
           <>
             {/* Open the font connections while the stylesheet is still being fetched (it is render-blocking). */}
@@ -256,9 +299,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       </head>
       <body className="flex min-h-dvh flex-col antialiased">
         <WebThemeProvider>
-          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "" }}>
+          <MarketProvider value={{ currency: marketCtx?.currency ?? "INR", locale: marketCtx?.locale ?? "en-IN", prefix: marketCtx?.prefix ?? "", ...(marketCtx && marketCtx.markets.length > 1 && marketCtx.market ? { markets: marketCtx.markets.map((m) => ({ handle: m.handle, name: m.name, currency: m.currency, countries: m.countries.map((code) => ({ code, name: countryName(code) })) })), currentHandle: marketCtx.market.handle, path: requestPath } : {}) }}>
           <MiniCartConfigProvider copy={miniCartCopy}>
-          {marketCtx?.market ? <MarketBar markets={marketCtx.markets} current={marketCtx.market} suggestion={marketCtx.suggestion} path={requestPath} country={visitorCountryCode} /> : null}
+          {marketCtx?.regionState.needsPincode ? <PincodeGate error={pinError} /> : null}
           <StoreStatusBanner isBypass={access.isBypass} mode={access.mode} />
           {themeHeader ? (
             <ThemeChrome blocks={themeHeader.blocks} renderData={themeHeader.renderData} storeName={storeName} currency={marketCtx?.currency ?? "INR"} locale={marketCtx?.locale ?? "en-IN"} />
@@ -277,6 +320,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           </MiniCartConfigProvider>
           </MarketProvider>
         </WebThemeProvider>
+        <RuttlWidget host={requestHost} />
       </body>
     </html>
   );

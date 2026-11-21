@@ -63,3 +63,36 @@ describe("allocateDiscount: a goods discount split over order lines", () => {
     expect(allocateDiscount([0, 0], 50)).toEqual([0, 0]);
   });
 });
+
+describe("priceOrder: several discounts at once (ADR-045)", () => {
+  it("takes a goods discount off the goods and waives shipping for a free-shipping one, together", () => {
+    const r = priceOrder({
+      subtotal: 10000,
+      shipping: 9900,
+      codFee: 0,
+      discounts: [
+        { type: "percent", discountAmount: 1000 },
+        { type: "free_shipping", discountAmount: 0 },
+      ],
+    });
+    expect(r).toMatchObject({ discountTotal: 1000, shippingTotal: 0, shippingDiscount: 9900, grandTotal: 9000, discountValue: 10900 });
+  });
+
+  it("adds goods discounts up but never takes the goods below zero", () => {
+    const r = priceOrder({
+      subtotal: 10000,
+      shipping: 0,
+      codFee: 0,
+      discounts: [
+        { type: "fixed", discountAmount: 8000 },
+        { type: "percent", discountAmount: 8000 },
+      ],
+    });
+    expect(r).toMatchObject({ discountTotal: 10000, grandTotal: 0 });
+  });
+
+  it("still accepts one discount through the old field", () => {
+    expect(priceOrder({ subtotal: 10000, shipping: 0, codFee: 0, discount: { type: "fixed", discountAmount: 500 } }).discountTotal).toBe(500);
+  });
+});
+

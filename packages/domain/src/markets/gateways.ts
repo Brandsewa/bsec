@@ -30,6 +30,10 @@ export function gatewayCurrencyCheck(input: {
         ? none
         : { blocking: "Cash on delivery is only offered for INR orders in India.", warning: null };
     case "razorpay":
+      // Razorpay takes domestic (INR) and international payments on one account; the latter must be switched on in the Razorpay dashboard.
+      return currency === "INR"
+        ? none
+        : { blocking: null, warning: `Razorpay can charge in ${currency} once International Payments is enabled on your Razorpay account.` };
     case "cashfree":
       return currency === "INR"
         ? none

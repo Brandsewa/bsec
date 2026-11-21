@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -63,7 +64,10 @@ export const accounts = pgTable("accounts", {
   password: text("password"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  // Sign-in looks an account up by user (audit A10-02, migration 0114).
+  index("accounts_user_id_idx").on(t.userId),
+]);
 
 /**
  * Better Auth email/phone verifications (PLAN §5.3).
@@ -133,6 +137,8 @@ export const memberships = tenantTable(
   },
   (t) => [
     unique("memberships_tenant_user_uniq").on(t.tenantId, t.userId),
+    // "Which stores is this user in" is asked on every admin load (audit A10-02, migration 0114).
+    index("memberships_user_id_idx").on(t.userId),
     tenantForeignKey({
       tableTenantId: t.tenantId,
       column: t.roleId,
@@ -186,7 +192,10 @@ export const auditLogs = tenantTable("audit_logs", {
   ip: text("ip"),
   requestId: text("request_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  // The activity views read one store's newest rows; the table only grows (audit A10-02, migration 0114).
+  index("audit_logs_tenant_created_idx").on(t.tenantId, t.createdAt.desc()),
+]);
 
 /**
  * Customer sessions: store customer Better Auth sessions (PLAN §5.6, M1 minimal).
@@ -201,4 +210,7 @@ export const customerSessions = tenantTable("customer_sessions", {
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+  // Sign-out everywhere and the account page look sessions up by customer (audit A10-02, migration 0114).
+  index("customer_sessions_user_idx").on(t.tenantId, t.userId),
+]);

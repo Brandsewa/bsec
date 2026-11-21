@@ -147,7 +147,7 @@ async function resolveShowcase(tx: Tx, b: BlockInstance, relatedTo?: string): Pr
     const rows =
       tab["source"] === "related" && relatedTo
         ? await loadRelatedProducts(tx, relatedTo, limit)
-        : await loadProducts(tx, { source: tab["source"] === "related" ? "newest" : tab["source"], collectionSlug: tab["collectionSlug"], limit });
+        : await loadProducts(tx, { source: tab["source"] === "related" ? "newest" : tab["source"], collectionSlug: tab["collectionSlug"], productSlugs: tab["productSlugs"], limit: tab["source"] === "manual" ? 24 : limit });
     const summaries = await buildProductSummaries(tx, rows.map((r) => r.id), rows);
     resolved.push({ products: await enrichShowcaseProducts(tx, summaries.map(toBlockProduct)) });
   }

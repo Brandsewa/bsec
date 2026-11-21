@@ -117,13 +117,13 @@ describe("creating markets", () => {
 
   it("keeps a country in only one market", async () => {
     await expect(setMarketCountries(rt, owner, usId, ["US", "IN"])).rejects.toThrow(/IN is already in the market "India"/);
-    await expect(setMarketCountries(rt, owner, usId, ["XX"])).rejects.toThrow(/not available yet/);
+    await expect(setMarketCountries(rt, owner, usId, ["XX"])).rejects.toThrow(/not a known country code/);
     const m = await setMarketCountries(rt, owner, usId, ["US"]);
     expect(m.countries).toEqual(["US"]);
   });
 
-  it("rejects an unsupported currency and a bad URL prefix", async () => {
-    await expect(createMarket(rt, owner, { name: "Japan", currency: "JPY", countries: ["US"], fxRate: 1 })).rejects.toThrow(/not supported/);
+  it("rejects an unknown currency and a bad URL prefix", async () => {
+    await expect(createMarket(rt, owner, { name: "Nowhere", currency: "XXX", countries: ["US"], fxRate: 1 })).rejects.toThrow(/not supported/);
     await expect(updateMarket(rt, owner, usId, { pathPrefix: "/cart" })).rejects.toThrow(/cannot clash/);
   });
 });
@@ -176,8 +176,26 @@ describe("going live", () => {
     await expect(setMarketPaymentMethods(rt, owner, usId, [{ provider: "cod", enabled: true }])).rejects.toThrow(/only offered for INR orders in India/);
     await expect(setMarketPaymentMethods(rt, owner, usId, [{ provider: "razorpay", enabled: true }])).rejects.toThrow(/Connect razorpay/);
     const m = await setMarketPaymentMethods(rt, owner, usId, [{ provider: "paypal", enabled: true }, { provider: "stripe", enabled: true }]);
-    expect(m.paymentMethods.map((p) => p.provider)).toEqual(["paypal", "stripe"]);
+    // Connected gateways are all offered on the market; the ones not switched on show as off.
+    expect(m.paymentMethods.filter((p) => p.enabled).map((p) => p.provider)).toEqual(["paypal", "stripe"]);
+    expect(m.paymentMethods.find((p) => p.provider === "cod")?.enabled).toBe(false);
     expect(m.paymentMethods.find((p) => p.provider === "stripe")?.warning).toMatch(/invite-only/);
+  });
+
+  it("offers an activated Razorpay on an international market, switched off until enabled", async () => {
+    await q(`INSERT INTO payment_methods (tenant_id, provider, display_name, status) VALUES ($1, 'razorpay', 'Razorpay', 'active')`, [A]);
+    try {
+      const before = await getMarketDetail(rt, owner, usId);
+      const rzp = before.paymentMethods.find((p) => p.provider === "razorpay");
+      expect(rzp).toMatchObject({ enabled: false, blocking: null });
+      expect(rzp?.warning).toMatch(/International Payments/);
+      const after = await setMarketPaymentMethods(rt, owner, usId, [{ provider: "paypal", enabled: true }, { provider: "stripe", enabled: true }, { provider: "razorpay", enabled: true }]);
+      expect(after.paymentMethods.find((p) => p.provider === "razorpay")?.enabled).toBe(true);
+    } finally {
+      // Put the market back as the next tests expect it: PayPal and Stripe on, Razorpay gone.
+      await setMarketPaymentMethods(rt, owner, usId, [{ provider: "paypal", enabled: true }, { provider: "stripe", enabled: true }]);
+      await q(`DELETE FROM payment_methods WHERE tenant_id = $1 AND provider = 'razorpay'`, [A]);
+    }
   });
 
   it("goes live once rates, shipping, policy and the acknowledgement are in place", async () => {

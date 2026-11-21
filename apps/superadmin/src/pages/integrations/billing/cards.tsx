@@ -547,32 +547,32 @@ export function rupees(paise: number): string {
 
 export function PlansCard({ canEdit }: { canEdit: boolean }) {
   const queryClient = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState<"INR" | "USD" | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["platform", "integrations", "billing-plans"],
     queryFn: () => client.integrations.billingPlans(),
   });
 
-  const sync = async () => {
-    setSyncing(true);
+  const sync = async (currency: "INR" | "USD") => {
+    setSyncing(currency);
     try {
-      const res = await client.integrations.syncBillingPlans();
+      const res = await client.integrations.syncBillingPlans({ currency });
       if (res.failed.length > 0) toast.error(`${res.failed.length} plan(s) failed: ${res.failed[0]?.error ?? ""}`);
       else toast.success(res.created > 0 ? `Created ${res.created} Razorpay plan(s)` : "Everything is already in sync");
       await queryClient.invalidateQueries({ queryKey: ["platform", "integrations", "billing-plans"] });
     } catch (err) {
       toast.error(messageOf(err));
     } finally {
-      setSyncing(false);
+      setSyncing(null);
     }
   };
 
-  const cell = (v: { pricePaise: number; razorpayPlanId: string | null; inSync: boolean }) =>
+  const cell = (v: { pricePaise: number; razorpayPlanId: string | null; inSync: boolean }, currency: "INR" | "USD" = "INR") =>
     v.pricePaise <= 0 ? (
       <span className="text-muted-foreground">Free</span>
     ) : (
       <div className="space-y-0.5">
-        <div>{rupees(v.pricePaise)}</div>
+        <div>{formatMoney(v.pricePaise, currency)}</div>
         {v.inSync ? <Badge variant="secondary">Synced</Badge> : <Badge variant="destructive">{v.razorpayPlanId ? "Price changed" : "Not synced"}</Badge>}
       </div>
     );
@@ -582,12 +582,18 @@ export function PlansCard({ canEdit }: { canEdit: boolean }) {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Razorpay plans</CardTitle>
-          <Button size="sm" disabled={!canEdit || syncing || !data?.canSync} onClick={() => void sync()}>
-            {syncing ? "Syncing..." : "Sync plans to Razorpay"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={!canEdit || syncing !== null || !data?.canSync} onClick={() => void sync("INR")}>
+              {syncing === "INR" ? "Syncing..." : "Sync INR plans"}
+            </Button>
+            <Button size="sm" variant="outline" disabled={!canEdit || syncing !== null || !data?.canSync} onClick={() => void sync("USD")}>
+              {syncing === "USD" ? "Syncing..." : "Sync USD plans"}
+            </Button>
+          </div>
         </div>
         <CardDescription>
           Razorpay needs a plan for every price a merchant can subscribe to. Sync creates the missing ones for the {data?.mode ?? "test"} account; existing plans are never edited, so current subscribers are not affected when a price changes.
+          USD plans are used when Razorpay bills stores outside India (international primary or backup); Razorpay must have international payments enabled on this account, or the USD sync is refused.
           {data && !data.canSync ? " Save and enable the keys above first." : ""}
         </CardDescription>
       </CardHeader>
@@ -600,6 +606,8 @@ export function PlansCard({ canEdit }: { canEdit: boolean }) {
                 <TableHead>Plan</TableHead>
                 <TableHead>Monthly</TableHead>
                 <TableHead>Yearly</TableHead>
+                <TableHead>Monthly (USD)</TableHead>
+                <TableHead>Yearly (USD)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -608,6 +616,8 @@ export function PlansCard({ canEdit }: { canEdit: boolean }) {
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell>{cell(p.monthly)}</TableCell>
                   <TableCell>{cell(p.yearly)}</TableCell>
+                  <TableCell>{cell(p.monthlyUsd, "USD")}</TableCell>
+                  <TableCell>{cell(p.yearlyUsd, "USD")}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

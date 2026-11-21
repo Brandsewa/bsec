@@ -1,74 +1,16 @@
-export interface MarketPreset {
-  id: "usa" | "canada" | "india" | "international" | "custom";
-  title: string;
-  description: string;
-  currency: string;
-  countries: string[];
-  name: string;
-  pathPrefix: string;
-  unitSystem: "metric" | "imperial";
-  taxDisplay: "inclusive" | "exclusive";
-  defaultFxRate?: number;
-}
+import { COUNTRY_CURRENCIES, listCountries } from "@bs/contracts/countries";
+import { currencyLabel } from "@bs/contracts/money";
 
-export const MARKET_PRESETS: MarketPreset[] = [
-  {
-    id: "usa",
-    title: "United States (USD)",
-    description: "Sell in US Dollars with imperial units and exclusive tax.",
-    currency: "USD",
-    countries: ["US"],
-    name: "United States",
-    pathPrefix: "/us",
-    unitSystem: "imperial",
-    taxDisplay: "exclusive",
-  },
-  {
-    id: "canada",
-    title: "Canada (CAD)",
-    description: "Sell in Canadian Dollars with metric units and exclusive tax.",
-    currency: "CAD",
-    countries: ["CA"],
-    name: "Canada",
-    pathPrefix: "/ca",
-    unitSystem: "metric",
-    taxDisplay: "exclusive",
-  },
-  {
-    id: "india",
-    title: "India (INR)",
-    description: "Sell in Indian Rupees with metric units and tax-inclusive pricing.",
-    currency: "INR",
-    countries: ["IN"],
-    name: "India",
-    pathPrefix: "/in",
-    unitSystem: "metric",
-    taxDisplay: "inclusive",
-  },
-  {
-    id: "international",
-    title: "International (USD)",
-    description: "Global market priced in USD covering US and Canada.",
-    currency: "USD",
-    countries: ["US", "CA"],
-    name: "International",
-    pathPrefix: "/global",
-    unitSystem: "metric",
-    taxDisplay: "exclusive",
-  },
-];
+/** Every country a market can cover, by name. */
+export const MARKET_COUNTRY_OPTIONS = listCountries().map((c) => ({ value: c.code, label: `${c.name} (${c.code})` }));
 
-export const AVAILABLE_CURRENCIES = [
-  { value: "INR", label: "INR - Indian Rupee (₹)" },
-  { value: "USD", label: "USD - US Dollar ($)" },
-  { value: "CAD", label: "CAD - Canadian Dollar ($)" },
-];
+/** Every currency in use by at least one country, as "USD - US Dollar ($)". */
+export const MARKET_CURRENCY_OPTIONS = [...COUNTRY_CURRENCIES]
+  .map((code) => ({ value: code, label: currencyLabel(code) }))
+  .sort((a, b) => a.label.localeCompare(b.label));
 
-export const PLATFORM_SUPPORTED_COUNTRIES = [
-  { value: "IN", label: "India (IN)" },
-  { value: "US", label: "United States (US)" },
-  { value: "CA", label: "Canada (CA)" },
-];
+/** Countries that use imperial units day to day. */
+export const IMPERIAL_COUNTRIES: ReadonlySet<string> = new Set(["US", "LR", "MM"]);
 
 export const ROUNDING_OPTIONS = [
   { value: "none", label: "No rounding (exact calculated price)" },

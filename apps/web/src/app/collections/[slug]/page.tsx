@@ -1,4 +1,5 @@
 import React from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -16,7 +17,8 @@ import {
   type CatalogListingOptions,
 } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontCollection, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontCollection, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
 
@@ -88,13 +90,18 @@ export async function generateMetadata({ params, searchParams }: CollectionPageP
           prefix: marketCtx?.prefix,
         });
 
-        return {
-          title: seoMeta.title,
-          description: seoMeta.description,
-          robots: seoMeta.robots,
-          openGraph: seoMeta.openGraph,
-          alternates: seoMeta.alternates,
-        };
+        const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+        return withShareImage(
+          {
+            title: seoMeta.title,
+            description: seoMeta.description,
+            robots: seoMeta.robots,
+            openGraph: seoMeta.openGraph,
+            twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+            alternates: seoMeta.alternates,
+          },
+          assets?.shareImage,
+        );
       }
     }
   } catch {
@@ -147,7 +154,7 @@ export default async function CollectionDetailPage({
 
     tenantId = access.tenantId;
     const marketCtx = await getMarketContext(tenantId);
-    const marketId = marketCtx.marketId;
+    const marketId = marketCtx.scope;
     marketCurrency = marketCtx.currency;
     marketLocale = marketCtx.locale;
 
@@ -244,8 +251,8 @@ export default async function CollectionDetailPage({
   return (
     <div data-cache-tag={collectionCacheTag} className="bs-skin">
       {/* Schema.org structured data */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbsJsonLd) }} />
+      <JsonLd data={itemListJsonLd} />
+      <JsonLd data={breadcrumbsJsonLd} />
       {template ? (
         <BlockRenderer
           blocks={template.blocks}

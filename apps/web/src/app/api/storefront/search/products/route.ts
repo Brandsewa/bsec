@@ -34,6 +34,7 @@ export async function GET(req: Request) {
     const query = (url.searchParams.get("query") ?? url.searchParams.get("q") ?? "").trim();
     if (query.length < 2) return NextResponse.json({ items: [] });
 
+    const marketCtx = await getMarketContext(access.tenantId);
     const tenantCtx = {
       tenantId: access.tenantId,
       storeStatus: access.mode ?? "live",
@@ -41,7 +42,8 @@ export async function GET(req: Request) {
       roles: ["store_admin"],
       permissions: ["products.read"],
       requestId: crypto.randomUUID(),
-      marketId: (await getMarketContext(access.tenantId)).marketId,
+      marketId: marketCtx.marketId,
+      priceRegion: marketCtx.region,
     };
 
     const result = await searchStorefrontProducts(rt, tenantCtx, query, { limit: 8, log: false });

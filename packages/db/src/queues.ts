@@ -35,6 +35,11 @@ export const QUEUES = [
   // Finance queues (docs/FINANCE-PLAN.md §3.5)
   { name: "finance.post", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "finance.reconcile", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Merchant analytics (ADR-047): hourly traffic rollup and raw-event retention
+  { name: "analytics.maintenance", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // Server-side conversion APIs: one purchase per order, retried with backoff (ADR-047)
+  { name: "analytics.conversion", options: { retryLimit: 6, retryBackoff: true, retryDelay: 30 } },
+  { name: "analytics.conversion_event", options: { retryLimit: 5, retryBackoff: true, retryDelay: 20 } },
   // Media library queues (MEDIA-LIBRARY-PLAN §8, Phase 4 S2/S4)
   { name: "media.purge", options: { retryLimit: 5, retryBackoff: true, retryDelay: 5 } },
   { name: "media.trash_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
@@ -50,6 +55,8 @@ export const QUEUES = [
   { name: "blog.publish_due", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // Custom domain checks
   { name: "domains.sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
+  // SEO: tells search engines about changed pages (IndexNow), docs/SEO-GEO-AEO-PLAN.md Phase 2
+  { name: "seo.indexnow_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 30 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -86,6 +93,9 @@ export const QUEUE_NAMES = {
   BLOG_PUBLISH_DUE: "blog.publish_due",
   FINANCE_POST: "finance.post",
   FINANCE_RECONCILE: "finance.reconcile",
+  ANALYTICS_MAINTENANCE: "analytics.maintenance",
+  ANALYTICS_CONVERSION: "analytics.conversion",
+  ANALYTICS_CONVERSION_EVENT: "analytics.conversion_event",
   MEDIA_PURGE: "media.purge",
   MEDIA_TRASH_SWEEP: "media.trash_sweep",
   MEDIA_BACKFILL_USAGES: "media.backfill_usages",
@@ -94,6 +104,7 @@ export const QUEUE_NAMES = {
   MEDIA_HASH: "media.hash",
   MEDIA_BACKFILL_HASHES: "media.backfill_hashes",
   DOMAINS_SWEEP: "domains.sweep",
+  SEO_INDEXNOW_SWEEP: "seo.indexnow_sweep",
   NOTIFICATION_DISPATCH: "notification.dispatch",
   NOTIFICATION_RETENTION_SWEEP: "notification.retention_sweep",
 } as const;

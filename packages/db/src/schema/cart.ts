@@ -29,6 +29,8 @@ export const carts = tenantTable(
     currency: text("currency").notNull().default("INR"),
     /** The market this cart is priced in (ADR-040). null on carts created before markets existed. */
     marketId: uuid("market_id"),
+    /** State Pricing app (ADR-044): the Indian state this cart is priced for, stamped by the server. null = default prices. */
+    priceRegion: text("price_region"),
     discountCodes: text("discount_codes").array().notNull().default(sql`ARRAY[]::text[]`),
     shippingAddress: jsonb("shipping_address"),
     shippingRateId: text("shipping_rate_id"),
@@ -58,6 +60,8 @@ export const cartItems = tenantTable(
     cartId: uuid("cart_id").notNull(),
     variantId: uuid("variant_id").notNull(),
     quantity: integer("quantity").notNull().default(1),
+    /** Units of this line the store added by itself for a buy-x-get-y offer (the shopper's own are quantity minus this). */
+    autoFreeQty: integer("auto_free_qty").notNull().default(0),
     unitPriceSnapshot: bigint("unit_price_snapshot", { mode: "number" }).notNull(),
     properties: jsonb("properties"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
 import { getMarketContext } from "@/server/market.ts";
 import { headers } from "next/headers";
 import { cacheTag } from "next/cache";
@@ -8,11 +9,17 @@ import {
   generateWebSiteJsonLd,
   generateOrganizationJsonLd,
   getStoreSettings,
+  getStorefrontSeoSettings,
+  buildHomeSeoMetadata,
+  homeLanguageAlternates,
   tenantTag,
 } from "@bs/domain";
 import { renderBlockDocument, type BlockData } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedStorefrontHomePage } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStorefrontHomePage, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
+import { blocksHaveH1 } from "@/lib/has-h1.ts";
+import { themeChromeIdentity } from "@/lib/theme-brand.ts";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { MarketingLandingPage } from "@/components/marketing/MarketingLandingPage.tsx";
@@ -24,7 +31,7 @@ import { PageFrame } from "@/components/marketing/landing/PageFrame.tsx";
 import { marketingPage } from "@/server/marketing-page.ts";
 
 export async function generateMetadata(): Promise<Metadata> {
-  let title = "Home";
+  const title = "Home";
   const description = "Welcome to our store.";
 
   try {
@@ -48,10 +55,34 @@ export async function generateMetadata(): Promise<Metadata> {
       permissions: ["settings.write", "content.write", "theme.publish"],
       requestId: crypto.randomUUID(),
     };
-    const homePage = await getStorefrontHomePage(rt, tenantCtx);
-    if (homePage.title) {
-      title = homePage.title;
-    }
+    const [homePage, seoSettings, storeSettings, marketCtx] = await Promise.all([
+      getStorefrontHomePage(rt, tenantCtx),
+      getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
+      getStoreSettings(rt, tenantCtx).catch(() => null),
+      getMarketContext(access.tenantId).catch(() => null),
+    ]);
+    // Title, description, canonical and share tags for the store's home page (never "Home" / "Welcome to our store.").
+    const seoMeta = buildHomeSeoMetadata({
+      homePage,
+      seoSettings,
+      storeSettings,
+      storeStatusMode: access.mode,
+      noindex: access.noindex,
+      host,
+      prefix: marketCtx?.prefix,
+    });
+    const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+    return withShareImage(
+      {
+        title: { absolute: seoMeta.title },
+        description: seoMeta.description,
+        robots: seoMeta.robots,
+        openGraph: { ...seoMeta.openGraph, type: "website" },
+        twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+        alternates: { ...seoMeta.alternates, ...(marketCtx?.markets && homeLanguageAlternates(marketCtx.markets, host) ? { languages: homeLanguageAlternates(marketCtx.markets, host) } : {}) },
+      },
+      assets?.shareImage,
+    );
   } catch {
     // Non-fatal fallback for static compilation / mock setups
   }
@@ -69,7 +100,8 @@ export default async function HomePage() {
   let storeName = "Store";
   let marketCurrency = "INR";
   let marketLocale = "en-IN";
-  const logoUrl: string | null = null;
+  let logoUrl: string | null = null;
+  let orgFacts: { legalName: string | null; email: string | null; telephone: string | null; sameAs: string[] } = { legalName: null, email: null, telephone: null, sameAs: [] };
   let isMarketing = false;
 
   try {
@@ -94,10 +126,22 @@ export default async function HomePage() {
       marketCurrency = marketCtx.currency;
       marketLocale = marketCtx.locale;
 
-      const [homeData, storeSettingsData] = await Promise.all([
-        getCachedStorefrontHomePage(access.tenantId, marketCtx.marketId).catch(() => null),
+      const [homeData, storeSettingsData, brandAssets, chromeHeader, chromeFooter] = await Promise.all([
+        getCachedStorefrontHomePage(access.tenantId, marketCtx.scope).catch(() => null),
         getStoreSettings(rt, tenantCtx).catch(() => null),
+        getCachedBrandAssets(access.tenantId).catch(() => null),
+        getCachedThemePage(access.tenantId, "header").catch(() => null),
+        getCachedThemePage(access.tenantId, "footer").catch(() => null),
       ]);
+      // Logo: Brand settings first, else the one set in the theme's header or footer. Profile links come from the footer's social icons.
+      const chrome = themeChromeIdentity(chromeHeader, chromeFooter);
+      logoUrl = brandAssets?.logoUrl ?? chrome.logoUrl;
+      orgFacts = {
+        legalName: storeSettingsData?.legalName ?? null,
+        email: storeSettingsData?.supportEmail ?? null,
+        telephone: storeSettingsData?.supportPhone ?? null,
+        sameAs: chrome.sameAs,
+      };
 
       // Set tenant home page cache tags for Next.js Cache Components (PLAN §11.6)
       try {
@@ -174,18 +218,14 @@ export default async function HomePage() {
     name: storeName,
     url: storeUrl,
     logoUrl,
+    ...orgFacts,
   });
 
   return (
     <main className="w-full min-h-[60vh]">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
-      />
+      <JsonLd data={webSiteJsonLd} />
+      <JsonLd data={orgJsonLd} />
+      {blocksHaveH1(blocksToRender) ? null : <h1 className="sr-only">{storeName}</h1>}
       <BlockRenderer
         blocks={blocksToRender}
         renderData={renderData}

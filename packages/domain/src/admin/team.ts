@@ -92,7 +92,9 @@ async function activeOwnerCount(tx: Parameters<Parameters<typeof withTenant>[2]>
       schema.roles,
       and(eq(schema.roles.id, schema.memberships.roleId), eq(schema.roles.tenantId, schema.memberships.tenantId)),
     )
-    .where(and(eq(schema.roles.name, "store_owner"), eq(schema.memberships.status, "active")));
+    // Locked, so two owners demoting or removing each other at the same moment cannot both see "two owners" (audit A2-04).
+    .where(and(eq(schema.roles.name, "store_owner"), eq(schema.memberships.status, "active")))
+    .for("update", { of: schema.memberships });
   return rows.length;
 }
 
@@ -318,6 +320,18 @@ export async function acceptInvitation(
       .update(schema.staffInvitations)
       .set({ acceptedAt: new Date(), updatedAt: sql`now()` })
       .where(eq(schema.staffInvitations.id, inv.id));
+
+    // The moment a person gains access is audited too (AGENTS.md rule 6, audit A2-03): who, into which role, never the token.
+    const [grantedRole] = await tx.select({ name: schema.roles.name }).from(schema.roles).where(eq(schema.roles.id, inv.roleId)).limit(1);
+    await tx.insert(schema.auditLogs).values({
+      tenantId: input.storeId,
+      actorType: "staff",
+      actorId: userId,
+      action: "staff_invitation.accept",
+      targetType: "memberships",
+      targetId: inv.id,
+      diff: { role: { before: null, after: grantedRole?.name ?? null } },
+    });
 
     return { ok: true as const, email };
   });

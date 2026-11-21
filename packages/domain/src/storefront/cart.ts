@@ -6,15 +6,19 @@ import type { TenantContext } from "../context.ts";
 import { cartWeightGrams, getTenantShippingRates } from "../orders/shipping-rates.ts";
 import { toCountryCode } from "../orders/shipping-rules.ts";
 import { publicMediaUrl } from "../media/storage.ts";
-import { evaluateDiscount } from "../orders/discounts.ts";
+import { evaluateCartDiscounts, hasAutoAddWork, planAutoAdds, type GiftTarget } from "../orders/discounts.ts";
+import { MAX_CODES_PER_CART } from "../discounts/engine.ts";
 import { postalCodeProblem } from "../markets/addresses.ts";
 import { isNonBaseMarket, isProductVisibleInMarket, loadCheckoutMarket, loadMarketPriceMap } from "../markets/lookup.ts";
+import { loadStatePriceMap } from "../apps/state-pricing.ts";
 
 export interface StorefrontCartItem {
   id: string;
   cartId: string;
   variantId: string;
   quantity: number;
+  /** Of `quantity`, how many the store added by itself for a free-item offer (the shopper's own are the rest). */
+  autoFreeQty?: number | undefined;
   unitPriceSnapshot: number;
   lineTotal: number;
   properties: Record<string, unknown> | null;
@@ -42,6 +46,12 @@ export interface StorefrontCartItem {
   updatedAt: string;
 }
 
+/** The shopper behind a cart, for discounts made for some customers. `strict` is set at checkout, when a guest who matches no customer is a stranger. */
+export interface Shopper {
+  customerId?: string | null | undefined;
+  strict?: boolean | undefined;
+}
+
 /** A discount code that is on the cart and still valid for it. */
 export interface CartDiscount {
   discountId: string;
@@ -51,6 +61,16 @@ export interface CartDiscount {
   /** Goods discount in paise (0 for free shipping). */
   amount: number;
   freeShipping: boolean;
+  /** True when it applied by itself (no code typed). */
+  automatic: boolean;
+  /** "product" discounts touch only some lines; "order" ones the whole order; "shipping" the delivery charge. */
+  discountClass: "product" | "order" | "shipping";
+  /** For free shipping: waive at most this much of the shipping charge. */
+  maxShipping?: number | null | undefined;
+  /** The generated single-use code that was typed, so it can be marked used when the order is placed. */
+  bulkCodeId?: string | undefined;
+  /** For a product discount: what it takes off each cart line (cart item id to amount). */
+  lineAmounts?: Record<string, number> | undefined;
 }
 
 export interface StorefrontCart {
@@ -59,11 +79,21 @@ export interface StorefrontCart {
   currency: string;
   /** The market the cart is priced in (ADR-040). null on carts created before markets existed (treated as the base market). */
   marketId?: string | null | undefined;
+  /** State Pricing app (ADR-044): the state this cart is priced for. */
+  priceRegion?: string | null | undefined;
   items: StorefrontCartItem[];
   itemCount: number;
   subtotal: number;
-  /** The applied code, if it is still valid for this cart. */
+  /** The main applied discount (a typed code wins over an automatic one), if any. Kept for screens that show one line. */
   discount?: CartDiscount | null | undefined;
+  /** Every discount applied to the cart: the typed code and/or automatic ones (ADR-045). */
+  discounts?: CartDiscount[] | undefined;
+  /** Every automatic offer of the store that is live for everyone, the ones this cart has earned first; the mini cart lists them. */
+  availableOffers?: Array<{ id: string; name: string; headline: string; unlocked: boolean }> | undefined;
+  /** The nearest automatic offer more spending would unlock ("Add 200.00 more to get 15% off"), worked out on the server. */
+  discountNudge?: { remaining: number; threshold: number; benefit: string } | null | undefined;
+  /** Typed codes the engine turned down, with the reason (used when a shopper tries a code). */
+  discountRejections?: Array<{ code: string; reason: string }> | undefined;
   /** Set when a code that was applied is no longer valid (expired, minimum no longer met...): the shopper must remove or fix it. */
   discountNotice?: string | null | undefined;
   lastActivityAt: string;
@@ -117,6 +147,8 @@ export interface EstimateCartShippingInput {
 async function loadCartWithItems(
   tx: Parameters<Parameters<typeof withTenant>[2]>[0],
   cartRecord: typeof schema.carts.$inferSelect,
+  /** Who is shopping, when the caller knows better than the cart does (checkout resolves the customer from their details). */
+  shopper?: Shopper,
 ): Promise<StorefrontCart> {
   const rawItems = await tx
     .select({
@@ -127,6 +159,7 @@ async function loadCartWithItems(
         title: schema.variants.title,
         optionValues: schema.variants.optionValues,
         price: schema.variants.price,
+        compareAtPrice: schema.variants.compareAtPrice,
         preorderEnabled: schema.variants.preorderEnabled,
         preorderShipsOn: schema.variants.preorderShipsOn,
         preorderMessage: schema.variants.preorderMessage,
@@ -187,6 +220,7 @@ async function loadCartWithItems(
       cartId: r.item.cartId,
       variantId: r.item.variantId,
       quantity: qty,
+      autoFreeQty: r.item.autoFreeQty,
       unitPriceSnapshot: unitPrice,
       lineTotal,
       properties: (r.item.properties as Record<string, unknown>) ?? null,
@@ -224,36 +258,60 @@ async function loadCartWithItems(
     };
   });
 
-  // The code on the cart is re-checked on every read, so a code that expires or whose minimum is no longer met
-  // never silently stays applied.
-  let discount: CartDiscount | null = null;
-  let discountNotice: string | null = null;
-  const appliedCode = cartRecord.discountCodes?.[0];
-  if (appliedCode) {
-    const res = await evaluateDiscount(tx as unknown as Db, cartRecord.tenantId as string, { code: appliedCode, cartSubtotal: subtotal, cartTotalQty: itemCount, currency: cartRecord.currency ?? "INR" });
-    if (res.valid && res.discountId) {
-      discount = {
-        discountId: res.discountId,
-        code: res.code ?? appliedCode,
-        title: res.title ?? appliedCode,
-        type: res.type ?? "",
-        amount: res.discountAmount,
-        freeShipping: Boolean(res.freeShipping),
-      };
-    } else {
-      discountNotice = `Code ${appliedCode} can't be used: ${res.reason ?? "no longer valid"}`;
-    }
-  }
+  // The engine runs on every read (ADR-045): a typed code that expires or whose minimum is no longer met never silently
+  // stays applied, and automatic discounts appear without the shopper doing anything.
+  const typedCodes = cartRecord.discountCodes ?? [];
+  const evaluated = await evaluateCartDiscounts(tx as unknown as Db, cartRecord.tenantId as string, {
+    codes: typedCodes,
+    lines: items.map((it, i) => ({
+      id: it.id,
+      productId: it.product.id,
+      variantId: it.variantId,
+      quantity: it.quantity,
+      unitPrice: it.unitPriceSnapshot,
+      lineTotal: it.lineTotal,
+      // A compare-at price above the selling price marks a sale item (base prices; market prices follow the same ratio).
+      onSale: rawItems[i]?.variant.compareAtPrice != null && Number(rawItems[i]?.variant.compareAtPrice) > Number(rawItems[i]?.variant.price),
+    })),
+    cartSubtotal: subtotal,
+    cartTotalQty: itemCount,
+    currency: cartRecord.currency ?? "INR",
+    marketId: cartRecord.marketId ?? null,
+    customerId: shopper?.customerId ?? cartRecord.customerId ?? null,
+    strict: shopper?.strict === true,
+  });
+  const discounts: CartDiscount[] = evaluated.applications.map((a) => ({
+    discountId: a.discountId,
+    code: a.code ?? a.title,
+    title: a.title,
+    type: a.type,
+    amount: a.amount,
+    freeShipping: a.freeShipping,
+    automatic: a.automatic,
+    discountClass: a.discountClass,
+    ...(a.bulkCodeId ? { bulkCodeId: a.bulkCodeId } : {}),
+    ...(a.freeShipping ? { maxShipping: a.maxShipping ?? null } : {}),
+    ...(a.lineAmounts ? { lineAmounts: a.lineAmounts } : {}),
+  }));
+  const discount: CartDiscount | null = discounts.find((d) => !d.automatic) ?? discounts[0] ?? null;
+  // A typed code that stopped working is reported by name (a code typed just now and refused is reported by apply instead).
+  const stale = evaluated.rejections.find((r) => typedCodes.some((c) => c.toUpperCase() === r.code));
+  const discountNotice: string | null = stale ? `Code ${stale.code} can't be used: ${stale.reason}` : null;
 
   return {
     id: cartRecord.id,
     token: cartRecord.token,
     currency: cartRecord.currency,
     marketId: cartRecord.marketId ?? null,
+    priceRegion: cartRecord.priceRegion ?? null,
     items,
     itemCount,
     subtotal,
     discount,
+    discounts,
+    discountRejections: evaluated.rejections,
+    discountNudge: evaluated.nudge,
+    availableOffers: evaluated.offers,
     discountNotice,
     lastActivityAt:
       cartRecord.lastActivityAt instanceof Date
@@ -301,6 +359,30 @@ async function repriceCartToMarket(
 }
 
 /**
+ * State Pricing app (ADR-044): stamps the cart with the shopper's state and reprices every line from the variant's
+ * default price or its price in that state. A null region puts the cart back on default prices. Base market only.
+ */
+async function repriceCartToRegion(
+  tx: Db,
+  tenantId: string,
+  cart: typeof schema.carts.$inferSelect,
+  region: string | null,
+): Promise<typeof schema.carts.$inferSelect> {
+  const items = await tx
+    .select({ id: schema.cartItems.id, variantId: schema.cartItems.variantId, basePrice: schema.variants.price })
+    .from(schema.cartItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+    .where(eq(schema.cartItems.cartId, cart.id));
+  const statePrices = region ? await loadStatePriceMap(tx, tenantId, region, items.map((i) => i.variantId)) : new Map<string, { price: number; compareAtPrice: number | null }>();
+  for (const it of items) {
+    const price = statePrices.get(it.variantId)?.price ?? Number(it.basePrice);
+    await tx.update(schema.cartItems).set({ unitPriceSnapshot: price, updatedAt: new Date() }).where(eq(schema.cartItems.id, it.id));
+  }
+  const [updated] = await tx.update(schema.carts).set({ priceRegion: region, lastActivityAt: new Date() }).where(eq(schema.carts.id, cart.id)).returning();
+  return updated ?? cart;
+}
+
+/**
  * Looks up active cart by token and tenantId. If not found, generates a new UUID token and creates a cart row.
  */
 export async function getOrCreateCart(
@@ -310,9 +392,12 @@ export async function getOrCreateCart(
   txOrDb?: Parameters<Parameters<typeof withTenant>[2]>[0],
   /** The market the shopper is in (ADR-040). Omitted = keep the cart's own market, or the base market for a new cart. */
   marketId?: string | null,
+  /** Who is shopping, for discounts made for some customers. Omitted = the cart's own customer. */
+  shopper?: Shopper,
 ): Promise<StorefrontCart> {
   const runWithTx = async (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => {
     let cartRecord: typeof schema.carts.$inferSelect | undefined;
+    let existed = false;
 
     if (token) {
       const rows = await tx
@@ -321,6 +406,7 @@ export async function getOrCreateCart(
         .where(eq(schema.carts.token, token))
         .limit(1);
       cartRecord = rows[0];
+      existed = Boolean(cartRecord);
     }
 
     if (!cartRecord) {
@@ -333,6 +419,7 @@ export async function getOrCreateCart(
           tenantId: ctx.tenantId,
           currency: market.currency,
           marketId: market.id,
+          priceRegion: ctx.priceRegion && !(await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, market.id)) ? ctx.priceRegion : null,
           status: "active",
         })
         .returning();
@@ -345,8 +432,13 @@ export async function getOrCreateCart(
       // The shopper switched market: the cart keeps its items but is repriced in the new market's currency.
       cartRecord = await repriceCartToMarket(tx as unknown as Db, ctx.tenantId, cartRecord, marketId);
     }
+    // The cart follows the shopper's state (ADR-044). undefined = the caller does not use the app, leave the cart alone.
+    if (ctx.priceRegion !== undefined && (ctx.priceRegion ?? null) !== (cartRecord.priceRegion ?? null) && !(await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartRecord.marketId ?? null))) {
+      cartRecord = await repriceCartToRegion(tx as unknown as Db, ctx.tenantId, cartRecord, ctx.priceRegion ?? null);
+    }
 
-    return loadCartWithItems(tx, cartRecord);
+    if (existed) await syncAutoFreeLines(tx, ctx, cartRecord, shopper);
+    return loadCartWithItems(tx, cartRecord, shopper);
   };
 
   if (txOrDb) {
@@ -385,6 +477,9 @@ async function assertNotMaintenance(tx: Parameters<Parameters<typeof withTenant>
 /**
  * Adds an item to a cart or increments quantity if it already exists.
  */
+/** The most of one variant a cart line may hold. Far above any real order, and keeps the integer column and totals safe (audit A3-07). */
+export const MAX_CART_LINE_QUANTITY = 9999;
+
 export async function addToCart(
   rt: Runtime,
   ctx: TenantContext,
@@ -392,6 +487,9 @@ export async function addToCart(
 ): Promise<StorefrontCart> {
   if (!input.quantity || input.quantity <= 0) {
     throw new Error("Quantity must be greater than zero");
+  }
+  if (input.quantity > MAX_CART_LINE_QUANTITY) {
+    throw new Error(`Bad Request: you can add at most ${MAX_CART_LINE_QUANTITY} of one item`);
   }
 
   const db = rt._db.db;
@@ -410,49 +508,8 @@ export async function addToCart(
       throw new Error("Cart not found");
     }
 
-    // 2. Verify variant belongs to a published, non-deleted product
-    const variantRows = await tx
-      .select({
-        variant: schema.variants,
-        product: schema.products,
-      })
-      .from(schema.variants)
-      .innerJoin(
-        schema.products,
-        and(
-          eq(schema.products.tenantId, schema.variants.tenantId),
-          eq(schema.products.id, schema.variants.productId),
-        ),
-      )
-      .where(
-        and(
-          eq(schema.variants.id, input.variantId),
-          inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
-          sql`${schema.products.deletedAt} IS NULL`,
-        ),
-      )
-      .limit(1);
-
-    const variantData = variantRows[0];
-    if (!variantData) {
-      throw new Error("Variant not found or product is not available");
-    }
-
-    if (variantData.product.priceOnRequest) {
-      throw new Error("This product is price on request and cannot be added to cart");
-    }
-
-    const cartMarketId = cartRecord.marketId ?? null;
-    if (!(await isProductVisibleInMarket(tx as unknown as Db, ctx.tenantId, cartMarketId, variantData.product.id))) {
-      throw new Error("Variant not found or product is not available");
-    }
-    let unitPriceSnapshot = Number(variantData.variant.price);
-    if (await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartMarketId)) {
-      const prices = await loadMarketPriceMap(tx as unknown as Db, ctx.tenantId, cartMarketId, [input.variantId]);
-      const marketPrice = prices.get(input.variantId);
-      if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
-      unitPriceSnapshot = marketPrice.price;
-    }
+    // 2. Verify the variant can be sold in this cart, and what it costs here
+    const { unitPriceSnapshot } = await resolveVariantForCart(tx, ctx, cartRecord, input.variantId);
 
     // 3. Upsert into cartItems: increment quantity if already exists
     await tx
@@ -468,7 +525,7 @@ export async function addToCart(
       .onConflictDoUpdate({
         target: [schema.cartItems.tenantId, schema.cartItems.cartId, schema.cartItems.variantId],
         set: {
-          quantity: sql`${schema.cartItems.quantity} + ${input.quantity}`,
+          quantity: sql`LEAST(${schema.cartItems.quantity} + ${input.quantity}, ${MAX_CART_LINE_QUANTITY})`,
           unitPriceSnapshot,
           updatedAt: sql`now()`,
         },
@@ -482,8 +539,154 @@ export async function addToCart(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
+}
+
+type CartTx = Parameters<Parameters<typeof withTenant>[2]>[0];
+
+/** A variant a cart may hold: published, visible in the cart's market, priced there. Throws the shopper-facing reason when not. */
+async function resolveVariantForCart(tx: CartTx, ctx: TenantContext, cartRecord: typeof schema.carts.$inferSelect, variantId: string) {
+  const variantRows = await tx
+    .select({
+      variant: schema.variants,
+      product: schema.products,
+    })
+    .from(schema.variants)
+    .innerJoin(
+      schema.products,
+      and(
+        eq(schema.products.tenantId, schema.variants.tenantId),
+        eq(schema.products.id, schema.variants.productId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.variants.id, variantId),
+        inArray(schema.products.status, [...DIRECT_PRODUCT_STATUSES]),
+        sql`${schema.products.deletedAt} IS NULL`,
+      ),
+    )
+    .limit(1);
+
+  const variantData = variantRows[0];
+  if (!variantData) {
+    throw new Error("Variant not found or product is not available");
+  }
+
+  if (variantData.product.priceOnRequest) {
+    throw new Error("This product is price on request and cannot be added to cart");
+  }
+
+  const cartMarketId = cartRecord.marketId ?? null;
+  if (!(await isProductVisibleInMarket(tx as unknown as Db, ctx.tenantId, cartMarketId, variantData.product.id))) {
+    throw new Error("Variant not found or product is not available");
+  }
+  let unitPriceSnapshot = Number(variantData.variant.price);
+  if (await isNonBaseMarket(tx as unknown as Db, ctx.tenantId, cartMarketId)) {
+    const prices = await loadMarketPriceMap(tx as unknown as Db, ctx.tenantId, cartMarketId, [variantId]);
+    const marketPrice = prices.get(variantId);
+    if (!marketPrice || marketPrice.price <= 0) throw new Error("This product is not available in your region");
+    unitPriceSnapshot = marketPrice.price;
+  } else if (cartRecord.priceRegion) {
+    const sp = (await loadStatePriceMap(tx as unknown as Db, ctx.tenantId, cartRecord.priceRegion, [variantId])).get(variantId);
+    if (sp) unitPriceSnapshot = sp.price;
+  }
+  return { ...variantData, unitPriceSnapshot };
+}
+
+/**
+ * Keeps the free items of buy-x-get-y offers in the cart (ADR-045): when the shopper's own items earn a free item the store
+ * adds it, and takes it out when they no longer do. The shopper's own quantity of a line is `quantity - auto_free_qty`, so a
+ * quantity they change is read as a change to their own items and the free ones are worked out again from it. The offer's
+ * discount then makes those units free in the normal way. Called after every cart change and when an order is placed.
+ */
+export async function syncAutoFreeLines(tx: CartTx, ctx: TenantContext, cartRecord: typeof schema.carts.$inferSelect, shopper?: Shopper): Promise<void> {
+  if (!(await hasAutoAddWork(tx as unknown as Db, ctx.tenantId, cartRecord.id))) return;
+  const rows = await tx
+    .select({ item: schema.cartItems, productId: schema.variants.productId, price: schema.variants.price, compareAt: schema.variants.compareAtPrice })
+    .from(schema.cartItems)
+    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+    .where(eq(schema.cartItems.cartId, cartRecord.id));
+
+  const own = rows
+    .map((r) => {
+      const quantity = Math.max(0, r.item.quantity - r.item.autoFreeQty);
+      const unitPrice = Number(r.item.unitPriceSnapshot);
+      return {
+        id: r.item.id,
+        productId: r.productId,
+        variantId: r.item.variantId,
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice * quantity,
+        onSale: r.compareAt != null && Number(r.compareAt) > Number(r.price),
+      };
+    })
+    .filter((l) => l.quantity > 0);
+
+  const resolveGift = async (productId: string): Promise<GiftTarget | null> => {
+    const variants = await tx
+      .select({ id: schema.variants.id, trackInventory: schema.variants.trackInventory, allowBackorder: schema.variants.allowBackorder })
+      .from(schema.variants)
+      .where(and(eq(schema.variants.tenantId, ctx.tenantId), eq(schema.variants.productId, productId)))
+      .orderBy(schema.variants.position, schema.variants.price);
+    for (const v of variants) {
+      try {
+        const r = await resolveVariantForCart(tx, ctx, cartRecord, v.id);
+        let available: number | null = null;
+        if (v.trackInventory && !v.allowBackorder) {
+          const [stock] = await tx
+            .select({ n: sql<number>`coalesce(sum(${schema.inventoryLevels.available}), 0)::int` })
+            .from(schema.inventoryLevels)
+            .where(and(eq(schema.inventoryLevels.tenantId, ctx.tenantId), eq(schema.inventoryLevels.variantId, v.id)));
+          available = stock?.n ?? 0;
+          if (available <= 0) continue; // out of stock: try the next variant, or give nothing
+        }
+        return { variantId: v.id, productId, unitPrice: r.unitPriceSnapshot, onSale: r.variant.compareAtPrice != null && Number(r.variant.compareAtPrice) > Number(r.variant.price), available };
+      } catch {
+        // not sellable here: try the next variant
+      }
+    }
+    return null;
+  };
+
+  const plan = own.length === 0
+    ? []
+    : await planAutoAdds(tx as unknown as Db, ctx.tenantId, {
+        codes: cartRecord.discountCodes ?? [],
+        lines: own,
+        cartSubtotal: own.reduce((sum, l) => sum + l.lineTotal, 0),
+        cartTotalQty: own.reduce((sum, l) => sum + l.quantity, 0),
+        currency: cartRecord.currency ?? "INR",
+        marketId: cartRecord.marketId ?? null,
+        customerId: shopper?.customerId ?? cartRecord.customerId ?? null,
+        strict: shopper?.strict === true,
+        resolveGift,
+      });
+  const wanted = new Map(plan.map((a) => [a.variantId, a.quantity]));
+
+  for (const r of rows) {
+    const want = wanted.get(r.item.variantId) ?? 0;
+    wanted.delete(r.item.variantId);
+    if (want === r.item.autoFreeQty) continue;
+    const mine = Math.max(0, r.item.quantity - r.item.autoFreeQty);
+    if (mine + want === 0) {
+      await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, r.item.id));
+    } else {
+      await tx
+        .update(schema.cartItems)
+        .set({ quantity: mine + want, autoFreeQty: want, updatedAt: sql`now()` })
+        .where(eq(schema.cartItems.id, r.item.id));
+    }
+  }
+  // Free items of a product the shopper has none of yet get a line of their own.
+  for (const [variantId, quantity] of wanted) {
+    if (quantity <= 0) continue;
+    const { unitPriceSnapshot } = await resolveVariantForCart(tx, ctx, cartRecord, variantId);
+    await tx.insert(schema.cartItems).values({ cartId: cartRecord.id, variantId, quantity, autoFreeQty: quantity, unitPriceSnapshot, tenantId: ctx.tenantId });
+  }
 }
 
 /**
@@ -508,6 +711,9 @@ export async function updateCartItemQuantity(
       throw new Error("Cart not found");
     }
 
+    if (input.quantity > MAX_CART_LINE_QUANTITY) {
+      throw new Error(`Bad Request: you can have at most ${MAX_CART_LINE_QUANTITY} of one item`);
+    }
     if (input.quantity <= 0) {
       await tx
         .delete(schema.cartItems)
@@ -518,10 +724,18 @@ export async function updateCartItemQuantity(
           ),
         );
     } else {
+      // The quantity shown includes the free items the store added. A number above them is read as the shopper's own plus the
+      // free ones; a number at or below them is read as the shopper's own, and the free ones are worked out again afterwards.
+      const [current] = await tx
+        .select({ free: schema.cartItems.autoFreeQty })
+        .from(schema.cartItems)
+        .where(and(eq(schema.cartItems.id, input.itemId), eq(schema.cartItems.cartId, cartRecord.id)))
+        .limit(1);
+      const free = current?.free ?? 0;
       await tx
         .update(schema.cartItems)
         .set({
-          quantity: input.quantity,
+          quantity: input.quantity > free ? input.quantity : input.quantity + free,
           updatedAt: sql`now()`,
         })
         .where(
@@ -539,6 +753,7 @@ export async function updateCartItemQuantity(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
 }
@@ -581,6 +796,7 @@ export async function removeCartItem(
       })
       .where(eq(schema.carts.id, cartRecord.id));
 
+    await syncAutoFreeLines(tx, ctx, cartRecord);
     return loadCartWithItems(tx, cartRecord);
   });
 }
@@ -699,43 +915,127 @@ export async function estimateCartShipping(
 }
 
 /**
- * Puts a discount code on the cart (one code at a time: a new code replaces the old one). The code must be valid for
- * the cart right now; otherwise the shopper gets the reason and the cart is unchanged.
+ * Puts a discount code on the cart. Codes stack when the rules allow (up to ${MAX_CODES_PER_CART}); a code that cannot sit
+ * beside the ones already there replaces them if it works on its own. The engine says whether it applies and why not.
+ * With `allowEmpty` (a shared link) the code is kept for later on a cart that has nothing in it yet.
  */
-export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string; code: string }): Promise<StorefrontCart> {
+export async function applyCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string; code: string; allowEmpty?: boolean | undefined }): Promise<StorefrontCart> {
   const code = input.code.trim();
   if (!code) throw new Error("Bad Request: enter a discount code");
   if (code.length > 64) throw new Error("Bad Request: that discount code is too long");
+  const wanted = code.toUpperCase();
 
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, input.token)).limit(1);
     if (!cartRecord) throw new Error("Not Found: cart not found");
 
-    // evaluate against the cart as it is (without the old code)
     const current = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [] });
-    if (current.items.length === 0) throw new Error("Bad Request: add something to your cart first");
-    const res = await evaluateDiscount(tx as unknown as Db, ctx.tenantId, { code, cartSubtotal: current.subtotal, cartTotalQty: current.itemCount, currency: current.currency ?? "INR" });
-    if (!res.valid) throw new Error(`Bad Request: ${res.reason ?? "this code can't be used"}`);
+    const empty = current.items.length === 0;
+    if (empty && !input.allowEmpty) throw new Error("Bad Request: add something to your cart first");
 
+    const existing = cartRecord.discountCodes ?? [];
+    const together = [...existing.filter((c) => c.toUpperCase() !== wanted), code];
+    if (together.length > MAX_CODES_PER_CART) throw new Error(`Bad Request: you can use up to ${MAX_CODES_PER_CART} codes on one order`);
+
+    const appliedIn = (c: StorefrontCart) => c.discounts?.find((d) => !d.automatic && d.code.toUpperCase() === wanted);
+    let trial = await loadCartWithItems(tx, { ...cartRecord, discountCodes: together });
+    if (!appliedIn(trial) && !empty && existing.length > 0) {
+      const alone = await loadCartWithItems(tx, { ...cartRecord, discountCodes: [code] });
+      if (appliedIn(alone)) {
+        trial = alone;
+      }
+    }
+    if (!appliedIn(trial) && !empty) {
+      // A buy-x-get-y code whose free item the store adds by itself cannot show as applied until the item is there: try it for real.
+      const needsItems = trial.discountRejections?.find((r) => r.code === wanted)?.reason === "Add the items this offer needs to your cart";
+      if (needsItems) {
+        const [withCode] = await tx
+          .update(schema.carts)
+          .set({ discountCodes: together, lastActivityAt: new Date() })
+          .where(eq(schema.carts.id, cartRecord.id))
+          .returning();
+        if (withCode) {
+          await syncAutoFreeLines(tx, ctx, withCode);
+          const real = await loadCartWithItems(tx, withCode);
+          if (appliedIn(real)) return real;
+        }
+        // not applied after all: nothing is kept, the error below undoes the attempt
+      }
+    }
+    if (!appliedIn(trial)) {
+      const why = trial.discountRejections?.find((r) => r.code === wanted);
+      // A shared link can arrive before anything is in the cart: keep a code that exists, it is checked once there is something to check.
+      if (!(empty && why && why.reason !== "Discount code not found")) throw new Error(`Bad Request: ${why?.reason ?? "this code can't be used"}`);
+    }
+
+    // Store the codes as the engine knows them (upper case), dropping any that no longer apply.
+    const stored = empty ? [wanted] : (trial.discounts ?? []).filter((d) => !d.automatic).map((d) => d.code);
     const [updated] = await tx
       .update(schema.carts)
-      .set({ discountCodes: [res.code ?? code], lastActivityAt: new Date() })
+      .set({ discountCodes: stored, lastActivityAt: new Date() })
       .where(eq(schema.carts.id, cartRecord.id))
       .returning();
+    await syncAutoFreeLines(tx, ctx, updated ?? cartRecord);
     return loadCartWithItems(tx, updated ?? cartRecord);
   });
 }
 
-/** Takes any discount code off the cart. */
-export async function removeCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string }): Promise<StorefrontCart> {
+/** Takes a discount code off the cart: the one named, or all of them when none is. */
+export async function removeCartDiscount(rt: Runtime, ctx: TenantContext, input: { token: string; code?: string | undefined }): Promise<StorefrontCart> {
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, input.token)).limit(1);
     if (!cartRecord) throw new Error("Not Found: cart not found");
+    const left = input.code ? (cartRecord.discountCodes ?? []).filter((c) => c.toUpperCase() !== input.code?.trim().toUpperCase()) : [];
     const [updated] = await tx
       .update(schema.carts)
-      .set({ discountCodes: [], lastActivityAt: new Date() })
+      .set({ discountCodes: left, lastActivityAt: new Date() })
       .where(eq(schema.carts.id, cartRecord.id))
       .returning();
+    await syncAutoFreeLines(tx, ctx, updated ?? cartRecord);
     return loadCartWithItems(tx, updated ?? cartRecord);
+  });
+}
+
+export interface CartRevalidation {
+  /** Titles of lines that are no longer for sale (unpublished, deleted, hidden in the market or unpriced) and were taken out. */
+  removed: string[];
+  /** How many lines had their saved price replaced by the current price. */
+  repriced: number;
+}
+
+/**
+ * Checks every line of a cart against the catalog as it is now (audit A3-01, A3-02; AGENTS.md rule 12): a line whose
+ * product was unpublished or deleted is removed, and a line whose price changed since it was added gets the current
+ * price. Runs in its own transaction so the correction is saved even when the caller then refuses the order and asks
+ * the shopper to review the cart.
+ */
+export async function revalidateCartLines(rt: Runtime, ctx: TenantContext, token: string): Promise<CartRevalidation> {
+  return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+    const result: CartRevalidation = { removed: [], repriced: 0 };
+    const [cartRecord] = await tx.select().from(schema.carts).where(eq(schema.carts.token, token)).limit(1);
+    if (!cartRecord || cartRecord.status !== "active") return result;
+    const items = await tx
+      .select({ id: schema.cartItems.id, variantId: schema.cartItems.variantId, snapshot: schema.cartItems.unitPriceSnapshot, title: schema.products.title })
+      .from(schema.cartItems)
+      .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.cartItems.tenantId), eq(schema.variants.id, schema.cartItems.variantId)))
+      .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.variants.tenantId), eq(schema.products.id, schema.variants.productId)))
+      .where(eq(schema.cartItems.cartId, cartRecord.id));
+    for (const it of items) {
+      let fresh: number;
+      try {
+        fresh = (await resolveVariantForCart(tx, ctx, cartRecord, it.variantId)).unitPriceSnapshot;
+      } catch (err) {
+        // A price-on-request product has no price to refresh; checkout refuses it with its own, more specific message.
+        if (err instanceof Error && /price on request/i.test(err.message)) continue;
+        await tx.delete(schema.cartItems).where(eq(schema.cartItems.id, it.id));
+        result.removed.push(it.title);
+        continue;
+      }
+      if (fresh !== Number(it.snapshot)) {
+        await tx.update(schema.cartItems).set({ unitPriceSnapshot: fresh, updatedAt: new Date() }).where(eq(schema.cartItems.id, it.id));
+        result.repriced += 1;
+      }
+    }
+    return result;
   });
 }

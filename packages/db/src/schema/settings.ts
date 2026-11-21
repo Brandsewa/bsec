@@ -135,6 +135,8 @@ export const seoSettings = tenantTable(
     aiCrawlers: jsonb("ai_crawlers"),
     breadcrumbsEnabled: boolean("breadcrumbs_enabled").notNull().default(true),
     faqSchemaEnabled: boolean("faq_schema_enabled").notNull().default(true),
+    /** When the IndexNow sweep last notified search engines of changed pages; null = not enrolled yet (migration 0107). */
+    indexnowPingedAt: timestamp("indexnow_pinged_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [

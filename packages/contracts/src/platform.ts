@@ -1432,6 +1432,11 @@ export const PlatformBillingSettingsView = z.object({
   /** The national (INR) gateway. PayPal is the international gateway and is switched on by `paypalEnabled`. */
   provider: z.enum(["razorpay", "cashfree"]),
   paypalEnabled: z.boolean(),
+  /** The international (USD) primary gateway; the other of PayPal and Razorpay is its backup while `internationalBackupEnabled`. */
+  internationalProvider: z.enum(["paypal", "razorpay"]),
+  /** India: when the national primary cannot take a payment, the other national gateway is tried. */
+  nationalBackupEnabled: z.boolean(),
+  internationalBackupEnabled: z.boolean(),
   mode: z.enum(["test", "live"]),
   enabled: z.boolean(),
   graceDays: z.number().int(),
@@ -1479,6 +1484,9 @@ export const BillingPlansView = z.object({
       name: z.string(),
       monthly: BillingPlanIntervalView,
       yearly: BillingPlanIntervalView,
+      /** USD plans (`pricePaise` holds cents), used when Razorpay bills stores outside India. */
+      monthlyUsd: BillingPlanIntervalView,
+      yearlyUsd: BillingPlanIntervalView,
     }),
   ),
 });
@@ -1490,6 +1498,7 @@ export const platformIntegrationsContract = {
     .output(BillingPlansView),
   syncBillingPlans: oc
     .route({ method: "POST", path: "/platform/integrations/billing/plans/sync" })
+    .input(z.object({ currency: z.enum(["INR", "USD"]).optional() }).optional())
     .output(
       z.object({
         mode: z.enum(["test", "live"]),
@@ -1507,6 +1516,9 @@ export const platformIntegrationsContract = {
       z.object({
         provider: z.enum(["razorpay", "cashfree"]).optional(),
         paypalEnabled: z.boolean().optional(),
+        internationalProvider: z.enum(["paypal", "razorpay"]).optional(),
+        nationalBackupEnabled: z.boolean().optional(),
+        internationalBackupEnabled: z.boolean().optional(),
         trial: z.object({ enabled: z.boolean().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
         cashfree: z.object({ test: CashfreeKeysInput.optional(), live: CashfreeKeysInput.optional() }).optional(),
         paypal: z.object({ test: PayPalKeysInput.optional(), live: PayPalKeysInput.optional() }).optional(),
@@ -1647,6 +1659,16 @@ export const platformIntegrationsContract = {
     ),
 };
 
+const loginPanelSchema = z.object({
+  heading: z.string(),
+  body: z.string(),
+  textColor: z.string(),
+  backgroundFrom: z.string(),
+  backgroundTo: z.string(),
+  imageUrl: z.string().nullable(),
+  verticalAlign: z.enum(["top", "middle", "bottom"]).default("middle"),
+});
+
 /** Platform-wide operational settings (Super Admin toggle). Security posture: owner-only updates. */
 export const platformSettingsContract = {
   get: oc
@@ -1668,4 +1690,61 @@ export const platformSettingsContract = {
       }),
     )
     .output(z.object({ ok: z.boolean(), requireStaffMfa: z.boolean() })),
+  /** The panel beside the admin sign-in form. Admins and owners edit it; the page reads it through a public endpoint. */
+  getLoginPanel: oc.route({ method: "GET", path: "/platform/settings/login-panel" }).output(loginPanelSchema.extend({ explicit: z.boolean() })),
+  updateLoginPanel: oc.route({ method: "POST", path: "/platform/settings/login-panel" }).input(loginPanelSchema).output(loginPanelSchema),
+};
+
+const BrandAssetSchema = z.object({
+  url: z.string(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  alt: z.string().optional(),
+});
+const BrandLogoSetSchema = z.object({ full: BrandAssetSchema.nullable(), icon: BrandAssetSchema.nullable() });
+const BrandButtonSchema = z.object({ background: z.string(), text: z.string() });
+/** Platform brand tokens ("dark" and "light" name the surface the asset sits on). Validated server-side by parseBrandTokens. */
+export const PlatformBrandTokensSchema = z.object({
+  logo: z.object({ dark: BrandLogoSetSchema, light: BrandLogoSetSchema }),
+  favicon: BrandAssetSchema.nullable(),
+  color: z.object({ primary: z.string(), secondary: z.string() }),
+  button: z.object({ dark: BrandButtonSchema, light: BrandButtonSchema }),
+  identity: z.object({ name: z.string(), tagline: z.string() }),
+  font: z.enum(["system", "rounded", "serif", "mono"]),
+  logoSize: z.object({ width: z.number().nullable(), height: z.number().nullable() }),
+});
+
+/** Platform branding (Super Admin). Read: any staff. Update: platform_admin and above. */
+export const platformBrandingContract = {
+  get: oc.route({ method: "GET", path: "/platform/branding" }).output(
+    z.object({
+      tokens: PlatformBrandTokensSchema,
+      /** Built-in brand used before anything is saved ("Reset to defaults"). */
+      defaults: PlatformBrandTokensSchema,
+      css: z.string(),
+      version: z.number(),
+      explicit: z.boolean(),
+      updatedAt: z.string().nullable(),
+      updatedByEmail: z.string().nullable(),
+    }),
+  ),
+  update: oc
+    .route({ method: "POST", path: "/platform/branding" })
+    .input(PlatformBrandTokensSchema)
+    .output(z.object({ ok: z.boolean(), version: z.number() })),
+  history: oc.route({ method: "GET", path: "/platform/branding/history" }).output(
+    z.array(
+      z.object({
+        version: z.number(),
+        action: z.string(),
+        createdAt: z.string(),
+        updatedByEmail: z.string().nullable(),
+        tokens: PlatformBrandTokensSchema,
+      }),
+    ),
+  ),
+  restore: oc
+    .route({ method: "POST", path: "/platform/branding/restore" })
+    .input(z.object({ version: z.number().int().positive() }))
+    .output(z.object({ ok: z.boolean(), version: z.number() })),
 };

@@ -32,6 +32,14 @@ describe("page speed: hero image and background video", () => {
     expect(html).not.toContain("autoPlay");
     expect(html).not.toContain("autoplay");
   });
+
+  it("uses the chosen poster, else falls back to the background image", () => {
+    const ctx: RenderContext = { mediaUrl: (id: string) => `https://m.example/${id}.webp` };
+    const withPoster = render([section("v", { background: { mediaId: "bg", videoUrl: "https://m.example/a.webm", videoPosterMediaId: "pst" } })], ctx);
+    expect(withPoster).toMatch(/<video[^>]*poster="https:\/\/m\.example\/pst\.webp"/);
+    const fallback = render([section("v", { background: { imageUrl: "https://m.example/bg.jpg", videoUrl: "https://m.example/a.webm" } })]);
+    expect(fallback).toMatch(/<video[^>]*poster="https:\/\/m\.example\/bg\.jpg"/);
+  });
 });
 
 describe("page speed: responsive image attributes", () => {

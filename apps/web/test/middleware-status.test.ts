@@ -65,6 +65,10 @@ describe("Storefront Status Middleware (PLAN §8.2, §8.3 & M3 Status Pipeline)"
       ["POST", "https://platform-root.test/api/webhooks/razorpay"],
       ["GET", "https://platform-root.test/api/admin/orders"],
       ["OPTIONS", "https://platform-root.test/api/rpc/admin/me/get"],
+      // The public platform brand (read by the dashboards' sign-in pages, the share image and the manifest).
+      ["GET", "https://platform-root.test/api/brand"],
+      ["GET", "https://platform-root.test/api/brand/og"],
+      ["GET", "https://platform-root.test/api/brand/manifest"],
     ];
     for (const [method, url] of cases) {
       const res = await middleware(new NextRequest(url, { method, headers: { host: "platform-root.test" } }));

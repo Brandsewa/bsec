@@ -107,6 +107,66 @@ describe("StripeProvider API calls (faked fetch)", () => {
     expect(form.get("metadata[tenant_id]")).toBe(ctx.tenantId);
   });
 
+  it("creates a PaymentIntent for the Payment Element: automatic payment methods, metadata, client secret out, no redirect URLs", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const provider = new StripeProvider({
+      secretKey: SECRET,
+      uiMode: "elements",
+      idempotencySalt: "2",
+      fetchFn: (async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return jsonResponse({ id: "pi_test_e1", status: "requires_payment_method", client_secret: "pi_test_e1_secret_x" });
+      }) as unknown as typeof fetch,
+    });
+    const res = await provider.createIntent(ctx, { id: "ord-e", number: "BS-1", currency: "USD", grandTotal: 2500, email: "a@b.co", phone: "1" });
+    expect(res.clientSecret).toBe("pi_test_e1_secret_x");
+    expect(res.providerOrderId).toBe("pi_test_e1");
+    expect(res.amount).toBe(2500);
+    const call = calls[0]!;
+    expect(call.url).toBe("https://api.stripe.com/v1/payment_intents");
+    const form = new URLSearchParams(String(call.init.body));
+    expect(form.get("amount")).toBe("2500");
+    expect(form.get("currency")).toBe("usd");
+    expect(form.get("automatic_payment_methods[enabled]")).toBe("true");
+    expect(form.get("metadata[order_id]")).toBe("ord-e");
+    expect(form.get("metadata[tenant_id]")).toBe(ctx.tenantId);
+    expect(form.get("receipt_email")).toBe("a@b.co");
+    expect(form.has("success_url")).toBe(false);
+    expect((call.init.headers as Record<string, string>)["Idempotency-Key"]).toBe("bsec-pi-ord-e-2");
+  });
+
+  it("a hosted session still needs both return URLs", async () => {
+    const noReturn = new StripeProvider({ secretKey: SECRET, cancelUrl: "https://x" });
+    await expect(noReturn.createIntent(ctx, { id: "o", number: "n", currency: "INR", grandTotal: 100, email: "", phone: "" })).rejects.toThrow(/success and cancel URLs/);
+  });
+
+  it("retrievePaymentIntent exposes the client secret only while it can still be paid", async () => {
+    const make = (status: string) =>
+      new StripeProvider({
+        secretKey: SECRET,
+        fetchFn: (async () => jsonResponse({ status, client_secret: "pi_secret", amount: 2500, amount_received: status === "succeeded" ? 2500 : 0, currency: "usd", metadata: { order_id: "ord-e" } })) as unknown as typeof fetch,
+      });
+    expect((await make("requires_payment_method").retrievePaymentIntent("pi_1")).clientSecret).toBe("pi_secret");
+    const paid = await make("succeeded").retrievePaymentIntent("pi_1");
+    expect(paid).toMatchObject({ clientSecret: null, amountReceived: 2500, currency: "USD", orderId: "ord-e", status: "succeeded" });
+    expect((await make("canceled").retrievePaymentIntent("pi_1")).clientSecret).toBeNull();
+  });
+
+  it("cancels a PaymentIntent with its cancel endpoint and a hosted session with expire", async () => {
+    const urls: string[] = [];
+    const provider = new StripeProvider({ secretKey: SECRET, fetchFn: (async (url: string) => { urls.push(url); return jsonResponse({}); }) as unknown as typeof fetch });
+    await provider.cancel(ctx, { providerOrderId: "pi_9" } as never);
+    await provider.cancel(ctx, { providerOrderId: "cs_9" } as never);
+    expect(urls).toEqual(["https://api.stripe.com/v1/payment_intents/pi_9/cancel", "https://api.stripe.com/v1/checkout/sessions/cs_9/expire"]);
+  });
+
+  it("a payment_intent.succeeded webhook carries the PaymentIntent id as the provider reference", async () => {
+    const provider = new StripeProvider({ secretKey: SECRET, webhookSecret: WHSEC, nowSeconds: () => NOW });
+    const body = eventBody("payment_intent.succeeded", { id: "pi_77", amount: 2500, currency: "usd", metadata: { order_id: "ord-e", tenant_id: ctx.tenantId } });
+    const ev = await provider.verifyWebhook({ "stripe-signature": sign(body) }, body);
+    expect(ev).toMatchObject({ isValid: true, providerOrderId: "pi_77", providerPaymentId: "pi_77", orderId: "ord-e", amount: 2500 });
+  });
+
   it("refunds partially with a stable idempotency key", async () => {
     const calls: Array<{ init: RequestInit }> = [];
     const provider = new StripeProvider({

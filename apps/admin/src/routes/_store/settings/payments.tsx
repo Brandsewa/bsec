@@ -13,6 +13,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame, useUnsavedGuard } from "../../../components/settings/settings-page.tsx";
 import { currencySymbol } from "@bs/contracts/money";
 import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
+import { PaymentDisplayForm } from "../../../components/payments/payment-display-form.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 
@@ -576,6 +577,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
   const isRazorpay = provider.provider === "razorpay";
   const isCashfree = provider.provider === "cashfree";
   const isPayPal = provider.provider === "paypal";
+  const isStripe = provider.provider === "stripe";
   // Razorpay, Cashfree, and PayPal pair an id (Key ID, App ID, or Client ID) with a secret; Stripe has a single secret key.
   const hasKeyId = isRazorpay || isCashfree || isPayPal;
   const locked = !canManage || !provider.platformEnabled;
@@ -647,7 +649,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 () =>
                   saveMutation.mutateAsync({
                     provider: provider.provider,
-                    ...(hasKeyId ? { keyId: keyId.trim() } : {}),
+                    ...(hasKeyId || (isStripe && keyId.trim()) ? { keyId: keyId.trim() } : {}),
                     keySecret: keySecret.trim(),
                     ...(webhookSecret.trim() ? { webhookSecret: webhookSecret.trim() } : {}),
                     ...(isPayPal ? { mode } : {}),
@@ -686,12 +688,14 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                 )}
               </Field>
             ) : null}
-            {hasKeyId ? (
+            {hasKeyId || isStripe ? (
               <Field
                 id="gw-key-id"
-                label={isCashfree ? "App ID" : isPayPal ? "Client ID" : "Key ID"}
+                label={isCashfree ? "App ID" : isPayPal ? "Client ID" : isStripe ? "Publishable key (optional)" : "Key ID"}
                 hint={
-                  isCashfree
+                  isStripe
+                    ? "Starts with pk_test_ (pk_live_ only if live mode is allowed). Lets shoppers pay inside your checkout page; without it they are sent to Stripe's page."
+                    : isCashfree
                     ? "From Cashfree, Developers, API keys. Use the sandbox (test) App ID first."
                     : isPayPal
                       ? "From PayPal Developer Dashboard > Apps & Credentials (REST app)."
@@ -704,7 +708,7 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
                   value={keyId}
                   disabled={locked}
                   onChange={(e) => setKeyId(e.target.value)}
-                  placeholder={isCashfree ? "TEST10..." : isPayPal ? "Enter PayPal REST client ID" : "rzp_test_..."}
+                  placeholder={isCashfree ? "TEST10..." : isPayPal ? "Enter PayPal REST client ID" : isStripe ? "pk_test_..." : "rzp_test_..."}
                 />
               </Field>
             ) : null}
@@ -758,6 +762,8 @@ function GatewaySheet({ provider, canManage, onClose }: { provider: StorePayment
               {busy === "save" ? "Saving…" : "Save keys"}
             </Button>
           </form>
+
+          <PaymentDisplayForm provider={provider.provider} providerName={provider.displayName} disabled={!canManage} />
 
           <div className="space-y-1 rounded-md border border-border p-3">
             <p className="font-medium text-foreground">Webhook URL</p>

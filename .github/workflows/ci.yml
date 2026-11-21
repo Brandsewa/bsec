@@ -19,7 +19,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.filter.outputs.docs_only }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 2
       - id: filter
@@ -67,14 +67,14 @@ jobs:
     needs: changes
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       # Turborepo's local cache survives between runs, so unchanged packages skip lint/typecheck/build/test.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-fast-${{ github.sha }}
@@ -138,13 +138,13 @@ jobs:
       # packages/domain/vitest.config.ts enforces fileParallelism: false and bootstrapRoles() uses advisory locks to prevent races.
       TEST_DATABASE_URL_SUPERUSER: postgres://postgres:postgres@localhost:5432/bsec
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-heavy-${{ matrix.build_web && 'web' || 'domain' }}-${{ github.sha }}
@@ -175,7 +175,7 @@ jobs:
     name: secret-scan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # scan the whole history, not just the PR diff
       # Gitleaks CLI image, not gitleaks-action: the action needs a paid license on organization repos.
@@ -199,9 +199,9 @@ jobs:
       matrix:
         app: [web, platform, worker, admin, superadmin, migrate]
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -209,13 +209,13 @@ jobs:
       - id: owner
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT" # registry refs must be lowercase
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           # ghcr.io/brandsewa/bsec-<app>; image names must be lowercase.
           images: ghcr.io/${{ github.repository_owner }}/bsec-${{ matrix.app }}
           tags: |
             type=sha,format=long
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: infra/docker/${{ matrix.app }}.Dockerfile
@@ -246,9 +246,9 @@ jobs:
       IMAGE_TAG: sha-${{ github.sha }}  # docker/metadata-action type=sha prefixes "sha-"
       COMPOSE: docker compose -f docker-compose.staging.yml
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # New GHCR packages start private; log in so the pull works whatever their visibility.
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -294,13 +294,13 @@ jobs:
           $COMPOSE run --rm --no-deps -e OWNER_EMAIL=owner@ci.example platform node dist/demo.js seed
           # First platform staff login (the Super Admin e2e sets up its authenticator through the UI)
           $COMPOSE run --rm --no-deps -e STAFF_EMAIL=owner@ci.example -e STAFF_NAME="CI Owner" -e STAFF_PASSWORD="$E2E_PASSWORD" platform node dist/create-staff.js
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter @bs/e2e
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -317,7 +317,7 @@ jobs:
         run: pnpm --filter @bs/e2e e2e
       - name: Upload browser test report and screenshots
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: e2e-report
           path: |
@@ -346,8 +346,8 @@ jobs:
       matrix:
         app: [web, platform, worker, admin, superadmin, migrate]
     steps:
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

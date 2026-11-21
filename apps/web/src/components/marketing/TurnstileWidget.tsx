@@ -10,6 +10,7 @@ interface TurnstileApi {
       callback: (token: string) => void;
       "expired-callback": () => void;
       "error-callback": () => void;
+      appearance?: "always" | "execute" | "interaction-only";
     },
   ): string;
   remove(widgetId: string): void;
@@ -40,7 +41,18 @@ function loadScript(): Promise<TurnstileApi> {
 }
 
 /** Cloudflare Turnstile challenge. Calls onToken(token) when solved and onToken(null) when it expires or fails. */
-export function TurnstileWidget({ siteKey, onToken, onFailure }: { siteKey: string; onToken: (token: string | null) => void; onFailure?: () => void }) {
+export function TurnstileWidget({
+  siteKey,
+  onToken,
+  onFailure,
+  appearance,
+}: {
+  siteKey: string;
+  onToken: (token: string | null) => void;
+  onFailure?: () => void;
+  /** "interaction-only" keeps the widget out of sight unless Cloudflare needs the shopper to do something. */
+  appearance?: "always" | "execute" | "interaction-only";
+}) {
   const container = useRef<HTMLDivElement>(null);
   const onTokenRef = useRef(onToken);
   const onFailureRef = useRef(onFailure);
@@ -58,6 +70,7 @@ export function TurnstileWidget({ siteKey, onToken, onFailure }: { siteKey: stri
         if (cancelled || !container.current) return;
         widgetId = api.render(container.current, {
           sitekey: siteKey,
+          ...(appearance ? { appearance } : {}),
           callback: (token) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(null),
           "error-callback": () => {
@@ -74,7 +87,7 @@ export function TurnstileWidget({ siteKey, onToken, onFailure }: { siteKey: stri
       cancelled = true;
       if (widgetId && window.turnstile) window.turnstile.remove(widgetId);
     };
-  }, [siteKey]);
+  }, [siteKey, appearance]);
 
   return <div ref={container} />;
 }

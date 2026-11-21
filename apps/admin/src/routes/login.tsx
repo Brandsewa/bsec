@@ -1,8 +1,10 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AuthCardSkeleton, AuthShell, Button, Field, FieldError, FieldGroup, FieldLabel, Input } from "@bs/ui";
-import { PasswordInput } from "@bs/ui";
+import { AuthCardSkeleton, Button, Field, FieldError, FieldGroup } from "@bs/ui";
+import { FloatingInput, FloatingPassword } from "../components/floating-input.tsx";
+import { SplitAuthShell } from "../components/split-auth-shell.tsx";
+import { apiBase } from "../lib/config.ts";
 import { fetchMe, signIn } from "../lib/auth.ts";
 import { fetchGoogleSignin, startGoogleSignIn, startOneTap } from "../lib/google.ts";
 
@@ -77,38 +79,28 @@ function LoginPage() {
   }
 
   return (
-    <AuthShell
-      variant="platform"
-      brand={{ name: "Bs Commerce" }}
-      title="Sign in"
-      description="Use your store admin account."
-    >
-      <form onSubmit={onSubmit} className="space-y-4">
+    <SplitAuthShell>
+      <form onSubmit={onSubmit} className="space-y-5">
         <FieldGroup>
+          <h1 className="sr-only">Sign in</h1>
           <Field>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <FloatingInput id="email" label="Email" type="email" autoComplete="username" required value={email} onChange={setEmail} />
           </Field>
           <Field>
-            <div className="flex items-center justify-between">
-              <FieldLabel htmlFor="password">Password</FieldLabel>
-              <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-            <PasswordInput
-              id="password"
-              
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <FloatingPassword id="password" label="Password" autoComplete="current-password" required value={password} onChange={setPassword} />
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" size="md" className="w-full" disabled={busy || !email || !password} loading={busy}>
+          <Button type="submit" size="lg" className="h-14 w-full text-base" disabled={busy || !email || !password} loading={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+          <div className="flex items-center justify-between text-sm">
+            <a href={`${apiBase()}/signup`} className="text-muted-foreground hover:text-foreground hover:underline">
+              New registration
+            </a>
+            <Link to="/forgot-password" className="text-muted-foreground hover:text-foreground hover:underline">
+              Forgot password?
+            </Link>
+          </div>
           {googleOn ? (
             <>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -116,13 +108,13 @@ function LoginPage() {
                 or
                 <span className="h-px flex-1 bg-border" />
               </div>
-              <Button type="button" variant="outline" size="md" className="w-full" onClick={() => void onGoogle()}>
+              <Button type="button" variant="outline" size="lg" className="h-14 w-full text-base" onClick={() => void onGoogle()}>
                 Continue with Google
               </Button>
             </>
           ) : null}
         </FieldGroup>
       </form>
-    </AuthShell>
+    </SplitAuthShell>
   );
 }

@@ -55,8 +55,11 @@ export async function processMediaDerive(
     return { derived: 0, dominantColor: null, derivatives: [] };
   }
 
-  return await withTenant(db, params.tenantId, async (tx) => {
-    const [row] = await tx
+  // Short transactions only: reading the row, and writing the result. The download, image decode, re-encodes and uploads happen
+  // with no database connection held (they used to run inside one transaction, tying up a pooled connection for seconds per
+  // picture and starving the other jobs: "timeout exceeded when trying to connect").
+  const [row] = await withTenant(db, params.tenantId, (tx) =>
+    tx
       .select({
         id: schema.media.id,
         tenantId: schema.media.tenantId,
@@ -68,110 +71,123 @@ export async function processMediaDerive(
       })
       .from(schema.media)
       .where(and(eq(schema.media.id, params.mediaId), eq(schema.media.tenantId, params.tenantId)))
-      .limit(1);
+      .limit(1),
+  );
 
-    if (!row || row.status !== "ready") {
-      return { derived: 0, dominantColor: null, derivatives: [] };
-    }
+  if (!row || row.status !== "ready") {
+    return { derived: 0, dominantColor: null, derivatives: [] };
+  }
 
-    // Only process static images; skip GIF, video, and documents
-    if (row.kind !== "image" || row.mime === "image/gif") {
-      return { derived: 0, dominantColor: null, derivatives: [] };
-    }
+  // Only process static images; skip GIF, video, and documents
+  if (row.kind !== "image" || row.mime === "image/gif") {
+    return { derived: 0, dominantColor: null, derivatives: [] };
+  }
 
-    const driver = await resolveDriverForMediaRow(db, row.storageConnectionId, "public_media");
-    if (!driver) {
-      return { derived: 0, dominantColor: null, derivatives: [] };
-    }
-
-    const originalBytes = await driver.get(row.storageKey);
-    if (!originalBytes || originalBytes.length === 0) {
-      return { derived: 0, dominantColor: null, derivatives: [] };
-    }
-
-    const sharp = await loadSharp();
-    let meta: { width?: number | undefined; height?: number | undefined; orientation?: number | undefined } = {};
-    try {
-      meta = await sharp(originalBytes).metadata();
-    } catch {
-      // Undecodable: handled just below
-    }
-    const { width: origW, height: origH } = orientedSize(meta);
-
-    if (origW <= 0 || origH <= 0) {
-      // Not decodable: record "no derivatives" so the backfill does not pick this row up forever
-      await tx
+  // A picture that cannot be derived (no storage to read it from, or the original is missing or empty) is recorded as "no
+  // derivatives". Left unmarked, the backfill picked the same rows again every minute (and re-queued itself every 30 s while
+  // more than a batch remained), downloading the same originals forever.
+  const markUnavailable = async () => {
+    await withTenant(db, params.tenantId, (tx) =>
+      tx
         .update(schema.media)
         .set({ derivatives: {}, updatedAt: new Date() })
-        .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId)));
-      return { derived: 0, dominantColor: null, derivatives: [] };
+        .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId), sql`${schema.media.derivatives} is null`)),
+    );
+    return { derived: 0, dominantColor: null, derivatives: [] };
+  };
+
+  const driver = await resolveDriverForMediaRow(db, row.storageConnectionId, "public_media");
+  if (!driver) return markUnavailable();
+
+  const originalBytes = await driver.get(row.storageKey);
+  if (!originalBytes || originalBytes.length === 0) return markUnavailable();
+
+  const sharp = await loadSharp();
+  let meta: { width?: number | undefined; height?: number | undefined; orientation?: number | undefined } = {};
+  try {
+    meta = await sharp(originalBytes).metadata();
+  } catch {
+    // Undecodable: handled just below
+  }
+  const { width: origW, height: origH } = orientedSize(meta);
+
+  if (origW <= 0 || origH <= 0) {
+    // Not decodable: record "no derivatives" so the backfill does not pick this row up forever
+    await withTenant(db, params.tenantId, (tx) =>
+      tx
+        .update(schema.media)
+        .set({ derivatives: {}, updatedAt: new Date() })
+        .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId))),
+    );
+    return { derived: 0, dominantColor: null, derivatives: [] };
+  }
+
+  // Auto-orient first: phone photos carry the turn in EXIF, which is dropped from the derived files
+  const image = sharp(originalBytes).rotate();
+
+  // Extract dominant color from image statistics
+  let dominantColor: string | null = null;
+  try {
+    const stats = await image.stats();
+    if (stats.dominant) {
+      const r = Math.round(stats.dominant.r);
+      const g = Math.round(stats.dominant.g);
+      const b = Math.round(stats.dominant.b);
+      dominantColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+    }
+  } catch {
+    // Non-fatal if stats cannot extract dominant color
+  }
+
+  // Generate WebP derivatives at widths [320, 640, 1024, 1600] capped at original width (never upscale)
+  const targetWidths = DERIVATIVE_WIDTHS.filter((w) => w < origW);
+  const derivativesList: MediaDerivativeItem[] = [];
+
+  for (const w of targetWidths) {
+    const derivedKey = `${params.tenantId}/_derived/${row.id}/${sourceFileId(row.storageKey)}/w${w}.webp`;
+
+    // Strict security assertion: derived keys must stay within tenant prefix
+    if (!derivedKey.startsWith(`${params.tenantId}/`)) {
+      throw new Error(
+        `Security violation: derived key "${derivedKey}" does not match tenant prefix "${params.tenantId}/"`,
+      );
     }
 
-    // Auto-orient first: phone photos carry the turn in EXIF, which is dropped from the derived files
-    const image = sharp(originalBytes).rotate();
+    // Generate stripped WebP variant
+    const webpBuf = await sharp(originalBytes)
+      .rotate()
+      .resize({ width: w, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
 
-    // Extract dominant color from image statistics
-    let dominantColor: string | null = null;
-    try {
-      const stats = await image.stats();
-      if (stats.dominant) {
-        const r = Math.round(stats.dominant.r);
-        const g = Math.round(stats.dominant.g);
-        const b = Math.round(stats.dominant.b);
-        dominantColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-      }
-    } catch {
-      // Non-fatal if stats cannot extract dominant color
-    }
+    await driver.put({
+      key: derivedKey,
+      body: webpBuf,
+      contentType: "image/webp",
+    });
 
-    // Generate WebP derivatives at widths [320, 640, 1024, 1600] capped at original width (never upscale)
-    const targetWidths = DERIVATIVE_WIDTHS.filter((w) => w < origW);
-    const derivativesList: MediaDerivativeItem[] = [];
+    const h = Math.round(origH * (w / origW));
+    derivativesList.push({
+      w,
+      h,
+      bytes: webpBuf.length,
+      key: derivedKey,
+    });
+  }
 
-    for (const w of targetWidths) {
-      const derivedKey = `${params.tenantId}/_derived/${row.id}/${sourceFileId(row.storageKey)}/w${w}.webp`;
+  const derivativesMap: Record<string, { key: string; width: number; height: number; bytes: number }> = {};
+  for (const item of derivativesList) {
+    derivativesMap[`w${item.w}`] = {
+      key: item.key,
+      width: item.w,
+      height: item.h ?? Math.round(origH * (item.w / origW)),
+      bytes: item.bytes ?? 0,
+    };
+  }
 
-      // Strict security assertion: derived keys must stay within tenant prefix
-      if (!derivedKey.startsWith(`${params.tenantId}/`)) {
-        throw new Error(
-          `Security violation: derived key "${derivedKey}" does not match tenant prefix "${params.tenantId}/"`,
-        );
-      }
-
-      // Generate stripped WebP variant
-      const webpBuf = await sharp(originalBytes)
-        .rotate()
-        .resize({ width: w, withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toBuffer();
-
-      await driver.put({
-        key: derivedKey,
-        body: webpBuf,
-        contentType: "image/webp",
-      });
-
-      const h = Math.round(origH * (w / origW));
-      derivativesList.push({
-        w,
-        h,
-        bytes: webpBuf.length,
-        key: derivedKey,
-      });
-    }
-
-    const derivativesMap: Record<string, { key: string; width: number; height: number; bytes: number }> = {};
-    for (const item of derivativesList) {
-      derivativesMap[`w${item.w}`] = {
-        key: item.key,
-        width: item.w,
-        height: item.h ?? Math.round(origH * (item.w / origW)),
-        bytes: item.bytes ?? 0,
-      };
-    }
-
-    // Update media row with derivatives and dominant color
-    await tx
+  // Update media row with derivatives and dominant color
+  await withTenant(db, params.tenantId, (tx) =>
+    tx
       .update(schema.media)
       .set({
         derivatives: derivativesMap,
@@ -180,14 +196,14 @@ export async function processMediaDerive(
         height: origH,
         updatedAt: new Date(),
       })
-      .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId)));
+      .where(and(eq(schema.media.id, row.id), eq(schema.media.tenantId, params.tenantId))),
+  );
 
-    return {
-      derived: derivativesList.length,
-      dominantColor,
-      derivatives: derivativesList,
-    };
-  });
+  return {
+    derived: derivativesList.length,
+    dominantColor,
+    derivatives: derivativesList,
+  };
 }
 
 /**

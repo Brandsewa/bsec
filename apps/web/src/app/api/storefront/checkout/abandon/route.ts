@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { abandonUnpaidOnlineOrder, evaluateStorefrontAccess } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
+import { publicUrl } from "@/lib/request-origin.ts";
 import { CART_COOKIE_NAME, getRequestHeaders, getCookieValue } from "../../cart/route.ts";
 
 /** Holds the cart token while an online payment is open, so an abandoned payment can put the items back (httpOnly, 2 hours). */
@@ -42,5 +43,6 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const { cartToken } = await abandon(req, url.searchParams.get("ot"));
-  return applyCookies(NextResponse.redirect(new URL("/checkout?payment=cancelled", url)), cartToken);
+  const h = await getRequestHeaders(req);
+  return applyCookies(NextResponse.redirect(publicUrl(h, "/checkout?payment=cancelled")), cartToken);
 }

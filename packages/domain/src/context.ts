@@ -37,6 +37,7 @@ const SETTINGS_CAPABILITY_FAMILIES: readonly StorePermission[] = [
   "privacy.manage",
   "audit.read",
   "markets.manage",
+  "apps.manage",
 ];
 
 export const SUPPORT_READ_PERMISSIONS: readonly StorePermission[] = STORE_PERMISSIONS.filter(
@@ -74,6 +75,8 @@ export interface TenantContext {
   requestId: string;
   /** The market a storefront request is in (ADR-040). Storefront reads use it for prices and catalog; absent = base market. */
   marketId?: string | null | undefined;
+  /** State Pricing app (ADR-044): the Indian state the shopper is priced for. Set only when the app is active; absent = default prices. */
+  priceRegion?: string | null | undefined;
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import { usePathname, useRouter } from "next/navigation";
 import { SEARCH_OPEN_EVENT } from "./SearchModal.tsx";
 

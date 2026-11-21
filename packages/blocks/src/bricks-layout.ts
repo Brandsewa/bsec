@@ -141,7 +141,9 @@ const backgroundSchema = z.object({
   imageSize: z.string().optional(), // 'cover' | 'contain' | 'auto' | custom
   imagePosition: z.string().optional(), // 'center center' | 'top center' | ...
   videoUrl: bgVideoUrlSchema.optional().or(z.literal("")),
-  videoPosterId: z.string().optional(),
+  // Key ends in "MediaId" so the media collector resolves it. Falls back to the background image when unset.
+  videoPosterMediaId: z.string().optional(),
+  videoPosterId: z.string().optional(), // legacy, read-only
   videoFit: z.string().optional(), // 'cover' | 'contain' | ...
   videoPosition: z.string().optional(), // 'center center' | ...
 });

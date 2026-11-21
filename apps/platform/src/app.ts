@@ -1,5 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { implement, onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -22,6 +24,11 @@ import {
   updatePlatformFeatureFlag,
   retirePlatformFeatureFlag,
   listPromotions,
+  listPlatformApps,
+  updatePlatformApp,
+  getPincodeDirectoryStatus,
+  importPincodesFromJson,
+  setTenantAppSuspended,
   createPromotion,
   updatePromotion,
   listTenantPromotions,
@@ -103,6 +110,7 @@ import {
   ensureSiteStatusLive,
   ensureThemeTemplatePage,
   ensurePlatformSiteChrome,
+  previewPlatformSiteRenderData,
   endMaintenance,
   executePrivacyErasure,
   executePrivacyExport,
@@ -116,13 +124,15 @@ import {
   scheduleMaintenance,
   updatePrivacyRequestStatus,
   updatePrivacySettings,
+  saveConversionCredentials,
+  clearConversionCredentials,
   updateStoreStatus,
   createPlatformSitePage,
   deletePage,
   duplicatePage,
   getPage,
   listPageVersions,
-  previewPageRenderData,
+  getPageVersion,
   publishPage,
   rollbackPage,
   savePlatformSiteDraft,
@@ -150,6 +160,8 @@ import {
   verifyExportSignature,
   getPlatformSystemData,
   updatePlatformSettings,
+  getLoginPanelForStaff,
+  updateLoginPanel,
   retryFailedJob,
   retryFailedWebhook,
   listThemeTemplates,
@@ -175,6 +187,10 @@ import {
   updatePlatformBillingSettings,
   testPlatformBillingConnection,
   getPlatformSettings,
+  getPlatformBrand,
+  updatePlatformBrand,
+  listPlatformBrandVersions,
+  restorePlatformBrand,
   updatePlatformEmailSettings,
   sendPlatformTestEmail,
   listRecentEmailDeliveries,
@@ -481,6 +497,8 @@ export const platformRouter = os.router({
     customerPrivacy: {
       getSettings: os.marketing.customerPrivacy.getSettings.use(siteRead).handler(({ context }) => getPrivacySettings(context.content.rt, context.content.ctx)),
       updateSettings: os.marketing.customerPrivacy.updateSettings.use(siteWrite).handler(({ context, input }) => updatePrivacySettings(context.content.rt, context.content.ctx, input)),
+      saveConversionCredentials: os.marketing.customerPrivacy.saveConversionCredentials.use(siteWrite).handler(({ context, input }) => saveConversionCredentials(context.content.rt, context.content.ctx, input)),
+      clearConversionCredentials: os.marketing.customerPrivacy.clearConversionCredentials.use(siteWrite).handler(({ context, input }) => clearConversionCredentials(context.content.rt, context.content.ctx, input.provider)),
       listRequests: os.marketing.customerPrivacy.listRequests.use(siteRead).handler(({ context, input }) => listPrivacyRequests(context.content.rt, context.content.ctx, input)),
       updateRequestStatus: os.marketing.customerPrivacy.updateRequestStatus.use(siteWrite).handler(({ context, input }) => updatePrivacyRequestStatus(context.content.rt, context.content.ctx, input)),
       exportCustomerData: os.marketing.customerPrivacy.exportCustomerData.use(siteWrite).handler(({ context, input }) => executePrivacyExport(context.content.rt, context.content.ctx, input.id)),
@@ -492,7 +510,8 @@ export const platformRouter = os.router({
       list: os.marketing.pages.list.use(siteRead).handler(({ context }) => listPages(context.content.rt, context.content.ctx)),
       get: os.marketing.pages.get.use(siteRead).handler(({ context, input }) => getPage(context.content.rt, context.content.ctx, input)),
       versions: os.marketing.pages.versions.use(siteRead).handler(({ context, input }) => listPageVersions(context.content.rt, context.content.ctx, input)),
-      blockData: os.marketing.pages.blockData.use(siteRead).handler(({ context, input }) => previewPageRenderData(context.content.rt, context.content.ctx, input)),
+      version: os.marketing.pages.version.use(siteRead).handler(({ context, input }) => getPageVersion(context.content.rt, context.content.ctx, input)),
+      blockData: os.marketing.pages.blockData.use(siteRead).handler(({ context, input }) => previewPlatformSiteRenderData(context.content.rt, context.content.ctx, input)),
       ensureTemplate: os.marketing.pages.ensureTemplate.use(siteWrite).handler(({ context, input }) => ensureThemeTemplatePage(context.content.rt, context.content.ctx, input)),
       ensureChrome: os.marketing.pages.ensureChrome.use(siteWrite).handler(({ context, input }) => ensurePlatformSiteChrome(context.content.rt, context.content.ctx, input)),
       create: os.marketing.pages.create.use(siteWrite).handler(({ context, input }) => createPlatformSitePage(context.content.rt, context.content.ctx, input)),
@@ -787,6 +806,15 @@ export const platformRouter = os.router({
       restorePlatformFeatureFlag(context.rt, actor(context), input, context.meta),
     ),
   },
+  marketplace: {
+    list: os.marketplace.list.use(requirePlatformStaff).handler(({ context }) => listPlatformApps(context.rt, actor(context))),
+    update: os.marketplace.update.use(requireStaff("platform_admin")).handler(({ context, input }) => updatePlatformApp(context.rt, actor(context), input.key, input, context.meta)),
+    pincodeStatus: os.marketplace.pincodeStatus.use(requirePlatformStaff).handler(({ context }) => getPincodeDirectoryStatus(context.rt, actor(context))),
+    importPincodes: os.marketplace.importPincodes.use(requireStaff("platform_admin")).handler(({ context, input }) => importPincodesFromJson(context.rt, actor(context), input.data, context.meta)),
+    setSuspended: os.marketplace.setSuspended
+      .use(requireStaff("platform_admin"))
+      .handler(({ context, input }) => setTenantAppSuspended(context.rt, actor(context), input.tenantId, input.key, input.suspended, context.meta)),
+  },
   promotions: {
     list: os.promotions.list.use(requirePlatformStaff).handler(({ context }) => listPromotions(context.rt, actor(context))),
     create: os.promotions.create.use(requireStaff("platform_owner")).handler(({ context, input }) => createPromotion(context.rt, actor(context), input, context.meta)),
@@ -913,9 +941,9 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return listBillingPlans(context.rt, staffUserId);
     }),
-    syncBillingPlans: os.integrations.syncBillingPlans.use(requireStaff("platform_owner")).handler(async ({ context }) => {
+    syncBillingPlans: os.integrations.syncBillingPlans.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
-      return syncBillingPlans(context.rt, staffUserId, context.meta);
+      return syncBillingPlans(context.rt, staffUserId, context.meta, undefined, input?.currency ? { currency: input.currency } : {});
     }),
     updateBillingSettings: os.integrations.updateBillingSettings.use(requireStaff("platform_owner")).handler(async ({ context, input }) => {
       const staffUserId = actor(context);
@@ -995,6 +1023,22 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return updatePlatformSettings(context.rt, staffUserId, input, context.meta);
     }),
+    getLoginPanel: os.settings.getLoginPanel.use(requirePlatformStaff).handler(async ({ context }) => {
+      return getLoginPanelForStaff(context.rt, actor(context));
+    }),
+    updateLoginPanel: os.settings.updateLoginPanel.use(requireStaff("platform_admin")).handler(async ({ context, input }) => {
+      return updateLoginPanel(context.rt, actor(context), input, context.meta);
+    }),
+  },
+  branding: {
+    get: os.branding.get.use(requirePlatformStaff).handler(async ({ context }) => getPlatformBrand(context.rt, actor(context))),
+    update: os.branding.update.use(requireStaff("platform_admin")).handler(async ({ context, input }) =>
+      updatePlatformBrand(context.rt, actor(context), input, context.meta),
+    ),
+    history: os.branding.history.use(requirePlatformStaff).handler(async ({ context }) => listPlatformBrandVersions(context.rt, actor(context))),
+    restore: os.branding.restore.use(requireStaff("platform_admin")).handler(async ({ context, input }) =>
+      restorePlatformBrand(context.rt, actor(context), input.version, context.meta),
+    ),
   },
 });
 
@@ -1026,6 +1070,10 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
 
   // CORS: exact Super Admin origins only. Tenant stores live on other *.bcom.si subdomains and must never be
   // able to make credentialed calls here.
+  // JSON API only: nosniff, no framing, no referrer, HSTS (audit A7-01). Cross-origin resource policy is left off: the Super Admin
+  // SPA reads these responses cross-origin through CORS, which the exact-origin list below already controls.
+  app.use("*", secureHeaders({ crossOriginResourcePolicy: false, strictTransportSecurity: "max-age=31536000", referrerPolicy: "no-referrer" }));
+
   app.use(
     "*",
     cors({
@@ -1036,6 +1084,13 @@ export function createApp(rt: Runtime, rootLog: Logger, contentRt?: Runtime) {
       exposeHeaders: ["X-Request-Id"],
     }),
   );
+
+  // A request body is capped while it streams, not only by its Content-Length header (a chunked body has none), so one request
+  // cannot make the process buffer without limit (audit A5-01). The media upload route gets room for the file plus form overhead.
+  const tooLarge = (c: Context) => c.json({ error: "Request too large" }, 413);
+  const jsonLimit = bodyLimit({ maxSize: 6 * 1024 * 1024, onError: tooLarge });
+  const uploadLimit = bodyLimit({ maxSize: MAX_MEDIA_BYTES + 1024 * 1024, onError: tooLarge });
+  app.use("*", (c, next) => (c.req.path === "/api/marketing/media/upload" ? uploadLimit(c, next) : jsonLimit(c, next)));
 
   app.use("*", async (c, next) => {
     const requestId = resolveRequestId(c.req.header("x-request-id"));

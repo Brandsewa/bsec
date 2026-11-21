@@ -7,6 +7,10 @@ import type { TenantContext } from "../context.ts";
 import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { THEME_SYSTEM_PAGE_TYPES } from "../themes/system-pages.ts";
+import { toMajorUnits } from "@bs/contracts/money";
+import { publicMediaUrl } from "../media/storage.ts";
+import { buildHreflangAlternates, marketHreflangs, type HreflangAlternate } from "./seo-markets.ts";
+import { buildMerchantReturnPolicyJsonLd, buildReviewsJsonLd, buildShippingDetailsJsonLd, type StorefrontOfferExtras } from "./seo-offers.ts";
 import { loadStorefrontMarkets } from "../markets/lookup.ts";
 import { withMarketScope } from "../markets/scope.ts";
 import {
@@ -32,13 +36,46 @@ export interface SeoSettings {
   updatedAt?: Date | string;
 }
 
+/**
+ * AI crawlers a store can allow or block (Settings > SEO). Search and user-triggered agents fetch a page to answer a
+ * shopper's question and cite it, so blocking them hides the store from AI answers (GEO/AEO): allowed by default.
+ * Training-only crawlers are allowed too, except two bulk scrapers that send no traffic back. Merchants can flip any of them.
+ */
 export const DEFAULT_AI_CRAWLERS: Record<string, "allow" | "block"> = {
-  GPTBot: "block",
-  ClaudeBot: "block",
-  PerplexityBot: "block",
-  "Google-Extended": "block",
+  "OAI-SearchBot": "allow",
+  "ChatGPT-User": "allow",
+  GPTBot: "allow",
+  "Claude-SearchBot": "allow",
+  "Claude-User": "allow",
+  ClaudeBot: "allow",
+  PerplexityBot: "allow",
+  "Perplexity-User": "allow",
+  "Google-Extended": "allow",
+  "Applebot-Extended": "allow",
   CCBot: "block",
+  Bytespider: "block",
 };
+
+/**
+ * Paths that are never useful in a search index: carts, checkout, per-customer tokens, internal search results.
+ * robots.txt keeps crawlers out (saves crawl budget); the pages are also noindex, so a leaked link cannot be indexed.
+ */
+export const PRIVATE_PATHS = [
+  "/cart",
+  "/checkout",
+  "/orders/",
+  "/account",
+  "/search",
+  "/track",
+  "/preview/",
+  "/cod/",
+  "/address/",
+  "/o/",
+  "/privacy-request",
+  "/privacy-verify",
+  "/unsubscribe/",
+  "/api/",
+];
 
 export const DEFAULT_SEO_SETTINGS: Omit<SeoSettings, "id" | "tenantId" | "updatedAt"> = {
   indexingEnabled: true,
@@ -205,16 +242,33 @@ export function generateOrganizationJsonLd(opts: {
   url: string;
   logoUrl?: string | null;
   sameAs?: string[];
+  legalName?: string | null;
+  email?: string | null;
+  telephone?: string | null;
 }): OrganizationJsonLd {
   const result: OrganizationJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
+    "@id": `${opts.url.replace(/\/$/, "")}/#organization`,
     name: opts.name,
     url: opts.url,
   };
 
+  if (opts.legalName && opts.legalName !== opts.name) result.legalName = opts.legalName;
+
+  // Google wants a logo as an ImageObject or URL it can crawl; an https URL on the store's media domain qualifies.
   if (opts.logoUrl) {
     result.logo = opts.logoUrl;
+  }
+
+  // A customer-service contact point only when the merchant gave one: nothing is invented.
+  if (opts.email || opts.telephone) {
+    result.contactPoint = {
+      "@type": "ContactPoint",
+      contactType: "customer service",
+      ...(opts.email ? { email: opts.email } : {}),
+      ...(opts.telephone ? { telephone: opts.telephone } : {}),
+    };
   }
 
   if (opts.sameAs && opts.sameAs.length > 0) {
@@ -222,6 +276,23 @@ export function generateOrganizationJsonLd(opts: {
   }
 
   return result;
+}
+
+/** Keeps only absolute https URLs, de-duplicated: merchant-entered profile links go straight into structured data. */
+export function cleanSameAs(values: unknown): string[] {
+  if (!values || typeof values !== "object") return [];
+  const raw = Array.isArray(values) ? values : Object.values(values as Record<string, unknown>);
+  const out = new Set<string>();
+  for (const v of raw) {
+    if (typeof v !== "string") continue;
+    try {
+      const u = new URL(v.trim());
+      if (u.protocol === "https:") out.add(u.toString());
+    } catch {
+      // not a URL: skip
+    }
+  }
+  return [...out];
 }
 
 /**
@@ -258,35 +329,61 @@ export function generateProductJsonLd(
   product: StorefrontProductDetail,
   storeUrl: string,
   currency = "INR",
+  opts: { storeName?: string | undefined; urlPrefix?: string | null | undefined; extras?: StorefrontOfferExtras | undefined } = {},
 ): ProductJsonLd {
   const baseUrl = storeUrl.replace(/\/$/, "");
-  const productUrl = `${baseUrl}/products/${product.slug}`;
+  const pfx = opts.urlPrefix ? (opts.urlPrefix.startsWith("/") ? opts.urlPrefix : `/${opts.urlPrefix}`) : "";
+  const productUrl = `${baseUrl}${pfx}/products/${product.slug}`;
 
   const images = (product.media ?? [])
     .map((m) => m.url)
     .filter((u): u is string => typeof u === "string" && u.length > 0);
 
-  const offers: ProductOfferJsonLd[] = (product.variants ?? []).map((v) => {
-    const isAvailable = v.stockStatus === "in_stock" || v.stockStatus === "low_stock";
-    return {
-      "@type": "Offer",
-      price: v.price,
-      priceCurrency: currency,
-      availability: isAvailable
-        ? "https://schema.org/InStock"
-        : "https://schema.org/OutOfStock",
-      url: `${productUrl}?variant=${v.id}`,
-      sku: v.sku,
-      itemCondition: "https://schema.org/NewCondition",
-    };
-  });
+  // Variant prices are stored in minor units (paise, cents); schema.org and Google want the amount a shopper sees.
+  // A price-on-request product has no price to publish, so it carries no offers at all.
+  const returnPolicy = buildMerchantReturnPolicyJsonLd(opts.extras?.returnPolicy);
+  const offers: ProductOfferJsonLd[] = product.priceOnRequest
+    ? []
+    : (product.variants ?? []).map((v) => {
+        const isAvailable = v.stockStatus === "in_stock" || v.stockStatus === "low_stock";
+        const availability = isAvailable
+          ? v.preorderEnabled
+            ? "https://schema.org/PreOrder"
+            : "https://schema.org/InStock"
+          : v.allowBackorder
+            ? "https://schema.org/BackOrder"
+            : "https://schema.org/OutOfStock";
+        const offer: ProductOfferJsonLd = {
+          "@type": "Offer",
+          price: toMajorUnits(v.price, currency),
+          priceCurrency: currency,
+          availability,
+          url: `${productUrl}?variant=${v.id}`,
+          sku: v.sku,
+          itemCondition: "https://schema.org/NewCondition",
+        };
+        // GTIN is only valid as 8, 12, 13 or 14 digits; anything else would make the item invalid in Merchant Center.
+        if (v.barcode && /^(\d{8}|\d{12,14})$/.test(v.barcode.trim())) offer["gtin"] = v.barcode.trim();
+        if (opts.storeName) offer["seller"] = { "@type": "Organization", name: opts.storeName };
+        // Merchant listing details, from the store's own settings (seo-offers.ts). Nothing is added for what is not configured.
+        if (returnPolicy) offer["hasMerchantReturnPolicy"] = returnPolicy;
+        const shippingDetails = buildShippingDetailsJsonLd(opts.extras?.shipping, { subtotalPaise: v.price, weightGrams: v.weightGrams, currency });
+        if (shippingDetails.length > 0) offer["shippingDetails"] = shippingDetails.length === 1 ? shippingDetails[0] : shippingDetails;
+        return offer;
+      });
+
+  const firstSku = (product.variants ?? []).find((v) => v.sku)?.sku;
 
   const result: ProductJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
+    "@id": `${productUrl}#product`,
+    url: productUrl,
     name: product.title,
     description: product.shortDescription ?? undefined,
     image: images.length > 0 ? images : undefined,
+    sku: firstSku,
+    category: product.productType ?? undefined,
     offers: offers.length > 0 ? offers : undefined,
   };
 
@@ -305,6 +402,9 @@ export function generateProductJsonLd(
       ratingValue: ratingAvg,
       reviewCount: ratingCount,
     };
+    // Individual reviews only alongside a real rating, and only the newest few that the page itself shows.
+    const reviews = buildReviewsJsonLd(opts.extras?.reviews);
+    if (reviews.length > 0) result["review"] = reviews;
   }
 
   return result;
@@ -467,10 +567,8 @@ export function generateRobotsTxt(
 
   // Default bot directives
   lines.push("User-agent: *");
-  lines.push("Disallow: /cart");
-  lines.push("Disallow: /checkout");
-  lines.push("Disallow: /orders/");
-  lines.push("Disallow: /api/");
+  lines.push("Allow: /");
+  for (const path of PRIVATE_PATHS) lines.push(`Disallow: ${path}`);
 
   if (seoSettings?.robotsExtra) {
     const extra = seoSettings.robotsExtra.trim();
@@ -479,20 +577,18 @@ export function generateRobotsTxt(
     }
   }
 
-  // AI Crawlers
+  // AI crawlers. Only blocked ones get a group: a bot with its own group ignores the "*" group, so an explicit
+  // "Allow: /" group would also let it into the cart and checkout. Allowed bots simply follow the rules above.
   const crawlerConfig: Record<string, "allow" | "block"> = {
     ...DEFAULT_AI_CRAWLERS,
     ...(seoSettings?.aiCrawlers ?? {}),
   };
 
   for (const [bot, action] of Object.entries(crawlerConfig)) {
+    if (action !== "block") continue;
     lines.push("");
     lines.push(`User-agent: ${bot}`);
-    if (action === "block") {
-      lines.push("Disallow: /");
-    } else {
-      lines.push("Allow: /");
-    }
+    lines.push("Disallow: /");
   }
 
   // Sitemap
@@ -553,6 +649,79 @@ export async function getStorefrontSeoSettings(
       },
       breadcrumbsEnabled: row.breadcrumbsEnabled,
       faqSchemaEnabled: row.faqSchemaEnabled,
+    };
+  });
+}
+
+export interface StorefrontShareImage {
+  url: string;
+  width?: number | undefined;
+  height?: number | undefined;
+  alt?: string | undefined;
+}
+
+export interface StorefrontBrandAssets {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  appleTouchIconUrl: string | null;
+  /** "32x32" style sizes of the icons, when the file's dimensions are known (web manifest). */
+  faviconSizes: string | null;
+  appleTouchIconSizes: string | null;
+  /** Image used for og:image and twitter:image on pages that have none of their own. */
+  shareImage: StorefrontShareImage | null;
+}
+
+/**
+ * Public brand images for the page head and structured data: logo, favicon, apple touch icon and the default share image.
+ * The share image is the SEO default image, else the brand's social image, else the logo, so every page that has no picture of
+ * its own still shows the store when a link is pasted or cited. Only files with a public URL are returned.
+ */
+export async function getStorefrontBrandAssets(rt: Runtime, tenantId: string): Promise<StorefrontBrandAssets> {
+  return withTenant(rt._db.db, tenantId, async (tx) => {
+    const [brand] = await tx
+      .select({
+        logo: schema.brandSettings.logoMediaId,
+        favicon: schema.brandSettings.faviconMediaId,
+        apple: schema.brandSettings.appleTouchIconMediaId,
+        social: schema.brandSettings.socialImageMediaId,
+      })
+      .from(schema.brandSettings)
+      .where(eq(schema.brandSettings.tenantId, tenantId))
+      .limit(1);
+    const [seo] = await tx
+      .select({ og: schema.seoSettings.defaultOgImageMediaId })
+      .from(schema.seoSettings)
+      .where(eq(schema.seoSettings.tenantId, tenantId))
+      .limit(1);
+
+    const ids = [brand?.logo, brand?.favicon, brand?.apple, brand?.social, seo?.og].filter((v): v is string => Boolean(v));
+    if (ids.length === 0) return { logoUrl: null, faviconUrl: null, appleTouchIconUrl: null, faviconSizes: null, appleTouchIconSizes: null, shareImage: null };
+    const rows = await tx
+      .select({ id: schema.media.id, storageKey: schema.media.storageKey, width: schema.media.width, height: schema.media.height, alt: schema.media.alt })
+      .from(schema.media)
+      .where(inArray(schema.media.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const urlOf = (id: string | null | undefined): string | null => {
+      const row = id ? byId.get(id) : undefined;
+      return (row && publicMediaUrl(row.storageKey)) || null;
+    };
+    const imageOf = (id: string | null | undefined): StorefrontShareImage | null => {
+      const row = id ? byId.get(id) : undefined;
+      const url = urlOf(id);
+      if (!row || !url) return null;
+      return { url, ...(row.width ? { width: row.width } : {}), ...(row.height ? { height: row.height } : {}), ...(row.alt?.trim() ? { alt: row.alt.trim() } : {}) };
+    };
+    const sizesOf = (id: string | null | undefined): string | null => {
+      const row = id ? byId.get(id) : undefined;
+      return row?.width && row?.height ? `${row.width}x${row.height}` : null;
+    };
+    return {
+      logoUrl: urlOf(brand?.logo),
+      faviconUrl: urlOf(brand?.favicon),
+      appleTouchIconUrl: urlOf(brand?.apple),
+      faviconSizes: sizesOf(brand?.favicon),
+      appleTouchIconSizes: sizesOf(brand?.apple),
+      shareImage: imageOf(seo?.og) ?? imageOf(brand?.social) ?? imageOf(brand?.logo),
     };
   });
 }
@@ -635,20 +804,31 @@ export interface SitemapUrlItem {
   lastmod?: string | undefined;
   changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never" | undefined;
   priority?: number | undefined;
+  /** Product pictures for Google image search (image sitemap extension). */
+  images?: Array<{ loc: string; title?: string | undefined }> | undefined;
+  /** The same page in the store's other markets (hreflang), only when every market has a distinct language-region code. */
+  alternates?: HreflangAlternate[] | undefined;
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
 /**
  * Generates valid Sitemap 0.9 XML string from a list of URLs.
  */
 export function generateSitemapXml(urls: SitemapUrlItem[]): string {
+  // The image and xhtml namespaces are declared only when an entry uses them, so a plain sitemap stays byte-for-byte as before.
+  const hasImages = urls.some((u) => (u.images?.length ?? 0) > 0);
+  const hasAlternates = urls.some((u) => (u.alternates?.length ?? 0) > 0);
   const xmlLines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${hasImages ? ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' : ""}${hasAlternates ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : ""}>`,
   ];
 
   for (const item of urls) {
     xmlLines.push("  <url>");
-    xmlLines.push(`    <loc>${item.loc}</loc>`);
+    xmlLines.push(`    <loc>${escapeXml(item.loc)}</loc>`);
     if (item.lastmod) {
       xmlLines.push(`    <lastmod>${item.lastmod}</lastmod>`);
     }
@@ -657,6 +837,15 @@ export function generateSitemapXml(urls: SitemapUrlItem[]): string {
     }
     if (item.priority !== undefined) {
       xmlLines.push(`    <priority>${item.priority.toFixed(1)}</priority>`);
+    }
+    for (const alt of item.alternates ?? []) {
+      xmlLines.push(`    <xhtml:link rel="alternate" hreflang="${escapeXml(alt.hreflang)}" href="${escapeXml(alt.href)}"/>`);
+    }
+    for (const img of item.images ?? []) {
+      xmlLines.push("    <image:image>");
+      xmlLines.push(`      <image:loc>${escapeXml(img.loc)}</image:loc>`);
+      if (img.title) xmlLines.push(`      <image:title>${escapeXml(img.title)}</image:title>`);
+      xmlLines.push("    </image:image>");
     }
     xmlLines.push("  </url>");
   }
@@ -694,6 +883,8 @@ export interface SeoMetadataResult {
     title: string;
     description: string;
     images?: Array<{ url: string }> | undefined;
+    url?: string | undefined;
+    siteName?: string | undefined;
   };
   alternates: {
     canonical: string;
@@ -757,6 +948,8 @@ export function buildCategorySeoMetadata(opts: {
     openGraph: {
       title,
       description,
+      url: canonicalUrl,
+      siteName: storeName,
     },
     alternates: {
       canonical: canonicalUrl,
@@ -825,6 +1018,8 @@ export function buildCollectionSeoMetadata(opts: {
     openGraph: {
       title,
       description,
+      url: canonicalUrl,
+      siteName: storeName,
     },
     alternates: {
       canonical: canonicalUrl,
@@ -883,10 +1078,51 @@ export function buildProductSeoMetadata(opts: {
       title,
       description,
       images: firstImage ? [{ url: firstImage }] : undefined,
+      url: `https://${cleanHost}${pfx}/products/${opts.product.slug}`,
+      siteName: storeName,
     },
     alternates: {
       canonical: `https://${cleanHost}${pfx}/products/${opts.product.slug}`,
     },
+  };
+}
+
+/**
+ * Builds the home page's metadata. The home page record is called "Home", which is a poor search title, so the title
+ * falls back to the store name; the description falls back to the store-wide default, then a plain sentence.
+ * The canonical is the bare host (or market prefix) so www/http/utm variants collapse into one URL.
+ */
+export function buildHomeSeoMetadata(opts: {
+  homePage: { title?: string | null | undefined; seo?: unknown } | null;
+  seoSettings: SeoSettings | null;
+  storeSettings: { storeName: string } | null;
+  storeStatusMode?: string | undefined;
+  noindex?: boolean | undefined;
+  host: string;
+  prefix?: string | null | undefined;
+}): SeoMetadataResult {
+  const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
+  const storeName = opts.storeSettings?.storeName ?? "Store";
+  const seoObj = (typeof opts.homePage?.seo === "object" && opts.homePage.seo !== null) ? (opts.homePage.seo as Record<string, unknown>) : {};
+  const pick = (v: unknown) => (typeof v === "string" && v.trim().length > 0 ? v.trim() : null);
+
+  const pageTitle = pick(opts.homePage?.title);
+  // "Home" (the record's default name) says nothing to a search engine: use the store name instead.
+  const genericTitle = !pageTitle || /^(home|homepage|home page)$/i.test(pageTitle);
+  const title = pick(seoObj.title) ?? (genericTitle ? storeName : formatTitle(opts.seoSettings?.titleTemplate, pageTitle, storeName));
+  const description =
+    pick(seoObj.description) ?? pick(opts.seoSettings?.defaultMetaDescription) ?? `Shop online at ${storeName}. Browse the full range and order with fast delivery.`;
+
+  const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
+  const canonical = `https://${cleanHost}${pfx || ""}${pfx ? "" : "/"}`;
+
+  return {
+    title,
+    description,
+    robots: { index: !isStoreBlocked, follow: !isStoreBlocked },
+    openGraph: { title, description, url: canonical, siteName: storeName },
+    alternates: { canonical },
   };
 }
 
@@ -897,7 +1133,10 @@ async function getScopedCatalogForSitemap(
   // 1. Published Products (Listed statuses only)
   const productRows = await tx
     .select({
+      id: schema.products.id,
       slug: schema.products.slug,
+      title: schema.products.title,
+      shortDescription: schema.products.shortDescription,
       updatedAt: schema.products.updatedAt,
     })
     .from(schema.products)
@@ -969,6 +1208,8 @@ async function getScopedCatalogForSitemap(
   const categoryRows = await tx
     .select({
       slug: schema.categories.slug,
+      name: schema.categories.name,
+      description: schema.categories.description,
       updatedAt: schema.categories.updatedAt,
     })
     .from(schema.categories)
@@ -1036,9 +1277,33 @@ export async function getStorefrontSitemapUrls(
 
     const sitemapItems: SitemapUrlItem[] = [];
 
+    // Product pictures for the image sitemap: the first few per product, in the merchant's order, with a public URL.
+    const imageRows = await tx
+      .select({ productId: schema.productMedia.productId, storageKey: schema.media.storageKey, alt: schema.productMedia.alt, mediaAlt: schema.media.alt })
+      .from(schema.productMedia)
+      .innerJoin(schema.media, and(eq(schema.media.tenantId, schema.productMedia.tenantId), eq(schema.media.id, schema.productMedia.mediaId)))
+      .innerJoin(schema.products, and(eq(schema.products.tenantId, schema.productMedia.tenantId), eq(schema.products.id, schema.productMedia.productId)))
+      .where(and(eq(schema.productMedia.tenantId, ctx.tenantId), inArray(schema.products.status, [...LISTED_PRODUCT_STATUSES]), isNull(schema.products.deletedAt)))
+      .orderBy(schema.productMedia.productId, schema.productMedia.position);
+    const imagesByProduct = new Map<string, Array<{ loc: string; title?: string | undefined }>>();
+    for (const r of imageRows) {
+      const loc = publicMediaUrl(r.storageKey);
+      if (!loc) continue;
+      const list = imagesByProduct.get(r.productId) ?? [];
+      if (list.length >= 5) continue;
+      const title = (r.alt?.trim() || r.mediaAlt?.trim()) || undefined;
+      list.push({ loc, ...(title ? { title } : {}) });
+      imagesByProduct.set(r.productId, list);
+    }
+    const imagesFor = (productId: string) => {
+      const imgs = imagesByProduct.get(productId);
+      return imgs && imgs.length > 0 ? { images: imgs } : {};
+    };
+
     // Home page
     const homePageRow = pageRows.find((p) => p.type === "home");
-    const homeLastMod = homePageRow ? homePageRow.updatedAt.toISOString() : new Date().toISOString();
+    // Without a saved home page the real change time is unknown: omit lastmod rather than claim the page changed just now.
+    const homeLastMod = homePageRow ? homePageRow.updatedAt.toISOString() : undefined;
     sitemapItems.push({
       loc: baseUrl,
       lastmod: homeLastMod,
@@ -1053,6 +1318,7 @@ export async function getStorefrontSitemapUrls(
         lastmod: p.updatedAt.toISOString(),
         changefreq: "weekly",
         priority: 0.8,
+        ...imagesFor(p.id),
       });
     }
 
@@ -1108,6 +1374,7 @@ export async function getStorefrontSitemapUrls(
           lastmod: p.updatedAt.toISOString(),
           changefreq: "weekly",
           priority: 0.8,
+          ...imagesFor(p.id),
         });
       }
 
@@ -1161,7 +1428,7 @@ export async function getStorefrontSitemapUrls(
     // Blog: real, visible, indexable posts and the categories that have any (ADR-033)
     const blog = await listBlogForSitemap(tx, ctx.tenantId);
     if (blog.enabled) {
-      sitemapItems.push({ loc: `${baseUrl}/blog`, lastmod: (blog.posts[0]?.lastmod ?? new Date()).toISOString(), changefreq: "weekly", priority: 0.6 });
+      sitemapItems.push({ loc: `${baseUrl}/blog`, lastmod: blog.posts[0]?.lastmod.toISOString(), changefreq: "weekly", priority: 0.6 });
       for (const c of blog.categories) {
         sitemapItems.push({ loc: `${baseUrl}/blog/category/${c.path}`, lastmod: c.lastmod.toISOString(), changefreq: "weekly", priority: 0.5 });
       }
@@ -1170,15 +1437,157 @@ export async function getStorefrontSitemapUrls(
       }
     }
 
-    // Static policy pages
+    // Policy pages: only the ones the merchant has published. An unpublished policy is either a 404 or the platform's
+    // generic boilerplate (the same text on every store), neither of which belongs in a sitemap.
+    const publishedPolicies = await tx
+      .select({ handle: schema.storePolicies.handle })
+      .from(schema.storePolicies)
+      .where(and(eq(schema.storePolicies.tenantId, ctx.tenantId), sql`${schema.storePolicies.publishedVersionId} is not null`));
+    const publishedHandles = new Set(publishedPolicies.map((r) => r.handle));
     for (const policy of STATIC_POLICY_PAGES) {
+      if (!publishedHandles.has(policy.path.replace("/policies/", ""))) continue;
       sitemapItems.push({
         loc: `${baseUrl}${policy.path}`,
         changefreq: policy.changefreq,
         priority: policy.priority,
       });
     }
+    if (publishedHandles.has("legal_notice")) {
+      sitemapItems.push({ loc: `${baseUrl}/policies/legal_notice`, changefreq: "yearly", priority: 0.3 });
+    }
+
+    // hreflang: the same page in each market that serves it, only for stores whose markets all have distinct language-region codes.
+    const hreflangs = marketHreflangs(markets);
+    if (hreflangs) {
+      const prefixes = extraMarkets.map((m) => {
+        const raw = m.pathPrefix ?? "";
+        return { id: m.id, prefix: `${baseUrl}${raw.startsWith("/") ? raw : `/${raw}`}` };
+      });
+      const baseMarket = markets.find((m) => m.isBase);
+      const keyOf = (loc: string): { key: string; marketId: string | undefined; isBase: boolean } => {
+        for (const p of prefixes) {
+          if (loc === p.prefix || loc.startsWith(`${p.prefix}/`)) return { key: `${baseUrl}${loc.slice(p.prefix.length)}`, marketId: p.id, isBase: false };
+        }
+        return { key: loc, marketId: baseMarket?.id, isBase: true };
+      };
+      const groups = new Map<string, Array<{ marketId: string; isBase: boolean; href: string }>>();
+      for (const item of sitemapItems) {
+        const k = keyOf(item.loc);
+        if (!k.marketId) continue;
+        const list = groups.get(k.key) ?? [];
+        list.push({ marketId: k.marketId, isBase: k.isBase, href: item.loc });
+        groups.set(k.key, list);
+      }
+      for (const item of sitemapItems) {
+        const k = keyOf(item.loc);
+        const alts = buildHreflangAlternates(groups.get(k.key) ?? [], hreflangs);
+        if (alts.length > 0) item.alternates = alts;
+      }
+    }
 
     return sitemapItems;
+  });
+}
+
+export interface LlmsTxtInput {
+  storeName: string;
+  baseUrl: string;
+  summary: string;
+  categories: Array<{ name: string; slug: string; description?: string | null | undefined }>;
+  collections: Array<{ title: string; slug: string }>;
+  products: Array<{ title: string; slug: string; shortDescription?: string | null | undefined }>;
+  pages: Array<{ title: string; path: string }>;
+  blog: boolean;
+  policies: Array<{ title: string; handle: string }>;
+  /** Cap on listed products; the full catalogue is always in the sitemap. */
+  productLimit?: number | undefined;
+}
+
+const oneLine = (v: string | null | undefined, max = 160) => {
+  const t = (v ?? "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+};
+
+/**
+ * Builds the store's /llms.txt (https://llmstxt.org): a plain-Markdown map of the store for AI agents and answer
+ * engines. H1 name, a one-line summary, then link sections. Nothing here is private: it lists what the sitemap lists.
+ */
+export function generateLlmsTxt(input: LlmsTxtInput): string {
+  const base = input.baseUrl.replace(/\/$/, "");
+  const out: string[] = [`# ${oneLine(input.storeName, 80)}`, "", `> ${oneLine(input.summary, 240)}`, ""];
+  const section = (heading: string, rows: string[]) => {
+    if (rows.length === 0) return;
+    out.push(`## ${heading}`, "", ...rows, "");
+  };
+  const link = (label: string, path: string, note?: string | null) => `- [${oneLine(label, 100)}](${base}${path})${note ? `: ${oneLine(note)}` : ""}`;
+
+  section("Shop by category", input.categories.map((c) => link(c.name, `/categories/${c.slug}`, c.description)));
+  section("Collections", input.collections.map((c) => link(c.title, `/collections/${c.slug}`)));
+  const limit = input.productLimit ?? 100;
+  section("Products", input.products.slice(0, limit).map((p) => link(p.title, `/products/${p.slug}`, p.shortDescription)));
+  section("Pages", input.pages.map((p) => link(p.title, p.path)));
+  if (input.blog) section("Blog", [link("Blog", "/blog"), `- [RSS feed](${base}/blog/feed.xml)`]);
+  section("Policies", input.policies.map((p) => link(p.title, `/policies/${p.handle}`)));
+  section("Optional", [`- [Sitemap](${base}/sitemap.xml)`]);
+  return out.join("\n");
+}
+
+const POLICY_TITLES: Record<string, string> = {
+  privacy: "Privacy policy",
+  terms: "Terms of service",
+  refund: "Refund and returns policy",
+  shipping: "Shipping policy",
+  legal_notice: "Legal notice",
+};
+
+/** Gathers what /llms.txt lists for one store: the same published, listed, non-empty content the sitemap uses. */
+export async function getStorefrontLlmsTxt(
+  rt: Runtime,
+  ctx: TenantContext,
+  host: string,
+  opts: { storeName: string; summary?: string | null | undefined },
+): Promise<string> {
+  const cleanHost = host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const db = rt._db.db;
+
+  return withTenant(db, ctx.tenantId, async (tx) => {
+    const { productRows, eligibleCollections, categoryRows } = await getScopedCatalogForSitemap(tx, ctx.tenantId);
+
+    const pageRows = await tx
+      .select({ id: schema.pages.id, parentId: schema.pages.parentId, slug: schema.pages.slug, title: schema.pages.title, type: schema.pages.type })
+      .from(schema.pages)
+      .where(and(eq(schema.pages.tenantId, ctx.tenantId), eq(schema.pages.status, "published"), notInArray(schema.pages.type, [...THEME_SYSTEM_PAGE_TYPES])));
+    const byId = new Map(pageRows.map((p) => [p.id, p]));
+    const pagePath = (page: (typeof pageRows)[number]): string => {
+      const segs = [page.slug];
+      const seen = new Set<string>();
+      let cur = page.parentId;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const parent = byId.get(cur);
+        if (!parent) break;
+        segs.unshift(parent.slug);
+        cur = parent.parentId;
+      }
+      return `/pages/${segs.join("/")}`;
+    };
+
+    const blog = await listBlogForSitemap(tx, ctx.tenantId);
+    const published = await tx
+      .select({ handle: schema.storePolicies.handle })
+      .from(schema.storePolicies)
+      .where(and(eq(schema.storePolicies.tenantId, ctx.tenantId), sql`${schema.storePolicies.publishedVersionId} is not null`));
+
+    return generateLlmsTxt({
+      storeName: opts.storeName,
+      baseUrl: `https://${cleanHost}`,
+      summary: opts.summary?.trim() || `Online store of ${opts.storeName}. Product catalogue, categories, policies and guides.`,
+      categories: categoryRows.map((c) => ({ name: c.name, slug: c.slug, description: c.description })),
+      collections: eligibleCollections.map((c) => ({ title: c.title, slug: c.slug })),
+      products: productRows.map((p) => ({ title: p.title, slug: p.slug, shortDescription: p.shortDescription })),
+      pages: pageRows.filter((p) => p.type !== "home").map((p) => ({ title: p.title, path: pagePath(p) })),
+      blog: blog.enabled && blog.posts.length > 0,
+      policies: published.map((r) => ({ handle: r.handle, title: POLICY_TITLES[r.handle] ?? r.handle })),
+    });
   });
 }

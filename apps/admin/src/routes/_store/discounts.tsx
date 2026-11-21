@@ -30,7 +30,7 @@ import { client, orpc } from "../../lib/orpc.ts";
 
 type Sort = "created_desc" | "created_asc" | "title_asc" | "title_desc" | "used_desc" | "used_asc";
 type DiscountStatus = "active" | "scheduled" | "expired" | "disabled" | "archived";
-type DiscountType = "percent" | "fixed" | "free_shipping" | "buy_x_get_y";
+type DiscountType = "percent" | "fixed" | "free_shipping" | "buy_x_get_y" | "bundle";
 
 const SORTS: ReadonlyArray<{ id: Sort; label: string }> = [
   { id: "created_desc", label: "Newest first" },
@@ -53,6 +53,8 @@ const TYPES = [
   { value: "percent", label: "Percentage off" },
   { value: "fixed", label: "Fixed amount off" },
   { value: "free_shipping", label: "Free shipping" },
+  { value: "buy_x_get_y", label: "Buy X get Y" },
+  { value: "bundle", label: "Bundle price" },
 ] as const;
 
 export interface DiscountsSearch {
@@ -68,7 +70,7 @@ export function parseDiscountsSearch(raw: Record<string, unknown>): DiscountsSea
   return {
     status: oneOf(raw["status"], ["all", "active", "scheduled", "expired", "disabled", "archived"] as const) ?? "all",
     q: text(raw["q"]),
-    type: oneOf(raw["type"], ["percent", "fixed", "free_shipping", "buy_x_get_y"] as const),
+    type: oneOf(raw["type"], ["percent", "fixed", "free_shipping", "buy_x_get_y", "bundle"] as const),
     sort: oneOf(raw["sort"], SORTS.map((x) => x.id)) ?? "created_desc",
     ...parsePaging(raw),
   };
@@ -105,8 +107,13 @@ export const Route = createFileRoute("/_store/discounts")({
   component: DiscountsPage,
 });
 
-const benefit = (d: DiscountRow, currency = "INR") =>
-  d.type === "percent" ? `${d.value}% off` : d.type === "fixed" ? `${formatMoney(d.value, currency)} off` : d.type === "free_shipping" ? "Free shipping" : "Buy X get Y";
+const benefit = (d: DiscountRow, currency = "INR") => {
+  const scope = d.appliesTo.type === "products" ? " on chosen products" : d.appliesTo.type === "collections" ? " on chosen collections" : "";
+  if (d.type === "percent") return `${d.value}% off${scope}`;
+  if (d.type === "fixed") return `${formatMoney(d.value, currency)} off${scope}`;
+  if (d.type === "free_shipping") return "Free shipping";
+  return d.type === "bundle" ? "Bundle price" : "Buy X get Y";
+};
 
 const EXPORT_HEADER = ["Code", "Title", "Type", "Value", "Used", "Usage limit", "Status", "Combinable", "Starts", "Ends", "Created"];
 const exportRow = (d: DiscountRow) => [
@@ -211,7 +218,7 @@ export function DiscountsPage() {
       header: "Discount code",
       cell: (d) => (
         <div className="flex items-center gap-2">
-          <Link to="/discounts/$id" params={{ id: d.id }} className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground hover:underline">{d.code ?? "AUTOMATIC"}</Link>
+          <Link to="/discounts/$id" params={{ id: d.id }} className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground hover:underline">{d.code ?? (d.usesCodeList ? "CODE LIST" : "AUTOMATIC")}</Link>
           {d.code ? (
             <Button
               variant="ghost"
@@ -420,7 +427,7 @@ export function DiscountsPage() {
                 </div>
                 <div className="grid min-w-0 flex-1 gap-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? "AUTOMATIC"}</span>
+                    <span className="rounded bg-muted px-2 py-0.5 font-mono font-semibold text-foreground">{d.code ?? (d.usesCodeList ? "CODE LIST" : "AUTOMATIC")}</span>
                     <StatusBadge status={d.status} />
                   </div>
                   <p className="truncate text-foreground">{d.title}</p>

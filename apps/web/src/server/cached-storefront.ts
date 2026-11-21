@@ -1,13 +1,18 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { themeChromeIdentity, withThemeLogoFallback } from "@/lib/theme-brand.ts";
 import {
   tenantTag,
   getStorefrontProduct,
+  getStatePricingScope,
+  type StatePricingScope,
   getStorefrontCollection,
   getStorefrontCategory,
   listStorefrontCategories,
   getStorefrontCustomFields,
   getStorefrontCoupons,
+  getStorefrontProductOffers,
+  type StorefrontProductOffer,
   getBlogMagazine,
   getBlogSidebar,
   type StorefrontCoupon,
@@ -16,6 +21,8 @@ import {
   getStorefrontPage,
   getStorefrontPageByPath,
   getBrandSettings,
+  getStorefrontBrandAssets,
+  getStorefrontOfferExtras,
   getStorefrontThemePage,
   getStorefrontThemeTokens,
   THEME_SYSTEM_PAGES,
@@ -36,7 +43,9 @@ import {
   type TenantContext,
   listStorefrontMarkets,
   type StorefrontMarket,
+  getStorefrontConsentConfig,
 } from "@bs/domain";
+import type { PublicConsentConfig } from "@bs/contracts";
 import { renderBlockDocument, resolveDefaultPages, walkBlocks, type BlockInstance } from "@bs/blocks";
 import { server } from "./runtime.ts";
 
@@ -56,6 +65,11 @@ import { server } from "./runtime.ts";
  * Helper to build standard tenant context for cached storefront reads.
  */
 function createStorefrontTenantContext(tenantId: string, marketId?: string | null): TenantContext {
+  // The scope is a market id, optionally followed by "@XX", the State Pricing app's state (base market only, ADR-044).
+  // It is an argument of every cached loader below, so two markets or two states never share a cache entry.
+  const at = marketId?.indexOf("@") ?? -1;
+  const region = at >= 0 ? (marketId as string).slice(at + 1) : null;
+  const realMarketId = at >= 0 ? (marketId as string).slice(0, at) || null : marketId;
   return {
     tenantId,
     storeStatus: "live",
@@ -64,7 +78,8 @@ function createStorefrontTenantContext(tenantId: string, marketId?: string | nul
     permissions: ["products.read", "settings.write", "content.write", "theme.publish"],
     requestId: crypto.randomUUID(),
     // The market is an argument of every cached loader below, so it is part of the cache key: two markets never share a price (ADR-040).
-    marketId: marketId ?? null,
+    marketId: realMarketId ?? null,
+    priceRegion: region,
   };
 }
 
@@ -74,6 +89,14 @@ export async function getCachedStorefrontMarkets(tenantId: string): Promise<Stor
   cacheTag(tenantTag(tenantId, "store-shell"));
   const { rt } = server();
   return listStorefrontMarkets(rt, tenantId);
+}
+
+/** Whether the State Pricing app is active for the store, and its mode. Tagged like the shell, so install and settings changes refresh it. */
+export async function getCachedStatePricingScope(tenantId: string): Promise<StatePricingScope> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return getStatePricingScope(rt, tenantId);
 }
 
 export async function getCachedStorefrontProduct(
@@ -119,12 +142,21 @@ export async function getCachedStorefrontCollection(
 }
 
 /** The coupons the store shows on product pages. Short-lived: a discount edit shows within a minute. */
-export async function getCachedStorefrontCoupons(tenantId: string): Promise<StorefrontCoupon[]> {
+export async function getCachedStorefrontCoupons(tenantId: string, productId?: string): Promise<StorefrontCoupon[]> {
   "use cache";
   cacheTag(tenantTag(tenantId, "product"));
   cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
   const { rt } = server();
-  return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId));
+  return getStorefrontCoupons(rt, createStorefrontTenantContext(tenantId), "INR", productId);
+}
+
+/** The automatic buy-x-get-y offers a shopper can earn on this product, for the promotion bar. Short-lived like the coupons. */
+export async function getCachedProductOffers(tenantId: string, productId: string): Promise<StorefrontProductOffer[]> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  cacheLife({ stale: 30, revalidate: 60, expire: 3600 });
+  const { rt } = server();
+  return getStorefrontProductOffers(rt, createStorefrontTenantContext(tenantId), "INR", productId);
 }
 
 /** The custom fields to show for one product (ADR-034), refreshed with the product and with field changes. */
@@ -257,6 +289,34 @@ export async function getCachedBrandSettings(tenantId: string) {
   return settings;
 }
 
+/**
+ * Logo, favicon, apple touch icon and default share image for the page head and structured data (docs/SEO-GEO-AEO-PLAN.md
+ * Phase 2). Refreshed when the brand is published or the SEO settings change.
+ */
+export async function getCachedBrandAssets(tenantId: string) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "theme"));
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  cacheTag(tenantTag(tenantId, "seo"));
+  const assets = await getStorefrontBrandAssets(server().rt, tenantId);
+  if (assets.logoUrl && assets.shareImage) return assets;
+  // Logo kept only in the theme header or footer: use it so the page head and the Organization schema still have one.
+  const [header, footer] = await Promise.all([getCachedThemePage(tenantId, "header").catch(() => null), getCachedThemePage(tenantId, "footer").catch(() => null)]);
+  return withThemeLogoFallback(assets, themeChromeIdentity(header, footer).logoUrl);
+}
+
+/**
+ * Return policy, shipping options and newest reviews for one product's structured data. Reviews refresh with the product tag;
+ * return and shipping settings have no cache tag, so the entry also expires on its own within the hour.
+ */
+export async function getCachedOfferExtras(tenantId: string, productId: string, market: { id: string; isBase: boolean } | null) {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product", productId));
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  cacheLife({ stale: 30, revalidate: 300, expire: 3600 });
+  return getStorefrontOfferExtras(server().rt, tenantId, { productId, market: market ?? undefined });
+}
+
 /** The store's public name (header, footer, page title). Invalidated with the rest of the store shell. */
 export async function getCachedStoreName(tenantId: string): Promise<string> {
   "use cache";
@@ -264,6 +324,14 @@ export async function getCachedStoreName(tenantId: string): Promise<string> {
   const { rt } = server();
   const settings = await getStoreSettings(rt, createStorefrontTenantContext(tenantId));
   return settings.storeName;
+}
+
+/** The cookie banner config (null when the store has no banner). Refreshed with the store shell when privacy settings are saved. */
+export async function getCachedConsentConfig(tenantId: string): Promise<PublicConsentConfig | null> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "store-shell"));
+  const { rt } = server();
+  return getStorefrontConsentConfig(rt, tenantId);
 }
 
 /**

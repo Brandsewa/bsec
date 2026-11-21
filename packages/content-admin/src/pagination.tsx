@@ -24,7 +24,7 @@ export function Pagination({
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
       <p aria-live="polite">
         {total === 0 ? "No results" : (
           <>
@@ -37,7 +37,7 @@ export function Pagination({
           <span className="hidden sm:inline">Rows per page</span>
           <SimpleSelect
             ariaLabel="Rows per page"
-            className="w-16"
+            className="h-8 w-16 text-xs"
             value={String(pageSize)}
             onChange={(v) => onPageSizeChange(Number(v))}
             options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}

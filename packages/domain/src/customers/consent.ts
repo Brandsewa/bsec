@@ -4,8 +4,17 @@ import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { type TenantContext } from "../context.ts";
 
+/**
+ * One-way hash of the shopper's IP for the consent audit trail. The key makes the hash unguessable (IPv4 is small
+ * enough to brute-force an unkeyed one), so production refuses to run without it instead of using a fixed salt
+ * (SEC-006). The fixed dev fallback is for local runs and tests only.
+ */
 export function hashConsentIp(ip: string, tenantId: string, secretKey?: string): string {
-  const salt = secretKey || process.env.TENANT_SECRETS_KEY || "bsec-default-tenant-secrets-key-salt";
+  const key = secretKey || process.env.TENANT_SECRETS_KEY || process.env.ENCRYPTION_KEY;
+  if (!key && process.env.NODE_ENV === "production") {
+    throw new Error("TENANT_SECRETS_KEY is required to record consent in production");
+  }
+  const salt = key || "bsec-default-tenant-secrets-key-salt";
   return createHash("sha256").update(`consent-ip:${tenantId}:${salt}:${ip}`).digest("hex");
 }
 

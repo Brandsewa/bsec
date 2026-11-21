@@ -22,6 +22,7 @@ import type * as R from "./registry.ts";
 import { ProductDetailSample } from "./views-product.tsx";
 import { MobileMenu, NavDropdownCloser } from "./views-mobile-menu-client.tsx";
 import { BgVideo } from "./views-bg-video-client.tsx";
+import { ShowcaseTabsPreview } from "./views-showcase-tabs-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
 
@@ -286,7 +287,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
 
   const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
@@ -371,7 +372,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   const customStyle = bricksElementStyle(props, { defaultWidth: "100%", defaultDisplay: "flex" });
 
   const hasExplicitBg = Boolean(bg || bgVideo || props.background?.color);
@@ -463,7 +464,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
   const bg = desktopBg || tabletBg || mobileBg;
 
   const bgVideo = props.background?.videoUrl;
-  const videoPoster = mediaSrc(ctx, props.background?.videoPosterId);
+  const videoPoster = mediaSrc(ctx, props.background?.videoPosterMediaId) || mediaSrc(ctx, props.background?.videoPosterId) || desktopBg || mobileBg || tabletBg;
   
   // If custom width is given, use it; otherwise use flex: 1 1 0 with minWidth: 0 so sibling blocks distribute space automatically
   const hasCustomWidth = Boolean(props.sizing?.width);
@@ -927,9 +928,6 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
                             </svg>
                           </summary>
                           <div className="bsb-mobile-sublist">
-                            <NavLink ctx={ctx} href={item.url} className="bsb-mobile-link bsb-mobile-parent-link">
-                              All {item.label}
-                            </NavLink>
                             {item.children.map((child) => (
                               <div key={child.id} className="bsb-mobile-subitem">
                                 {child.children && child.children.length > 0 ? (
@@ -941,9 +939,6 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
                                       </svg>
                                     </summary>
                                     <div className="bsb-mobile-subsublist">
-                                      <NavLink ctx={ctx} href={child.url} className="bsb-mobile-link bsb-mobile-parent-link">
-                                        All {child.label}
-                                      </NavLink>
                                       {child.children.map((sub) => (
                                         <NavLink key={sub.id} ctx={ctx} href={sub.url} className="bsb-mobile-link">
                                           {sub.label}
@@ -980,7 +975,7 @@ export function SiteHeaderView({ props, ctx }: A<R.SiteHeaderProps>): ReactNode 
           {hasResolvedMenu ? (
             menuData.map((item) =>
               item.children && item.children.length > 0 ? (
-                <div key={item.id} className="bsb-nav-item bsb-has-dropdown">
+                <div key={item.id} className={`bsb-nav-item bsb-has-dropdown${item.children.some((c) => c.children && c.children.length > 0) ? " bsb-has-mega" : ""}`}>
                   <NavLink ctx={ctx} href={item.url} className="bsb-nav-link">
                     <span>{item.label}</span>
                     <svg className="bsb-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1162,6 +1157,7 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
     <div className="bsb-site-footer-brand">
       {logoUrl ? <img className="bsb-logo-img" {...logoAttrs(ctx, props.logoMediaId, logoUrl)} alt={name} style={logoSizeStyle(props.logoSize)} /> : <p className="bsb-heading bsb-h-sm">{name}</p>}
       {props.about ? <p className="bsb-muted" style={{ marginTop: "0.5rem", fontSize: "0.875rem" }}>{props.about}</p> : null}
+      {ctx?.renderMarketSwitcher?.()}
       <FooterSocials props={props} />
     </div>
   );
@@ -1225,18 +1221,41 @@ export function SiteFooterView({ props, ctx }: A<R.SiteFooterProps>): ReactNode 
   );
 }
 
-/** Footer colours picked in the editor: the text colour also feeds the muted text, titles and divider lines, so a dark background with light text reads everywhere. */
+/** Black or white, whichever reads better on a #rrggbb background (WCAG relative luminance). */
+function readableOn(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#111111";
+  const n = parseInt(m[1] ?? "000000", 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return lum > 0.179 ? "#111111" : "#ffffff";
+}
+
+/**
+ * Footer colours picked in the editor. The text colour also feeds the muted text, titles and divider lines, so a dark
+ * background with light text reads everywhere; with only a background set, the text colour is chosen for contrast. The
+ * newsletter field and button are drawn from the same two colours (field tinted from the text colour, button inverted), so
+ * they stay visible on any background instead of keeping the theme's colours.
+ */
 function footerColors(bg: string | undefined, fg: string | undefined): CSSProperties | undefined {
   if (!bg && !fg) return undefined;
+  const text = fg ?? (bg ? readableOn(bg) : undefined);
   const base = bg ?? "transparent";
   return {
     ...(bg ? { background: bg } : null),
-    ...(fg
+    ...(text
       ? {
-          color: fg,
-          "--t": fg,
-          "--m": `color-mix(in srgb, ${fg} 75%, ${base})`,
-          "--b": `color-mix(in srgb, ${fg} 25%, ${base})`,
+          color: text,
+          "--t": text,
+          "--m": `color-mix(in srgb, ${text} 75%, ${base})`,
+          "--b": `color-mix(in srgb, ${text} 25%, ${base})`,
+          "--ft-input-bg": `color-mix(in srgb, ${text} 8%, ${base})`,
+          "--bs-btn-bg": text,
+          "--bs-btn-fg": bg ?? readableOn(text),
+          "--bs-btn-bd": text,
         }
       : null),
   } as CSSProperties;
@@ -1609,7 +1628,7 @@ export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>):
               <div className={cx("bsb-psc-tabs", `bsb-psc-tabs-${props.tabsStyle}`)} role="tablist" aria-label="Product groups">
                 {tabs.map((t, i) => (
                   <button key={i} type="button" role="tab" className="bsb-psc-tab" data-psc-tab="" aria-selected={i === 0} tabIndex={i === 0 ? 0 : -1}>
-                    {t.label || (t.source === "collection" ? t.collectionSlug : t.source === "featured" ? "Featured" : "New arrivals") || `Tab ${i + 1}`}
+                    {t.label || (t.source === "collection" ? t.collectionSlug : t.source === "featured" ? "Featured" : t.source === "manual" ? "Selected" : "New arrivals") || `Tab ${i + 1}`}
                   </button>
                 ))}
               </div>
@@ -1653,5 +1672,7 @@ export function ProductShowcaseView({ props, ctx, }: A<R.ProductShowcaseProps>):
   );
 
   const behavior = { tabs: hasTabs, autoplay: props.autoplay, interval: props.interval, loop: props.loop, pauseOnHover: props.pauseOnHover };
-  return ctx?.renderProductShowcase ? <>{ctx.renderProductShowcase({ options: behavior, children: markup })}</> : markup;
+  if (ctx?.renderProductShowcase) return <>{ctx.renderProductShowcase({ options: behavior, children: markup })}</>;
+  // No host (the editor preview): still let the tabs switch, so every tab can be checked while editing.
+  return hasTabs ? <ShowcaseTabsPreview>{markup}</ShowcaseTabsPreview> : markup;
 }

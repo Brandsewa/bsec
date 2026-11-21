@@ -60,7 +60,7 @@ const CASHFREE_APP_ID = /^[A-Za-z0-9]{6,60}$/;
 function modeOfKey(provider: OnlineProvider, key: string): "test" | "live" {
   if (provider === "cashfree") return cashfreeModeOfSecret(key);
   if (provider === "paypal") return "test"; // PayPal keys do not say; the merchant chooses sandbox or live explicitly
-  return provider === "razorpay" ? (key.startsWith("rzp_live_") ? "live" : "test") : key.startsWith("sk_live_") ? "live" : "test";
+  return provider === "razorpay" ? (key.startsWith("rzp_live_") ? "live" : "test") : key.startsWith("sk_live_") || key.startsWith("pk_live_") ? "live" : "test";
 }
 
 async function readPlatformProvider(db: Db, provider: OnlineProvider) {
@@ -210,7 +210,7 @@ function encryptOrExplain(value: string) {
 export async function saveStripeCredentials(
   rt: Runtime,
   ctx: TenantContext,
-  input: { secretKey: string; webhookSecret?: string | undefined },
+  input: { secretKey: string; webhookSecret?: string | undefined; publishableKey?: string | undefined },
 ): Promise<StorePaymentProviderView> {
   assertPermission(ctx, "payments.manage");
   const { liveModeAllowed } = await assertPaymentProviderEnabled(rt._db.db, "stripe");
@@ -221,11 +221,22 @@ export async function saveStripeCredentials(
     throw new Error("Bad Request: Stripe webhook signing secret should look like whsec_XXXX");
   }
   const mode = modeOfKey("stripe", input.secretKey);
+  // The publishable key (public by design) lets the checkout page show Stripe's card fields (Payment Element). It must belong to the same mode
+  // as the secret key, or the form would open against a different Stripe environment than the one that created the session.
+  if (input.publishableKey !== undefined) {
+    if (!/^pk_(test|live)_[A-Za-z0-9]{10,}$/.test(input.publishableKey)) {
+      throw new Error("Bad Request: Stripe publishable key should look like pk_test_XXXX or pk_live_XXXX");
+    }
+    if (modeOfKey("stripe", input.publishableKey) !== mode) {
+      throw new Error("Bad Request: the publishable key and the secret key must both be test keys or both be live keys");
+    }
+  }
   if (mode === "live" && !liveModeAllowed) {
     throw new Error("Precondition: live keys are not allowed yet. Use a test key (sk_test_...) until the platform allows live mode.");
   }
   const entries: Array<[string, string]> = [
     ["key_secret", input.secretKey],
+    ...(input.publishableKey ? ([["key_id", input.publishableKey]] as Array<[string, string]>) : []),
     ...(input.webhookSecret ? ([["webhook_secret", input.webhookSecret]] as Array<[string, string]>) : []),
   ];
   const encrypted = entries.map(([keyName, value]) => ({ keyName, ...encryptOrExplain(value) }));
@@ -241,6 +252,10 @@ export async function saveStripeCredentials(
           set: { ciphertext: e.ciphertext, iv: e.iv, keyVersion: e.keyVersion, updatedBy, updatedAt: new Date() },
         });
     }
+    // A new secret key without a publishable key must not keep an older (possibly other-account) publishable key.
+    if (!input.publishableKey) {
+      await tx.delete(schema.tenantSecrets).where(and(eq(schema.tenantSecrets.tenantId, ctx.tenantId), eq(schema.tenantSecrets.provider, "stripe"), eq(schema.tenantSecrets.keyName, "key_id")));
+    }
     // New keys invalidate the previous test and deactivate the method until it is tested and activated again.
     await upsertMethodRow(tx, ctx.tenantId, "stripe", "Stripe", { status: "pending_setup", mode, setup: { lastTestOk: null, lastTestAt: null, lastTestError: null } });
     await tx.insert(schema.auditLogs).values({
@@ -253,6 +268,7 @@ export async function saveStripeCredentials(
       diff: {
         mode: { before: null, after: mode },
         webhookConfigured: { before: null, after: Boolean(input.webhookSecret) },
+        publishableKeyConfigured: { before: null, after: Boolean(input.publishableKey) },
       },
     });
   });

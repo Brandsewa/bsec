@@ -43,6 +43,7 @@ export const STORE_PERMISSIONS = [
   "privacy.manage",
   "audit.read",
   "markets.manage",
+  "apps.manage",
 ] as const;
 export type StorePermission = (typeof STORE_PERMISSIONS)[number];
 
@@ -70,6 +71,7 @@ export const LEGACY_SETTINGS_WRITE_FAMILIES: readonly StorePermission[] = [
   "privacy.manage",
   "audit.read",
   "markets.manage",
+  "apps.manage",
 ];
 
 const LEGACY_SETTINGS_WRITE_SET = new Set<string>(LEGACY_SETTINGS_WRITE_FAMILIES);

@@ -174,6 +174,7 @@ export function Login({ onSuccess }: LoginProps) {
         name: "Bs Commerce",
       }}
       title="Bs Commerce Super Admin"
+      titleIsBrand
       description="Platform Operations & Management Portal"
       variant="platform"
     >

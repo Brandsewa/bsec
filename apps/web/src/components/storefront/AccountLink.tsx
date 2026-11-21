@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import type { ComponentType } from "react";
-import Link from "next/link";
+import Link from "@/components/storefront/IntentLink.tsx";
 import { usePathname } from "next/navigation";
 
 type MenuProps = { name: string | null; anchor: HTMLElement | null; onClose: (restoreFocus: boolean) => void };

@@ -129,8 +129,9 @@ export async function POST(
           );
         }
       }
-      const msg = err instanceof Error ? err.message : "Tenant verification failed";
-      return NextResponse.json({ error: msg }, { status: 400 });
+      // Why it failed goes to the log, not to an unauthenticated caller (audit A4-03).
+      server().log.warn({ err, provider }, "webhook tenant could not be verified");
+      return NextResponse.json({ error: "Webhook could not be verified" }, { status: 400 });
     }
 
     if (!tenantId) {
@@ -217,7 +218,7 @@ export async function POST(
 
     return NextResponse.json({ received: true, duplicate: result.duplicate }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Error processing webhook";
-    return NextResponse.json({ error: message }, { status: 500 });
+    server().log.error({ err }, "webhook processing failed");
+    return NextResponse.json({ error: "Error processing webhook" }, { status: 500 });
   }
 }

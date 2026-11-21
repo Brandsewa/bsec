@@ -76,6 +76,7 @@ let mockMediaUrlToReturn: string | undefined = undefined;
 
 vi.mock("@/server/cached-storefront.ts", () => ({
   getCachedStorefrontPageByPath: vi.fn(async () => pageDataToReturn),
+  getCachedBrandAssets: vi.fn(async () => null),
 }));
 
 vi.mock("@/server/runtime.ts", () => ({
@@ -209,7 +210,9 @@ describe("Catch-all Storefront Page ([...path]/page.tsx)", () => {
     });
 
     expect(meta.openGraph?.images).toBeUndefined();
-    expect(meta.twitter).toBeUndefined();
+    // No picture and no store default image: a plain summary card (title and description), never an image card.
+    expect(meta.twitter).toMatchObject({ card: "summary" });
+    expect(meta.twitter).not.toHaveProperty("images");
   });
 
   it("generates metadata gracefully without images when imageMediaId is deleted or cannot be resolved", async () => {
@@ -232,7 +235,9 @@ describe("Catch-all Storefront Page ([...path]/page.tsx)", () => {
 
     expect(meta.title).toBe("SEO Title");
     expect(meta.openGraph?.images).toBeUndefined();
-    expect(meta.twitter).toBeUndefined();
+    // No picture and no store default image: a plain summary card (title and description), never an image card.
+    expect(meta.twitter).toMatchObject({ card: "summary" });
+    expect(meta.twitter).not.toHaveProperty("images");
   });
 });
 

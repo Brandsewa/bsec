@@ -65,7 +65,7 @@ export async function dispatchTransactionalEmailOrThrow(
 export async function handleOrderCreatedJob(
   db: Db,
   log: Logger,
-  data: { tenantId: string; orderId: string },
+  data: { tenantId: string; orderId: string; paymentAfterCancel?: boolean | undefined },
 ): Promise<void> {
   const { tenantId, orderId } = data;
   const [order] = await withTenant(db, tenantId, async (tx) => {
@@ -77,6 +77,22 @@ export async function handleOrderCreatedJob(
   });
   // The job is queued while the order is still being committed: if it is not visible yet, fail so pg-boss retries.
   if (!order) throw new Error(`Order ${orderId} not visible yet; retrying`);
+
+  // A payment arrived for an order that was already cancelled (audit A4-01): tell the store, send no confirmation to the shopper.
+  if (data.paymentAfterCancel) {
+    const { dispatchNotification } = await import("./notifications/dispatcher.ts");
+    await dispatchNotification(db, {
+      eventKey: "store_payment_after_cancel",
+      tenantId,
+      eventRef: `store_payment_after_cancel_${orderId}`,
+      title: `Payment received for cancelled order ${order.number}`,
+      body: "A shopper paid after this order was cancelled. The order was not reinstated. Refund the payment or restore the order.",
+      link: `/orders/${orderId}`,
+      ctaLabel: "View order",
+      emailSubject: `Action needed: payment received for cancelled order ${order.number}`,
+    });
+    return;
+  }
   const eventRef = `order_created_${orderId}`;
   const [alreadySent] = order.email
     ? await withTenant(db, tenantId, async (tx) => {
@@ -662,7 +678,12 @@ export async function handleMaintenanceCleanupJob(
     log.warn({ err }, "platform_message_log prune failed during maintenance pass");
     return { deletedCount: 0 };
   });
-  const { pruneEmailLogs, prunePrivacyRequests } = await import("./system/retention.ts");
+  const { pruneEmailLogs, prunePrivacyRequests, pruneInvalidWebhookInbox } = await import("./system/retention.ts");
+  const prunedInvalidWebhooks = await pruneInvalidWebhookInbox(db, 24).catch((err) => {
+    log.warn({ err }, "webhook_inbox invalid-signature prune failed during maintenance pass");
+    return { deletedCount: 0 };
+  });
+  if (prunedInvalidWebhooks.deletedCount > 0) log.info({ deleted: prunedInvalidWebhooks.deletedCount }, "deleted invalid-signature webhook requests older than 24 hours");
   const prunedTenantEmailLogs = await pruneEmailLogs(db, 180).catch((err) => {
     log.warn({ err }, "email_log prune failed during maintenance pass");
     return { deletedCount: 0 };
@@ -774,7 +795,7 @@ export async function startJobs(opts: {
   });
 
   // Handle order.created domain event (send the order confirmation)
-  await boss.work<{ tenantId: string; orderId: string }>(
+  await boss.work<{ tenantId: string; orderId: string; paymentAfterCancel?: boolean }>(
     QUEUE_NAMES.ORDER_CREATED,
     { localConcurrency: 2 },
     async (batch) => {
@@ -783,6 +804,17 @@ export async function startJobs(opts: {
           await withTenantJobSlot(job.data.tenantId, async () => {
             await handleOrderCreatedJob(db, opts.log, job.data);
             opts.log.info({ job_id: job.id, orderId: job.data.orderId }, "order.created processed");
+            // A late payment on a cancelled order is not a purchase: no conversion event.
+            if (job.data.paymentAfterCancel) return;
+            // The order is confirmed (COD placed, or online payment settled): send its Purchase to Meta and GA4 if the visitor allowed it.
+            const tracked = await withTenant(db, job.data.tenantId, (tx) =>
+              tx
+                .select({ id: schema.orderTracking.id })
+                .from(schema.orderTracking)
+                .where(and(eq(schema.orderTracking.tenantId, job.data.tenantId), eq(schema.orderTracking.orderId, job.data.orderId)))
+                .limit(1),
+            );
+            if (tracked.length > 0) await boss.send(QUEUE_NAMES.ANALYTICS_CONVERSION, job.data, { singletonKey: job.data.orderId });
           });
         } catch (err) {
           opts.log.error({ err, job_id: job.id }, "order.created failed");
@@ -957,6 +989,46 @@ export async function startJobs(opts: {
         opts.log.info({ job_id: job.id, ...res }, "notification.retention_sweep processed");
       } catch (err) {
         opts.log.error({ err, job_id: job.id }, "notification.retention_sweep failed");
+        throw err;
+      }
+    }
+  });
+
+  // Server-side conversion APIs (ADR-047): one Purchase per order to Meta CAPI and GA4, retried with backoff
+  await boss.work<{ tenantId: string; orderId: string }>(QUEUE_NAMES.ANALYTICS_CONVERSION, { localConcurrency: 2 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { handleAnalyticsConversionJob } = await import("./analytics/conversions.ts");
+        await handleAnalyticsConversionJob(db, opts.log, job.data);
+      } catch (err) {
+        opts.log.warn({ err, job_id: job.id }, "analytics.conversion will retry");
+        throw err;
+      }
+    }
+  });
+
+  // Server-side Meta events before an order exists: add to cart and begin checkout (ADR-047, slice 5c)
+  await boss.work<{ tenantId: string; id: string }>(QUEUE_NAMES.ANALYTICS_CONVERSION_EVENT, { localConcurrency: 4 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { handleServerEventJob } = await import("./analytics/server-events.ts");
+        await handleServerEventJob(db, opts.log, job.data);
+      } catch (err) {
+        opts.log.warn({ err, job_id: job.id }, "analytics.conversion_event will retry");
+        throw err;
+      }
+    }
+  });
+
+  // Merchant analytics (ADR-047): hourly traffic rollup for yesterday and today, plus raw-event and rollup retention
+  await boss.work(QUEUE_NAMES.ANALYTICS_MAINTENANCE, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { runAnalyticsMaintenance } = await import("./analytics/rollup.ts");
+        const res = await runAnalyticsMaintenance(db);
+        opts.log.info({ job_id: job.id, ...res }, "analytics.maintenance processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "analytics.maintenance failed");
         throw err;
       }
     }
@@ -1174,6 +1246,20 @@ export async function startJobs(opts: {
     }
   });
 
+  // seo.indexnow_sweep: tells search engines which pages changed (docs/SEO-GEO-AEO-PLAN.md Phase 2). A no-op unless INDEXNOW_ENABLED=true.
+  await boss.work(QUEUE_NAMES.SEO_INDEXNOW_SWEEP, { localConcurrency: 1 }, async (batch) => {
+    for (const job of batch) {
+      try {
+        const { runIndexNowSweep } = await import("./storefront/indexnow.ts");
+        const res = await runIndexNowSweep(db, { log: opts.log });
+        if (res.notified > 0 || res.failed > 0) opts.log.info({ job_id: job.id, ...res }, "seo.indexnow_sweep processed");
+      } catch (err) {
+        opts.log.error({ err, job_id: job.id }, "seo.indexnow_sweep failed");
+        throw err;
+      }
+    }
+  });
+
   // Handle maintenance.watchdog_sweep recurring job (Settings Phase 8 / Slice 8B)
   await boss.work(
     QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP,
@@ -1362,7 +1448,9 @@ export async function startJobs(opts: {
     await boss.schedule(QUEUE_NAMES.SEGMENTS_REFRESH_COUNTS, "0 */6 * * *", {});
     await boss.schedule(QUEUE_NAMES.MAINTENANCE_WATCHDOG_SWEEP, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.BLOG_PUBLISH_DUE, "* * * * *", {});
+    await boss.schedule(QUEUE_NAMES.SEO_INDEXNOW_SWEEP, "*/15 * * * *", {});
     await boss.schedule(QUEUE_NAMES.FINANCE_RECONCILE, "0 4 * * *", {});
+    await boss.schedule(QUEUE_NAMES.ANALYTICS_MAINTENANCE, "20 * * * *", {});
     await boss.schedule(QUEUE_NAMES.MEDIA_TRASH_SWEEP, "0 22 * * *", {});
     // The web service has no job queue, so new uploads are found here: derived images within a minute, hashes in minutes.
     await boss.schedule(QUEUE_NAMES.MEDIA_BACKFILL_DERIVATIVES, "* * * * *", {});

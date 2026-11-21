@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
+import { MARKETING_BLOCK_DEFINITIONS, MARKETING_STARTERS, MkThemeSchema, MkFeaturesSchema, MkHeaderSchema, MkPricingSchema, websiteThemeCss, hasMarketingBlocks, onlyMarketingBlocks, renderBlockTree, validateBlockDocument, type BlockInstance } from "../src/index.ts";
 
 const about = MARKETING_STARTERS["about"]!;
 
@@ -55,5 +55,97 @@ describe("website sections", () => {
 
   it("the stylesheet has no gradients", () => {
     expect(readFileSync(join(__dirname, "..", "src", "marketing.css"), "utf8")).not.toMatch(/gradient\(/);
+  });
+});
+
+describe("website theme settings", () => {
+  it("turns the store theme tokens into website CSS, light and dark, only for what was set", () => {
+    const theme = MkThemeSchema.parse({
+      tokens: {
+        colors: { siteBackground: "#fafafa", lightHeading: "#111111", lightButton: "#1f3a5f" },
+        darkColors: { siteBackground: "#0b0b0b", lightHeading: "#eeeeee" },
+        fonts: { heading: "Lora", body: "Inter", headingWeight: 600 },
+        radius: "lg",
+        buttons: { uppercase: true, radius: "full" },
+        layout: { desktop: { siteWidth: "1100px" } },
+      },
+    });
+    const { css, fontsHref } = websiteThemeCss(theme);
+    expect(css).toContain(".mk{--bg:#fafafa;--ink:#111111");
+    expect(css).toContain("--pri:#1f3a5f");
+    expect(css).toContain("[data-theme=dark] .mk{--bg:#0b0b0b;--ink:#eeeeee");
+    expect(css).toContain('--sans:"Inter"');
+    expect(css).toContain("font-weight:600");
+    expect(css).toContain("border-radius:14px");
+    expect(css).toContain("border-radius:9999px");
+    expect(css).toContain("max-width:1100px");
+    expect(css).not.toContain("--surface");
+    expect(fontsHref).toContain("fonts.googleapis.com");
+  });
+
+  it("keeps the earlier quick settings working when no tokens are set", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ light: { primary: "#1f3a5f", primaryInk: "", background: "", text: "" }, font: "inter" }));
+    expect(css).toContain("--pri:#1f3a5f");
+    expect(css).toContain('--sans:"Inter"');
+    expect(websiteThemeCss(MkThemeSchema.parse({})).css).toBe("");
+  });
+});
+
+describe("website builder round two", () => {
+  const render = (type: "MkFeatures" | "MkHeader" | "MkPricing", props: Record<string, unknown>, data?: Record<string, unknown>) => {
+    const block = { id: "b1", type, version: 1, props } as BlockInstance;
+    return renderToStaticMarkup(<>{renderBlockTree([block], { data } as never)}</>);
+  };
+
+  it("feature cards can have an icon and fold to an accordion on phones", () => {
+    const html = render("MkFeatures", MkFeaturesSchema.parse({ title: "T", items: [{ icon: "check", title: "One", body: "Body one" }], openFirst: true, singleOpen: true, iconStyle: "chevron" }));
+    expect(html).toContain("cell-ic");
+    expect(html).toContain("mkf-acc");
+    expect(html).toContain("<details");
+    expect(html).toContain('name="mkf-b1"');
+    expect(html).toContain("ind-chevron");
+    expect(render("MkFeatures", MkFeaturesSchema.parse({ title: "T", items: [{ title: "One", body: "Body" }], mobileAccordion: false }))).not.toContain("<details");
+  });
+
+  it("the header takes a layout", () => {
+    expect(render("MkHeader", MkHeaderSchema.parse({ layout: "logo-center" }))).toContain("lay-logo-center");
+    expect(render("MkHeader", MkHeaderSchema.parse({}))).toContain("lay-left");
+  });
+
+  it("the pricing table shows the live plans handed to the editor", () => {
+    const html = render("MkPricing", MkPricingSchema.parse({}), { b1: { kind: "plans", plans: [{ code: "starter", name: "Starter", priceMonthlyPaise: 99900, priceYearlyPaise: 999000, tagline: "For a first store", badge: "New", bullets: ["Up to 500 products"] }] } });
+    expect(html).toContain("Starter");
+    expect(html).toContain("₹999");
+    expect(html).toContain("Up to 500 products");
+    expect(html).toContain("For a first store");
+  });
+
+  it("theme sizes reach the website's headings and the widgets", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ tokens: { fontSizes: { h1: { desktop: 40, tablet: 34, mobile: 28 } }, fonts: { heading: "Lora" } } }));
+    expect(css).toContain(".mk.mk.mk h1{font-size:40px}");
+    expect(css).toContain("--bs-h1-d:2.5rem");
+    expect(css).toContain("--bs-font-heading");
+  });
+  it("the page width and layout spacing reach store layouts on website pages", () => {
+    const { css } = websiteThemeCss(MkThemeSchema.parse({ tokens: { layout: { desktop: { siteWidth: "1380px" } } } }));
+    expect(css).toContain("--bs-site-w-d:1380px");
+  });
+
+  it("every website widget can drop its own top and bottom padding", () => {
+    const html = (type: keyof typeof MARKETING_BLOCK_DEFINITIONS, defaultPadding: boolean) => {
+      const def = MARKETING_BLOCK_DEFINITIONS[type];
+      const block = { id: "b1", type, version: 1, props: { ...(def.defaultProps as object), defaultPadding } } as BlockInstance;
+      return renderToStaticMarkup(<>{renderBlockTree([block], {})}</>);
+    };
+    expect(MkFeaturesSchema.parse({ title: "t", items: [{ title: "a", body: "b" }] }).defaultPadding).toBe(true);
+    for (const type of ["MkHero", "MkStatement", "MkFeatures", "MkSteps", "MkBand", "MkFinalCall", "MkIncluded", "MkPricing", "MkDocHeader"] as const) {
+      expect(html(type, true), type).not.toContain("nopad");
+      expect(html(type, false), type).toContain("nopad");
+    }
+  });
+
+  it("feature cards get side padding on phones", () => {
+    const parsed = MkFeaturesSchema.parse({ title: "t", items: [{ title: "a", body: "b" }], cardSidePadding: 24 });
+    expect(parsed.cardSidePadding).toBe(24);
   });
 });

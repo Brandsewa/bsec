@@ -73,8 +73,8 @@ export async function GET(req: Request) {
     };
 
     const existingToken = await getCookieValue(CART_COOKIE_NAME, req);
-    const marketId = (await getMarketContext(access.tenantId)).marketId;
-    const cart = await getOrCreateCart(rt, tenantCtx, existingToken, undefined, marketId);
+    const marketCtx = await getMarketContext(access.tenantId);
+    const cart = await getOrCreateCart(rt, { ...tenantCtx, priceRegion: marketCtx.region }, existingToken, undefined, marketCtx.marketId);
 
     // The store's own free-shipping amount (from its shipping settings), for the mini cart's progress bar. Null when it has none.
     const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(rt._db.db, access.tenantId).catch(() => null);

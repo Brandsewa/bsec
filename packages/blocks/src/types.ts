@@ -156,6 +156,7 @@ export type BlockData =
   | { kind: "blog-posts"; posts: BlockBlogPost[]; viewAllHref: string }
   | { kind: "reviews"; reviews: BlockReview[] }
   | { kind: "menu"; items: ResolvedMenuItem[] }
+  | { kind: "plans"; plans: Array<{ code: string; name: string; priceMonthlyPaise: number; priceYearlyPaise: number; tagline: string | null; badge: string | null; bullets: string[] }> }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 
@@ -196,6 +197,8 @@ export interface RenderContext {
   renderLink?: ((p: { href: string; className?: string; children: ReactNode }) => ReactNode) | undefined;
   /** Cart icon with live count (a client component supplied by the storefront). */
   renderCart?: (() => ReactNode) | undefined;
+  /** Country and currency selector for the footer, under the store description (a client component supplied by the storefront). */
+  renderMarketSwitcher?: (() => ReactNode) | undefined;
   /** Account link showing "Login" or the signed-in shopper's name (a client component supplied by the storefront). */
   renderAccount?: (() => ReactNode) | undefined;
   /** The real product page body / collection listing; the editor draws labelled placeholders instead. */
@@ -307,7 +310,7 @@ export interface ProductDetailOptions {
   showSku?: boolean | undefined;
   thumbPosition?: "bottom" | "left" | "right" | undefined;
   showReadMore?: boolean | undefined;
-  variantStyle?: "buttons" | "pills" | "dropdown" | undefined;
+  variantStyle?: "buttons" | "pills" | "dropdown" | "cards" | undefined;
   priceNote?: string | undefined;
   showBuyNow?: boolean | undefined;
   addToCartLabel?: string | undefined;
@@ -316,6 +319,12 @@ export interface ProductDetailOptions {
   addToCartText?: string | undefined;
   buyNowBg?: string | undefined;
   buyNowText?: string | undefined;
+  showVariantBadge?: boolean | undefined;
+  showVariantPrice?: boolean | undefined;
+  variantCardBg?: string | undefined;
+  variantCardActive?: string | undefined;
+  variantBadgeBg?: string | undefined;
+  variantBadgeText?: string | undefined;
   showPaymentImage?: boolean | undefined;
   paymentImageMediaId?: string | undefined;
   paymentImageAlt?: string | undefined;

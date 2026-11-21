@@ -28,3 +28,14 @@ export function storeAdminBase(): string {
   if (hostname.startsWith("superadmin.")) return `${protocol}//admin.${hostname.slice("superadmin.".length)}`;
   return `${protocol}//admin.${hostname}`;
 }
+
+/** The public website (serves GET /api/brand, which the sign-in pages read before anyone is logged in). */
+export function webBase(): string {
+  const fromEnv = (import.meta.env.VITE_WEB_URL ?? import.meta.env.VITE_MARKETING_URL) as string | undefined;
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (typeof window === "undefined") return "http://localhost:3000";
+  const { protocol, hostname } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return `${protocol}//${hostname}:3000`;
+  if (hostname.startsWith("superadmin.")) return `${protocol}//${hostname.slice("superadmin.".length)}`;
+  return "https://bcom.si";
+}

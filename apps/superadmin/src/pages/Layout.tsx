@@ -8,6 +8,7 @@ import {
   CreditCard,
   Receipt,
   Gift,
+  Puzzle,
   Database,
   FileSpreadsheet,
   Flag,
@@ -21,7 +22,9 @@ import {
   FileText,
   Files,
   Menu,
+  Palette,
   Layers,
+  LogIn,
   LogOut,
   Mail,
   MessageSquare,
@@ -54,11 +57,14 @@ import {
   DropdownMenuTrigger,
   Label,
   ThemeToggle,
+  setPlatformBrand,
   type NavGroup,
 } from "@bs/ui";
 import { PasswordInput } from "@bs/ui";
 import { changePassword, signOut, type PlatformUser } from "../lib/auth.ts";
 import { UserContext } from "../lib/user-context.tsx";
+import { useQuery } from "@tanstack/react-query";
+import { client } from "../lib/orpc.ts";
 import { PlatformNotifications } from "../components/PlatformNotifications.tsx";
 
 interface LayoutProps {
@@ -78,6 +84,7 @@ const navGroups: NavGroup[] = [
       { label: "Plans", href: "/plans", icon: CreditCard },
       { label: "Invoices & transactions", href: "/ledger", icon: Receipt },
       { label: "Promotions", href: "/promotions", icon: Gift },
+      { label: "Marketplace", href: "/marketplace", icon: Puzzle },
       { label: "Signups Funnel", href: "/signups", icon: Users },
       { label: "Themes", href: "/templates", icon: Layers },
     ],
@@ -107,12 +114,43 @@ const navGroups: NavGroup[] = [
     label: "Administration",
     items: [
       { label: "Platform Staff", href: "/staff", icon: UserCheck },
+      { label: "Sign-in page", href: "/login-page", icon: LogIn },
+      { label: "Branding", href: "/branding", icon: Palette },
       { label: "Audit Log", href: "/audit", icon: FileSpreadsheet },
     ],
   },
 ];
 
+/** Applies the platform brand: CSS variables, favicon and the sidebar logo (dark logo on dark surfaces, light on light). */
+function useBrand() {
+  const { data } = useQuery({ queryKey: ["platform", "branding"], queryFn: () => client.branding.get(), staleTime: 60_000 });
+  React.useEffect(() => {
+    if (data) setPlatformBrand(data);
+  }, [data]);
+  return data?.tokens ?? null;
+}
+
+function BrandMark({ tokens }: { tokens: NonNullable<ReturnType<typeof useBrand>> | null }) {
+  const dark = tokens?.logo.dark.full ?? tokens?.logo.dark.icon ?? tokens?.logo.light.full ?? tokens?.logo.light.icon ?? null;
+  const light = tokens?.logo.light.full ?? tokens?.logo.light.icon ?? dark;
+  if (!dark || !light) {
+    return (
+      <div className="flex items-center gap-2">
+        <Database className="h-5 w-5 text-primary" />
+        <span className="text-sm font-bold tracking-tight">Super Admin</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center">
+      <img src={light.url} alt={light.alt || "Platform logo"} className="h-5 max-w-28 object-contain object-left dark:hidden" />
+      <img src={dark.url} alt={dark.alt || "Platform logo"} className="hidden h-5 max-w-28 object-contain object-left dark:block" />
+    </div>
+  );
+}
+
 export function Layout({ user, onLogout }: LayoutProps) {
+  const brandTokens = useBrand();
   const location = useLocation();
   // The staff list and Storefront are admin-only on the server; do not show support staff a page that would be refused.
   const groups = navGroups
@@ -185,6 +223,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "plans", label: "Plans", icon: CreditCard, onSelect: () => navigate({ to: "/plans" }), group: "Commerce" },
     { id: "ledger", label: "Invoices & transactions", icon: Receipt, onSelect: () => navigate({ to: "/ledger" }), group: "Commerce" },
     { id: "promotions", label: "Promotions", icon: Gift, onSelect: () => navigate({ to: "/promotions" }), group: "Commerce" },
+    { id: "marketplace", label: "Marketplace", icon: Puzzle, onSelect: () => navigate({ to: "/marketplace" }), group: "Commerce" },
     { id: "signups", label: "Signups Funnel", icon: Users, onSelect: () => navigate({ to: "/signups" }), group: "Commerce" },
     { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
@@ -203,18 +242,14 @@ export function Layout({ user, onLogout }: LayoutProps) {
     ...(user.role !== "platform_support"
       ? [{ id: "staff", label: "Platform Staff", icon: UserCheck, onSelect: () => navigate({ to: "/staff" }), group: "Administration" }]
       : []),
+    { id: "branding", label: "Branding", icon: Palette, onSelect: () => navigate({ to: "/branding" }), group: "Administration" },
     { id: "audit", label: "Audit Log", icon: FileSpreadsheet, onSelect: () => navigate({ to: "/audit" }), group: "Administration" },
   ];
 
   return (
     <UserContext.Provider value={user}>
       <AppShell
-        brand={
-          <div className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-primary" />
-            <span className="text-sm font-bold tracking-tight">Super Admin</span>
-          </div>
-        }
+        brand={<BrandMark tokens={brandTokens} />}
         groups={groups}
         activeHref={location.pathname.startsWith("/integrations") ? "/integrations" : location.pathname}
         topRight={
@@ -282,12 +317,6 @@ export function Layout({ user, onLogout }: LayoutProps) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        }
-        banner={
-          <div className="flex items-center justify-between bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 border-b border-amber-500/20">
-            <span>Super Admin Mode · Every privileged action is audited under platform BYPASSRLS</span>
-            <span className="text-muted-foreground">Staff: <strong className="font-semibold text-foreground">{user.email}</strong> · {user.role.replace("platform_", "")}</span>
           </div>
         }
       >
