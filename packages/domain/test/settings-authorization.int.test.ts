@@ -87,12 +87,14 @@ describe("Slice 8C: Settings Authorization (role definitions and owner-only runt
     expect(missing).toEqual(["payments.manage"]);
   });
 
-  it("legacy settings.write satisfies the migrated families but never payments.manage or staff.manage", () => {
+  it("legacy settings.write satisfies the migrated families but never payments.manage, staff.manage or ai.manage", () => {
     for (const fam of SETTINGS_FAMILIES) {
-      const expected = fam !== "payments.manage" && fam !== "staff.manage";
+      // ai.manage (ADR-050) is deliberately standalone too: a custom role with settings.write must not gain control of AI access.
+      const expected = fam !== "payments.manage" && fam !== "staff.manage" && fam !== "ai.manage";
       expect(hasPermission(["settings.write"], fam), fam).toBe(expected);
     }
     expect(hasPermission(["settings.write"], "staff.manage")).toBe(false);
+    expect(hasPermission(["settings.write"], "ai.manage")).toBe(false);
   });
 
   it("a provisioned store's store_admin role lacks payments.manage, and migration 0046 repairs older stores", async () => {

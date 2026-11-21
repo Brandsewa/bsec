@@ -82,7 +82,17 @@ export async function checkRateLimit(
   };
 }
 
-export type QuotaKey = "uncached_storefront_rpm" | "admin_api_rpm" | "job_concurrency";
+export type QuotaKey =
+  | "uncached_storefront_rpm"
+  | "admin_api_rpm"
+  | "job_concurrency"
+  // AI access limits (ADR-050, docs/MCP-PLAN.md section 7). XS and S are not entitled to AI access, so they stay at 0.
+  | "ai_calls_min_conn"
+  | "ai_calls_min_store"
+  | "ai_writes_min_store"
+  | "ai_reports_min_store"
+  | "ai_calls_day_store"
+  | "ai_writes_day_store";
 
 /**
  * Generous starting quotas (PLAN §14 / M7):
@@ -92,6 +102,12 @@ const DEFAULT_TIER_QUOTAS: Record<QuotaKey, { XS: number; S: number; M: number; 
   uncached_storefront_rpm: { XS: 3000, S: 4500, M: 9000, L: 18000 },
   admin_api_rpm: { XS: 600, S: 1200, M: 2400, L: 4800 },
   job_concurrency: { XS: 4, S: 6, M: 8, L: 16 },
+  ai_calls_min_conn: { XS: 0, S: 0, M: 60, L: 120 },
+  ai_calls_min_store: { XS: 0, S: 0, M: 120, L: 300 },
+  ai_writes_min_store: { XS: 0, S: 0, M: 20, L: 60 },
+  ai_reports_min_store: { XS: 0, S: 0, M: 10, L: 30 },
+  ai_calls_day_store: { XS: 0, S: 0, M: 3000, L: 15000 },
+  ai_writes_day_store: { XS: 0, S: 0, M: 200, L: 1000 },
 };
 
 /**

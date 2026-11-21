@@ -7,6 +7,19 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { storeContract } from "@bs/contracts";
 import { hasPermission, type StorePermission } from "@bs/auth";
 import {
+  approveAuthorizationRequest,
+  denyAuthorizationRequest,
+  getAiAuthorization,
+  getAiSettings,
+  getAiUsage,
+  listAiActivity,
+  listAiChanges,
+  listAiConnections,
+  revokeAiConnection,
+  updateAiSettings,
+} from "@bs/domain";
+import { aiBase, handleAuthorize, handleMcp, handleRegister, handleRevoke, handleToken, runSetupCheck } from "./ai-http.ts";
+import {
   adjustInventory,
   assertPermission,
   buildTenantContext,
@@ -779,6 +792,110 @@ export const storeRouter = os.router({
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return disconnectStoreGoogle(context.rt, context.tenantCtx);
         }),
+    },
+    ai: {
+      settings: {
+        get: os.admin.ai.settings.get
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(async ({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            const view = await getAiSettings(context.rt, context.tenantCtx).catch((e) => {
+              throw mapAuthError(e);
+            });
+            return { ...view, mcpUrl: `${aiBase() ?? ""}/api/mcp` };
+          }),
+        update: os.admin.ai.settings.update
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(async ({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            const view = await updateAiSettings(context.rt, context.tenantCtx, input).catch((e) => {
+              throw mapAuthError(e);
+            });
+            return { ...view, mcpUrl: `${aiBase() ?? ""}/api/mcp` };
+          }),
+      },
+      connections: {
+        list: os.admin.ai.connections.list
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(({ context }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return listAiConnections(context.rt, context.tenantCtx).catch((e) => {
+              throw mapAuthError(e);
+            });
+          }),
+        revoke: os.admin.ai.connections.revoke
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return revokeAiConnection(context.rt, context.tenantCtx, input.id).catch((e) => {
+              throw mapAuthError(e);
+            });
+          }),
+      },
+      usage: os.admin.ai.usage
+        .use(requireAdmin)
+        .use(requirePermission("ai.manage"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getAiUsage(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      activity: os.admin.ai.activity
+        .use(requireAdmin)
+        .use(requirePermission("ai.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAiActivity(context.rt, context.tenantCtx, input.limit).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      changes: os.admin.ai.changes
+        .use(requireAdmin)
+        .use(requirePermission("ai.manage"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listAiChanges(context.rt, context.tenantCtx, input.limit).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      setupCheck: os.admin.ai.setupCheck
+        .use(requireAdmin)
+        .use(requirePermission("ai.manage"))
+        .handler(() => runSetupCheck()),
+      authorization: {
+        get: os.admin.ai.authorization.get
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return getAiAuthorization(context.rt, context.tenantCtx, input.requestId).catch((e) => {
+              throw mapAuthError(e);
+            });
+          }),
+        approve: os.admin.ai.authorization.approve
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return approveAuthorizationRequest(context.rt, context.tenantCtx, input.requestId).catch((e) => {
+              throw mapAuthError(e);
+            });
+          }),
+        deny: os.admin.ai.authorization.deny
+          .use(requireAdmin)
+          .use(requirePermission("ai.manage"))
+          .handler(({ context, input }) => {
+            if (!context.tenantCtx) throw new Error("Missing tenant context");
+            return denyAuthorizationRequest(context.rt, context.tenantCtx, input.requestId).catch((e) => {
+              throw mapAuthError(e);
+            });
+          }),
+      },
     },
     apps: {
       list: os.admin.apps.list
@@ -3940,6 +4057,13 @@ api.get("/public/login-panel", async (c) => {
   const panel = await getPublicLoginPanel(server().rt._db.db);
   return c.json(panel, 200, { "cache-control": "public, max-age=60" });
 });
+
+/** AI access (ADR-050): OAuth endpoints and the MCP endpoint. Bearer tokens only; never reads cookies. */
+api.get("/oauth/authorize", (c) => handleAuthorize(c.req.raw));
+api.post("/oauth/register", (c) => handleRegister(c.req.raw));
+api.post("/oauth/token", (c) => handleToken(c.req.raw));
+api.post("/oauth/revoke", (c) => handleRevoke(c.req.raw));
+api.all("/mcp", (c) => handleMcp(c.req.raw));
 
 api.all("/auth/*", async (c) => {
   await ensureStaffAuthFresh();

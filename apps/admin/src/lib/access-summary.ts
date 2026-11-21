@@ -47,6 +47,7 @@ const SETTINGS_FAMILIES: StorePermission[] = [
   "policies.manage",
   "privacy.manage",
   "apps.manage",
+  "ai.manage",
   "markets.manage",
 ];
 

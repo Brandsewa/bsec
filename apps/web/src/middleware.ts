@@ -51,6 +51,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/webhooks/") ||
     pathname.startsWith("/api/admin/") ||
     pathname.startsWith("/api/rpc/admin/") ||
+    // AI access (ADR-050): OAuth, discovery metadata and the MCP endpoint resolve their store from a token, not a storefront host.
+    pathname === "/api/mcp" ||
+    pathname.startsWith("/api/oauth/") ||
+    pathname.startsWith("/.well-known/oauth-") ||
     // The platform brand (logos, colours, share image, manifest) is public and not about any store: the dashboards' sign-in
     // pages read it from the platform root host, which the gate would otherwise answer "Store Not Found".
     pathname === "/api/brand" ||

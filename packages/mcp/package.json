@@ -1,0 +1,29 @@
+{
+  "name": "@bs/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
+    "test": "vitest run --passWithNoTests",
+    "test:fast": "vitest run --passWithNoTests --exclude \"**/*.int.test.ts\"",
+    "test:heavy": "vitest run int.test.ts --passWithNoTests"
+  },
+  "dependencies": {
+    "@bs/agent-capabilities": "workspace:*",
+    "@bs/domain": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@bs/config": "workspace:*",
+    "@types/node": "24.19.0",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

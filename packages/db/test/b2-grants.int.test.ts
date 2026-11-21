@@ -184,7 +184,10 @@ describe("B2: app_rw privileges on platform vs tenant tables", () => {
 const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "_platform_meta",
   "accounts",
+  "agent_tokens", // AI access (ADR-050, migration 0119): SELECT, INSERT, DELETE and UPDATE(rotated_at, revoked_at) only; a token is resolved before the store is known
   "domains",
+  "oauth_authorization_requests", // AI access (ADR-050): single-use authorization requests; SELECT, INSERT, DELETE and UPDATE of the approval columns only
+  "oauth_clients", // AI access (ADR-050): registered AI apps (dynamic registration); SELECT, INSERT, DELETE and UPDATE(name, redirect_uris, last_used_at) only
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
   "platform_email_log", // INSERT (mail diagnostics) + DELETE and SELECT(id, created_at) for the 90-day prune
   "platform_notifications", // INSERT + DELETE and SELECT(id, created_at) (the worker adds Super Admin inbox cards and prunes old ones); staff read them through app_platform
