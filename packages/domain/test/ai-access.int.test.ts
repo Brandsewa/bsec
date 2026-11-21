@@ -24,6 +24,7 @@ import {
   provisionTenant,
   registerOAuthClient,
   revokeAiConnection,
+  resolveAiQuota,
   rotateRefreshToken,
   updateAiSettings,
   type Runtime,
@@ -281,11 +282,36 @@ describe("usage limits", () => {
     await rtPlatform._db.db.execute(sql`DELETE FROM tenant_quota_overrides WHERE tenant_id = ${a.tenantId} AND quota_key = 'ai_calls_min_conn'`);
   });
 
+  it("an entitled store is never limited to zero because its size tier is missing or still XS or S", async () => {
+    const { tokens } = await connect(ctxA);
+    const s = await authenticateAgent(rtWeb, tokens.access_token, "r");
+    const db = rtWeb._db.db;
+    for (const tier of ["XS", "S", null] as const) {
+      if (tier) await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${a.tenantId}, ${tier}) ON CONFLICT (tenant_id) DO UPDATE SET tier = ${tier}`);
+      else await rtPlatform._db.db.execute(sql`DELETE FROM tenant_size_tiers WHERE tenant_id = ${a.tenantId}`);
+      expect(await resolveAiQuota(db, a.tenantId, "ai_calls_min_conn"), String(tier)).toBe(60); // the Growth plan maps to tier M
+      expect(await resolveAiQuota(db, a.tenantId, "ai_calls_day_store"), String(tier)).toBe(3000);
+      await rtPlatform._db.db.execute(sql`DELETE FROM rate_limit_counters WHERE key LIKE ${`ai:%${a.tenantId}%`} OR key LIKE ${`ai:c:${s.connection.id}%`}`);
+      await enforceAgentLimits(db, s, "read"); // does not throw
+    }
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${a.tenantId}, 'M') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'M'`);
+  });
+
+  it("a Pro store resolves to the larger limits even when its tier row is stale", async () => {
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${b.tenantId}, 'S') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'S'`);
+    await rtPlatform._db.db.execute(sql`UPDATE subscriptions SET plan_id = (SELECT id FROM plans WHERE code = 'pro') WHERE tenant_id = ${b.tenantId}`);
+    expect(await resolveAiQuota(rtWeb._db.db, b.tenantId, "ai_calls_day_store")).toBe(15000);
+    await rtPlatform._db.db.execute(sql`UPDATE subscriptions SET plan_id = (SELECT id FROM plans WHERE code = 'growth') WHERE tenant_id = ${b.tenantId}`);
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${b.tenantId}, 'M') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'M'`);
+  });
+
   it("a quota of zero blocks the call outright (not entitled)", async () => {
     const { tokens } = await connect(ctxA);
     const s = await authenticateAgent(rtWeb, tokens.access_token, "r");
     await rtPlatform._db.db.execute(sql`INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES (${a.tenantId}, 'ai_calls_day_store', 0) ON CONFLICT (tenant_id, quota_key) DO UPDATE SET value = 0`);
-    await expect(enforceAgentLimits(rtWeb._db.db, s, "read")).rejects.toBeInstanceOf(AgentRateLimitError);
+    const err = await enforceAgentLimits(rtWeb._db.db, s, "read").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentRateLimitError);
+    expect((err as AgentRateLimitError).message).toMatch(/paused for this store/); // plain words, not "sending requests too fast"
     await rtPlatform._db.db.execute(sql`DELETE FROM tenant_quota_overrides WHERE tenant_id = ${a.tenantId} AND quota_key = 'ai_calls_day_store'`);
   });
 });
