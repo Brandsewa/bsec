@@ -14,10 +14,11 @@ const LEVEL_VARIANT: Record<AccessLevel, "default" | "secondary" | "outline"> = 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : null);
 
 /**
- * Only the signed-in person's own access, one block per store. Everyone's access is managed under Settings, Users.
+ * Only the signed-in person's own access in the store they are working in right now. Their access to other stores is not
+ * shown here; it appears when they switch to that store. Everyone's access is managed under Settings, Users.
  * Presentation only: what a person can actually do is decided by the domain services, never by this page.
  */
-export function PermissionsTab() {
+export function PermissionsTab({ tenantId }: { tenantId: string | undefined }) {
   const profile = useQuery({ queryKey: ["admin", "account"], queryFn: () => client.admin.account.get() });
   if (profile.isLoading) {
     return (
@@ -33,18 +34,17 @@ export function PermissionsTab() {
       </AccountCard>
     );
   }
-  if (profile.data.access.length === 0) {
+  const current = profile.data.access.find((a) => a.tenantId === tenantId);
+  if (!current) {
     return (
       <AccountCard title="Your access">
-        <p className="text-sm text-muted-foreground">You are not a member of any store.</p>
+        <p className="text-sm text-muted-foreground">You do not have a role in this store.</p>
       </AccountCard>
     );
   }
   return (
     <div className="grid gap-4">
-      {profile.data.access.map((a) => (
-        <StoreAccess key={a.tenantId} access={a} />
-      ))}
+      <StoreAccess key={current.tenantId} access={current} />
     </div>
   );
 }
