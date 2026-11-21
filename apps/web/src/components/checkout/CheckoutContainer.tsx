@@ -24,9 +24,11 @@ export interface CheckoutContainerProps {
   region?: CheckoutRegion | undefined;
   display?: CheckoutDisplay | undefined;
   countryPicker?: CheckoutCountryPicker | undefined;
+  /** Public Turnstile key when the bot check is on for checkout, else null. */
+  turnstileSiteKey?: string | null | undefined;
 }
 
-export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn, region, display, countryPicker }: CheckoutContainerProps) {
+export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOptions, consent, savedAddresses, customerEmail, signedIn, region, display, countryPicker, turnstileSiteKey }: CheckoutContainerProps) {
   const router = useRouter();
   const money = useMoney();
   const summaryId = useId();
@@ -109,6 +111,7 @@ export function CheckoutContainer({ cart, shippingRates: initialRates, paymentOp
           region={region}
           display={display}
           countryPicker={countryPicker}
+          turnstileSiteKey={turnstileSiteKey}
           paymentMethod={paymentMethod}
           onPaymentMethodChange={setPaymentMethod}
           shippingMethod={shippingMethod}

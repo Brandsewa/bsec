@@ -2,7 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { buildBeginCheckoutEvent, getClientIp, recordServerEvent, getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent } from "@bs/domain";
+import { buildBeginCheckoutEvent, getClientIp, recordServerEvent, getCustomerAddresses, getCustomerProfile, evaluateStorefrontAccess, getOrCreateCart, getTenantShippingRates, getStorefrontCheckoutOptions, getStorefrontCheckoutConsent, getCheckoutTurnstileSiteKey } from "@bs/domain";
 import { accountContext } from "@/server/customer-session.ts";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
@@ -120,7 +120,7 @@ export default async function CheckoutPage({ searchParams }: { searchParams: Pro
         </p>
       ) : null}
 
-      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} display={options.display} countryPicker={countryPicker} />
+      <CheckoutContainer cart={cart} shippingRates={shippingRates} paymentOptions={paymentOptions} consent={consent} savedAddresses={savedAddresses} customerEmail={customerEmail} signedIn={Boolean(account)} region={region} display={options.display} countryPicker={countryPicker} turnstileSiteKey={getCheckoutTurnstileSiteKey()} />
 
       {copy.showTrustBadges ? (
         <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">

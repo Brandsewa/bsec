@@ -3,6 +3,7 @@
 import { payWithRazorpay } from "@/lib/razorpay-client.ts";
 import type { StripeConfig, StripePaymentApi } from "@/lib/stripe-client.ts";
 import { StripePaymentElement } from "./StripePaymentElement.tsx";
+import { TurnstileWidget } from "@/components/marketing/TurnstileWidget.tsx";
 import { priceOrder, toPricingDiscounts } from "@bs/domain/pricing";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -146,6 +147,8 @@ export interface CheckoutFormProps {
   onShippingMethodChange?: (method: string) => void;
   /** Called with the state and country the order ships to, on first render and whenever they change, so shipping options can follow. */
   onShippingStateChange?: (state: string, country: string) => void;
+  /** Public Cloudflare Turnstile key; set only when the platform has both keys, which is when the server asks for a token. */
+  turnstileSiteKey?: string | null | undefined;
 }
 
 export function CheckoutForm({
@@ -164,6 +167,7 @@ export function CheckoutForm({
   shippingMethod: controlledShippingMethod,
   onShippingMethodChange,
   onShippingStateChange,
+  turnstileSiteKey = null,
 }: CheckoutFormProps) {
   const router = useRouter();
   const money = useMoney();
@@ -255,6 +259,10 @@ export function CheckoutForm({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bot check (audit A3-04). A token works once, so the widget is remounted (nonce) after every refused attempt.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileNonce, setTurnstileNonce] = useState(0);
+  const [turnstileFailed, setTurnstileFailed] = useState(false);
 
   // The price comes from the store's own shipping rates (the same ones the order is charged with).
   const currentShippingPaise = (shippingRates.find((r) => r.method === shippingMethod) ?? shippingRates[0])?.amount ?? 0;
@@ -386,6 +394,11 @@ export function CheckoutForm({
       }
     }
 
+    if (turnstileSiteKey && !turnstileToken) {
+      setError(turnstileFailed ? "The security check could not load. Please reload the page or try another browser." : "The security check is still running. Please wait a moment and try again.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -420,6 +433,7 @@ export function CheckoutForm({
             : undefined,
           termsConsent: consent.termsRequired ? termsAccepted : undefined,
           marketingConsent: consent.marketing ? marketingAccepted : undefined,
+          turnstileToken: turnstileSiteKey ? (turnstileToken ?? undefined) : undefined,
         }),
       });
 
@@ -472,6 +486,10 @@ export function CheckoutForm({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error placing order");
       setLoading(false);
+      if (turnstileSiteKey) {
+        setTurnstileToken(null);
+        setTurnstileNonce((n) => n + 1);
+      }
     }
   };
 
@@ -838,12 +856,42 @@ export function CheckoutForm({
         </div>
       )}
 
+      {turnstileSiteKey ? (
+        <div>
+          <TurnstileWidget
+            key={turnstileNonce}
+            siteKey={turnstileSiteKey}
+            appearance="interaction-only"
+            onToken={(token) => {
+              setTurnstileToken(token);
+              if (token) setTurnstileFailed(false);
+            }}
+            onFailure={() => setTurnstileFailed(true)}
+          />
+          {turnstileFailed ? (
+            <p role="alert" className="mt-2 text-sm text-foreground">
+              The security check could not load, so the order cannot be placed yet.{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setTurnstileFailed(false);
+                  setTurnstileNonce((n) => n + 1);
+                }}
+              >
+                Try again
+              </button>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <button
         type="submit"
-        disabled={loading || noPaymentMethod}
+        disabled={loading || noPaymentMethod || (Boolean(turnstileSiteKey) && !turnstileToken)}
         className="w-full rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {loading ? "Processing Order..." : `${pendingStripe ? "Try payment again" : "Place Order"} (${money(orderTotal)})`}
+        {loading ? "Processing Order..." : turnstileSiteKey && !turnstileToken && !turnstileFailed ? "Checking security..." : `${pendingStripe ? "Try payment again" : "Place Order"} (${money(orderTotal)})`}
       </button>
     </form>
   );
