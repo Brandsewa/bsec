@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `feat/checkout-turnstile` (not merged yet)
+- **Branch:** `feat/checkout-turnstile` (merged in #301, 7ae64710)
 - **Area:** domain, web
 - **Type:** feature
 - **Supersedes:** none
