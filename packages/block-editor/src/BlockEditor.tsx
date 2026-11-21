@@ -15,6 +15,7 @@ import { EditorHeader, EditorHeaderContext, type EditorHeaderState } from "./Edi
 import { FooterPanel, HeaderPanel } from "./HeaderFooterPanels.tsx";
 import { GeneralPanel, WebsiteThemePanel } from "./GeneralPanel.tsx";
 import { ROOT_ZONE, wrapDroppedWidget } from "./wrap-on-drop.ts";
+import { OutlineWithActions, SectionActionsProvider } from "./OutlineActions.tsx";
 
 export interface BlockEditorProps {
   title: string;
@@ -162,10 +163,11 @@ export function BlockEditor({ title, initialBlocks: initialFromProps, host, them
   const overrides = useMemo(
     () => ({
       header: EditorHeader,
+      outline: OutlineWithActions,
       puck: ({ children }: { children: ReactNode }) => (
         <>
           <PuckBridge onReady={setPuckGetter} />
-          {children}
+          <SectionActionsProvider>{children}</SectionActionsProvider>
         </>
       ),
     }),
