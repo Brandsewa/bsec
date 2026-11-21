@@ -1,14 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePuck } from "@puckeditor/core";
 import type { PuckItem } from "@bs/blocks";
 import { ROOT_ZONE } from "./wrap-on-drop.ts";
-import { cloneWithNewIds, countNested, getClipboardItem, insertIntoZone, setClipboardItem, subscribeClipboard } from "./section-clipboard.ts";
+import { cloneWithNewIds, countNested, findById, getClipboard, insertIntoZone, setClipboard, subscribeClipboard, topLevelInsertIndex, type Clip } from "./section-clipboard.ts";
 
 /**
- * Copy / Paste / Duplicate / Delete for the selected element: buttons next to the "Outline" title and a right-click
- * menu on the Outline rows and on the canvas. They drive Puck's own state and actions, so the canvas, the outline,
- * undo/redo and saving all see the change like any edit. The provider is always mounted inside Puck (so the canvas
- * menu works whichever sidebar tab is open); the Outline override only draws the buttons.
+ * Copy / Copy all / Paste / Duplicate / Delete for the page builder: buttons next to the "Outline" title, a Copy button on
+ * every Outline row, and a right-click menu on the Outline rows and on the canvas. They drive Puck's own state and actions,
+ * so the canvas, the outline, undo/redo and saving all see the change like any edit. The provider is always mounted
+ * inside Puck (so the canvas menu works whichever sidebar tab is open); the Outline override only draws the buttons.
  */
 
 const CSS = `
@@ -19,6 +19,10 @@ const CSS = `
 .bse-outline-actions button[data-danger]:hover:not(:disabled) { background: #fee2e2; color: #b91c1c; }
 .bse-outline-actions button:disabled { opacity: .35; cursor: not-allowed; }
 .bse-outline-actions button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+[class*="Layer-content"] > [class*="LayerActions"] { order: 2; }
+.bse-row-copy { order: 1; flex: none; align-self: center; width: 22px; height: 22px; margin-inline-end: 2px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: inherit; display: none; align-items: center; justify-content: center; cursor: pointer; }
+[class*="Layer-inner"]:hover .bse-row-copy { display: inline-flex; }
+.bse-row-copy:hover { background: rgba(0,0,0,.07); }
 .bse-outline-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; padding: 6px 12px; border-radius: 7px; background: #18181b; color: #fff; font-size: 12px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.18); pointer-events: none; }
 .bse-confirm-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(24,24,27,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .bse-confirm { width: 100%; max-width: 380px; background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); font-family: inherit; }
@@ -40,16 +44,31 @@ const CSS = `
 
 const icon = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
+// Copy (one element) is a clipboard with an arrow out, Copy all is a stack of layers and Paste a clipboard with an arrow
+// in: all three are deliberately unlike Puck's own Duplicate icon (two overlapping squares).
+const COPY_PATHS = '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v2M21 14H11"/><path d="m15 10-4 4 4 4"/>';
+const ROW_COPY_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COPY_PATHS}</svg>`;
+
 const CopyIcon = () => (
   <svg {...icon}>
-    <rect x="9" y="9" width="12" height="12" rx="2" />
-    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v2M21 14H11" />
+    <path d="m15 10-4 4 4 4" />
+  </svg>
+);
+const CopyAllIcon = () => (
+  <svg {...icon}>
+    <path d="m12 2 9 5-9 5-9-5 9-5Z" />
+    <path d="m3 12 9 5 9-5" />
+    <path d="m3 17 9 5 9-5" />
   </svg>
 );
 const PasteIcon = () => (
   <svg {...icon}>
-    <rect x="8" y="3" width="8" height="4" rx="1" />
-    <path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" />
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
+    <path d="M12 11v6M9 14l3 3 3-3" />
   </svg>
 );
 const DuplicateIcon = () => (
@@ -65,12 +84,16 @@ const TrashIcon = () => (
 );
 
 const labelOf = (type: string) => type.replace(/([a-z])([A-Z])/g, "$1 $2");
+const plural = (n: number) => `${n} section${n === 1 ? "" : "s"}`;
+const describe = (c: Clip) => (c.kind === "page" ? plural(c.items.length) : labelOf(c.items[0]?.type ?? "element"));
 
 interface Actions {
   hasSelection: boolean;
   name: string;
-  copied: PuckItem | null;
+  copied: Clip | null;
+  sectionCount: number;
   copy: () => void;
+  copyAll: () => void;
   paste: () => void;
   askDelete: () => void;
 }
@@ -83,10 +106,10 @@ export function OutlineWithActions({ children }: { children?: ReactNode }) {
     <div className="bse-outline">
       {a ? (
         <div className="bse-outline-actions" role="toolbar" aria-label="Outline actions">
-          <button type="button" onClick={a.copy} disabled={!a.hasSelection} title={a.hasSelection ? `Copy ${a.name}` : "Select an element to copy"} aria-label="Copy">
-            <CopyIcon />
+          <button type="button" onClick={a.copyAll} disabled={a.sectionCount === 0} title={a.sectionCount === 0 ? "This page has no sections" : `Copy all ${plural(a.sectionCount)} on this page`} aria-label="Copy all sections">
+            <CopyAllIcon />
           </button>
-          <button type="button" onClick={a.paste} disabled={!a.copied} title={a.copied ? `Paste ${labelOf(a.copied.type)}` : "Nothing copied yet"} aria-label="Paste">
+          <button type="button" onClick={a.paste} disabled={!a.copied} title={a.copied ? `Paste ${describe(a.copied)}` : "Nothing copied yet"} aria-label="Paste">
             <PasteIcon />
           </button>
           <button type="button" data-danger="" onClick={a.askDelete} disabled={!a.hasSelection} title={a.hasSelection ? `Delete ${a.name}` : "Select an element to delete"} aria-label="Delete">
@@ -104,7 +127,7 @@ const MENU_H = 200;
 
 export function SectionActionsProvider({ children }: { children?: ReactNode }) {
   const { appState, selectedItem, dispatch } = usePuck();
-  const copied = useSyncExternalStore(subscribeClipboard, getClipboardItem, () => null);
+  const copied = useSyncExternalStore(subscribeClipboard, getClipboard, () => null);
   const [toast, setToast] = useState<{ text: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -117,26 +140,49 @@ export function SectionActionsProvider({ children }: { children?: ReactNode }) {
   const selector = appState.ui.itemSelector;
   const item = (selectedItem ?? null) as PuckItem | null;
   const hasSelection = Boolean(selector && item);
+  const pageContent = appState.data.content as unknown as PuckItem[];
+
+  // The row Copy buttons (added to the DOM below) read the latest page through a ref, so their listeners never go stale.
+  const contentRef = useRef(pageContent);
+  useEffect(() => {
+    contentRef.current = pageContent;
+  });
 
   const say = (text: string) => setToast({ text });
 
   const copy = () => {
     if (!item) return;
-    setClipboardItem(item);
+    setClipboard({ kind: "item", items: [item] });
     say(`${labelOf(item.type)} copied`);
+  };
+
+  const copyAll = () => {
+    if (pageContent.length === 0) return;
+    setClipboard({ kind: "page", items: pageContent });
+    say(`${plural(pageContent.length)} copied`);
   };
 
   const paste = () => {
     if (!copied) return;
-    const clone = cloneWithNewIds(copied);
-    const zone = selector?.zone ?? ROOT_ZONE;
-    const index = selector ? selector.index + 1 : appState.data.content.length;
-    const content = insertIntoZone(appState.data.content as unknown as PuckItem[], zone, index, clone);
+    const clones = copied.items.map((it) => cloneWithNewIds(it));
+    let content: PuckItem[] | null;
+    let index: number;
+    let zone: string | undefined;
+    if (copied.kind === "page") {
+      // A whole page of sections goes in at the top level of this page (which may be another page than it came from).
+      index = topLevelInsertIndex(pageContent, selector ? { zone: selector.zone ?? ROOT_ZONE, index: selector.index } : null);
+      content = pageContent.slice();
+      content.splice(index, 0, ...clones);
+    } else {
+      zone = selector?.zone;
+      index = selector ? selector.index + 1 : pageContent.length;
+      content = clones[0] ? insertIntoZone(pageContent, zone ?? ROOT_ZONE, index, clones[0]) : null;
+    }
     if (!content) return say("Could not paste here");
     // One setData keeps the whole copy (nested elements and all their settings) as a single undo step.
     dispatch({ type: "setData", data: { content } as never, recordHistory: true });
-    dispatch({ type: "setUi", ui: { itemSelector: { index, ...(selector?.zone ? { zone: selector.zone } : {}) } } });
-    say(`${labelOf(clone.type)} pasted`);
+    dispatch({ type: "setUi", ui: { itemSelector: { index, ...(zone ? { zone } : {}) } } });
+    say(copied.kind === "page" ? `${plural(clones.length)} pasted` : `${labelOf((clones[0]?.type ?? "element"))} pasted`);
   };
 
   const duplicate = () => {
@@ -216,9 +262,53 @@ export function SectionActionsProvider({ children }: { children?: ReactNode }) {
     };
   }, [open]);
 
+  // A Copy button on every Outline row, just before Puck's own Duplicate and Delete. Those are not overridable, so this
+  // button is added to the row's DOM and follows the same reveal (row hovered). It copies that row's element
+  // with everything inside it.
+  useEffect(() => {
+    const made = new Set<HTMLButtonElement>();
+    const decorate = () => {
+      document.querySelectorAll<HTMLElement>('[class*="Layer-content"]:not([data-bse-copy])').forEach((row) => {
+        const id = row.closest("[data-puck-layer-tree-id]")?.getAttribute("data-puck-layer-tree-id");
+        if (!id) return;
+        row.setAttribute("data-bse-copy", "");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "bse-row-copy";
+        b.title = "Copy this section";
+        b.setAttribute("aria-label", "Copy this section");
+        b.innerHTML = ROW_COPY_SVG;
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const it = findById(contentRef.current, id);
+          if (!it) return;
+          setClipboard({ kind: "item", items: [it] });
+          setToast({ text: `${labelOf(it.type)} copied` });
+        });
+        row.appendChild(b);
+        made.add(b);
+      });
+    };
+    decorate();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const mo = new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(decorate, 30);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      mo.disconnect();
+      clearTimeout(timer);
+      made.forEach((b) => {
+        b.parentElement?.removeAttribute("data-bse-copy");
+        b.remove();
+      });
+    };
+  }, []);
+
   const nested = item ? countNested(item) : 0;
   const name = item ? labelOf(item.type) : "element";
-  const actions: Actions = { hasSelection, name, copied, copy, paste, askDelete: () => setConfirming(true) };
+  const actions: Actions = { hasSelection, name, copied, sectionCount: pageContent.length, copy, copyAll, paste, askDelete: () => setConfirming(true) };
   const run = (fn: () => void) => () => {
     setMenu(null);
     fn();
@@ -235,7 +325,7 @@ export function SectionActionsProvider({ children }: { children?: ReactNode }) {
             <CopyIcon /> Copy
           </button>
           <button type="button" role="menuitem" onClick={run(paste)} disabled={!copied}>
-            <PasteIcon /> Paste{copied ? ` ${labelOf(copied.type)}` : ""}
+            <PasteIcon /> Paste{copied ? ` ${describe(copied)}` : ""}
           </button>
           <button type="button" role="menuitem" onClick={run(duplicate)} disabled={!hasSelection}>
             <DuplicateIcon /> Duplicate

@@ -7,23 +7,39 @@ import type { PuckItem } from "@bs/blocks";
  * survives switching pages in a multi-page workspace, and is mirrored to localStorage so a reload keeps it.
  */
 
-const STORAGE_KEY = "bs:builder-clipboard:v1";
+const STORAGE_KEY = "bs:builder-clipboard:v2";
 
-let current: PuckItem | null = readStored();
+/**
+ * What is on the clipboard: one element ("item", from a section's own Copy button or the context menu) or every
+ * top-level section of a page ("page", from the Outline's Copy-all button). Both are lists of elements so paste
+ * treats them alike.
+ */
+export interface Clip {
+  kind: "item" | "page";
+  items: PuckItem[];
+}
+
+let current: Clip | null = readStored();
 const listeners = new Set<() => void>();
 
-function readStored(): PuckItem | null {
+const isEl = (v: unknown): v is PuckItem => {
+  if (!v || typeof v !== "object") return false;
+  const o = v as { type?: unknown; props?: unknown };
+  return typeof o.type === "string" && !!o.props && typeof (o.props as { id?: unknown }).id === "string";
+};
+
+function readStored(): Clip | null {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as PuckItem;
-    return parsed && typeof parsed.type === "string" && parsed.props && typeof parsed.props.id === "string" ? parsed : null;
+    const parsed = JSON.parse(raw) as Clip;
+    return parsed && (parsed.kind === "item" || parsed.kind === "page") && Array.isArray(parsed.items) && parsed.items.length > 0 && parsed.items.every(isEl) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-export function getClipboardItem(): PuckItem | null {
+export function getClipboard(): Clip | null {
   return current;
 }
 
@@ -32,8 +48,8 @@ export function subscribeClipboard(cb: () => void): () => void {
   return () => listeners.delete(cb);
 }
 
-export function setClipboardItem(item: PuckItem | null): void {
-  current = item ? (JSON.parse(JSON.stringify(item)) as PuckItem) : null;
+export function setClipboard(clip: Clip | null): void {
+  current = clip && clip.items.length > 0 ? (JSON.parse(JSON.stringify(clip)) as Clip) : null;
   try {
     if (current) globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(current));
     else globalThis.localStorage?.removeItem(STORAGE_KEY);
@@ -45,12 +61,6 @@ export function setClipboardItem(item: PuckItem | null): void {
 
 const defaultId = (type: string) => `${type}-${globalThis.crypto.randomUUID()}`;
 
-const isElement = (v: unknown): v is PuckItem => {
-  if (!v || typeof v !== "object") return false;
-  const o = v as { type?: unknown; props?: unknown };
-  return typeof o.type === "string" && !!o.props && typeof (o.props as { id?: unknown }).id === "string";
-};
-
 /**
  * A deep copy of an element in which it, and every element nested inside it, gets a new unique id (Puck keys the
  * canvas, the outline and the selection by these ids, so a duplicate would collide). Everything else is copied as is.
@@ -60,7 +70,7 @@ export function cloneWithNewIds<T>(value: T, makeId: (type: string) => string = 
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = cloneWithNewIds(v, makeId);
-    if (isElement(value)) (out.props as Record<string, unknown>).id = makeId(value.type);
+    if (isEl(value)) (out.props as Record<string, unknown>).id = makeId(value.type);
     return out as T;
   }
   return value;
@@ -72,7 +82,7 @@ export function countNested(item: unknown): number {
   const walk = (v: unknown, root: boolean) => {
     if (Array.isArray(v)) return v.forEach((x) => walk(x, false));
     if (v && typeof v === "object") {
-      if (!root && isElement(v)) n += 1;
+      if (!root && isEl(v)) n += 1;
       Object.values(v as Record<string, unknown>).forEach((x) => walk(x, false));
     }
   };
@@ -110,7 +120,7 @@ export function insertIntoZone(content: PuckItem[], zone: string, index: number,
       const props: Record<string, unknown> = { ...it.props };
       let changed = false;
       for (const [k, v] of Object.entries(it.props)) {
-        if (Array.isArray(v) && v.length > 0 && v.every(isElement)) {
+        if (Array.isArray(v) && v.length > 0 && v.every(isEl)) {
           const inner = walk(v as PuckItem[]);
           if (inner.some((x, i) => x !== v[i])) {
             props[k] = inner;
@@ -122,4 +132,34 @@ export function insertIntoZone(content: PuckItem[], zone: string, index: number,
     });
   const next = walk(content);
   return found ? next : null;
+}
+
+/** The element with this id anywhere in the page (any depth), or null. */
+export function findById(content: PuckItem[], id: string): PuckItem | null {
+  let hit: PuckItem | null = null;
+  const walk = (v: unknown) => {
+    if (hit) return;
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (v && typeof v === "object") {
+      if (isEl(v) && v.props.id === id) {
+        hit = v;
+        return;
+      }
+      Object.values(v as Record<string, unknown>).forEach(walk);
+    }
+  };
+  walk(content);
+  return hit;
+}
+
+/**
+ * Where a pasted list of sections goes on the page level: right after the top-level section that holds the
+ * selection (the selection itself when it is top level), or the end of the page when nothing is selected.
+ */
+export function topLevelInsertIndex(content: PuckItem[], selection: { zone: string; index: number } | null): number {
+  if (!selection) return content.length;
+  if (selection.zone === ROOT) return Math.min(selection.index + 1, content.length);
+  const parentId = selection.zone.slice(0, selection.zone.lastIndexOf(":"));
+  const at = content.findIndex((top) => findById([top], parentId));
+  return at === -1 ? content.length : at + 1;
 }

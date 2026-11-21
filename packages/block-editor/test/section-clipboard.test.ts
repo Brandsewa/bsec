@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cloneWithNewIds, countNested, insertIntoZone } from "../src/section-clipboard.ts";
+import { cloneWithNewIds, countNested, findById, insertIntoZone, topLevelInsertIndex } from "../src/section-clipboard.ts";
 
 const section = {
   type: "Section",
@@ -56,5 +56,25 @@ describe("insertIntoZone", () => {
   });
   it("returns null for an unknown zone", () => {
     expect(insertIntoZone(page as never, "Nope-1:content", 0, {} as never)).toBeNull();
+  });
+});
+
+describe("page-level helpers", () => {
+  const top = (id: string, content: unknown[] = []) => ({ type: "Section", props: { id, content } });
+  const pageOf = [top("A"), top("B", [{ type: "Container", props: { id: "B-c", content: [{ type: "RichText", props: { id: "B-t" } }] } }]), top("C")] as never;
+
+  it("finds an element at any depth, or null", () => {
+    expect(findById(pageOf, "B-t")?.type).toBe("RichText");
+    expect(findById(pageOf, "C")?.props.id).toBe("C");
+    expect(findById(pageOf, "nope")).toBeNull();
+  });
+
+  it("puts pasted sections after the top-level section that holds the selection", () => {
+    expect(topLevelInsertIndex(pageOf, null)).toBe(3);
+    expect(topLevelInsertIndex(pageOf, { zone: "root:default-zone", index: 0 })).toBe(1);
+    expect(topLevelInsertIndex(pageOf, { zone: "root:default-zone", index: 2 })).toBe(3);
+    // Selection deep inside section B: after B, not inside it.
+    expect(topLevelInsertIndex(pageOf, { zone: "B-c:content", index: 0 })).toBe(2);
+    expect(topLevelInsertIndex(pageOf, { zone: "Missing:content", index: 0 })).toBe(3);
   });
 });
