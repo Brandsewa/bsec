@@ -22,12 +22,12 @@ const base = {
 };
 const store = { tenantId: "0199a000-0000-7000-8000-0000000000aa", storeName: "Demo Store", joinedAt: "2026-10-02T00:00:00.000Z" };
 
-async function render(access: unknown[] | "loading" | "error") {
+async function render(access: unknown[] | "loading" | "error", tenantId: string | undefined = store.tenantId) {
   const { PermissionsTab } = await import("../src/components/account/permissions-tab.tsx");
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (access === "error") qc.setQueryDefaults(["admin", "account"], { queryFn: () => Promise.reject(new Error("boom")) });
   else if (access !== "loading") qc.setQueryData(["admin", "account"], { ...base, access });
-  const router = createRouter({ routeTree: createRootRoute({ component: () => React.createElement(PermissionsTab) }), history: createMemoryHistory({ initialEntries: ["/"] }) });
+  const router = createRouter({ routeTree: createRootRoute({ component: () => React.createElement(PermissionsTab, { tenantId }) }), history: createMemoryHistory({ initialEntries: ["/"] }) });
   await router.load();
   return renderToString(React.createElement(QueryClientProvider, { client: qc }, React.createElement(RouterProvider, { router })));
 }
@@ -78,5 +78,27 @@ describe("Account, Permissions tab", () => {
   it("shows a loading state and never raw permissions while loading", async () => {
     const html = await render("loading");
     expect(html).not.toContain("Advanced permission details");
+  });
+
+  it("shows only the store the person is working in, never their other stores", async () => {
+    const other = { ...store, tenantId: "0199a000-0000-7000-8000-0000000000bb", storeName: "Other Shop" };
+    const access = [
+      { ...store, role: "store_owner", permissions: [], invitedBy: null, owner: null },
+      { ...other, role: "store_admin", permissions: ["products.write"], invitedBy: "Olive", owner: { name: "Olive", email: "olive@other.example" } },
+    ];
+    const here = await render(access, store.tenantId);
+    expect(here).toContain("Demo Store");
+    expect(here).not.toContain("Other Shop");
+    expect(here).not.toContain("olive@other.example");
+    const there = await render(access, other.tenantId);
+    expect(there).toContain("Other Shop");
+    expect(there).not.toContain("Demo Store");
+    expect(there).not.toContain("Full store access");
+  });
+
+  it("says so when the person has no role in the current store", async () => {
+    const html = await render([{ ...store, role: "store_admin", permissions: [], invitedBy: null, owner: null }], "0199a000-0000-7000-8000-0000000000cc");
+    expect(html).toContain("do not have a role in this store");
+    expect(html).not.toContain("Demo Store");
   });
 });
