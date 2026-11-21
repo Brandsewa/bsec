@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouteContext } from "@tanstack/react-router";
 import { Activity, Bell, Lock, ShieldCheck, UserRound } from "lucide-react";
 import { PageContainer, PageHeader, PageSkeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@bs/ui";
 import { ActivityTab } from "../../components/account/activity-tab.tsx";
@@ -31,6 +31,8 @@ const TAB_DEFS: { value: AccountTab; label: string; Icon: typeof UserRound }[] =
 function AccountPage() {
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
+  // The store the person is working in now; Permissions shows only this one.
+  const { store } = useRouteContext({ from: "/_store" });
   return (
     <PageContainer>
       <PageHeader title="My account" description="Your details, how you sign in, the alerts you get and what you can access." />
@@ -57,7 +59,7 @@ function AccountPage() {
             <NotificationsTab />
           </TabsContent>
           <TabsContent value="permissions" className="mt-3">
-            <PermissionsTab />
+            <PermissionsTab tenantId={store?.tenantId} />
           </TabsContent>
           <TabsContent value="activity" className="mt-3">
             <ActivityTab />
