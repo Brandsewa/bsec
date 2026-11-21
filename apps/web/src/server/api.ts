@@ -11,6 +11,15 @@ import {
   assertPermission,
   buildTenantContext,
   getAdminMe,
+  getAccountProfile,
+  updateAccountProfile,
+  listSessions,
+  revokeSession,
+  revokeOtherSessions,
+  listSecurityEvents,
+  listAccountAlerts,
+  setAccountAlertMuted,
+  recordSecurityEvent,
   getStoreStatus,
   getStoreStatusInternal,
   attachProductMedia,
@@ -328,6 +337,7 @@ import {
   checkReserveSubdomainRateLimit,
   checkLeadCaptureRateLimit,
   checkPasswordResetRateLimit,
+  checkStaffTwoFactorRateLimit,
   checkResetPasswordConfirmRateLimit,
   sendPlatformEmail,
   renderEmail,
@@ -619,6 +629,17 @@ const requirePermission = (needed: StorePermission) =>
     });
   });
 
+/** The signed-in staff user for account routes. A support session or a customer login has no account page. */
+function staffUserId(context: ApiContext): string {
+  if (context.headers?.get("x-support-token")) throw new ORPCError("FORBIDDEN", { message: "Not available in a support session" });
+  if (!context.session || context.session.type === "customer") throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
+  return context.session.user.id;
+}
+
+function accountRequestInfo(headers: Headers | undefined): { ip: string | null; userAgent: string | null } {
+  return { ip: headers ? clientIp(headers) : null, userAgent: headers?.get("user-agent") ?? null };
+}
+
 export const storeRouter = os.router({
   system: {
     health: os.system.health.handler(({ context }) => checkHealth(context.rt)),
@@ -646,6 +667,31 @@ export const storeRouter = os.router({
           throw new ORPCError("UNAUTHORIZED", { message: "Sign in required" });
         }
         return getAdminMe(context.rt, context.session.user.id);
+      }),
+    },
+    account: {
+      get: os.admin.account.get.handler(({ context }) => getAccountProfile(context.rt, staffUserId(context))),
+      update: os.admin.account.update.handler(({ context, input }) =>
+        updateAccountProfile(context.rt, staffUserId(context), input).catch((e) => {
+          throw new ORPCError("BAD_REQUEST", { message: e instanceof Error ? e.message : "Could not save" });
+        }),
+      ),
+      sessions: os.admin.account.sessions.handler(({ context }) => listSessions(context.rt, staffUserId(context), context.session?.session?.id)),
+      revokeSession: os.admin.account.revokeSession.handler(({ context, input }) =>
+        revokeSession(context.rt, staffUserId(context), input.id, context.session?.session?.id, accountRequestInfo(context.headers)).catch((e) => {
+          throw new ORPCError("BAD_REQUEST", { message: e instanceof Error ? e.message : "Could not sign that device out" });
+        }),
+      ),
+      revokeOtherSessions: os.admin.account.revokeOtherSessions.handler(({ context }) =>
+        revokeOtherSessions(context.rt, staffUserId(context), context.session?.session?.id, accountRequestInfo(context.headers)),
+      ),
+      securityEvents: os.admin.account.securityEvents.handler(({ context }) => listSecurityEvents(context.rt, staffUserId(context))),
+      alerts: os.admin.account.alerts.handler(({ context }) => listAccountAlerts(context.rt, staffUserId(context))),
+      setAlertMuted: os.admin.account.setAlertMuted.handler(async ({ context, input }) => {
+        await setAccountAlertMuted(context.rt, staffUserId(context), input.key, input.muted).catch((e) => {
+          throw new ORPCError("BAD_REQUEST", { message: e instanceof Error ? e.message : "Could not save" });
+        });
+        return { ok: true as const };
       }),
     },
     support: {
@@ -3935,6 +3981,9 @@ api.all("/auth/*", async (c) => {
     const res = await cfg.auth.handler(req);
     if (res.status === 200) {
       const session = await resolveStaffSession(c.req.raw.headers);
+      if (session?.user?.id) {
+        await recordSecurityEvent(server().rt._db.db, { userId: session.user.id, type: "password_changed", ip: clientIp(req.headers), userAgent: req.headers.get("user-agent") });
+      }
       if (session?.user?.email) {
         const email = session.user.email;
         const rt = server().rt;
@@ -3978,7 +4027,44 @@ api.all("/auth/*", async (c) => {
     }
     const res = await cfg.auth.handler(req);
     if (res.status >= 400) await recordLoginFailure(db, ip, who);
-    else await clearLoginFailures(db, who);
+    else {
+      await clearLoginFailures(db, who);
+      // A password that needs a second step is only a sign-in once the code is accepted (recorded above).
+      const body = (await res.clone().json().catch(() => ({}))) as { user?: { id?: string }; twoFactorRedirect?: boolean };
+      if (body.user?.id && !body.twoFactorRedirect) await recordSecurityEvent(db, { userId: body.user.id, type: "sign_in", ip, userAgent: req.headers.get("user-agent") });
+    }
+    return res;
+  }
+
+  // Security trail for the account page (never changes the response; a failed write is swallowed in recordSecurityEvent).
+  if (req.method === "POST" && /\/two-factor\//.test(path)) {
+    try {
+      await checkStaffTwoFactorRateLimit(server().rt._db.db, { ip: clientIp(req.headers) ?? "unknown" });
+    } catch (err) {
+      if (err instanceof RateLimitExceededError) return c.json({ error: err.message }, 429, { "retry-after": String(err.retryAfter) });
+      throw err;
+    }
+  }
+  const trailed = req.method === "POST" && /\/two-factor\/(verify-totp|verify-backup-code|disable|generate-backup-codes)$/.test(path);
+  if (trailed) {
+    const before = await resolveStaffSession(req.headers);
+    const res = await cfg.auth.handler(req);
+    if (res.ok) {
+      const info = { ip: clientIp(req.headers), userAgent: req.headers.get("user-agent") };
+      const db = server().rt._db.db;
+      if (path.endsWith("/disable") && before) await recordSecurityEvent(db, { userId: before.user.id, type: "mfa_disabled", ...info });
+      else if (path.endsWith("/generate-backup-codes") && before) await recordSecurityEvent(db, { userId: before.user.id, type: "backup_codes_regenerated", ...info });
+      else if (path.endsWith("/verify-totp") || path.endsWith("/verify-backup-code")) {
+        // With a session this is enrolling the authenticator; without one it is the second step of a sign-in.
+        const body = (await res.clone().json().catch(() => ({}))) as { user?: { id?: string } };
+        const userId = before?.user.id ?? body.user?.id;
+        if (userId) {
+          await recordSecurityEvent(db, { userId, type: before ? "mfa_enabled" : "sign_in", ...info });
+          // Turning the authenticator on ends every other session, so anyone holding a password-only session is signed out.
+          if (before) await revokeOtherSessions(server().rt, userId, before.session?.id, info);
+        }
+      }
+    }
     return res;
   }
   return cfg.auth.handler(req);

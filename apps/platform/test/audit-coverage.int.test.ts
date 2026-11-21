@@ -27,7 +27,7 @@ const ctxFor = (userId: string, createdAt: Date): PlatformContext => ({
   rt,
   contentRt: rt,
   log: createLogger("audit-coverage-test"),
-  session: { user: { id: userId }, type: "platform_staff", createdAt },
+  session: { user: { id: userId }, type: "platform_staff", createdAt, sessionId: "audit-coverage-session" },
   meta: { ip: "203.0.113.7", userAgent: "vitest", requestId: "req-audit-coverage" },
 });
 
@@ -370,6 +370,9 @@ const CASES: Record<string, Case> = {
     },
   },
   "staff.invite": { role: "platform_admin", action: "platform_staff.invite", input: async () => ({ email: `invitee${++seq}@platform.test`, role: "platform_support" }) },
+  "account.update": { role: "platform_support", action: "platform_account.update_profile", input: async () => ({ jobTitle: "Support engineer" }) },
+  "account.revokeSession": { role: "platform_support", action: "platform_account.revoke_session", input: async () => ({ id: "no-such-session" }) },
+  "account.revokeOtherSessions": { role: "platform_support", action: "platform_account.revoke_other_sessions", input: async () => ({}) },
   "staff.updateRole": { role: "platform_owner", action: "platform_staff.update_role", input: async () => ({ userId: (await F.staffOf("platform_support")).userId, role: "platform_admin" }) },
   "staff.deactivate": { role: "platform_admin", action: "platform_staff.deactivate", input: async () => ({ userId: (await F.staffOf("platform_support")).userId }) },
   "staff.reactivate": {

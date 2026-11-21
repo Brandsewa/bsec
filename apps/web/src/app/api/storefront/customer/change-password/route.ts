@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { changeCustomerPassword } from "@bs/domain";
+import { changeCustomerPassword, recordCustomerSecurityEvent } from "@bs/domain";
 import { CUSTOMER_COOKIE_NAME, currentCustomer, resolveStore, sameOrigin } from "@/server/customer-session.ts";
 import { cookies } from "next/headers";
 
@@ -41,6 +41,11 @@ export async function POST(req: Request) {
       nextPassword: parsed.data.nextPassword,
       currentSessionToken: currentToken,
       revokeOtherSessions: parsed.data.revokeOtherSessions,
+    });
+
+    await recordCustomerSecurityEvent(store.rt._db.db, store.tenantId, customer.id, "password_changed", {
+      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      userAgent: req.headers.get("user-agent"),
     });
 
     return NextResponse.json(

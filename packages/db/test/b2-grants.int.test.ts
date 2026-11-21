@@ -190,8 +190,11 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "platform_notifications", // INSERT + DELETE and SELECT(id, created_at) (the worker adds Super Admin inbox cards and prunes old ones); staff read them through app_platform
   "platform_message_log", // INSERT (SMS/WhatsApp diagnostics, masked recipients) + DELETE and SELECT(id, created_at) for the 90-day prune
   "rate_limit_counters",
+  "security_events", // INSERT + SELECT only (append-only, migration 0116)
   "sessions",
+  "staff_two_factors", // store-staff authenticator (migration 0118); the platform's two_factors stays invisible to app_rw
   "tenant_active_jobs",
+  "user_notification_mutes",
   "users",
   "verifications",
   "webhook_inbox",

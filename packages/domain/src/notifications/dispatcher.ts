@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { mutedUserIds } from "../account/notification-prefs.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import { sendPlatformEmail } from "../system/platform-mailer.ts";
 import { renderEmail, type EmailBrand } from "../system/email-templates.ts";
@@ -109,6 +110,11 @@ export async function dispatchNotification(db: Db, input: NotifyInput): Promise<
   let extra: string[] = [...(input.legacyExtraEmails ?? [])];
   if (def.audience === "store") {
     people = await storeRecipients(db, storeTenantId, def);
+    // A person can mute an alert for themselves (account page). Locked alerts cannot be muted.
+    if (!def.locked) {
+      const muted = await mutedUserIds(db, def.key, people.flatMap((p) => (p.userId ? [p.userId] : [])));
+      if (muted.size) people = people.filter((p) => !p.userId || !muted.has(p.userId));
+    }
     const rule = emailOn ? await withTenant(db, storeTenantId, (tx) => loadTenantRule(tx, storeTenantId, def.key, "email")) : undefined;
     extra = [...extra, ...(rule?.extraEmails ?? [])];
   } else {

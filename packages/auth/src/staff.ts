@@ -1,7 +1,7 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { schema, type Db } from "@bs/db";
-import { oneTap } from "better-auth/plugins";
+import { oneTap, twoFactor } from "better-auth/plugins";
 import { STAFF_COOKIE_PREFIX } from "./index.ts";
 import { googleAccountLinkGuard, googleSessionGuard, googleSocialProvider, type GoogleConfigLoader } from "./google.ts";
 
@@ -46,7 +46,9 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
         sessions: schema.sessions,
         accounts: schema.accounts,
         verifications: schema.verifications,
-        twoFactors: schema.twoFactors,
+        // Store staff use their own authenticator table and flag (migration 0118). The platform's two_factors table is
+        // deliberately not mapped here: the tenant runtime has no access to it. (usePlural adds the s: model "staffTwoFactor".)
+        staffTwoFactors: schema.staffTwoFactors,
       },
       usePlural: true,
     }),
@@ -93,13 +95,23 @@ export function createStaffAuth(db: Db, opts: StaffAuthOptions = {}) {
     // Google must confirm the email (Google is not a trusted-by-name provider). An unverified local account is linked only
     // after googleAccountLinkGuard removes its password login and sessions.
     account: { accountLinking: { enabled: true, requireLocalEmailVerified: false } },
-    plugins: opts.loadGoogle ? [oneTap({ disableSignup: true })] : [],
+    // Authenticator-app MFA is optional for store staff (plan section 9 Q1): they enrol from Account -> Security, and once
+    // enrolled the sign-in asks for a code. (Platform staff use the same plugin, where it is mandatory.)
+    plugins: [
+      twoFactor({
+        issuer: "Brand Sewa",
+        schema: { user: { fields: { twoFactorEnabled: "storeTwoFactorEnabled" } }, twoFactor: { modelName: "staffTwoFactor" } },
+      }), ...(opts.loadGoogle ? [oneTap({ disableSignup: true })] : []),
+    ],
     databaseHooks: {
       account: { create: { before: async (account, ctx) => { await googleAccountLinkGuard(db)(account, ctx); } } },
       session: { create: { before: async (session, ctx) => { await googleSessionGuard(db, { requirePlatformStaff: false })(session, ctx); } } },
     },
     // Our own Postgres-backed limiter (checkAdminLoginLimit) guards sign-in; Better Auth's in-memory
     // limiter would not be shared across containers.
+    // Our own Postgres-backed limiter (checkAdminLoginLimit) guards sign-in, and checkStaffTwoFactorRateLimit guards the
+    // second-factor endpoints in the web handler. Better Auth's in-memory limiter would not be shared across containers and,
+    // once enabled, also adds its own tight defaults to sign-in.
     rateLimit: { enabled: false },
     advanced: {
       cookiePrefix: STAFF_COOKIE_PREFIX,

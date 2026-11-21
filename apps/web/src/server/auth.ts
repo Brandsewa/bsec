@@ -1,5 +1,5 @@
 import { createStaffAuth, googleConfigFingerprint, STAFF_COOKIE_PREFIX, type GoogleAuthConfig, type StaffAuth } from "@bs/auth";
-import { loadPlatformGoogleRuntimeConfig, renderEmail, sendPlatformEmail } from "@bs/domain";
+import { loadPlatformGoogleRuntimeConfig, recordSecurityEvent, renderEmail, sendPlatformEmail } from "@bs/domain";
 import { server } from "./runtime.ts";
 import type { ApiContext } from "./api.ts";
 
@@ -98,6 +98,7 @@ export function getStaffAuth(): { auth: StaffAuth; settings: AuthSettings } | nu
     },
     onPasswordReset: async ({ user }) => {
       const rt = server().rt;
+      await recordSecurityEvent(rt._db.db, { userId: user.id, type: "password_reset" });
       const brand = { storeName: "Brand Sewa Admin", baseUrl: settings.adminOrigins[0] ?? settings.baseURL };
       const { html, text } = renderEmail("password_changed", brand, {}, "Your password was changed");
       queueMicrotask(async () => {

@@ -1470,6 +1470,64 @@ export const AdminMe = z.object({
 });
 export type AdminMe = z.infer<typeof AdminMe>;
 
+// ---- Account and Profile (docs/ACCOUNTS-PROFILE-PLAN.md phase 1) ----
+export const AccountProfile = z.object({
+  id: z.string().uuid(),
+  email: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  image: z.string().nullable(),
+  locale: z.string(),
+  timezone: z.string().nullable(),
+  dateFormat: z.string().nullable(),
+  timeFormat: z.string().nullable(),
+  defaultLanding: z.string().nullable(),
+  uiDensity: z.string().nullable(),
+  twoFactorEnabled: z.boolean(),
+  createdAt: z.string(),
+  access: z.array(
+    z.object({
+      tenantId: z.string().uuid(),
+      storeName: z.string(),
+      role: z.string(),
+      permissions: z.array(z.string()),
+      joinedAt: z.string().nullable(),
+      invitedBy: z.string().nullable(),
+    }),
+  ),
+});
+export type AccountProfile = z.infer<typeof AccountProfile>;
+export const AccountProfileInput = z.object({
+  name: z.string().min(1).max(120).optional(),
+  phone: z.string().max(20).nullable().optional(),
+  jobTitle: z.string().max(80).nullable().optional(),
+  image: z.string().max(2000).nullable().optional(),
+  timezone: z.string().max(64).nullable().optional(),
+  dateFormat: z.enum(["dd/mm/yyyy", "mm/dd/yyyy", "yyyy-mm-dd"]).nullable().optional(),
+  timeFormat: z.enum(["12h", "24h"]).nullable().optional(),
+  defaultLanding: z.enum(["dashboard", "orders", "products", "analytics"]).nullable().optional(),
+  uiDensity: z.enum(["comfortable", "compact"]).nullable().optional(),
+});
+export type AccountProfileInput = z.infer<typeof AccountProfileInput>;
+export const AccountSession = z.object({
+  id: z.string(),
+  device: z.string(),
+  ip: z.string().nullable(),
+  signedInAt: z.string(),
+  lastActiveAt: z.string(),
+  current: z.boolean(),
+});
+export const AccountSecurityEvent = z.object({ id: z.string(), type: z.string(), ip: z.string().nullable(), device: z.string(), at: z.string() });
+export const AccountAlert = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  category: z.string(),
+  locked: z.boolean(),
+  muted: z.boolean(),
+});
+
 export const StoreSupportSession = z.object({
   id: z.string().uuid(),
   staffName: z.string(),
@@ -2342,6 +2400,22 @@ export const adminContract = {
   },
   me: {
     get: oc.route({ method: "GET", path: "/admin/me" }).output(AdminMe),
+  },
+  account: {
+    get: oc.route({ method: "GET", path: "/admin/account" }).output(AccountProfile),
+    update: oc.route({ method: "PUT", path: "/admin/account" }).input(AccountProfileInput).output(AccountProfile),
+    sessions: oc.route({ method: "GET", path: "/admin/account/sessions" }).output(z.array(AccountSession)),
+    revokeSession: oc
+      .route({ method: "POST", path: "/admin/account/sessions/revoke" })
+      .input(z.object({ id: z.string().min(1) }))
+      .output(z.object({ revoked: z.boolean() })),
+    revokeOtherSessions: oc.route({ method: "POST", path: "/admin/account/sessions/revoke-others" }).output(z.object({ count: z.number() })),
+    securityEvents: oc.route({ method: "GET", path: "/admin/account/security-events" }).output(z.array(AccountSecurityEvent)),
+    alerts: oc.route({ method: "GET", path: "/admin/account/alerts" }).output(z.array(AccountAlert)),
+    setAlertMuted: oc
+      .route({ method: "PUT", path: "/admin/account/alerts" })
+      .input(z.object({ key: z.string().min(1).max(100), muted: z.boolean() }))
+      .output(z.object({ ok: z.literal(true) })),
   },
   payments: {
     get: oc.route({ method: "GET", path: "/admin/payments" }).output(PaymentsStatus),

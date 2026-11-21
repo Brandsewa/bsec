@@ -1748,3 +1748,42 @@ export const platformBrandingContract = {
     .input(z.object({ version: z.number().int().positive() }))
     .output(z.object({ ok: z.boolean(), version: z.number() })),
 };
+
+// ---- Account and Profile for platform staff (docs/ACCOUNTS-PROFILE-PLAN.md phase 3) ----
+export const PlatformAccount = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  role: z.enum(["platform_owner", "platform_admin", "platform_support"]),
+  roleLabel: z.string(),
+  can: z.array(z.string()),
+  cannot: z.array(z.string()),
+  mfa: z.object({ enabled: z.boolean(), required: z.boolean(), enrolledAt: z.string().nullable() }),
+  createdAt: z.string(),
+  supportSessions: z.array(z.object({ id: z.string(), storeName: z.string(), scope: z.string(), consent: z.string(), expiresAt: z.string() })),
+});
+export type PlatformAccount = z.infer<typeof PlatformAccount>;
+
+export const platformAccountContract = {
+  get: oc.route({ method: "GET", path: "/platform/account" }).output(PlatformAccount),
+  update: oc
+    .route({ method: "PUT", path: "/platform/account" })
+    .input(z.object({ name: z.string().min(1).max(120).optional(), phone: z.string().max(20).nullable().optional(), jobTitle: z.string().max(80).nullable().optional() }))
+    .output(PlatformAccount),
+  sessions: oc.route({ method: "GET", path: "/platform/account/sessions" }).output(
+    z.array(z.object({ id: z.string(), device: z.string(), ip: z.string().nullable(), signedInAt: z.string(), lastActiveAt: z.string(), current: z.boolean() })),
+  ),
+  revokeSession: oc
+    .route({ method: "POST", path: "/platform/account/sessions/revoke" })
+    .input(z.object({ id: z.string().min(1) }))
+    .output(z.object({ revoked: z.boolean() })),
+  revokeOtherSessions: oc.route({ method: "POST", path: "/platform/account/sessions/revoke-others" }).output(z.object({ count: z.number() })),
+  securityEvents: oc.route({ method: "GET", path: "/platform/account/security-events" }).output(
+    z.array(z.object({ id: z.string(), type: z.string(), ip: z.string().nullable(), device: z.string(), at: z.string() })),
+  ),
+  activity: oc.route({ method: "GET", path: "/platform/account/activity" }).output(
+    z.array(z.object({ id: z.string(), action: z.string(), targetType: z.string(), targetId: z.string(), tenantId: z.string().nullable(), at: z.string() })),
+  ),
+};

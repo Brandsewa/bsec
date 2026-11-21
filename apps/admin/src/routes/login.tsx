@@ -5,7 +5,7 @@ import { AuthCardSkeleton, Button, Field, FieldError, FieldGroup } from "@bs/ui"
 import { FloatingInput, FloatingPassword } from "../components/floating-input.tsx";
 import { SplitAuthShell } from "../components/split-auth-shell.tsx";
 import { apiBase } from "../lib/config.ts";
-import { fetchMe, signIn } from "../lib/auth.ts";
+import { fetchMe, signIn, verifyBackupCode, verifyTotp } from "../lib/auth.ts";
 import { fetchGoogleSignin, startGoogleSignIn, startOneTap } from "../lib/google.ts";
 
 function googleErrorMessage(search: string): string | null {
@@ -37,6 +37,10 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(() => (typeof window !== "undefined" ? googleErrorMessage(window.location.search) : null));
   const [busy, setBusy] = useState(false);
+  // Set once the password is accepted and the account has an authenticator: the next screen asks for the code.
+  const [needCode, setNeedCode] = useState(false);
+  const [useBackup, setUseBackup] = useState(false);
+  const [code, setCode] = useState("");
 
   const { data: google } = useQuery({ queryKey: ["google-signin"], queryFn: fetchGoogleSignin, staleTime: 60_000 });
   const googleOn = Boolean(google?.enabled);
@@ -70,12 +74,69 @@ function LoginPage() {
     setError(null);
     const res = await signIn(email.trim(), password);
     if (!res.ok) {
+      if (res.twoFactorRequired) {
+        setNeedCode(true);
+        setBusy(false);
+        return;
+      }
       setError(res.message);
       setBusy(false);
       return;
     }
     queryClient.clear();
     await navigate({ to: "/" });
+  }
+
+  async function onSubmitCode(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const res = await (useBackup ? verifyBackupCode(code.trim()) : verifyTotp(code.replace(/\s/g, "")));
+    if (!res.ok) {
+      setError(res.message);
+      setBusy(false);
+      return;
+    }
+    queryClient.clear();
+    await navigate({ to: "/" });
+  }
+
+  if (needCode) {
+    return (
+      <SplitAuthShell>
+        <form onSubmit={onSubmitCode} className="space-y-5">
+          <FieldGroup>
+            <h1 className="text-xl font-semibold">{useBackup ? "Use a backup code" : "Two-step verification"}</h1>
+            <p className="text-sm text-muted-foreground">
+              {useBackup ? "Enter one of the backup codes you saved when you turned on the authenticator. Each code works once." : "Enter the 6 digit code from your authenticator app."}
+            </p>
+            <Field>
+              <FloatingInput
+                id="code"
+                label={useBackup ? "Backup code" : "6 digit code"}
+                inputMode={useBackup ? "text" : "numeric"}
+                autoComplete="one-time-code"
+                required
+                value={code}
+                onChange={setCode}
+              />
+            </Field>
+            {error ? <FieldError>{error}</FieldError> : null}
+            <Button type="submit" size="lg" className="h-14 w-full text-base" disabled={busy || !code.trim()} loading={busy}>
+              {busy ? "Checking…" : "Verify"}
+            </Button>
+            <div className="flex items-center justify-between text-sm">
+              <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => { setUseBackup((v) => !v); setCode(""); setError(null); }}>
+                {useBackup ? "Use the authenticator app" : "Use a backup code"}
+              </button>
+              <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => { setNeedCode(false); setUseBackup(false); setCode(""); setPassword(""); setError(null); }}>
+                Back to sign in
+              </button>
+            </div>
+          </FieldGroup>
+        </form>
+      </SplitAuthShell>
+    );
   }
 
   return (

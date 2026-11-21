@@ -36,6 +36,10 @@ export const customers = tenantTable(
     marketingState: text("marketing_state").notNull().default("not_subscribed"), // subscribed, unsubscribed, not_subscribed, invalid
     marketingSource: text("marketing_source"),
     marketingUpdatedAt: timestamp("marketing_updated_at", { withTimezone: true }),
+    /** Texting and WhatsApp opt-ins, separate from the email choice above (migration 0117). */
+    consentSms: boolean("consent_sms").notNull().default(false),
+    consentWhatsapp: boolean("consent_whatsapp").notNull().default(false),
+    channelConsentUpdatedAt: timestamp("channel_consent_updated_at", { withTimezone: true }),
     tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
     note: text("note"),
     totalSpent: bigint("total_spent", { mode: "number" }).notNull().default(0),
@@ -120,6 +124,29 @@ export const customerNotes = tenantTable(
  * Customer Addresses (PLAN §5.6 / M4).
  * Shipping and billing address book per customer.
  */
+/** Sign-in trail a shopper sees on their Security page (sign in, password change, device signed out). */
+export const customerSecurityEvents = tenantTable(
+  "customer_security_events",
+  {
+    id: uuid("id").default(sql`uuidv7()`).primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    type: text("type").notNull(),
+    ip: text("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [
+    index("customer_security_events_cust_created_idx").on(t.tenantId, t.customerId, t.createdAt),
+    tenantForeignKey({
+      tableTenantId: t.tenantId,
+      column: t.customerId,
+      target: customers,
+      name: "customer_security_events_customer_fk",
+      onDelete: "cascade",
+    }),
+  ],
+);
+
 export const customerAddresses = tenantTable(
   "customer_addresses",
   {

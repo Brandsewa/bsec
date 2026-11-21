@@ -741,3 +741,15 @@ export async function reapStaleTenantJobSlots(
   return parseInt(result.rows[0]?.count ?? "0", 10);
 }
 
+
+/**
+ * Store-staff second-factor endpoints (authenticator code, backup code, enable, disable, new backup codes): 10 tries per
+ * 5 minutes per address. A six digit code must not be guessable, and this is shared across web containers.
+ */
+export async function checkStaffTwoFactorRateLimit(db: Db, params: { ip: string }): Promise<void> {
+  const key = `staff2fa:ip:${params.ip}`;
+  const res = await checkRateLimit(db, { key, limit: 10, windowSeconds: 300 });
+  if (!res.allowed) {
+    throw new RateLimitExceededError(`Too many attempts. Please retry after ${res.retryAfter} seconds.`, res.retryAfter, res.limit, key);
+  }
+}

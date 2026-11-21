@@ -1,12 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
-import { type Db, customerSessions, customers, withTenant } from "@bs/db";
+import { type Db, customerSecurityEvents, customerSessions, customers, withTenant } from "@bs/db";
 import type { CustomerRecord } from "./otp.ts";
 
 /** A shopper stays signed in on one device for 30 days. */
 export const CUSTOMER_SESSION_TTL_MS = 30 * 86_400_000;
 
-const hashToken = (raw: string): string => createHash("sha256").update(raw.trim()).digest("hex");
+export const hashCustomerToken = (raw: string): string => createHash("sha256").update(raw.trim()).digest("hex");
 
 /**
  * Opens a session after a successful OTP check. The raw token goes into an httpOnly cookie and is never stored:
@@ -24,11 +24,13 @@ export async function createCustomerSession(
     id: randomUUID(),
     tenantId,
     userId: customerId,
-    token: hashToken(token),
+    token: hashCustomerToken(token),
     expiresAt,
     ipAddress: meta.ip ?? null,
     userAgent: meta.userAgent?.slice(0, 300) ?? null,
   });
+  // Shown on the shopper's Security page. Same transaction, so a sign-in and its trail commit together.
+  await tx.insert(customerSecurityEvents).values({ tenantId, customerId, type: "sign_in", ip: meta.ip ?? null, userAgent: meta.userAgent?.slice(0, 300) ?? null });
   return { token, expiresAt };
 }
 
@@ -50,7 +52,7 @@ export async function getCustomerBySession(db: Db, tenantId: string, rawToken: s
       .where(
         and(
           eq(customerSessions.tenantId, tenantId),
-          eq(customerSessions.token, hashToken(rawToken)),
+          eq(customerSessions.token, hashCustomerToken(rawToken)),
           gt(customerSessions.expiresAt, new Date()),
           eq(customers.status, "active"),
         ),
@@ -62,7 +64,7 @@ export async function getCustomerBySession(db: Db, tenantId: string, rawToken: s
 /** Sign out: forget this session. Unknown tokens are a no-op. */
 export async function destroyCustomerSession(db: Db, tenantId: string, rawToken: string): Promise<void> {
   await withTenant(db, tenantId, async (tx) => {
-    await tx.delete(customerSessions).where(and(eq(customerSessions.tenantId, tenantId), eq(customerSessions.token, hashToken(rawToken))));
+    await tx.delete(customerSessions).where(and(eq(customerSessions.tenantId, tenantId), eq(customerSessions.token, hashCustomerToken(rawToken))));
   });
 }
 
@@ -80,7 +82,7 @@ export async function destroyOtherCustomerSessions(db: Db, tenantId: string, cus
       and(
         eq(customerSessions.tenantId, tenantId),
         eq(customerSessions.userId, customerId),
-        sql`${customerSessions.token} != ${hashToken(currentRawToken)}`,
+        sql`${customerSessions.token} != ${hashCustomerToken(currentRawToken)}`,
       ),
     );
   });
