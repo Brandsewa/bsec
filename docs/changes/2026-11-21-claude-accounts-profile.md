@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `feat/accounts-profile` (not merged)
+- **Branch:** `feat/accounts-profile` (merged in #305, 7dabf0b2; production deploy passed)
 - **Area:** db, domain, contracts, auth, admin, superadmin, platform, web, docs
 - **Type:** feature
 - **Supersedes:** none (builds the plan in `2026-11-21-claude-accounts-profile-plan.md`)
@@ -38,7 +38,7 @@ Run in the worktree against local Postgres (Docker, port 55432) and the local de
 
 ## Docs updated
 - [x] `docs/ACCOUNTS-PROFILE-PLAN.md` (section 11), ADR-049 and the ADR index, `docs/ARCHITECTURE.md` (identity tables, migrations 0116 to 0118, API, routes, auth, "Last verified"). `DEPLOYMENT.md` unchanged: no new env vars or services.
-- [ ] `progress.md` In flight line is added on this branch and must be removed after merge.
+- [x] `progress.md` In flight line removed after merge.
 
 ## Follow-ups and open questions
 - Owner: accept ADR-049 and the `staff_two_factors` grant, or ask for another design.

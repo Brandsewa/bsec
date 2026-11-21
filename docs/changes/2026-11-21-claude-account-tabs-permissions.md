@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `feat/account-tabs-permissions` (not merged)
+- **Branch:** `feat/account-tabs-permissions` (merged in #308, 4dc5bf4d)
 - **Area:** admin, domain, contracts, docs
 - **Type:** feature
 - **Supersedes:** none (changes the layout from `2026-11-21-claude-accounts-profile.md`)

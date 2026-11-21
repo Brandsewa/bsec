@@ -1,6 +1,6 @@
 # Accounts and Profile plan (staff, platform staff, customer)
 
-Status: **phases 1 to 3 built on `feat/accounts-profile`, not merged** (see section 11 for what was built and what changed from this plan) · Author: Claude · 2026-11-21 · Section 9: Q1 decided by the owner, Q2 to Q6 defaulted to Claude's recommendations (owner may override before a phase starts).
+Status: **phases 1 to 3 merged in #305 (7dabf0b2) and deployed** (see section 11 for what was built and what changed from this plan) · Author: Claude · 2026-11-21 · Section 9: Q1 decided by the owner, Q2 to Q6 defaulted to Claude's recommendations (owner may override before a phase starts).
 
 Goal: replace today's thin "Password / Theme / Sign out" menus with one dedicated, tabbed **Account** page per audience, covering the essentials only. Not a full identity product: no SSO, API tokens, saved payment methods or owner transfer in this plan (section 8).
 
