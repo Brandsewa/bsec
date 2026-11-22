@@ -112,6 +112,8 @@ export async function middleware(request: NextRequest) {
     marketPrefixes?: MarketEntry[] | undefined;
     /** A store redirect for this path (ADR-051), found by the evaluate route. */
     redirect?: { to: string; status: number; prefix: string } | null | undefined;
+    /** The store's primary custom domain when this request came in on another one of its custom domains. */
+    canonicalHost?: string | null | undefined;
   };
 
   try {
@@ -234,6 +236,11 @@ export async function middleware(request: NextRequest) {
   const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix && m.prefix === requestedPrefix) : undefined;
   // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
   // so the layout can write hreflang links and the market switcher can return to the same page.
+  // One address per store: a request on a secondary custom domain (for example the bare domain when www is primary) is sent to the
+  // primary one, same path and query. GET and HEAD only; the platform address is never redirected.
+  if (access.canonicalHost && (request.method === "GET" || request.method === "HEAD")) {
+    return NextResponse.redirect(`https://${access.canonicalHost}${request.nextUrl.pathname}${request.nextUrl.search}`, 308);
+  }
   // A redirect the merchant set up (ADR-051): a real HTTP redirect before any page renders. A relative target keeps the visitor's
   // market prefix; the request's query string is kept unless the target has its own.
   if (access.redirect && (request.method === "GET" || request.method === "HEAD")) {

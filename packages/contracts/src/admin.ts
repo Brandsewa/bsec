@@ -923,6 +923,21 @@ export const SeoHealthView = z.object({
 });
 export type SeoHealthView = z.infer<typeof SeoHealthView>;
 
+/** Links in the store's menus and published pages that lead nowhere (docs/STOREFRONT-AUDIT-FIXES-PLAN.md phase 4). */
+export const LinkHealthView = z.object({
+  scanned: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  problems: z.array(
+    z.object({
+      kind: z.enum(["broken", "platform_host", "shopify_checkout", "www_host"]),
+      link: z.string(),
+      hint: z.string(),
+      where: z.object({ type: z.enum(["menu", "page"]), label: z.string() }),
+    }),
+  ),
+});
+export type LinkHealthView = z.infer<typeof LinkHealthView>;
+
 /** An old address the store keeps alive (ADR-051). */
 export const RedirectView = z.object({
   id: z.string().uuid(),
@@ -5234,6 +5249,9 @@ export const adminContract = {
     health: oc
       .route({ method: "GET", path: "/admin/seo/health" })
       .output(SeoHealthView),
+    links: oc
+      .route({ method: "GET", path: "/admin/seo/links" })
+      .output(LinkHealthView),
   },
 
   // --- Store redirects (ADR-051): old addresses that keep working ---

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { evaluateStorefrontAccess, findStoreRedirect, listStorefrontMarkets, recordLookupFailure } from "@bs/domain";
+import { evaluateStorefrontAccess, findCanonicalHost, findStoreRedirect, listStorefrontMarkets, recordLookupFailure } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 /**
@@ -66,7 +66,9 @@ export async function GET(request: NextRequest) {
       const hit = await findStoreRedirect(rt, access.tenantId, market ? requested.slice(first.length) || "/" : requested).catch(() => null);
       if (hit) redirect = { ...hit, prefix: market?.prefix ?? "" };
     }
-    return NextResponse.json({ ...access, marketPrefixes: marketPrefixesForTenant, redirect });
+    // A store with several of its own domains answers on one: the others redirect to the primary (domains/canonical.ts).
+    const canonicalHost = access.tenantId ? await findCanonicalHost(rt._db.db, host).catch(() => null) : null;
+    return NextResponse.json({ ...access, marketPrefixes: marketPrefixesForTenant, redirect, canonicalHost });
   } catch (error) {
     const { fallbackMode } = recordLookupFailure(host, error);
 

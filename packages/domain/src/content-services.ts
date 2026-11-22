@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
-import { getBlockDefinition, hasMarketingBlocks, validateBlockDocument } from "@bs/blocks";
+import { getBlockDefinition, hasMarketingBlocks, normalizeStoreHref, validateBlockDocument } from "@bs/blocks";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
@@ -1401,6 +1401,20 @@ export function isProtectedMenu(handle: string): boolean {
   return handle === "header" || handle === "footer";
 }
 
+/**
+ * A menu link to the store's own preview address (`<store>.bcom.si`) becomes a relative path, as for block links
+ * (`normalizeStoreHref`), so the menu keeps shoppers on the store's real domain. Only plain address items; nested items too.
+ */
+function tidyMenuLinks(items: unknown[]): unknown[] {
+  return items.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const it = { ...(item as Record<string, unknown>) };
+    if ((it.type === undefined || it.type === "url") && typeof it.url === "string") it.url = normalizeStoreHref(it.url.trim());
+    if (Array.isArray(it.children)) it.children = tidyMenuLinks(it.children);
+    return it;
+  });
+}
+
 function validateMenuItems(kind: string, items: unknown[], depth = 1): void {
   if (kind === "filter") {
     if (depth > 1) {
@@ -1605,7 +1619,7 @@ export async function createMenu(
   assertPermission(ctx, "content.write");
   const db = rt._db.db;
   const kind = input.kind ?? "navigation";
-  const items = input.items ?? [];
+  const items = kind === "filter" ? (input.items ?? []) : tidyMenuLinks(input.items ?? []);
   validateMenuItems(kind, items);
 
   return withTenant(db, ctx.tenantId, async (tx) => {
@@ -1660,14 +1674,14 @@ export async function updateMenu(
     }
 
     const effectiveKind = input.kind ?? (existing.kind as "navigation" | "filter") ?? "navigation";
-    const effectiveItems = input.items !== undefined ? input.items : ((existing.items as unknown[]) ?? []);
+    const effectiveItems = input.items !== undefined ? (effectiveKind === "filter" ? input.items : tidyMenuLinks(input.items)) : ((existing.items as unknown[]) ?? []);
     validateMenuItems(effectiveKind, effectiveItems);
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (input.name !== undefined) updateData.title = input.name;
     if (input.handle !== undefined) updateData.handle = input.handle;
     if (input.kind !== undefined) updateData.kind = input.kind;
-    if (input.items !== undefined) updateData.items = input.items;
+    if (input.items !== undefined) updateData.items = effectiveItems;
 
     const [updated] = await tx
       .update(schema.menus)

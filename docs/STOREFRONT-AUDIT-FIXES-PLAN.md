@@ -1,6 +1,6 @@
 # Storefront audit fixes plan
 
-Status: **phase 1 and most of phase 2 built on `fix/storefront-audit-fixes` (not merged)**; phase 3 (redirect manager, www) and phase 4 not started. Section 9 lists what was built and what differed from this plan · Author: Claude · 2026-11-21 · Builder: Claude.
+Status: **phases 1 to 3 and most of phase 4 built** (phase 1 and most of phase 2 in PR 313 on `fix/storefront-audit-fixes`; the rest on `feat/storefront-redirects-health`, stacked on it). Sections 9 and 10 list what was built and what differed from this plan · Author: Claude · 2026-11-21 · Builder: Claude.
 
 Goal: fix, once and for every store, the platform-caused defects found by three external quality audits of live stores, and add the guardrails that stop merchants from making the content mistakes the audits also found.
 
@@ -131,4 +131,16 @@ The first reading of the code (section 2) was done in a checkout that was behind
 | F13 blog sitemap | **Not a defect:** blog categories nest one level and parents are already listed; the audited page is probably an empty category. Dropped. |
 | F9 Shopify blog paths | Built in `middleware.ts` (phase 3 item 1 done early). The redirect manager and `/checkouts/*` handling are not built. |
 | Phase 4 SEO health panel | **Already exists** (`admin/seo-health.ts`, `admin.seo.health`, Settings, SEO health). Add the new checks to it rather than building a second panel. |
+
+## 10. Build log, phases 3 and 4 (2026-11-22)
+
+| Plan item | What was done |
+|---|---|
+| Redirect manager (phase 3.2) | Built: ADR-051, migration `0120`, `tenant_redirects`, `admin.redirects.*` (list, create, update, delete, import; `content.write`; audited), Settings > Redirects with CSV upload (500 rows per call), answered at the gate through the evaluate route (30 second per-process copy), automatic redirects when a product, collection or category slug changes. **Pages are not covered**: the pages route already redirects an old slug. |
+| `www` and apex (phase 3.3) | Built differently from the plan: the Domains screen suggests connecting the www or bare twin, and a request on a secondary custom domain now redirects to the primary one (`domains/canonical.ts`). The existing guide already recommended www; we still do not change anyone's DNS. |
+| Link health check (phase 4.1) | Built as an on-demand read (not a background job): `admin.seo.links`, shown as a card on SEO health. It reads menus and published pages and judges links against the store's real products, collections, categories, pages, blog posts and redirects. Not read: product and blog bodies, because they are stored as plain text, not as links. |
+| SEO health checks (phase 4.2) | Only the link card was added. **Not built:** banner amount versus the real threshold, homepage H1 equal to the store name. |
+| Menu links (F10) | Menu links to the preview address are saved as paths. |
+| Page descriptions (F6) | A custom page with no SEO description now uses the first real sentence of its copy. Blog and policy fallbacks are unchanged. |
+| Not built | Starter H1 hint, richer product schema, bulk import alt column and NFC, banner chevron (not reproduced). Cloudflare email obfuscation and the mojibake repair still need owner decisions (section 4). |
 

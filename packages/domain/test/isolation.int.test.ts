@@ -66,6 +66,7 @@ import {
   previewShippingRate,
   getStorageUsage,
   getSeoHealth,
+  getLinkHealth,
   listRedirects,
   createRedirect,
   updateRedirect,
@@ -2294,6 +2295,8 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getStorageUsage(rt, ctx);
       case "seo.health":
         return await getSeoHealth(rt, ctx);
+      case "seo.links":
+        return await getLinkHealth(rt, ctx);
       case "redirects.list":
         return await listRedirects(rt, ctx);
       case "redirects.create":

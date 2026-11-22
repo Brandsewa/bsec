@@ -131,6 +131,33 @@ export function clampMetaDescription(text: string, max = META_DESCRIPTION_MAX): 
   return `${(atWord.length >= max * 0.6 ? atWord : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
 }
 
+const TEXT_KEY = /^(subtitle|text|body|description|content|intro|heading|html)$/i;
+
+/**
+ * The first real sentence of copy in a page's blocks (document order), for a page whose merchant wrote no description. Text shorter
+ * than `minLength` is skipped (a button label or a heading is not a description). Returns "" when there is none.
+ */
+export function firstTextOfBlocks(node: unknown, minLength = 40, depth = 0): string {
+  if (depth > 12) return "";
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const t = firstTextOfBlocks(item, minLength, depth + 1);
+      if (t) return t;
+    }
+  } else if (node && typeof node === "object") {
+    for (const [k, v] of Object.entries(node)) {
+      if (typeof v === "string" && TEXT_KEY.test(k)) {
+        const t = cleanMetaText(v);
+        if (t.length >= minLength) return t;
+      } else if (v && typeof v === "object") {
+        const t = firstTextOfBlocks(v, minLength, depth + 1);
+        if (t) return t;
+      }
+    }
+  }
+  return "";
+}
+
 /**
  * The description to put in the page head when the merchant wrote none: the first candidate that has text (an empty string is
  * not text), with HTML removed and the length capped, else the fallback. Never returns an empty string.

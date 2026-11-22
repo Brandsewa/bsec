@@ -402,6 +402,7 @@ import {
   listStoreStatusTransitions,
   getStorageUsage,
   getSeoHealth,
+  getLinkHealth,
   listRedirects,
   createRedirect,
   updateRedirect,
@@ -3405,6 +3406,15 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getSeoHealth(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      links: os.admin.seo.links
+        .use(requireAdmin)
+        .use(requirePermission("settings.read"))
+        .handler(({ context }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return getLinkHealth(context.rt, context.tenantCtx).catch((e) => {
             throw mapAuthError(e);
           });
         }),

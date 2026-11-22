@@ -9,10 +9,12 @@ import { startTestDb, type TestDb } from "@bs/db/test-env";
 import { STORE_PERMISSIONS } from "@bs/auth";
 import {
   clearRedirectCache,
+  createMenu,
   createRedirect,
   createRuntime,
   deleteRedirect,
   findStoreRedirect,
+  getLinkHealth,
   importRedirects,
   listRedirects,
   provisionTenant,
@@ -179,5 +181,43 @@ describe("automatic redirects when an address changes", () => {
   it("still reads the same after the in-process lookup is dropped (it is read from the database again)", async () => {
     clearRedirectCache(a.tenantId);
     expect(await findStoreRedirect(rtWeb, a.tenantId, "/collections/old-col")).toEqual({ to: "/collections/new-col", status: 308 });
+  });
+});
+
+describe("link health (storefront audit phase 4)", () => {
+  it("lists broken links from menus and published pages, and respects redirects and real pages", async () => {
+    await pg.query(`insert into products (tenant_id, title, slug, status) values ($1, 'Real Tea', 'real-tea', 'draft')`, [a.tenantId]);
+    await pg.query(
+      `insert into menus (tenant_id, handle, title, kind, items) values ($1, 'lh-menu', 'Link menu', 'navigation', $2::jsonb)`,
+      [a.tenantId, JSON.stringify([{ label: "Real", url: "/products/real-tea" }, { label: "Gone", url: "/products/missing-tea" }, { label: "Old", url: "/old-tea" }, { label: "Out", url: "https://example.com" }])],
+    );
+    const pageId = crypto.randomUUID();
+    const versionId = crypto.randomUUID();
+    await pg.query(`insert into pages (id, tenant_id, title, slug, type, status) values ($1, $2, 'Link page', 'link-page', 'custom', 'draft')`, [pageId, a.tenantId]);
+    await pg.query(`insert into page_versions (id, tenant_id, page_id, document) values ($1, $2, $3, $4::jsonb)`, [
+      versionId,
+      a.tenantId,
+      pageId,
+      JSON.stringify({ version: 1, blocks: [{ id: "b1", type: "Hero", version: 1, props: { primaryHref: "/checkouts/cn/abc", secondaryHref: "/pages/link-page" } }] }),
+    ]);
+    await pg.query(`update pages set status = 'published', published_version_id = $1 where id = $2`, [versionId, pageId]);
+
+    const view = await getLinkHealth(rtWeb, a);
+    const found = view.problems.map((p) => `${p.where.type}:${p.kind}:${p.link}`).sort();
+    expect(found).toEqual(["menu:broken:/products/missing-tea", "page:shopify_checkout:/checkouts/cn/abc"]);
+    expect(view.scanned).toBeGreaterThanOrEqual(6);
+    expect(view.truncated).toBe(false);
+  });
+
+  it("only reads this store's content", async () => {
+    const other = await getLinkHealth(rtWeb, b);
+    expect(other.problems.some((p) => p.link.includes("missing-tea"))).toBe(false);
+  });
+
+  it("saves a menu link to the store's preview address as a relative path", async () => {
+    await createMenu(rtWeb, a, { name: "Tidy", handle: "tidy-menu", items: [{ label: "Tea", type: "url", url: "https://acme.bcom.si/products/real-tea?x=1", children: [{ label: "Sub", type: "url", url: "https://acme.bcom.si" }] }] });
+    const row = (await pg.query(`select items from menus where tenant_id = $1 and handle = 'tidy-menu'`, [a.tenantId])).rows[0] as { items: Array<{ url: string; children: Array<{ url: string }> }> };
+    expect(row.items[0]?.url).toBe("/products/real-tea?x=1");
+    expect(row.items[0]?.children[0]?.url).toBe("/");
   });
 });

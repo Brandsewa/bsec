@@ -17,6 +17,58 @@ const STATUS = {
   fail: { icon: XCircle, label: "Needs attention", className: "text-destructive" },
 } as const;
 
+const LINK_KIND_LABEL = {
+  broken: "Page not found",
+  platform_host: "Preview address",
+  shopify_checkout: "Old checkout link",
+  www_host: "www not connected",
+} as const;
+
+/** Links in menus and published pages that lead nowhere, with what to do about each. Read-only. */
+function BrokenLinksCard() {
+  const links = useQuery(orpc.admin.seo.links.queryOptions());
+  const problems = links.data?.problems ?? [];
+  return (
+    <SettingsCard
+      title="Links that lead nowhere"
+      description={
+        links.data
+          ? problems.length === 0
+            ? `We read ${links.data.scanned} links in your menus and pages and found no problems.`
+            : `${problems.length}${links.data.truncated ? "+" : ""} of ${links.data.scanned} links need fixing. Edit the link where it is used, or add a redirect.`
+          : "Checks the links in your menus and published pages against what your store really has."
+      }
+    >
+      {links.isLoading ? (
+        <TableSkeleton rows={3} columns={2} />
+      ) : links.isError ? (
+        <EmptyState icon={AlertTriangle} title="Could not check your links" description={errorMessage(links.error)} action={<Button onClick={() => void links.refetch()}>Try again</Button>} />
+      ) : problems.length === 0 ? null : (
+        <ul className="divide-y divide-border/60">
+          {problems.map((p) => (
+            <li key={`${p.where.type}|${p.where.label}|${p.link}`} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{LINK_KIND_LABEL[p.kind]}</Badge>
+                <code className="break-all text-xs">{p.link}</code>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                In {p.where.type === "menu" ? "the menu" : "the page"} <span className="font-medium text-foreground">{p.where.label}</span>. {p.hint}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {problems.some((p) => p.kind === "broken") ? (
+        <div className="mt-4">
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/settings/redirects" />}>
+            Add a redirect
+          </Button>
+        </div>
+      ) : null}
+    </SettingsCard>
+  );
+}
+
 export function SeoHealthPage() {
   const health = useQuery(orpc.admin.seo.health.queryOptions());
   const checks = health.data?.checks ?? [];
@@ -67,6 +119,7 @@ export function SeoHealthPage() {
               })}
             </ul>
           </SettingsCard>
+          <BrokenLinksCard />
         </>
       )}
     </SettingsPageFrame>
