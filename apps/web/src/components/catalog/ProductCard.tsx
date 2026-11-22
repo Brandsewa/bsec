@@ -76,7 +76,7 @@ export function ProductCard({
           <img src={imageUrl ?? PLACEHOLDER_IMAGE_URL} alt={imageUrl ? imageAlt : ""} loading={priority ? "eager" : "lazy"} className="bs-pcard-img" />
           {secondUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={secondUrl} alt="" loading="lazy" aria-hidden className="bs-pcard-img bs-pcard-img2" />
+            <img src={secondUrl} alt={`${product.title}, alternate view`} loading="lazy" aria-hidden className="bs-pcard-img bs-pcard-img2" />
           ) : null}
         </Link>
 

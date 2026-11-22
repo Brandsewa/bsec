@@ -287,7 +287,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       "Button",
       {
         text: bricksRowInputField("Text", "Click here") as Field,
-        link: bricksRowInputField("Link", "/collections/all") as Field,
+        link: bricksRowInputField("Link", "/products/all") as Field,
         newTab: radio("Open in new tab"),
         styleType: bricksRowSelectField("Button Style", [
           { value: "theme", label: "Theme Preset" },
@@ -487,7 +487,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
               secondaryLabel: text("Second button label"),
               secondaryHref: link("Second button link"),
             },
-            defaultItemProps: { title: "New slide", subtitle: "", primaryLabel: "Shop now", primaryHref: "/collections/all", secondaryLabel: "", secondaryHref: "" },
+            defaultItemProps: { title: "New slide", subtitle: "", primaryLabel: "Shop now", primaryHref: "/products/all", secondaryLabel: "", secondaryHref: "" },
           } as Field,
           titleSize: select("Heading size (theme H2 / H1)", { lg: "Large (H2 size)", xl: "Extra large (H1 size)" }),
           titleTag: select("First slide heading tag (SEO)", { h2: "H2", h1: "H1 (use once per page)" }),

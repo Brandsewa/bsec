@@ -155,13 +155,18 @@ export function ProductReviewsSection({ productId, productTitle }: ProductReview
         ) : (
           <button
             type="button"
-            disabled={shopper === null}
+            // Not `disabled` while the shopper's state loads: the server HTML (what crawlers and slow phones see) must show a live
+            // button. A click in that first moment goes to sign-in, which brings a signed-in shopper straight back.
             onClick={() => {
+              if (shopper === null) {
+                window.location.href = `/account/login?next=${encodeURIComponent(`${window.location.pathname}#reviews-section`)}`;
+                return;
+              }
               setFormSuccess(null);
               setFormError(null);
               setFormOpen(true);
             }}
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-60"
+            className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90"
           >
             Write a Review
           </button>

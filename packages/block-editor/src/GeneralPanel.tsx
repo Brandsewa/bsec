@@ -114,7 +114,7 @@ const STORE_DEFAULT_BANNER: BlockInstance = {
   id: "announcement-bar",
   type: "Banner",
   version: 1,
-  props: { text: "Free shipping on orders over ₹999", variant: "promo", dismissible: false },
+  props: { text: "Free shipping on orders over {{free_shipping_threshold}}", variant: "promo", dismissible: false },
 };
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);

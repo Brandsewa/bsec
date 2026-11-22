@@ -529,6 +529,45 @@ export async function getStorefrontProduct(
   });
 }
 
+/** The page of the built-in listing of every listed product: `/products/all` (not a collection, so a store can use any slug). */
+export const ALL_PRODUCTS_PATH = "/products/all";
+
+/**
+ * Every listed product in the shopper's market, with the same filters, sort and paging as a collection. Returned in the
+ * collection shape (a virtual, rule-less automated collection) so the collection listing template can draw it.
+ */
+export async function getStorefrontAllProducts(
+  rt: Runtime,
+  ctx: TenantContext,
+  opts?: CatalogListingOptions,
+): Promise<StorefrontCollectionDetail | null> {
+  const db = rt._db.db;
+  if (!(await isFeatureEnabled(db, ctx.tenantId, "catalog"))) return null;
+  return withMarketScope(db, ctx, async (tx) => {
+    const now = new Date().toISOString();
+    const virtual: ListingSource = { id: "all-products", type: "automated", match: "all", rules: [], sortOrder: "newest" };
+    return {
+      collection: {
+        id: "all-products",
+        title: "All products",
+        slug: "all",
+        type: "automated",
+        rules: [],
+        sortOrder: "newest",
+        imageMediaId: null,
+        description: null,
+        descriptionJson: null,
+        seo: {},
+        published: true,
+        indexable: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      ...(await listCollectionProducts(tx, ctx, virtual, opts)),
+    };
+  });
+}
+
 /**
  * Retrieves a collection and its published products with sorting and pagination.
  */

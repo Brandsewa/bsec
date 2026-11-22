@@ -3,6 +3,7 @@ import { MARKETING_PAGES } from "./components/marketing/landing/site-info.ts";
 import { isPlatformMarketingHost } from "./server/hosts.ts";
 import { BOT_UA, decideMarket, type MarketEntry } from "./lib/market-detect.ts";
 import { MARKET_COOKIE, MARKET_PREFIX_HEADER, PATH_HEADER } from "./lib/market-constants.ts";
+import { legacyStorefrontPath } from "./lib/legacy-paths.ts";
 
 /** Last market list the evaluation endpoint returned per host, for a moment when it cannot be reached. */
 const lastMarketPrefixes = new Map<string, MarketEntry[]>();
@@ -225,6 +226,13 @@ export async function middleware(request: NextRequest) {
   const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix && m.prefix === requestedPrefix) : undefined;
   // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
   // so the layout can write hreflang links and the market switcher can return to the same page.
+  // Old addresses (`/products`, Shopify's `/blogs/<blog>/<post>`) get one permanent redirect, inside the visitor's market.
+  const legacyTarget = legacyStorefrontPath(matchedMarket ? pathname.slice(firstSegment.length + 1) || "/" : pathname);
+  if (legacyTarget && (request.method === "GET" || request.method === "HEAD")) {
+    const to = request.nextUrl.clone();
+    to.pathname = `${matchedMarket ? requestedPrefix : ""}${legacyTarget}`;
+    return NextResponse.redirect(to, 308);
+  }
   const forwarded = new Headers(request.headers);
   forwarded.delete(MARKET_PREFIX_HEADER);
   const hasMarkets = (access.marketPrefixes?.length ?? 0) > 1;

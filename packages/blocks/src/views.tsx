@@ -108,8 +108,19 @@ function SectionHead({
   );
 }
 
+/** The store's real free-shipping amount, so an announcement bar can quote it instead of a number typed by hand. */
+const FREE_SHIPPING_TOKEN = "{{free_shipping_threshold}}";
+
 export function BannerView({ props, ctx }: A<R.BannerProps>): ReactNode {
-  const all = [{ text: props.text, link: props.link }, ...props.messages];
+  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const threshold = d && d.kind === "banner" ? d.freeShippingThresholdPaise : undefined;
+  // With data: the amount fills the token, and a message about free shipping is dropped when the store has no threshold.
+  // Without data (the editors): the token stays visible so the owner can see what will be replaced.
+  const all = [{ text: props.text, link: props.link }, ...props.messages].flatMap((m) => {
+    if (!m.text.includes(FREE_SHIPPING_TOKEN) || threshold === undefined) return [m];
+    return threshold ? [{ ...m, text: m.text.split(FREE_SHIPPING_TOKEN).join(money(threshold, ctx)) }] : [];
+  });
+  if (all.length === 0) return null;
   const rotating = props.rotate && all.length > 1;
   const style = {
     padding: "0.6rem 1rem",

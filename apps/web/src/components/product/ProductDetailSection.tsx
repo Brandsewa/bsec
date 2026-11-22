@@ -234,7 +234,7 @@ export function ProductDetailSection({
             Home
           </Link>
           <span>/</span>
-          <Link href="/products" className="hover:text-foreground transition-colors">
+          <Link href="/products/all" className="hover:text-foreground transition-colors">
             Products
           </Link>
           <span>/</span>

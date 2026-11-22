@@ -35,7 +35,7 @@ const b = (id: string, type: BlockInstance["type"], props: Record<string, unknow
 });
 
 const TRUST_ITEMS = [
-  { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+  { icon: "truck", title: "Free shipping", description: "On qualifying orders" },
   { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
   { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
   { icon: "support", title: "Friendly support", description: "Phone and WhatsApp" },
@@ -150,12 +150,12 @@ export const MODERN_TEMPLATE_CART: BlockInstance[] = [
 ];
 
 export const MODERN_TEMPLATE_HEADER: BlockInstance[] = [
-  b("mc-banner", "Banner", { text: "Free shipping on orders over ₹999", link: "/collections/all", variant: "promo", dismissible: false }),
+  b("mc-banner", "Banner", { text: "Free shipping on orders over {{free_shipping_threshold}}", link: "/products/all", variant: "promo", dismissible: false }),
   b("mc-header", "SiteHeader", {
     menuHandle: "header",
     links: [
       { label: "Home", href: "/" },
-      { label: "Shop all", href: "/collections/all" },
+      { label: "Shop all", href: "/products/all" },
       { label: "Our story", href: "/pages/about" },
     ],
     layout: "left",

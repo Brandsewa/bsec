@@ -7,6 +7,7 @@ import {
   getStatePricingScope,
   type StatePricingScope,
   getStorefrontCollection,
+  getStorefrontAllProducts,
   getStorefrontCategory,
   listStorefrontCategories,
   getStorefrontCustomFields,
@@ -139,6 +140,20 @@ export async function getCachedStorefrontCollection(
   }
 
   return res;
+}
+
+/** The all-products listing (`/products/all`): every listed product, filtered, sorted and paged like a collection. */
+export async function getCachedStorefrontAllProducts(
+  tenantId: string,
+  options?: CatalogListingOptions,
+  marketId?: string | null,
+): Promise<StorefrontCollectionDetail | null> {
+  "use cache";
+  cacheTag(tenantTag(tenantId, "product"));
+  // Filter menu changes also invalidate listings.
+  cacheTag(tenantTag(tenantId, "nav"));
+  const { rt } = server();
+  return getStorefrontAllProducts(rt, createStorefrontTenantContext(tenantId, marketId), options);
 }
 
 /** The coupons the store shows on product pages. Short-lived: a discount edit shows within a minute. */

@@ -9,10 +9,12 @@ import { STORE_PERMISSIONS } from "@bs/auth";
 import {
   createMarket,
   createRuntime,
+  getStorefrontAllProducts,
   getStorefrontCollection,
   getStorefrontProduct,
   getStorefrontSitemapUrls,
   provisionTenant,
+  resolveBlockData,
   setFixedMarketPrices,
   setMarketProductVisibility,
   updateMarket,
@@ -160,3 +162,43 @@ describe("sitemap URLs in a multi-market store (WP-6)", () => {
   });
 });
 
+
+describe("the built-in all-products listing (storefront audit: /products/all)", () => {
+  it("lists every listed product with the same sort as a collection", async () => {
+    const all = await getStorefrontAllProducts(rtWeb, shopper(baseId), { sort: "price_desc" });
+    expect(all?.collection).toMatchObject({ slug: "all", title: "All products", published: true });
+    expect(all?.products.items.map((p) => p.slug)).toEqual(["pricey-lamp", "cheap-lamp"]);
+    expect(all?.products.total).toBe(2);
+  });
+
+  it("filters like a collection, by price range", async () => {
+    const all = await getStorefrontAllProducts(rtWeb, shopper(baseId), { filters: { price: "100000-1000000" } });
+    expect(all?.products.items.map((p) => p.slug)).toEqual(["pricey-lamp"]);
+  });
+
+  it("follows the market's catalog and prices, like a real collection", async () => {
+    await setMarketProductVisibility(rtWeb, admin, usId, [{ productId: ids.pricey, published: false }]);
+    const us = await getStorefrontAllProducts(rtWeb, shopper(usId));
+    expect(us?.products.items.map((p) => p.slug)).toEqual(["cheap-lamp"]);
+    expect(us?.products.items[0]?.priceMin).toBe(699);
+  });
+
+  it("does not stand in for a collection: /collections/all is not a collection", async () => {
+    expect(await getStorefrontCollection(rtWeb, shopper(baseId), "all")).toBeNull();
+  });
+
+  it("is in the sitemap", async () => {
+    const locs = (await getStorefrontSitemapUrls(rtWeb, admin, "scope.store")).map((u) => u.loc);
+    expect(locs).toContain("https://scope.store/products/all");
+  });
+});
+
+describe("announcement bar free-shipping token data (storefront audit)", () => {
+  const bar = (id: string, text: string) => ({ id, type: "Banner", version: 1, props: { text } });
+
+  it("reads the real threshold from the store's shipping rates, for bars that use the token only", async () => {
+    const data = await resolveBlockData(rtWeb, shopper(baseId), [bar("with", "Free shipping over {{free_shipping_threshold}}"), bar("without", "Sale on now")] as never);
+    expect(data["with"]).toEqual({ kind: "banner", freeShippingThresholdPaise: 99900 });
+    expect(data["without"]).toBeUndefined();
+  });
+});
