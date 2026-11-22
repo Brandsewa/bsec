@@ -9,6 +9,7 @@ import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
 import { syncVariantMarketPrices } from "./markets/service.ts";
+import { recordAutoRedirect } from "./redirects/service.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -678,6 +679,9 @@ export async function updateProduct(
     if (!row) {
       throw new Error(`Product not found: "${input.id}"`);
     }
+
+    // A renamed address keeps working: the old one redirects to the new one (ADR-051).
+    if (existing.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/products/${existing.slug}`, `/products/${row.slug}`);
 
     // Update product_categories if primary or extra categories are passed
     if (input.primaryCategoryId !== undefined || input.extraCategoryIds !== undefined) {
@@ -1622,6 +1626,8 @@ export async function updateCategory(
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
 
+    if (existing.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/categories/${existing.slug}`, `/categories/${row.slug}`);
+
     if (input.productIds !== undefined && row.type === "manual") {
       await syncCategoryProducts(tx, ctx.tenantId, row.id, input.productIds);
     }
@@ -2069,6 +2075,7 @@ export async function updateCollection(
   const db = rt._db.db;
 
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [before] = await tx.select({ slug: schema.collections.slug }).from(schema.collections).where(eq(schema.collections.id, input.id)).limit(1);
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
@@ -2090,6 +2097,8 @@ export async function updateCollection(
       .returning();
 
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
+
+    if (before && before.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/collections/${before.slug}`, `/collections/${row.slug}`);
 
     if (input.imageMediaId !== undefined) {
       await syncMediaUsages(tx, ctx, {

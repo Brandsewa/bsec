@@ -402,6 +402,11 @@ import {
   listStoreStatusTransitions,
   getStorageUsage,
   getSeoHealth,
+  listRedirects,
+  createRedirect,
+  updateRedirect,
+  deleteRedirect,
+  importRedirects,
   getSettingsUpdate,
   applySettingsUpdate,
   getCookieInventory,
@@ -3400,6 +3405,54 @@ export const storeRouter = os.router({
         .handler(({ context }) => {
           if (!context.tenantCtx) throw new Error("Missing tenant context");
           return getSeoHealth(context.rt, context.tenantCtx).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+    },
+    redirects: {
+      list: os.admin.redirects.list
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return listRedirects(context.rt, context.tenantCtx, input ?? {}).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      create: os.admin.redirects.create
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return createRedirect(context.rt, context.tenantCtx, input).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      update: os.admin.redirects.update
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          const { id, ...rest } = input;
+          return updateRedirect(context.rt, context.tenantCtx, id, rest).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      delete: os.admin.redirects.delete
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return deleteRedirect(context.rt, context.tenantCtx, input.id).catch((e) => {
+            throw mapAuthError(e);
+          });
+        }),
+      import: os.admin.redirects.import
+        .use(requireAdmin)
+        .use(requirePermission("content.write"))
+        .handler(({ context, input }) => {
+          if (!context.tenantCtx) throw new Error("Missing tenant context");
+          return importRedirects(context.rt, context.tenantCtx, input.rows).catch((e) => {
             throw mapAuthError(e);
           });
         }),

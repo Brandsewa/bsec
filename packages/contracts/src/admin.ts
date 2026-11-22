@@ -923,6 +923,30 @@ export const SeoHealthView = z.object({
 });
 export type SeoHealthView = z.infer<typeof SeoHealthView>;
 
+/** An old address the store keeps alive (ADR-051). */
+export const RedirectView = z.object({
+  id: z.string().uuid(),
+  fromPath: z.string(),
+  toPath: z.string(),
+  statusCode: z.number().int(),
+  source: z.enum(["manual", "import", "auto"]),
+  createdAt: z.string(),
+});
+export type RedirectView = z.infer<typeof RedirectView>;
+
+export const RedirectImportRow = z.object({
+  from: z.string().min(1).max(600),
+  to: z.string().min(1).max(2000),
+  status: z.union([z.number().int(), z.string().max(10)]).optional(),
+});
+
+export const RedirectImportResult = z.object({
+  created: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  results: z.array(z.object({ row: z.number().int(), from: z.string(), ok: z.boolean(), message: z.string().optional() })),
+});
+export type RedirectImportResult = z.infer<typeof RedirectImportResult>;
+
 export const StorageUsageView = z.object({
   usedBytes: z.number(),
   limitBytes: z.number().nullable(),
@@ -5210,6 +5234,30 @@ export const adminContract = {
     health: oc
       .route({ method: "GET", path: "/admin/seo/health" })
       .output(SeoHealthView),
+  },
+
+  // --- Store redirects (ADR-051): old addresses that keep working ---
+  redirects: {
+    list: oc
+      .route({ method: "GET", path: "/admin/redirects" })
+      .input(z.object({ search: z.string().max(200).optional(), page: z.number().int().min(1).optional(), pageSize: z.number().int().min(1).max(100).optional() }).optional())
+      .output(z.object({ items: z.array(RedirectView), total: z.number().int(), limit: z.number().int() })),
+    create: oc
+      .route({ method: "POST", path: "/admin/redirects" })
+      .input(z.object({ from: z.string().min(1).max(600), to: z.string().min(1).max(2000), status: z.number().int().optional() }))
+      .output(RedirectView),
+    update: oc
+      .route({ method: "PATCH", path: "/admin/redirects/{id}" })
+      .input(z.object({ id: z.string().uuid(), from: z.string().min(1).max(600).optional(), to: z.string().min(1).max(2000).optional(), status: z.number().int().optional() }))
+      .output(RedirectView),
+    delete: oc
+      .route({ method: "DELETE", path: "/admin/redirects/{id}" })
+      .input(z.object({ id: z.string().uuid() }))
+      .output(z.object({ success: z.literal(true) })),
+    import: oc
+      .route({ method: "POST", path: "/admin/redirects/import" })
+      .input(z.object({ rows: z.array(RedirectImportRow).min(1).max(500) }))
+      .output(RedirectImportResult),
   },
 
   // --- M8 Onboarding Setup Checklist (PLAN §5.2, §8) ---

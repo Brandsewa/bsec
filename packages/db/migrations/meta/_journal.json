@@ -799,6 +799,13 @@
       "when": 1794780000000,
       "tag": "0119_ai_access",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1794866400000,
+      "tag": "0120_store_redirects",
+      "breakpoints": true
     }
   ]
 }

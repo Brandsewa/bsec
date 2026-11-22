@@ -36,6 +36,8 @@ export * from "./storefront/lifecycle.ts";
 export { clearStorefrontAccessCache } from "./storefront/access-cache.ts";
 export * from "./storefront/product-status.ts";
 export * from "./storefront/catalog.ts";
+export * from "./redirects/paths.ts";
+export * from "./redirects/service.ts";
 export * from "./catalog/variant-builder.ts";
 export * from "./catalog/variant-options.ts";
 export * from "./catalog/custom-fields.ts";

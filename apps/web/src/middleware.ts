@@ -110,6 +110,8 @@ export async function middleware(request: NextRequest) {
     message?: string | undefined;
     headline?: string | null | undefined;
     marketPrefixes?: MarketEntry[] | undefined;
+    /** A store redirect for this path (ADR-051), found by the evaluate route. */
+    redirect?: { to: string; status: number; prefix: string } | null | undefined;
   };
 
   try {
@@ -117,10 +119,12 @@ export async function middleware(request: NextRequest) {
     evalUrl.searchParams.set("host", host);
     // Forward all search parameters (e.g. preview_token, previewToken) to the Node evaluation route
     for (const [key, value] of request.nextUrl.searchParams.entries()) {
-      if (key !== "host") {
+      if (key !== "host" && key !== "bs_path") {
         evalUrl.searchParams.set(key, value);
       }
     }
+    // The requested path, so the evaluate route can look up a store redirect. Set here, never taken from the visitor.
+    evalUrl.searchParams.set("bs_path", pathname);
 
     // Fail-open timeout protection:
     // If the evaluation route times out (e.g. 3s under heavy DB load), abort request
@@ -230,6 +234,20 @@ export async function middleware(request: NextRequest) {
   const matchedMarket = requestedPrefix ? access.marketPrefixes?.find((m) => m.prefix && m.prefix === requestedPrefix) : undefined;
   // The market header is only ever set here, never trusted from the visitor; the original path (without the prefix) is passed on
   // so the layout can write hreflang links and the market switcher can return to the same page.
+  // A redirect the merchant set up (ADR-051): a real HTTP redirect before any page renders. A relative target keeps the visitor's
+  // market prefix; the request's query string is kept unless the target has its own.
+  if (access.redirect && (request.method === "GET" || request.method === "HEAD")) {
+    const target = new URL(access.redirect.to, request.url);
+    const outgoing = request.nextUrl.clone();
+    if (access.redirect.to.startsWith("/")) {
+      outgoing.pathname = `${access.redirect.prefix}${target.pathname}`;
+      outgoing.search = target.search || request.nextUrl.search;
+      outgoing.hash = target.hash;
+      return NextResponse.redirect(outgoing, access.redirect.status);
+    }
+    target.search = target.search || request.nextUrl.search;
+    return NextResponse.redirect(target, access.redirect.status);
+  }
   // Old addresses (`/products`, Shopify's `/blogs/<blog>/<post>`) get one permanent redirect, inside the visitor's market.
   const legacyTarget = legacyStorefrontPath(matchedMarket ? pathname.slice(firstSegment.length + 1) || "/" : pathname);
   if (legacyTarget && (request.method === "GET" || request.method === "HEAD")) {

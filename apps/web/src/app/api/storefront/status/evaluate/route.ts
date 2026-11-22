@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { evaluateStorefrontAccess, listStorefrontMarkets, recordLookupFailure } from "@bs/domain";
+import { evaluateStorefrontAccess, findStoreRedirect, listStorefrontMarkets, recordLookupFailure } from "@bs/domain";
 import { server } from "@/server/runtime.ts";
 
 /**
@@ -55,7 +55,18 @@ export async function GET(request: NextRequest) {
     }
 
     const marketPrefixesForTenant = access.tenantId ? await marketPrefixes(access.tenantId) : [];
-    return NextResponse.json({ ...access, marketPrefixes: marketPrefixesForTenant });
+
+    // A store redirect for the requested path (ADR-051). The middleware sends the path as `bs_path`; the market prefix is taken
+    // off to match and handed back so a relative target can keep the visitor in their market.
+    let redirect: { to: string; status: number; prefix: string } | null = null;
+    const requested = request.nextUrl.searchParams.get("bs_path");
+    if (access.tenantId && access.allowed && requested && requested.startsWith("/")) {
+      const first = `/${(requested.split("/")[1] ?? "").toLowerCase()}`;
+      const market = marketPrefixesForTenant.find((p) => p.prefix && p.prefix === first);
+      const hit = await findStoreRedirect(rt, access.tenantId, market ? requested.slice(first.length) || "/" : requested).catch(() => null);
+      if (hit) redirect = { ...hit, prefix: market?.prefix ?? "" };
+    }
+    return NextResponse.json({ ...access, marketPrefixes: marketPrefixesForTenant, redirect });
   } catch (error) {
     const { fallbackMode } = recordLookupFailure(host, error);
 

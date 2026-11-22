@@ -112,5 +112,6 @@
   "0116_account_profile_security.sql": "8452fc487e1a28a46cf3125c7f40daa56972cf63a714531d81b54cdf3eb7e789",
   "0117_customer_account_security.sql": "bfe5e8ff142b7150abedda8ade1cf389002b3314c2752e28016002dcc1ddc729",
   "0118_staff_two_factors.sql": "a6817e3bd738653f344341ce8a738d0f99aa8ce26aafd57fba96a62503996bda",
-  "0119_ai_access.sql": "a631391dba608926f9597a9ab49df392650ceb2966bedaada122b7918c22207a"
+  "0119_ai_access.sql": "a631391dba608926f9597a9ab49df392650ceb2966bedaada122b7918c22207a",
+  "0120_store_redirects.sql": "79f44d696712d9d72a8db625b277ddf2b1b9ad529170bae7abe0040dfef6252d"
 }
