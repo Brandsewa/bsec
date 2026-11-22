@@ -66,6 +66,12 @@ import {
   previewShippingRate,
   getStorageUsage,
   getSeoHealth,
+  getLinkHealth,
+  listRedirects,
+  createRedirect,
+  updateRedirect,
+  deleteRedirect,
+  importRedirects,
   scheduleMaintenance,
   cancelScheduledMaintenance,
   endMaintenance,
@@ -2289,6 +2295,22 @@ async function executeAdminProcedure(procPath: string, rt: Runtime, ctx: TenantC
         return await getStorageUsage(rt, ctx);
       case "seo.health":
         return await getSeoHealth(rt, ctx);
+      case "seo.links":
+        return await getLinkHealth(rt, ctx);
+      case "redirects.list":
+        return await listRedirects(rt, ctx);
+      case "redirects.create":
+        return await createRedirect(rt, ctx, { from: `/iso-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, to: "/iso-target" });
+      case "redirects.update": {
+        const r = await createRedirect(rt, ctx, { from: `/iso-u-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, to: "/iso-target" });
+        return await updateRedirect(rt, ctx, r.id, { to: "/iso-target-2" });
+      }
+      case "redirects.delete": {
+        const r = await createRedirect(rt, ctx, { from: `/iso-d-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, to: "/iso-target" });
+        return await deleteRedirect(rt, ctx, r.id);
+      }
+      case "redirects.import":
+        return await importRedirects(rt, ctx, [{ from: `/iso-i-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, to: "/iso-target" }]);
       case "storefront.listTransitions":
         return await listStoreStatusTransitions(rt, ctx, { limit: 5 });
       case "storefront.scheduleMaintenance":

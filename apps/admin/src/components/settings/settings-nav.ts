@@ -1,4 +1,4 @@
-import { Bot, BellRing, SearchCheck, Mail, CreditCard, Globe, ListPlus, Puzzle, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
+import { Bot, BellRing, CornerDownRight, SearchCheck, Mail, CreditCard, Globe, ListPlus, Puzzle, HardDrive, History, Landmark, LayoutDashboard, LifeBuoy, Receipt, RotateCcw, ShoppingBag, ShoppingCart, Sparkles, Store, Truck, UserCheck, UserCog } from "lucide-react";
 import type { ComponentType } from "react";
 import { hasPermission, type StorePermission } from "@bs/auth/permissions";
 
@@ -40,6 +40,7 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
       { id: "branding", label: "Branding", href: "/settings/branding", description: "Logo, colours, fonts", icon: Sparkles, perm: "branding.manage" },
       { id: "storefront", label: "Storefront", href: "/settings/storefront", description: "Go live, coming soon, password", icon: Store, perm: "storefront.manage" },
       { id: "domains", label: "Domains", href: "/settings/domains", description: "Custom domains and DNS", icon: Globe, perm: "domains.manage" },
+      { id: "redirects", label: "Redirects", href: "/settings/redirects", description: "Keep old addresses working", icon: CornerDownRight, perm: "content.write" },
       { id: "seo", label: "SEO health", href: "/settings/seo", description: "What search engines and AI can see", icon: SearchCheck, perm: "settings.read" },
     ],
   },

@@ -60,3 +60,21 @@ describe("generateProductJsonLd brand", () => {
     expect(generateProductJsonLd(product, "https://shop.example", "INR").brand).toBeUndefined();
   });
 });
+
+describe("firstTextOfBlocks", () => {
+  const blocks = [
+    { type: "Hero", props: { title: "Welcome", subtitle: "Short", primaryLabel: "Shop now" } },
+    { type: "RichText", props: { body: "<p>We grow and pack single-estate Darjeeling teas in the hills, and ship them across India.</p>" } },
+  ];
+
+  it("returns the first real sentence of copy, skipping short labels", async () => {
+    const { firstTextOfBlocks } = await import("../src/storefront/seo.ts");
+    expect(firstTextOfBlocks(blocks)).toBe("We grow and pack single-estate Darjeeling teas in the hills, and ship them across India.");
+  });
+
+  it("returns an empty string when there is no copy", async () => {
+    const { firstTextOfBlocks } = await import("../src/storefront/seo.ts");
+    expect(firstTextOfBlocks([{ type: "Banner", props: { text: "Sale" } }])).toBe("");
+    expect(firstTextOfBlocks(undefined)).toBe("");
+  });
+});

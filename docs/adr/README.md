@@ -57,5 +57,6 @@ New decisions get an ADR **before** code (PLAN §15). Copy `template.md`, take t
 | [048](048-stripe-payment-element.md) | Stripe Payment Element inline at the store checkout | Accepted |
 | [049](049-account-security-model.md) | Account and sign-in security model (profile, sessions, authenticator, security trail) | Proposed |
 | [050](050-ai-access-mcp.md) | AI access for stores over MCP: layered capabilities, OAuth connections, a permission matrix | Accepted |
+| [051](051-store-redirects.md) | Store redirects: a tenant table answered from the storefront gate | Accepted |
 
-**Next number: 051.**
+**Next number: 052.**
