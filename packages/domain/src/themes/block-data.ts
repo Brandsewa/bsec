@@ -19,6 +19,7 @@ import { assertPermission, type TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
 import { computeCanonicalPath } from "../content-services.ts";
 import { buildCloudflareImageUrl, publicMediaUrl } from "../media/storage.ts";
+import { getFreeShippingThresholdPaise } from "../orders/shipping-rates.ts";
 import { buildProductSummaries, type StorefrontProductSummary } from "../storefront/catalog.ts";
 import { LISTED_PRODUCT_STATUSES } from "../storefront/product-status.ts";
 import { blogMenuTargetsTx, recentBlogPostsTx, type BlogPostSummary } from "../blog/queries.ts";
@@ -511,7 +512,7 @@ export async function loadMenusData(
           br = activeBrandsBySlug.get(s);
         }
         if (!br) return null; // dead target: skip
-        resolvedUrl = `/collections/all?brand=${br.slug}`;
+        resolvedUrl = `/products/all?brand=${br.slug}`;
         break;
       }
       case "home": {
@@ -698,6 +699,9 @@ export async function recentReviewsTx(
   }));
 }
 
+/** The text token an announcement bar uses for the store's real free-shipping amount (see BannerView). */
+const FREE_SHIPPING_TOKEN = "{{free_shipping_threshold}}";
+
 export async function resolveBlockData(
   rt: Runtime,
   ctx: TenantContext,
@@ -709,9 +713,11 @@ export async function resolveBlockData(
   const footerBlocks: BlockInstance[] = [];
   const blogBlocks: BlockInstance[] = [];
   const reviewBlocks: BlockInstance[] = [];
+  const bannerBlocks: BlockInstance[] = [];
 
   walkBlocks(blocks, (b) => {
     if (b.hidden) return;
+    if (b.type === "Banner" && JSON.stringify(b.props).includes(FREE_SHIPPING_TOKEN)) bannerBlocks.push(b);
     if (b.type === "ProductShowcase") showcaseBlocks.push(b);
     else if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") collectionBlocks.push(b);
     else if (b.type === "SiteHeader" || b.type === "MkHeader") headerBlocks.push(b);
@@ -726,7 +732,8 @@ export async function resolveBlockData(
     headerBlocks.length === 0 &&
     footerBlocks.length === 0 &&
     blogBlocks.length === 0 &&
-    reviewBlocks.length === 0
+    reviewBlocks.length === 0 &&
+    bannerBlocks.length === 0
   ) {
     return {};
   }
@@ -772,6 +779,12 @@ export async function resolveBlockData(
         posts: res.enabled ? res.posts.map(toBlockBlogPost) : [],
         viewAllHref: res.categoryPath ? `/blog/category/${res.categoryPath}` : "/blog",
       };
+    }
+
+    // Announcement bars that quote the free-shipping amount read it from the shipping rates, so the bar and the cart never disagree.
+    if (bannerBlocks.length > 0) {
+      const freeShippingThresholdPaise = await getFreeShippingThresholdPaise(db, ctx.tenantId).catch(() => null);
+      for (const b of bannerBlocks) out[b.id] = { kind: "banner", freeShippingThresholdPaise };
     }
 
     if (headerBlocks.length > 0 || footerBlocks.length > 0) {

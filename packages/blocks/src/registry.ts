@@ -4,7 +4,7 @@ import {
   alignSchema,
   bgVideoUrlSchema,
   hexColorSchema,
-  hrefSchema,
+  storeHrefSchema as hrefSchema,
   httpsImageUrlSchema,
   logoSizeSchema,
   iconNameSchema,
@@ -61,7 +61,7 @@ export const BannerBlock: BlockDefinition<BannerProps> = {
   version: 1,
   schema: BannerSchema,
   defaultProps: {
-    text: "Special introductory offer: free shipping on orders over ₹999!",
+    text: "Special introductory offer: free shipping on orders over {{free_shipping_threshold}}!",
     dismissible: false,
     variant: "promo",
     messages: [],
@@ -334,8 +334,8 @@ export const ButtonBlock: BlockDefinition<ButtonProps> = {
   defaultProps: {
     label: "Click here",
     text: "Click here",
-    href: "/collections/all",
-    link: "/collections/all",
+    href: "/products/all",
+    link: "/products/all",
     newTab: false,
     styleType: "theme",
     variant: "primary",
@@ -390,7 +390,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
     menuHandle: "header",
     links: [
       { label: "Home", href: "/" },
-      { label: "Shop", href: "/collections/all" },
+      { label: "Shop", href: "/products/all" },
       { label: "About", href: "/pages/about" },
     ],
     layout: "left",
@@ -432,7 +432,7 @@ export const SiteFooterSchema = z.object({
     .default([]),
   /** Social icons under the brand: one per network, each linking out. Empty shows none. */
   socials: z
-    .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: hrefSchema.min(1) }))
+    .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: hrefSchema.refine((v) => v.length > 0, { message: "Enter a link" }) }))
     .max(8)
     .default([]),
   socialStyle: z.enum(["plain", "filled", "outline"]).default("plain"),
@@ -459,7 +459,7 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
     logoSize: { desktop: {}, tablet: {}, mobile: {} },
     mobileAccordion: true,
     columns: [
-      { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
+      { title: "Shop", links: [{ label: "All products", href: "/products/all" }, { label: "Search", href: "/search" }] },
       {
         title: "Policies",
         links: [
@@ -832,7 +832,7 @@ const DEFAULT_SLIDES: HeroSlide[] = [
     title: "Pure quality, delivered with care",
     subtitle: "Small-batch products from makers you can trust.",
     primaryLabel: "Shop now",
-    primaryHref: "/collections/all",
+    primaryHref: "/products/all",
     secondaryLabel: "Our story",
     secondaryHref: "/pages/about",
   },
@@ -1414,7 +1414,7 @@ export const TrustStripSchema = z.object({
     .min(1)
     .max(12)
     .default([
-      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "truck", title: "Free shipping", description: "On qualifying orders" },
       { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
       { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
       { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },

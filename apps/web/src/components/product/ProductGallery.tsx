@@ -114,20 +114,22 @@ export function ProductGallery({ media, title, thumbPosition = "bottom" }: Produ
               ? { url: thumbItem.url, width: thumbItem.width, height: thumbItem.height, focalX: thumbItem.focalX, focalY: thumbItem.focalY, dominantColor: thumbItem.dominantColor, derivatives: thumbItem.derivatives }
               : null,
           );
+          // A saved alt of "" means "not written yet" (as on the product card), so the title stands in.
+          const thumbLabel = itemIsVideo ? `Video ${idx + 1} of ${count}` : (item.alt?.trim() || `${title}, picture ${idx + 1} of ${count}`);
           return (
             <button
               key={item.id || item.mediaId || idx}
               type="button"
               role="tab"
               aria-selected={isSelected}
-              aria-label={itemIsVideo ? `Video ${idx + 1} of ${count}` : (item.alt ?? `${title}, picture ${idx + 1} of ${count}`)}
+              aria-label={thumbLabel}
               onClick={() => setSelectedIndex(idx)}
               className={`relative h-[4.5rem] w-[4.5rem] flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all lg:h-20 lg:w-20 ${
                 isSelected ? "border-primary ring-2 ring-primary/20" : "border-border/60 opacity-80 hover:border-border hover:opacity-100"
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={thumbInfo.src} srcSet={thumbInfo.srcSet} alt="" loading="lazy" style={{ objectPosition: thumbInfo.objectPosition }} className="h-full w-full object-cover" />
+              <img src={thumbInfo.src} srcSet={thumbInfo.srcSet} alt={thumbLabel} loading="lazy" style={{ objectPosition: thumbInfo.objectPosition }} className="h-full w-full object-cover" />
               {itemIsVideo ? (
                 <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white shadow-xs">

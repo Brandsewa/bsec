@@ -1294,7 +1294,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                   onChange={(id: string) => {
                     const br = (brandsQuery.data ?? []).find((b) => b.id === id);
                     if (br) {
-                      handleResourceSelect(br.id, br.name, `/collections/all?brand=${br.slug}`);
+                      handleResourceSelect(br.id, br.name, `/products/all?brand=${br.slug}`);
                     }
                   }}
                   options={[

@@ -1,0 +1,270 @@
+import React from "react";
+import { JsonLd } from "@/components/blog/JsonLd.tsx";
+import { getMarketContext } from "@/server/market.ts";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { cacheTag } from "next/cache";
+import {
+  evaluateStorefrontAccess,
+  getStorefrontAllProducts,
+  ALL_PRODUCTS_PATH,
+  getStoreSettings,
+  getStorefrontSeoSettings,
+  generateItemListJsonLd,
+  generateBreadcrumbJsonLd,
+  buildCollectionSeoMetadata,
+  tenantTag,
+  type CatalogListingOptions,
+} from "@bs/domain";
+import { server } from "@/server/runtime.ts";
+import { getCachedBrandAssets, getCachedStorefrontAllProducts, getCachedThemePage } from "@/server/cached-storefront.ts";
+import { withShareImage } from "@/lib/share-image.ts";
+import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
+import { CollectionListingSection } from "@/components/catalog/CollectionListingSection.tsx";
+
+interface CollectionPageProps {
+  searchParams: Promise<{
+    page?: string;
+    limit?: string;
+    sort?: string;
+    inStockOnly?: string;
+    [key: string]: string | undefined;
+  }>;
+}
+
+/** The collection page's product list is either the full "Collection page" block or the bare "Collection products" widget. */
+const isListingBlock = (type: string) => type === "CollectionListing" || type === "CollectionProducts";
+
+export async function generateMetadata({ searchParams }: CollectionPageProps): Promise<Metadata> {
+  const sp = await searchParams;
+
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+
+    if (access.tenantId) {
+      const tenantCtx = {
+        tenantId: access.tenantId,
+        storeStatus: access.mode ?? "live",
+        actor: { type: "system" as const },
+        roles: ["store_admin"],
+        permissions: ["products.read", "settings.write"],
+        requestId: crypto.randomUUID(),
+      };
+
+      const [res, seoSettings, storeSettings, marketCtx] = await Promise.all([
+        getStorefrontAllProducts(rt, tenantCtx),
+        getStorefrontSeoSettings(rt, tenantCtx).catch(() => null),
+        getStoreSettings(rt, tenantCtx).catch(() => null),
+        getMarketContext(access.tenantId).catch(() => null),
+      ]);
+
+      if (res?.collection) {
+        const page = sp.page ? parseInt(sp.page, 10) : 1;
+        const hasFilterOrSortParams = Boolean(
+          sp.sort ||
+          sp.inStockOnly ||
+          sp.in_stock ||
+          sp.price ||
+          sp.brand ||
+          sp.category ||
+          sp.collection ||
+          sp.tag ||
+          Object.keys(sp).some((k) => !["page", "limit"].includes(k))
+        );
+
+        const seoMeta = buildCollectionSeoMetadata({
+          collection: res.collection,
+          seoSettings,
+          storeSettings,
+          storeStatusMode: access.mode,
+          noindex: access.noindex,
+          productsCount: res.products.total,
+          hasFilterOrSortParams,
+          page,
+          host,
+          prefix: marketCtx?.prefix,
+          path: ALL_PRODUCTS_PATH,
+        });
+
+        const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
+        return withShareImage(
+          {
+            title: seoMeta.title,
+            description: seoMeta.description,
+            robots: seoMeta.robots,
+            openGraph: seoMeta.openGraph,
+            twitter: { card: assets?.shareImage ? "summary_large_image" : "summary", title: seoMeta.openGraph.title, description: seoMeta.openGraph.description },
+            alternates: seoMeta.alternates,
+          },
+          assets?.shareImage,
+        );
+      }
+    }
+  } catch {
+    // Non-fatal fallback
+  }
+
+  return {
+    title: "All products",
+  };
+}
+
+/** `/products/all`: every product in the store, with the collection page's filters, sort and "Load more". */
+export default async function AllProductsPage({
+  searchParams,
+}: CollectionPageProps) {
+  const sp = await searchParams;
+
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  // "Products per load" comes from the theme's collection template (12 by default); ?limit= is what "Load more" raises.
+  let limit = 12;
+  const rawSort = sp.sort ?? "created_desc";
+  const inStockOnly = sp.inStockOnly === "true";
+
+  // Map sort parameter to domain CatalogListingOptions
+  let sortOption: CatalogListingOptions["sort"] = undefined;
+  if (rawSort === "price_asc") sortOption = "price_asc";
+  else if (rawSort === "price_desc") sortOption = "price_desc";
+  else if (rawSort === "title_asc" || rawSort === "title") sortOption = "title";
+  else if (rawSort === "popularity") sortOption = "popularity";
+  else if (rawSort === "rating") sortOption = "rating";
+  else if (rawSort === "created_desc" || rawSort === "newest") sortOption = "newest";
+
+  let collectionData: Awaited<ReturnType<typeof getStorefrontAllProducts>> = null;
+  let host = "localhost";
+  let tenantId = "";
+  let marketCurrency = "INR";
+  let marketLocale = "en-IN";
+  let template: Awaited<ReturnType<typeof getCachedThemePage>> = null;
+
+  try {
+    const h = await headers();
+    host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+    const { rt } = server();
+    const access = await evaluateStorefrontAccess(rt, host, { headers: h });
+
+    if (!access.tenantId) {
+      notFound();
+    }
+
+    tenantId = access.tenantId;
+    const marketCtx = await getMarketContext(tenantId);
+    const marketId = marketCtx.scope;
+    marketCurrency = marketCtx.currency;
+    marketLocale = marketCtx.locale;
+
+    // Check if the theme's collection template defines a filterMenuHandle
+    template = await getCachedThemePage(tenantId, "collection", marketId).catch(() => null);
+    const listingForSize = template?.blocks.find((b) => isListingBlock(b.type));
+    const templateSize = Number(listingForSize?.props?.["pageSize"]);
+    const defaultLimit = [12, 24, 36].includes(templateSize) ? templateSize : listingForSize ? 24 : 12;
+    limit = Math.max(1, Math.min(100, parseInt(sp.limit ?? "", 10) || defaultLimit));
+    let filterMenuHandle: string | undefined = undefined;
+    if (template?.blocks) {
+      const listingBlock = template.blocks.find((b) => isListingBlock(b.type));
+      if (listingBlock && typeof listingBlock.props?.filterMenuHandle === "string" && listingBlock.props.filterMenuHandle) {
+        filterMenuHandle = listingBlock.props.filterMenuHandle;
+      }
+    }
+    if (!filterMenuHandle && typeof sp.filterMenu === "string") {
+      filterMenuHandle = sp.filterMenu;
+    }
+    if (!filterMenuHandle) {
+      filterMenuHandle = "filter";
+    }
+
+    // Extract filter search params
+    const filterParams: Record<string, string | string[] | undefined> = {};
+    for (const [k, v] of Object.entries(sp)) {
+      if (!["page", "limit", "sort"].includes(k)) {
+        filterParams[k] = v;
+      }
+    }
+
+    collectionData = await getCachedStorefrontAllProducts(tenantId, {
+      page,
+      limit,
+      sort: sortOption,
+      inStockOnly: inStockOnly || undefined,
+      filterMenuHandle,
+      filters: filterParams,
+    }, marketId);
+  } catch {
+    notFound();
+  }
+
+  if (!collectionData?.collection) {
+    notFound();
+  }
+
+  const { collection, products } = collectionData;
+
+  // Set tenant collection cache tags for Next.js Cache Components (PLAN §11.6)
+  try {
+    cacheTag(tenantTag(tenantId, "product"));
+  } catch {
+    // Ignore outside Next.js request context
+  }
+
+  const collectionCacheTag = tenantTag(tenantId, "product");
+
+  const storeUrl = `https://${host}`;
+
+  // Schema.org structured data
+  const itemListJsonLd = generateItemListJsonLd(
+    collection.title,
+    products.items.map((prod, idx) => ({
+      name: prod.title,
+      url: `${storeUrl}/products/${prod.slug}`,
+      position: (page - 1) * limit + idx + 1,
+    })),
+  );
+
+  const breadcrumbsJsonLd = generateBreadcrumbJsonLd([
+    { name: "Home", url: storeUrl },
+    { name: collection.title, url: `${storeUrl}${ALL_PRODUCTS_PATH}` },
+  ]);
+
+  const listing = (options?: Parameters<typeof CollectionListingSection>[0]["options"]) => (
+    <CollectionListingSection
+      collection={collection}
+      products={products}
+      page={page}
+      limit={limit}
+      rawSort={rawSort}
+      inStockOnly={inStockOnly}
+      filterData={collectionData?.filterData}
+      filters={sp}
+      options={options}
+      basePath={ALL_PRODUCTS_PATH}
+      archive={{ href: ALL_PRODUCTS_PATH, label: "All products" }}
+      currency={marketCurrency}
+      locale={marketLocale}
+    />
+  );
+
+  return (
+    <div data-cache-tag={collectionCacheTag} className="bs-skin">
+      {/* Schema.org structured data */}
+      <JsonLd data={itemListJsonLd} />
+      <JsonLd data={breadcrumbsJsonLd} />
+      {template ? (
+        <BlockRenderer
+          blocks={template.blocks}
+          renderData={template.renderData}
+          context={{
+            currency: marketCurrency,
+            locale: marketLocale,
+            renderCollectionListing: (options) => listing(options),
+          }}
+        />
+      ) : (
+        listing()
+      )}
+    </div>
+  );
+}

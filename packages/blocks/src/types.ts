@@ -158,6 +158,7 @@ export type BlockData =
   | { kind: "menu"; items: ResolvedMenuItem[] }
   | { kind: "plans"; plans: Array<{ code: string; name: string; priceMonthlyPaise: number; priceYearlyPaise: number; tagline: string | null; badge: string | null; bullets: string[] }> }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
+  | { kind: "banner"; freeShippingThresholdPaise: number | null }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 
 export interface RenderMediaDetail {

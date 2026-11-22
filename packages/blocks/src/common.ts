@@ -24,6 +24,30 @@ export const hrefSchema = z
   .max(2000)
   .refine(isSafeHref, { message: "Link must start with /, #, https://, mailto: or tel:" });
 
+// Hosts under the platform domain that are not a store: a link to one of these is a real external link, never "this store".
+const PLATFORM_APP_HOST = /^https?:\/\/(?!(?:www|admin|superadmin|platform|media|api|app|status|docs)\.)[a-z0-9-]+\.bcom\.si(?=[/?#]|$)/i;
+// A path field that got an absolute URL pasted into it: "/collections/https://shop.example/collections/teas".
+const NESTED_ABSOLUTE = /^\/[^/?#]+\/(https?:\/\/.+)$/i;
+
+/**
+ * Tidies a store link the way a shopper's browser would: a link to the store's own preview host (`<store>.bcom.si`) becomes a
+ * relative path, so it keeps the shopper on the store's real domain (and market) instead of switching hosts and dropping
+ * their cart; an absolute URL pasted after a path prefix keeps only the URL. Anything else is returned unchanged.
+ */
+export const normalizeStoreHref = (v: string): string => {
+  const nested = NESTED_ABSOLUTE.exec(v);
+  let out = nested?.[1] ?? v;
+  const host = PLATFORM_APP_HOST.exec(out);
+  if (host) {
+    const rest = out.slice(host[0].length);
+    out = rest === "" ? "/" : rest.startsWith("/") ? rest : `/${rest}`;
+  }
+  return out;
+};
+
+/** A link in a store's own blocks: validated like `hrefSchema`, then tidied by `normalizeStoreHref` (also when old content is rendered). */
+export const storeHrefSchema = hrefSchema.transform(normalizeStoreHref);
+
 // Video: YouTube, Vimeo or a direct .mp4/.webm on https.
 const SAFE_VIDEO =
   /^https:\/\/((www\.)?youtube\.com\/watch\?v=[\w-]{6,20}|youtu\.be\/[\w-]{6,20}|vimeo\.com\/\d+|[^\s]+\.(mp4|webm)(\?[^\s]*)?)$/i;
