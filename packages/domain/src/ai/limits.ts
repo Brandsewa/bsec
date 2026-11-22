@@ -6,7 +6,8 @@
  */
 import { and, eq, gte, sql } from "drizzle-orm";
 import { schema, withTenant, type Db } from "@bs/db";
-import { checkRateLimit, resolveTenantQuota, type QuotaKey } from "../system/rate-limit.ts";
+import { checkRateLimit, type QuotaKey } from "../system/rate-limit.ts";
+import { tierForPlan } from "../saas/plan-tiers.ts";
 import type { AgentSession } from "./session.ts";
 
 export type AgentCallKind = "read" | "write" | "report";
@@ -46,8 +47,37 @@ export function localDay(timezone: string, now = new Date()): { date: string; se
   return { date: `${parts.year}-${parts.month}-${parts.day}`, secondsLeft: Math.max(60, 86400 - elapsed) };
 }
 
-async function hit(db: Db, key: string, quota: number, windowSeconds: number): Promise<{ allowed: boolean; retryAfter: number }> {
-  if (quota <= 0) return { allowed: false, retryAfter: windowSeconds };
+/**
+ * The limit for one AI quota key. A store only reaches a limit after the plan check passed, so the limit must never come out as
+ * zero just because the store's size tier row is missing or still says XS or S (those tiers carry 0 for AI access, because they are
+ * not entitled). Order: an explicit Super Admin override for the store (a deliberate 0 still means "paused") > the store's tier when
+ * it is M or L > the tier its plan maps to (Growth is M, Pro is L) > M.
+ */
+export async function resolveAiQuota(db: Db, tenantId: string, key: QuotaKey): Promise<number> {
+  const override = await db.execute<{ value: number }>(sql`SELECT value FROM tenant_quota_overrides WHERE tenant_id = ${tenantId} AND quota_key = ${key} LIMIT 1`);
+  if (override.rows[0]) return Number(override.rows[0].value);
+
+  const tierRow = await db.execute<{ tier: string }>(sql`SELECT tier FROM tenant_size_tiers WHERE tenant_id = ${tenantId} LIMIT 1`);
+  let tier = tierRow.rows[0]?.tier?.toUpperCase() ?? "";
+  if (tier !== "M" && tier !== "L") {
+    const plan = await db.execute<{ code: string }>(sql`
+      SELECT p.code FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+       WHERE s.tenant_id = ${tenantId} AND s.status IN ('active', 'trialing', 'past_due')
+       ORDER BY s.created_at DESC LIMIT 1`);
+    tier = tierForPlan(plan.rows[0]?.code);
+    if (tier !== "M" && tier !== "L") tier = "M";
+  }
+  const def = await db.execute<{ tier_m: number; tier_l: number }>(sql`SELECT tier_m, tier_l FROM quota_definitions WHERE key = ${key} LIMIT 1`);
+  const row = def.rows[0];
+  if (!row) return 0;
+  return Number(tier === "L" ? row.tier_l : row.tier_m);
+}
+
+/** A limit of zero is not "too many requests": it means Super Admin paused AI access for the store. Said plainly, with a long wait. */
+const PAUSED_MESSAGE = "AI access is paused for this store by Brand Sewa. Contact support to turn it back on.";
+
+async function hit(db: Db, key: string, quota: number, windowSeconds: number): Promise<{ allowed: boolean; retryAfter: number; paused?: true }> {
+  if (quota <= 0) return { allowed: false, retryAfter: 3600, paused: true };
   const r = await checkRateLimit(db, { key, limit: quota, windowSeconds });
   return { allowed: r.allowed, retryAfter: r.retryAfter };
 }
@@ -61,7 +91,7 @@ export async function enforceAgentLimits(db: Db, session: AgentSession, kind: Ag
   const connId = session.connection.id;
   const day = localDay(session.timezone);
   try {
-    const q = (key: QuotaKey) => resolveTenantQuota(db, tenantId, key);
+    const q = (key: QuotaKey) => resolveAiQuota(db, tenantId, key);
     const checks: Array<{ key: string; quota: QuotaKey; window: number; message: (wait: number) => string }> = [
       { key: `ai:c:${connId}:m`, quota: "ai_calls_min_conn", window: 60, message: (w) => `This AI app is sending requests too fast. Try again in ${humanWait(w)}.` },
       { key: `ai:s:${tenantId}:m`, quota: "ai_calls_min_store", window: 60, message: (w) => `AI access limit reached for this store. It resets in ${humanWait(w)}.` },
@@ -73,6 +103,7 @@ export async function enforceAgentLimits(db: Db, session: AgentSession, kind: Ag
 
     for (const c of checks) {
       const r = await hit(db, c.key, await q(c.quota), c.window);
+      if (r.paused) throw new AgentRateLimitError(PAUSED_MESSAGE, r.retryAfter);
       if (!r.allowed) throw new AgentRateLimitError(c.message(r.retryAfter), r.retryAfter);
     }
   } catch (err) {
@@ -108,7 +139,7 @@ export interface AiUsage {
 
 export async function readAiUsage(db: Db, tenantId: string, timezone: string): Promise<AiUsage> {
   const day = localDay(timezone);
-  const [callLimit, writeLimit] = await Promise.all([resolveTenantQuota(db, tenantId, "ai_calls_day_store"), resolveTenantQuota(db, tenantId, "ai_writes_day_store")]);
+  const [callLimit, writeLimit] = await Promise.all([resolveAiQuota(db, tenantId, "ai_calls_day_store"), resolveAiQuota(db, tenantId, "ai_writes_day_store")]);
   const counts = await withTenant(db, tenantId, async (tx) => {
     const since = sql`(${day.date}::date::timestamp AT TIME ZONE ${timezone})`;
     const [row] = await tx
