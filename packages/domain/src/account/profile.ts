@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { schema, withUser } from "@bs/db";
+import { and, asc, eq } from "drizzle-orm";
+import { schema, withTenant, withUser } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { getAdminMe } from "../admin/me.ts";
 
@@ -24,7 +24,7 @@ export interface AccountProfile {
   twoFactorEnabled: boolean;
   createdAt: string;
   /** Read-only access summary, one row per store (role and permissions come from memberships, not from this page). */
-  access: { tenantId: string; storeName: string; role: string; permissions: string[]; joinedAt: string | null; invitedBy: string | null }[];
+  access: { tenantId: string; storeName: string; role: string; permissions: string[]; joinedAt: string | null; invitedBy: string | null; owner: { name: string; email: string } | null }[];
 }
 
 export interface AccountProfileInput {
@@ -67,7 +67,24 @@ export async function getAccountProfile(rt: Runtime, userId: string): Promise<Ac
       const [inviter] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, m.invitedBy)).limit(1);
       invitedBy = inviter?.name ?? null;
     }
-    access.push({ tenantId: s.tenantId, storeName: s.name, role: s.role, permissions: s.permissions, joinedAt: m?.createdAt?.toISOString() ?? null, invitedBy });
+    // Who to ask for more access: the store owner, shown to people who belong to that store only (never to the owner themselves).
+    let owner: { name: string; email: string } | null = null;
+    if (s.role !== "store_owner") {
+      const owners = await withTenant(db, s.tenantId, (tx) =>
+        tx
+          .select({ id: schema.users.id, name: schema.users.name, email: schema.users.email })
+          .from(schema.memberships)
+          .innerJoin(schema.roles, and(eq(schema.roles.tenantId, schema.memberships.tenantId), eq(schema.roles.id, schema.memberships.roleId)))
+          .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+          .where(and(eq(schema.memberships.tenantId, s.tenantId), eq(schema.memberships.status, "active"), eq(schema.roles.name, "store_owner")))
+          .orderBy(asc(schema.memberships.createdAt))
+          .limit(10),
+      );
+      // Prefer the owner who granted this access; otherwise the longest-standing owner.
+      const o = owners.find((x) => x.id === m?.invitedBy) ?? owners[0];
+      owner = o ? { name: o.name, email: String(o.email) } : null;
+    }
+    access.push({ tenantId: s.tenantId, storeName: s.name, role: s.role, permissions: s.permissions, joinedAt: m?.createdAt?.toISOString() ?? null, invitedBy, owner });
   }
   return {
     id: u.id,

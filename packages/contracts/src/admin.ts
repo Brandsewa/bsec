@@ -1,6 +1,7 @@
 import { oc } from "@orpc/contract";
 import { marketsContract } from "./markets.ts";
 import { appsContract } from "./apps.ts";
+import { aiContract } from "./ai.ts";
 import { z } from "zod";
 import { PublicPlanCompareGroup } from "./plan-content.ts";
 import { financeContract } from "./finance.ts";
@@ -1494,6 +1495,8 @@ export const AccountProfile = z.object({
       permissions: z.array(z.string()),
       joinedAt: z.string().nullable(),
       invitedBy: z.string().nullable(),
+      /** The store owner to ask for more access; null for the owner themselves or when none is found. */
+      owner: z.object({ name: z.string(), email: z.string() }).nullable(),
     }),
   ),
 });
@@ -2382,6 +2385,7 @@ const ProductImportRunSchema = z.object({
 export const adminContract = {
   markets: marketsContract,
   apps: appsContract,
+  ai: aiContract,
   support: {
     list: oc.route({ method: "GET", path: "/admin/support/sessions" }).output(z.array(StoreSupportSession)),
     approve: oc

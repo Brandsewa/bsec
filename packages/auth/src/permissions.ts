@@ -44,6 +44,7 @@ export const STORE_PERMISSIONS = [
   "audit.read",
   "markets.manage",
   "apps.manage",
+  "ai.manage",
 ] as const;
 export type StorePermission = (typeof STORE_PERMISSIONS)[number];
 
