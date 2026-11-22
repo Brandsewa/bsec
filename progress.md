@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/ai-products-full` · AI access: every product field, variant, option, image, category and collection editable through MCP; map `docs/MCP-PRODUCTS-MAP.md`, change record `docs/changes/2026-11-22-claude-ai-products-full.md` · 2026-11-22
 - claude · `fix/ai-access-limits-tier` · AI access limits no longer resolve to zero for stores whose size tier row is missing or XS/S (Claude chat was told "sending requests too fast" on the first call); change record `docs/changes/2026-11-21-claude-ai-access-limit-tier-fix.md` · 2026-11-21
 - claude · `feat/ai-access-mcp` · AI access over MCP: Settings > AI access (consent, permission matrix, connections, usage), OAuth for Claude, stateless MCP endpoint at `/api/mcp`, capability layer; plan `docs/MCP-PLAN.md`, ADR-050, change record `docs/changes/2026-11-21-claude-ai-access-mcp.md` · 2026-11-21
 - claude · `feat/cashfree-gateway` · Cashfree as a second gateway: platform plan billing (alongside Razorpay) and store-side connection; built on top of `feat/platform-billing-b5-b6`, awaiting owner sandbox run; ADR-037, change record `docs/changes/2026-10-19-claude-cashfree-gateway.md` · 2026-10-19

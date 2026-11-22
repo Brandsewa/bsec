@@ -5,6 +5,8 @@ import { customerCapabilities } from "./capabilities/customers.ts";
 import { financeCapabilities } from "./capabilities/finance.ts";
 import { orderCapabilities } from "./capabilities/orders.ts";
 import { overviewCapabilities } from "./capabilities/overview.ts";
+import { mediaCapabilities } from "./capabilities/product-media.ts";
+import { variantCapabilities } from "./capabilities/product-variants.ts";
 import { productCapabilities } from "./capabilities/products.ts";
 import { toToolError } from "./errors.ts";
 import { allowedCapabilities, refusalFor } from "./policy.ts";
@@ -15,6 +17,8 @@ import type { AnyCapability, CapabilityResult } from "./types.ts";
 export const ALL_CAPABILITIES: readonly AnyCapability[] = [
   ...overviewCapabilities,
   ...productCapabilities,
+  ...variantCapabilities,
+  ...mediaCapabilities,
   ...collectionCapabilities,
   ...orderCapabilities,
   ...customerCapabilities,
