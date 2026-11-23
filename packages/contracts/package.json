@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./money": "./src/money.ts",
+    "./rich-text": "./src/rich-text.ts",
     "./discount-rules": "./src/discount-rules.ts",
     "./countries": "./src/countries.ts",
     "./units": "./src/units.ts",

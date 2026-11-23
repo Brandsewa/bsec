@@ -1,3 +1,4 @@
+import { richBlocksToImportText } from "@bs/contracts/rich-text";
 import { and, asc, eq, gt, ilike, inArray, isNull } from "drizzle-orm";
 import { FINANCE_EXPORT_ROLES } from "@bs/auth";
 import { minorUnitExponent } from "@bs/contracts/money";
@@ -150,8 +151,9 @@ export async function exportProductRows(rt: Runtime, ctx: TenantContext, input: 
       const pMedia = media.filter((m) => m.productId === p.id && m.kind === "image");
       const pCats = cats.filter((c) => c.productId === p.id);
       const seo = (p.seo ?? {}) as { title?: string; description?: string };
-      const desc = (p.descriptionJson as { text?: unknown } | string | null) ?? null;
-      const descText = typeof desc === "string" ? desc : typeof desc?.text === "string" ? desc.text : "";
+      const desc = (p.descriptionJson as { text?: unknown; blocks?: unknown } | string | null) ?? null;
+      // Formatted descriptions export as text with `##` headings and `-` lists, which the import reads back into blocks.
+      const descText = typeof desc === "string" ? desc : Array.isArray(desc?.blocks) ? richBlocksToImportText(desc.blocks as Array<{ type: string }>) : typeof desc?.text === "string" ? desc.text : "";
       const gallery = pMedia.filter((m) => !m.variantId);
       const featured = gallery[0];
       const cf = new Map(cfValues.filter((v) => v.productId === p.id).map((v) => [v.definitionId, v.value]));

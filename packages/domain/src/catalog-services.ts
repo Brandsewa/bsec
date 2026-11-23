@@ -4,7 +4,7 @@ import type { CollectionRule } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
-import { cleanRichDescription, type RichDescriptionValue } from "./rich-description.ts";
+import { cleanRichDescription, normalizeProductDescription, type RichDescriptionValue } from "./rich-description.ts";
 import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
@@ -466,7 +466,7 @@ export async function createProduct(
         title: input.title,
         slug,
         status: input.status ?? "draft",
-        descriptionJson: input.descriptionJson,
+        descriptionJson: normalizeProductDescription(input.descriptionJson),
         shortDescription: input.shortDescription,
         brandId: input.brandId,
         productType: input.productType,
@@ -657,7 +657,7 @@ export async function updateProduct(
     if (input.title !== undefined) updateValues.title = input.title;
     if (input.slug !== undefined) updateValues.slug = input.slug;
     if (input.status !== undefined) updateValues.status = input.status;
-    if (input.descriptionJson !== undefined) updateValues.descriptionJson = input.descriptionJson;
+    if (input.descriptionJson !== undefined) updateValues.descriptionJson = normalizeProductDescription(input.descriptionJson);
     if (input.shortDescription !== undefined) updateValues.shortDescription = input.shortDescription;
     if (input.brandId !== undefined) updateValues.brandId = input.brandId;
     if (input.productType !== undefined) updateValues.productType = input.productType;
