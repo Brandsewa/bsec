@@ -144,3 +144,21 @@ The first reading of the code (section 2) was done in a checkout that was behind
 | Page descriptions (F6) | A custom page with no SEO description now uses the first real sentence of its copy. Blog and policy fallbacks are unchanged. |
 | Not built | Starter H1 hint, richer product schema, bulk import alt column and NFC, banner chevron (not reproduced). Cloudflare email obfuscation and the mojibake repair still need owner decisions (section 4). |
 
+## 11. Second audit (external SEO tool, 2026-11-23): what was done
+
+A second list came from an external SEO tool run on one live store. Mapped against the code and built on `feat/storefront-seo-gaps`:
+
+| Item | Result |
+|---|---|
+| Double-escaped `&amp;` in titles | Fixed on output (`decodeEntities`): product, category, collection, blog, custom page and policy titles and descriptions, and the store name in every title. The stored text is not changed; the cause is usually text saved with entities by an import. |
+| Redirect manager with CSV | Already built (section 10). |
+| Blog broken-link report | The link check now reads blog post HTML. **Bulk find-and-replace across blog posts: skipped on request.** |
+| Longer, structured product descriptions | Not part of this PR; own PR (rich product descriptions). |
+| Index page templates | `/collections` and `/categories`: canonical, hidden H1, `CollectionPage` + `ItemList` JSON-LD, title and description from the theme archive template (editable in the theme editor). |
+| Noindex visibility | SEO health lists pages kept out of search, with the reason. The four noindexed categories in the audit are empty categories: that is the storefront's rule, not a hand setting. |
+| Sitemap | `/collections` and `/categories` added with `lastmod`; `lastmod` was already output for entries. |
+| Alt text enforcement | SEO health counts blog and page pictures with no alt text. **Not built:** a required alt field in the blog editor and on card images. |
+| Counters | Already present (SEO card 70 and 160 characters; blog editor checklist). Limits differ slightly from 60 and 155; unchanged. |
+| Default titles and descriptions | Blog archive, blog category and policy pages: descriptive defaults (a policy uses its first sentence). |
+| AggregateRating | Already present once a product has reviews. |
+

@@ -9,9 +9,10 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { computeCanonicalPath } from "../content-services.ts";
 import { classifyLink, type KnownTargets, type LinkProblem } from "./link-rules.ts";
+import { hrefsInHtml } from "./content-scan.ts";
 
 export interface LinkHealthProblem extends LinkProblem {
-  where: { type: "menu" | "page"; label: string };
+  where: { type: "menu" | "page" | "blog"; label: string };
 }
 
 export interface LinkHealthView {
@@ -49,7 +50,7 @@ export async function getLinkHealth(rt: Runtime, ctx: TenantContext): Promise<Li
 
   return withTenant(db, ctx.tenantId, async (tx) => {
     const t = ctx.tenantId;
-    const [products, collections, categories, pageRows, posts, redirects, menus] = await Promise.all([
+    const [products, collections, categories, pageRows, posts, redirects, menus, blogPosts] = await Promise.all([
       tx.select({ s: schema.products.slug }).from(schema.products).where(and(eq(schema.products.tenantId, t), isNull(schema.products.deletedAt))).limit(MAX_ROWS),
       tx.select({ s: schema.collections.slug }).from(schema.collections).where(and(eq(schema.collections.tenantId, t), eq(schema.collections.published, true))).limit(MAX_ROWS),
       tx.select({ s: schema.categories.slug }).from(schema.categories).where(eq(schema.categories.tenantId, t)).limit(MAX_ROWS),
@@ -61,6 +62,7 @@ export async function getLinkHealth(rt: Runtime, ctx: TenantContext): Promise<Li
       tx.select({ s: schema.blogPosts.slug }).from(schema.blogPosts).where(eq(schema.blogPosts.tenantId, t)).limit(MAX_ROWS),
       tx.select({ f: schema.tenantRedirects.fromPath }).from(schema.tenantRedirects).where(eq(schema.tenantRedirects.tenantId, t)).limit(5000),
       tx.select({ handle: schema.menus.handle, title: schema.menus.title, items: schema.menus.items, kind: schema.menus.kind }).from(schema.menus).where(eq(schema.menus.tenantId, t)),
+      tx.select({ slug: schema.blogPosts.slug, title: schema.blogPosts.title, html: schema.blogPosts.contentHtml }).from(schema.blogPosts).where(eq(schema.blogPosts.tenantId, t)).limit(2000),
     ]);
 
     const byId = new Map(pageRows.map((p) => [p.id, p]));
@@ -79,6 +81,7 @@ export async function getLinkHealth(rt: Runtime, ctx: TenantContext): Promise<Li
       if (m.kind === "filter") continue;
       sources.push({ where: { type: "menu", label: m.title || m.handle }, links: collectLinks(m.items) });
     }
+    for (const p of blogPosts) sources.push({ where: { type: "blog", label: p.title || p.slug }, links: hrefsInHtml(p.html ?? "").filter((h) => h.startsWith("/") || /^https?:\/\//i.test(h)) });
     const versionIds = pageRows.map((p) => p.versionId).filter((v): v is string => Boolean(v));
     const versions = versionIds.length > 0 ? await tx.select({ id: schema.pageVersions.id, document: schema.pageVersions.document }).from(schema.pageVersions).where(and(eq(schema.pageVersions.tenantId, t), inArray(schema.pageVersions.id, versionIds))) : [];
     const docById = new Map(versions.map((v) => [v.id, v.document]));

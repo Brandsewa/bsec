@@ -52,7 +52,7 @@ function BrokenLinksCard() {
                 <code className="break-all text-xs">{p.link}</code>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                In {p.where.type === "menu" ? "the menu" : "the page"} <span className="font-medium text-foreground">{p.where.label}</span>. {p.hint}
+                In {p.where.type === "menu" ? "the menu" : p.where.type === "blog" ? "the blog post" : "the page"} <span className="font-medium text-foreground">{p.where.label}</span>. {p.hint}
               </p>
             </li>
           ))}
@@ -65,6 +65,35 @@ function BrokenLinksCard() {
           </Button>
         </div>
       ) : null}
+    </SettingsCard>
+  );
+}
+
+const NOINDEX_TYPE = { category: "Category", collection: "Collection", product: "Product", blog: "Blog post" } as const;
+
+/** Pages the storefront asks search engines to skip, and why, so a missing page in search results can be explained. */
+function KeptOutCard({ data }: { data: { total: number; items: Array<{ type: keyof typeof NOINDEX_TYPE; name: string; path: string; reason: string }> } }) {
+  return (
+    <SettingsCard
+      title="Pages kept out of search"
+      description={
+        data.total === 0
+          ? "Nothing on your store is hidden from search engines."
+          : `${data.total} ${data.total === 1 ? "page is" : "pages are"} marked to stay out of search results. Empty categories and collections are skipped automatically; add products to bring them back.`
+      }
+    >
+      {data.total === 0 ? null : (
+        <ul className="divide-y divide-border/60">
+          {data.items.map((i) => (
+            <li key={`${i.type}|${i.path}`} className="flex flex-wrap items-center gap-2 py-2.5 first:pt-0 last:pb-0">
+              <Badge variant="secondary">{NOINDEX_TYPE[i.type]}</Badge>
+              <span className="text-sm font-medium">{i.name}</span>
+              <code className="break-all text-xs text-muted-foreground">{i.path}</code>
+              <span className="basis-full text-xs text-muted-foreground">{i.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </SettingsCard>
   );
 }
@@ -119,6 +148,7 @@ export function SeoHealthPage() {
               })}
             </ul>
           </SettingsCard>
+          {health.data?.noindexed ? <KeptOutCard data={health.data.noindexed} /> : null}
           <BrokenLinksCard />
         </>
       )}

@@ -1,3 +1,4 @@
+import { decodeEntities } from "../html-entities.ts";
 import type { BlogPostPage, BlogPostSummary, PublicBlogList } from "./queries.ts";
 import type { BlogSettings } from "./shared.ts";
 
@@ -32,7 +33,9 @@ export const blogBase = (host: string): string => `https://${host.replace(/^http
 const feedLink = (host: string) => ({ "application/rss+xml": `${blogBase(host)}/blog/feed.xml` });
 
 /** Appends the store name unless the title already carries it (an SEO title of "Tea | Ricwell" must not become "Tea | Ricwell | ricwell"). */
-export function brandedTitle(title: string, storeName: string): string {
+export function brandedTitle(rawTitle: string, rawStoreName: string): string {
+  const title = decodeEntities(rawTitle);
+  const storeName = decodeEntities(rawStoreName);
   return title.toLowerCase().includes(storeName.toLowerCase()) ? title : `${title} | ${storeName}`;
 }
 
@@ -50,7 +53,7 @@ export function buildBlogPostMetadata(opts: {
   const base = blogBase(host);
   const url = `${base}/blog/${post.slug}`;
   const seo = post.seo;
-  const title = trimTo((seo?.title?.trim() || post.title).trim(), 70);
+  const title = trimTo(decodeEntities((seo?.title?.trim() || post.title).trim()), 70);
   const description = trimTo(seo?.description?.trim() || post.excerpt, 160);
   const img = post.seoImage ?? post.image;
   const imageUrl = img?.url ?? opts.fallbackImageUrl;
@@ -92,10 +95,10 @@ export function buildBlogArchiveMetadata(opts: {
   const path = cat ? `/blog/category/${cat.path}` : "/blog";
   const url = `${base}${path}${list.page > 1 ? `/page/${list.page}` : ""}`;
   const baseTitle = cat ? cat.parent ? `${cat.name} (${cat.parent.name})` : cat.name : settings.title;
-  const seoTitle = (cat?.seo?.title?.trim() || baseTitle).trim();
+  const seoTitle = decodeEntities((cat?.seo?.title?.trim() || baseTitle).trim());
   const pageSuffix = list.page > 1 ? ` - Page ${list.page}` : "";
   const description = trimTo(
-    (cat ? cat.seo?.description?.trim() || cat.description || `Posts in ${cat.name} from ${storeName}.` : settings.description || `Read the latest posts from ${storeName}.`) + "",
+    (cat ? cat.seo?.description?.trim() || cat.description || `Read ${cat.name} guides and articles from ${storeName}.` : settings.description || `Read the latest guides, news and updates from ${storeName}.`) + "",
     160,
   );
   const index = !(opts.storeNoindex || list.total === 0);
