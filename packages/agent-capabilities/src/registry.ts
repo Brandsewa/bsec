@@ -1,7 +1,12 @@
 import { enforceAgentLimits, noteDeniedCall, recordAgentCall, type AgentSession, type Runtime } from "@bs/domain";
 import { analyticsCapabilities } from "./capabilities/analytics.ts";
+import { blogCapabilities } from "./capabilities/blog.ts";
+import { categoryCapabilities } from "./capabilities/categories.ts";
 import { collectionCapabilities } from "./capabilities/collections.ts";
 import { customerCapabilities } from "./capabilities/customers.ts";
+import { menuCapabilities } from "./capabilities/menus.ts";
+import { pageCapabilities } from "./capabilities/pages.ts";
+import { redirectCapabilities } from "./capabilities/redirects.ts";
 import { financeCapabilities } from "./capabilities/finance.ts";
 import { orderCapabilities } from "./capabilities/orders.ts";
 import { overviewCapabilities } from "./capabilities/overview.ts";
@@ -19,7 +24,12 @@ export const ALL_CAPABILITIES: readonly AnyCapability[] = [
   ...productCapabilities,
   ...variantCapabilities,
   ...mediaCapabilities,
+  ...categoryCapabilities,
   ...collectionCapabilities,
+  ...blogCapabilities,
+  ...pageCapabilities,
+  ...menuCapabilities,
+  ...redirectCapabilities,
   ...orderCapabilities,
   ...customerCapabilities,
   ...analyticsCapabilities,

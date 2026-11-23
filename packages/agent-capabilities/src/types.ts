@@ -23,6 +23,8 @@ export interface Capability<S extends z.ZodType = z.ZodType> {
   kind: AgentCallKind;
   /** Makes something visible to shoppers: also needs the "Allow publishing" switch. */
   publishes?: boolean;
+  /** A second store permission the approving user must hold (for example theme.publish to publish a page). */
+  alsoNeeds?: { permission: string; text: string };
   /** The result contains text written by the store or its shoppers (names, notes, reviews): marked as data for the AI. */
   userText?: boolean;
   annotations: { readOnly: boolean; destructive: boolean; idempotent: boolean };

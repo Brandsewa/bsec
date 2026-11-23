@@ -5,13 +5,14 @@ describe("AI permission matrix", () => {
   it("keeps only real toggle cells that are exactly true", () => {
     const m = normalizeMatrix({
       products: { read: true, write: "yes", delete: true },
-      collections: { read: true, delete: true }, // delete is "soon": not a toggle yet
+      orders: { write: true }, // write is "soon": not a toggle yet
+      collections: { read: true, delete: true },
+      pages: { delete: true, write: "no" },
       finance: { read: true, write: true, delete: true }, // write and delete are locked
       customers: { write: true }, // n/a
-      orders: { read: 1 },
       bogus: { read: true },
     });
-    expect(m).toEqual({ products: { read: true, delete: true }, collections: { read: true }, finance: { read: true } });
+    expect(m).toEqual({ products: { read: true, delete: true }, collections: { read: true, delete: true }, pages: { delete: true }, finance: { read: true } });
   });
 
   it("treats anything that is not an object as an empty matrix", () => {
@@ -37,6 +38,8 @@ describe("AI permission matrix", () => {
 
   it("maps each cell to the store permission the approving user must hold", () => {
     expect(storePermissionFor("products", "read")).toBe("products.read");
+    expect(storePermissionFor("categories", "write")).toBe("products.write");
+    for (const r of ["blog", "pages", "redirects"] as const) for (const a of ["read", "write", "delete"] as const) expect(storePermissionFor(r, a)).toBe("content.write");
     expect(storePermissionFor("products", "delete")).toBe("products.write");
     expect(storePermissionFor("collections", "write")).toBe("products.write");
     expect(storePermissionFor("customers", "read")).toBe("customers.read");
