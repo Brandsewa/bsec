@@ -8,17 +8,21 @@ export function canAccess(session: AgentSession, resource: AiResource, action: A
   return hasPermission(session.ctx.permissions, storePermissionFor(resource, action) as StorePermission);
 }
 
-const VERB: Record<AiAction, string> = { read: "read", write: "change", delete: "archive" };
+const VERB: Record<AiAction, string> = { read: "read", write: "change", delete: "delete or archive" };
+const RESOURCE_TEXT: Partial<Record<AiResource, string>> = { blog: "blog posts", pages: "website pages and menus", redirects: "redirects", categories: "categories" };
 
 /** Why a capability is not available, or null when it is. Plain language: the AI relays it to the merchant. */
 export function refusalFor(session: AgentSession, cap: AnyCapability): string | null {
   if (cap.resource && cap.action) {
     if (!isCellAllowed(session.settings.matrix, cap.resource, cap.action)) {
-      return `This store has not allowed AI apps to ${VERB[cap.action]} ${cap.resource}. The store owner can change this in Settings > AI access > Permissions.`;
+      return `This store has not allowed AI apps to ${VERB[cap.action]} ${RESOURCE_TEXT[cap.resource] ?? cap.resource}. The store owner can change this in Settings > AI access > Permissions.`;
     }
     if (!hasPermission(session.ctx.permissions, storePermissionFor(cap.resource, cap.action) as StorePermission)) {
-      return `The person who connected this app does not have permission to ${VERB[cap.action]} ${cap.resource} in this store.`;
+      return `The person who connected this app does not have permission to ${VERB[cap.action]} ${RESOURCE_TEXT[cap.resource] ?? cap.resource} in this store.`;
     }
+  }
+  if (cap.alsoNeeds && !hasPermission(session.ctx.permissions, cap.alsoNeeds.permission as StorePermission)) {
+    return `The person who connected this app does not have permission to ${cap.alsoNeeds.text} in this store.`;
   }
   if (cap.publishes && !session.settings.allowPublishing) {
     return "This store has not allowed AI apps to publish. The store owner can turn on Allow publishing in Settings > AI access > Permissions.";

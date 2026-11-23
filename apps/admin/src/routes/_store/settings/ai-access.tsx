@@ -22,7 +22,11 @@ const KEY = ["admin", "ai", "settings"] as const;
 
 const RESOURCES: Array<{ id: string; label: string; hint: string }> = [
   { id: "products", label: "Products", hint: "Delete means archive: products can be restored." },
-  { id: "collections", label: "Collections", hint: "" },
+  { id: "categories", label: "Categories", hint: "Delete works only for a hidden category with no products." },
+  { id: "collections", label: "Collections", hint: "Delete works only for a collection that is not published." },
+  { id: "blog", label: "Blog posts", hint: "Includes blog categories. New posts are drafts. Delete works only for drafts." },
+  { id: "pages", label: "Website pages", hint: "Page text, links and sections (saved as drafts) and menus. Delete works only for unpublished pages." },
+  { id: "redirects", label: "Redirects", hint: "Old address to a new address on your store." },
   { id: "customers", label: "Customers", hint: "Includes names, email addresses, phone numbers and addresses." },
   { id: "orders", label: "Orders", hint: "" },
   { id: "analytics", label: "Analytics", hint: "" },
@@ -39,6 +43,34 @@ const CHANGE_LABELS: Record<string, string> = {
   "inventory.adjusted": "Adjusted stock",
   "collection.created": "Created a collection (unpublished)",
   "collection.updated": "Edited a collection",
+  "collection.deleted": "Deleted a collection",
+  "category.created": "Created a category (inactive)",
+  "category.updated": "Edited a category",
+  "category.deleted": "Deleted a category",
+  "blog.post.created": "Wrote a blog post (draft)",
+  "blog.post.updated": "Edited a blog post",
+  "blog.post.published": "Published a blog post",
+  "blog.post.unpublished": "Unpublished a blog post",
+  "blog.post.deleted": "Deleted a blog post",
+  "blog.category.created": "Created a blog category",
+  "blog.category.updated": "Edited a blog category",
+  "blog.category.deleted": "Deleted a blog category",
+  "page.created": "Created a page (draft)",
+  "page.updated": "Edited page settings",
+  "page.block.updated": "Changed page text or settings (draft)",
+  "page.block.added": "Added a page section (draft)",
+  "page.block.moved": "Moved a page section (draft)",
+  "page.block.removed": "Removed a page section (draft)",
+  "page.block.hidden": "Hid or showed a page section (draft)",
+  "page.published": "Published a page",
+  "page.unpublished": "Unpublished a page",
+  "page.deleted": "Deleted a page",
+  "menu.created": "Created a menu",
+  "menu.updated": "Edited a menu",
+  "menu.deleted": "Deleted a menu",
+  "redirect.created": "Added a redirect",
+  "redirect.updated": "Edited a redirect",
+  "redirect.deleted": "Deleted a redirect",
 };
 
 function AiAccessPage() {
@@ -464,7 +496,7 @@ function PermissionsTab({ settings, busy, onChange }: { settings: AiSettings; bu
     next[resource] = { ...(next[resource] ?? {}), [action]: on };
     onChange({ matrix: next });
   }
-  const productsWrite = settings.matrix.products?.write === true || settings.matrix.collections?.write === true;
+  const productsWrite = ["products", "categories", "collections", "blog", "pages"].some((r) => settings.matrix[r]?.write === true);
   return (
     <>
       <SettingsCard
@@ -510,15 +542,15 @@ function PermissionsTab({ settings, busy, onChange }: { settings: AiSettings; bu
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Delete means archive: nothing is ever deleted permanently by an AI app. Locked means it can never be turned on.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Delete means archive for products (they can be restored). Everything else can only be deleted when it is already hidden from shoppers, and the AI must confirm each deletion. Locked means it can never be turned on.</p>
       </SettingsCard>
 
-      <SettingsCard title="Publishing" description="New products and collections made by an AI app are saved as drafts. Turn this on to let it make them visible to shoppers.">
+      <SettingsCard title="Publishing" description="New products, collections, blog posts and page changes made by an AI app are saved as drafts. Turn this on to let it make them visible to shoppers (publishing a page also needs the publish permission of the person who connected the app).">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-foreground">Allow publishing</span>
           <Switch aria-label="Allow publishing" checked={settings.allowPublishing} disabled={busy || !productsWrite} onCheckedChange={(on) => onChange({ allowPublishing: on })} />
         </div>
-        {!productsWrite ? <p className="mt-2 text-xs text-muted-foreground">Turn on Write for Products or Collections first.</p> : null}
+        {!productsWrite ? <p className="mt-2 text-xs text-muted-foreground">Turn on Write for Products, Categories, Collections, Blog posts or Website pages first.</p> : null}
       </SettingsCard>
     </>
   );

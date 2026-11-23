@@ -4,7 +4,7 @@
  * Pure data, no protocol knowledge, so any later adapter (not only MCP) reads the same rows.
  */
 
-export const AI_RESOURCES = ["products", "collections", "customers", "orders", "analytics", "finance"] as const;
+export const AI_RESOURCES = ["products", "categories", "collections", "blog", "pages", "redirects", "customers", "orders", "analytics", "finance"] as const;
 export type AiResource = (typeof AI_RESOURCES)[number];
 
 export const AI_ACTIONS = ["read", "write", "delete"] as const;
@@ -16,13 +16,19 @@ export type AiAction = (typeof AI_ACTIONS)[number];
  *  soon:   shown disabled, "Coming soon"
  *  na:     does not apply to this resource
  *  locked: permanently off for AI (money is never written by AI)
- * Delete always means reversible (archive); permanent deletion is never offered.
+ * Delete: products are only archived (permanent deletion is never offered). For categories, collections, blog posts and
+ * categories, website pages, menus and redirects, "delete" removes an item that is already hidden from shoppers (a draft or an
+ * unpublished collection), always with an explicit confirmation, and the store's own rules still apply.
  */
 export type AiCellKind = "toggle" | "soon" | "na" | "locked";
 
 export const AI_CELLS: Readonly<Record<AiResource, Readonly<Record<AiAction, AiCellKind>>>> = {
   products: { read: "toggle", write: "toggle", delete: "toggle" },
-  collections: { read: "toggle", write: "toggle", delete: "soon" },
+  categories: { read: "toggle", write: "toggle", delete: "toggle" },
+  collections: { read: "toggle", write: "toggle", delete: "toggle" },
+  blog: { read: "toggle", write: "toggle", delete: "toggle" },
+  pages: { read: "toggle", write: "toggle", delete: "toggle" },
+  redirects: { read: "toggle", write: "toggle", delete: "toggle" },
   customers: { read: "toggle", write: "na", delete: "na" },
   orders: { read: "toggle", write: "soon", delete: "na" },
   analytics: { read: "toggle", write: "na", delete: "na" },
@@ -71,8 +77,14 @@ export function readOnlyMatrix(): AiMatrix {
 export function storePermissionFor(resource: AiResource, action: AiAction): string {
   switch (resource) {
     case "products":
+    case "categories":
     case "collections":
       return action === "read" ? "products.read" : "products.write";
+    case "blog":
+    case "pages":
+    case "redirects":
+      // The store's own services guard even reads of these with content.write (there is no separate content.read).
+      return "content.write";
     case "customers":
       return "customers.read";
     case "orders":

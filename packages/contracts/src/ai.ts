@@ -8,7 +8,7 @@ import { z } from "zod";
 
 const Uuid = z.string().uuid();
 
-export const AI_RESOURCES = ["products", "collections", "customers", "orders", "analytics", "finance"] as const;
+export const AI_RESOURCES = ["products", "categories", "collections", "blog", "pages", "redirects", "customers", "orders", "analytics", "finance"] as const;
 export const AI_ACTIONS = ["read", "write", "delete"] as const;
 export const AiCellKind = z.enum(["toggle", "soon", "na", "locked"]);
 

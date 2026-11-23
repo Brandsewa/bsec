@@ -265,3 +265,4 @@ export * from "./ai/limits.ts";
 export * from "./ai/call-log.ts";
 export * from "./ai/settings.ts";
 export * from "./ai/audit.ts";
+export * from "./ai/page-blocks.ts";
