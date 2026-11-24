@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `fix/storefront-audit-fixes` (not merged yet)
+- **Branch:** `fix/storefront-audit-fixes` (merged in #313, 13634f36)
 - **Area:** web, domain, blocks, block-editor, docs
 - **Type:** fix
 - **Supersedes:** none (builds the plan in `docs/changes/2026-11-21-claude-storefront-audit-fixes-plan.md`)
