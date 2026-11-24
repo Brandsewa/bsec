@@ -35,6 +35,9 @@ First slice of `docs/BACKUP-DR-PLAN.md` (owner decisions 2026-11-24): the parts 
 - R2 changes made by the owner's session in Cloudflare (bucket `bsec-backups`): lifecycle rule `expire-dumps-35d` (prefix `data/`, 35 days), bucket lock `lock-dumps-14d` (prefix `data/`, 14 days), read-only token scoped to the bucket. R2 has no write-only permission, so Coolify's upload token stays Object Read & Write; the 14-day lock is what stops a stolen token deleting a dump.
 - NOT verified: the worker job against a real R2 bucket (env vars set on the worker, but this branch is not deployed), the email path against a real SMTP provider, the full `packages/db` and `apps/platform` heavy suites after the final grants change (only the affected files were rerun), the web and admin heavy suites, mobile layout of the new page.
 
+## CI finding: a latent test failure on main
+The first CI run of this branch failed `packages/agent-capabilities/test/products-full.int.test.ts` ("will not silently flatten a description..."): the test built a description with a heading without `level` and a paragraph with `children`, which the validator in `packages/domain/src/policies/validator.ts` rejects. `main` was green only because Turborepo replayed this package's old result from cache ("cache hit, replaying logs"); changing `packages/domain` invalidated the cache, so the test ran for real. The call chain is unchanged from `main`. Fixed the test input (`level: 2`, paragraph `text`); the package's 23 heavy tests pass locally. Worth knowing: a heavy shard on `main` can hide a failing test behind a cache hit until a dependency changes.
+
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (migration 0121, `backup.check` queue; "Last verified" bumped)
 - [x] ADR: not needed (no architectural decision beyond the plan)

@@ -172,7 +172,7 @@ describe("the whole product through the tools", () => {
     await matrix({ products: { read: true, write: true } });
     const s = await sessionFor();
     const { id } = ok<{ id: string }>(await run(s, "create_product", { title: "Rich one", price: 100 }));
-    await updateProduct(rtWeb, ctx, { id, descriptionJson: { v: 1, blocks: [{ type: "heading", text: "Care" }, { type: "paragraph", children: [{ text: "Wash cold" }] }] } });
+    await updateProduct(rtWeb, ctx, { id, descriptionJson: { v: 1, blocks: [{ type: "heading", level: 2, text: "Care" }, { type: "paragraph", text: "Wash cold" }] } });
     const read = ok<{ descriptionFormat: string; description: string }>(await run(s, "get_product", { id }));
     expect(read.descriptionFormat).toBe("rich");
     expect(read.description).toContain("Wash cold");
