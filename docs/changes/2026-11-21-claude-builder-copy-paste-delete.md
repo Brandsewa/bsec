@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `docs/go-live-hardening-plan` (working tree, not committed, not merged yet)
+- **Branch:** `feat/builder-copy-paste-delete` (merged in #303, 3cfc218f)
 - **Area:** block-editor
 - **Type:** feature
 - **Supersedes:** none

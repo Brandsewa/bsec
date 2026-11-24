@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `feat/builder-copy-all-sections`
+- **Branch:** `feat/builder-copy-all-sections` (merged in #304, 295327d2)
 - **Area:** block-editor
 - **Type:** feature
 - **Supersedes:** none (follows `2026-11-21-claude-builder-copy-paste-delete.md`, merged in #303)
