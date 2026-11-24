@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "@/components/storefront/IntentLink.tsx";
-import type { StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail, StorefrontProductOffer } from "@bs/domain";
+import type { PolicyBlock, StorefrontCoupon, StorefrontCustomField, StorefrontProductDetail, StorefrontProductOffer } from "@bs/domain";
 import { formatMoney } from "@bs/contracts/money";
 import { CouponCards } from "./CouponCards.tsx";
 import { OfferSlot } from "./OfferSlot.tsx";
@@ -11,6 +11,7 @@ import { RatingSummary } from "./RatingSummary.tsx";
 import { ProductGallery } from "./ProductGallery.tsx";
 import { ProductBuyProvider, SkuLine, VariantOptions, PriceBlock, PurchaseActions } from "./VariantSelector.tsx";
 import { ProductDescription } from "./ProductDescription.tsx";
+import { RichBlocks } from "@/components/storefront/RichBlocks.tsx";
 import { DeliveryEstimate } from "./DeliveryEstimate.tsx";
 import { MobileBuyBar } from "./MobileBuyBar.tsx";
 
@@ -81,6 +82,9 @@ export function ProductDetailSection({
   const fmt = (minor: number) => formatMoney(minor, currency, { ...(locale ? { locale } : {}) });
   const priceLabel = prices.length > 1 && Math.max(...prices) !== lowest ? `From ${fmt(lowest)}` : fmt(lowest);
   const longDescription = descriptionText(product.descriptionJson);
+  // A formatted long description (headings, lists, links) is drawn in full under the product, where search engines and shoppers read it.
+  const richBlocks = (product.descriptionJson as { blocks?: unknown } | null)?.blocks;
+  const richDescription = Array.isArray(richBlocks) && richBlocks.length > 0 ? (richBlocks as PolicyBlock[]) : null;
   const usps = options.showUsps ? (options.usps ?? []).slice(0, 4) : [];
 
   const gallery = (
@@ -253,6 +257,14 @@ export function ProductDetailSection({
           </div>
         </ProductBuyProvider>
       </div>
+      {richDescription ? (
+        <section aria-labelledby="product-about" className="mt-10 max-w-3xl border-t border-border/60 pt-8">
+          <h2 id="product-about" className="text-2xl font-bold text-foreground">
+            About this product
+          </h2>
+          <RichBlocks blocks={richDescription} />
+        </section>
+      ) : null}
       {options.stickyMobileBar ? <MobileBuyBar title={product.title} priceLabel={priceLabel} /> : null}
     </div>
   );

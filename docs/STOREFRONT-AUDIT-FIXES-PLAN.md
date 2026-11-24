@@ -161,4 +161,5 @@ A second list came from an external SEO tool run on one live store. Mapped again
 | Counters | Already present (SEO card 70 and 160 characters; blog editor checklist). Limits differ slightly from 60 and 155; unchanged. |
 | Default titles and descriptions | Blog archive, blog category and policy pages: descriptive defaults (a policy uses its first sentence). |
 | AggregateRating | Already present once a product has reviews. |
+| Longer, structured product descriptions (built in the next PR on top of this one) | Product descriptions can be formatted blocks: the admin product forms use the same rich editor as categories; a spreadsheet import with paragraphs, `#` headings or `-` lists becomes blocks; the spreadsheet export writes blocks back as the same text; the product page shows the description in full under the product. Not built: an FAQ block with FAQPage markup (a heading and paragraphs give the same visible structure), images inside a description, a bulk find-and-edit of descriptions. |
 

@@ -3,6 +3,7 @@ import { listBlogForSitemap } from "../blog/queries.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { ALL_PRODUCTS_PATH } from "./catalog.ts";
 import { decodeEntities } from "../html-entities.ts";
+import { plainTextOfDescription } from "../rich-description.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -115,7 +116,7 @@ export const META_DESCRIPTION_MAX = 155;
 
 /** Plain text from a stored description: a string, HTML, or the admin's `{ type: "text", text }` value. Empty when there is none. */
 export function cleanMetaText(input: unknown): string {
-  const raw = typeof input === "string" ? input : input && typeof input === "object" && typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : "";
+  const raw = typeof input === "string" ? input : input && typeof input === "object" ? plainTextOfDescription(input) : "";
   return decodeEntities(raw.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();

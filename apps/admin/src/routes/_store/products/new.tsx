@@ -7,7 +7,9 @@ import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel, Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { Textarea } from "@bs/ui";
+import type { RichDescription } from "@bs/contracts";
+import { richBlocksToText } from "@bs/contracts/rich-text";
+import { RichDescriptionField } from "../../../components/rich-description-field.tsx";
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { DraftVariantBuilderCard, defaultDraftVariant, usableOptions, type DraftVariant } from "../../../components/product/draft-variant-builder.tsx";
 import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
@@ -55,7 +57,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [slugTouched, setSlugTouched] = useState(false);
   const [status, setStatus] = useState<"draft" | "active" | "unlisted" | "archived">("draft");
   const [shortDescription, setShortDescription] = useState("");
-  const [description, setDescription] = useState("");
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(null);
   const [tags, setTags] = useState("");
   const [requiresShipping, setRequiresShipping] = useState(true);
   const [priceOnRequest, setPriceOnRequest] = useState(false);
@@ -139,7 +141,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       ...(slug ? { slug } : {}),
       status,
       ...(shortDescription.trim() ? { shortDescription: shortDescription.trim() } : {}),
-      ...(description.trim() ? { descriptionJson: { type: "text", text: description.trim() } } : {}),
+      ...(descriptionJson ? { descriptionJson } : {}),
       tags: tags
         .split(",")
         .map((s) => s.trim())
@@ -252,16 +254,12 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                 />
               </div>
 
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="product-desc">Description</FieldLabel>
-                <Textarea
-                  id="product-desc"
-                  rows={6}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detailed product story, specifications, and care instructions..."
-                />
-              </div>
+              <RichDescriptionField
+                id="product-desc"
+                value={descriptionJson}
+                onChange={setDescriptionJson}
+                tip="Shown in full under the product, where shoppers and search engines read it. Use headings for sections such as tasting notes, brewing and FAQ, plus lists, bold, italic and links."
+              />
 
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="product-tags">Tags</FieldLabel>
@@ -295,7 +293,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
             defaultTitle={title}
-            defaultDescription={shortDescription || description.slice(0, 160)}
+            defaultDescription={shortDescription || richBlocksToText(descriptionJson?.blocks ?? []).replace(/\s+/g, " ").slice(0, 160)}
             pathPrefix="/products"
             slug={slug}
             title={seoTitle}
