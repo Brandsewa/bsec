@@ -1,6 +1,6 @@
 # pgBackRest: continuous WAL archiving, backups and point-in-time restore
 
-Status: image and rehearsal built and passing locally; **not yet in production** (cutover needs the owner's go-ahead, 03:00 local time). Plan: `docs/BACKUP-DR-PLAN.md` G1. The daily Coolify `pg_dump` to `bsec-backups` stays: it is the independent logical copy.
+Status: image and rehearsal built and passing locally and in CI; **not yet in production**. Cutover planned for Wednesday 2026-11-25, 09:00 IST, done by hand by the owner following the steps below (moved from the original 03:00 plan). Plan: `docs/BACKUP-DR-PLAN.md` G1. The daily Coolify `pg_dump` to `bsec-backups` stays: it is the independent logical copy.
 
 ## What was built
 - `infra/docker/postgres.Dockerfile`: `postgres:18` + pgBackRest (pinned package version, PGDG repo already in the base image). Built by CI as `ghcr.io/<owner>/bsec-postgres` (`sha-<commit>`, then `:main` after the checks pass), same as the app images.
@@ -21,9 +21,9 @@ Status: image and rehearsal built and passing locally; **not yet in production**
 | `PGBACKREST_REPO1_S3_KEY` and `PGBACKREST_REPO1_S3_KEY_SECRET` | the token above |
 | `PGBACKREST_REPO1_CIPHER_PASS` | the passphrase |
 
-## Cutover (03:00 local, announce first; about a minute of database restart)
+## Cutover (09:00 IST, by hand; about a minute of database restart)
 1. Check disk headroom on the VPS (WAL archiving adds some local disk use) and note the current `bsec-postgres` image tag for rollback.
-2. Set the five variables on `bsec-postgres`. Change its image to `ghcr.io/brandsewa/bsec-postgres:main`. Restart.
+2. The five variables are set on `bsec-postgres` already (check they are still there). Change its image to the **pinned** tag `ghcr.io/brandsewa/bsec-postgres:sha-<commit>` (the exact tag is in the change record for the first publish), **not** `:main`: `:main` moves with every merge, so a later restart could quietly pull a newer image under the live database. Restart.
 3. In the container log find `bsec-postgres: pgBackRest configured, WAL archiving ON (stanza bsec)`. In a shell, `SHOW archive_mode;` must say `on`. **Unverified until this step:** whether Coolify's Postgres resource keeps the image's entrypoint. If the log line is missing, roll back (below) and tell Claude.
 4. In the `bsec-postgres` container (Coolify terminal):
    ```bash
