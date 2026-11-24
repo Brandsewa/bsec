@@ -15,6 +15,7 @@ import {
   deleteRedirect,
   findStoreRedirect,
   getLinkHealth,
+  getSeoHealth,
   importRedirects,
   listRedirects,
   provisionTenant,
@@ -221,3 +222,28 @@ describe("link health (storefront audit phase 4)", () => {
     expect(row.items[0]?.children[0]?.url).toBe("/");
   });
 });
+
+describe("blog posts and kept-out pages in SEO health (storefront audit follow-up)", () => {
+  it("reads blog post links, counts pictures with no alt text and lists pages kept out of search", async () => {
+    await pg.query(
+      `insert into blog_posts (tenant_id, title, slug, content_html, status, seo) values ($1, 'Brew guide', 'brew-guide', $2, 'published', $3::jsonb)`,
+      [a.tenantId, '<p><a href="/products/missing-blog-tea">Buy</a> <a href="https://example.com">x</a></p><img src="/p.png"><img src="/q.png" alt="Described">', JSON.stringify({ noindex: true })],
+    );
+    const links = await getLinkHealth(rtWeb, a);
+    expect(links.problems.filter((p) => p.where.type === "blog").map((p) => p.link)).toEqual(["/products/missing-blog-tea"]);
+
+    const health = await getSeoHealth(rtWeb, a);
+    const alt = health.checks.find((c) => c.id === "content-image-alt");
+    expect(alt?.count).toBeGreaterThanOrEqual(1);
+    const names = (health.noindexed?.items ?? []).map((i) => `${i.type}:${i.path}`);
+    expect(names).toContain("blog:/blog/brew-guide");
+    expect(names).toContain("category:/categories/new-cat"); // empty category from the earlier slug test
+    expect(health.noindexed?.total).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not show another store's content", async () => {
+    const other = await getSeoHealth(rtWeb, b);
+    expect((other.noindexed?.items ?? []).some((i) => i.path === "/blog/brew-guide")).toBe(false);
+  });
+});
+

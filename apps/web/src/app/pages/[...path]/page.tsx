@@ -13,6 +13,7 @@ import {
   resolveMediaUrlById,
   deriveMetaDescription,
   firstTextOfBlocks,
+  decodeEntities,
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
@@ -58,7 +59,7 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
       const result = await getStorefrontPageByPath(rt, tenantCtx, path);
       if (result) {
         const seo = parsePageSeo(result.page.seo);
-        const title = seo?.title || result.page.title;
+        const title = decodeEntities(seo?.title || result.page.title);
         const storeLabel = await getCachedStoreName(access.tenantId).catch(() => "our store");
         const description = seo?.description || deriveMetaDescription([firstTextOfBlocks(result.page.document?.blocks)], `${result.page.title}: ${storeLabel}.`);
         const canonicalUrl = `https://${host}${result.canonicalPath}`;

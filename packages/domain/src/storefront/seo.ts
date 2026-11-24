@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, inArray, notInArray, or, sql } from "drizzle-orm
 import { listBlogForSitemap } from "../blog/queries.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
 import { ALL_PRODUCTS_PATH } from "./catalog.ts";
+import { decodeEntities } from "../html-entities.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -103,7 +104,8 @@ export function formatTitle(
   storeName: string,
 ): string {
   const tpl = template && template.trim().length > 0 ? template : "%s | {{store_name}}";
-  return tpl.replace(/%s/g, title).replace(/\{\{store_name\}\}/g, storeName);
+  // Plain text: a name or title saved with entities ("&amp;") would otherwise show the entity in the browser tab.
+  return decodeEntities(tpl.replace(/%s/g, () => decodeEntities(title)).replace(/\{\{store_name\}\}/g, () => decodeEntities(storeName)));
 }
 
 export const generateTitle = formatTitle;
@@ -111,14 +113,10 @@ export const generateTitle = formatTitle;
 /** Longest description search engines show before cutting it off (about 155 characters on desktop). */
 export const META_DESCRIPTION_MAX = 155;
 
-const HTML_ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " };
-
 /** Plain text from a stored description: a string, HTML, or the admin's `{ type: "text", text }` value. Empty when there is none. */
 export function cleanMetaText(input: unknown): string {
   const raw = typeof input === "string" ? input : input && typeof input === "object" && typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : "";
-  return raw
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&(?:amp|lt|gt|quot|nbsp|#39);/g, (e) => HTML_ENTITIES[e] ?? e)
+  return decodeEntities(raw.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -983,8 +981,8 @@ export function buildCategorySeoMetadata(opts: {
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.category.seo === "object" && opts.category.seo !== null) ? (opts.category.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.category.name, storeName);
   const description = storedDescription ?? deriveMetaDescription([opts.category.description], `Browse ${opts.category.name} at ${storeName}. High-quality products and great deals.`);
@@ -1054,8 +1052,8 @@ export function buildCollectionSeoMetadata(opts: {
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.collection.seo === "object" && opts.collection.seo !== null) ? (opts.collection.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.collection.title, storeName);
   const description = storedDescription ?? deriveMetaDescription([opts.collection.description], `Shop ${opts.collection.title} at ${storeName}. High-quality products and great deals.`);
@@ -1123,8 +1121,8 @@ export function buildProductSeoMetadata(opts: {
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.product.seo === "object" && opts.product.seo !== null) ? (opts.product.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.product.title, storeName);
   const description = storedDescription ?? deriveMetaDescription([opts.product.shortDescription, opts.product.descriptionJson], `Buy ${opts.product.title} at ${storeName}.`);
@@ -1196,7 +1194,7 @@ export function buildHomeSeoMetadata(opts: {
   };
 }
 
-async function getScopedCatalogForSitemap(
+export async function getScopedCatalogForSitemap(
   tx: Db,
   tenantId: string,
 ) {
@@ -1395,6 +1393,15 @@ export async function getStorefrontSitemapUrls(
     // The built-in all-products listing.
     if (productRows.length > 0) {
       sitemapItems.push({ loc: `${baseUrl}${ALL_PRODUCTS_PATH}`, lastmod: productRows[0]?.updatedAt.toISOString() ?? homeLastMod, changefreq: "daily", priority: 0.7 });
+    }
+
+    // The two index pages (`/collections`, `/categories`), once the store has something to list; their lastmod is the newest entry's.
+    const newest = (rows: Array<{ updatedAt: Date }>): string => rows.reduce((a, r) => (r.updatedAt > a ? r.updatedAt : a), rows[0]?.updatedAt ?? new Date(0)).toISOString();
+    if (eligibleCollections.length > 0) {
+      sitemapItems.push({ loc: `${baseUrl}/collections`, lastmod: newest(eligibleCollections), changefreq: "weekly", priority: 0.6 });
+    }
+    if (categoryRows.length > 0) {
+      sitemapItems.push({ loc: `${baseUrl}/categories`, lastmod: newest(categoryRows), changefreq: "weekly", priority: 0.6 });
     }
 
     // Base Collections

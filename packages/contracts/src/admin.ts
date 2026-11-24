@@ -920,6 +920,13 @@ export const SeoHealthView = z.object({
   /** Pages listed in the store's sitemap right now. */
   indexablePageCount: z.number().int().nonnegative(),
   checks: z.array(SeoHealthCheck),
+  /** Pages kept out of search results, and why (the storefront decides this by rule; see `noindexReason`). Capped; `total` is the full count. */
+  noindexed: z
+    .object({
+      total: z.number().int().nonnegative(),
+      items: z.array(z.object({ type: z.enum(["category", "collection", "product", "blog"]), name: z.string(), path: z.string(), reason: z.string() })),
+    })
+    .optional(),
 });
 export type SeoHealthView = z.infer<typeof SeoHealthView>;
 
@@ -932,7 +939,7 @@ export const LinkHealthView = z.object({
       kind: z.enum(["broken", "platform_host", "shopify_checkout", "www_host"]),
       link: z.string(),
       hint: z.string(),
-      where: z.object({ type: z.enum(["menu", "page"]), label: z.string() }),
+      where: z.object({ type: z.enum(["menu", "page", "blog"]), label: z.string() }),
     }),
   ),
 });

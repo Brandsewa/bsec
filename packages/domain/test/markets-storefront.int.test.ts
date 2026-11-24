@@ -191,6 +191,14 @@ describe("the built-in all-products listing (storefront audit: /products/all)", 
     const locs = (await getStorefrontSitemapUrls(rtWeb, admin, "scope.store")).map((u) => u.loc);
     expect(locs).toContain("https://scope.store/products/all");
   });
+
+  it("lists the collections and categories index pages with the newest entry's date", async () => {
+    const urls = await getStorefrontSitemapUrls(rtWeb, admin, "scope.store");
+    const index = urls.find((u) => u.loc === "https://scope.store/collections");
+    expect(index?.lastmod).toBeTruthy();
+    const newestCollection = urls.filter((u) => u.loc.startsWith("https://scope.store/collections/")).map((u) => u.lastmod ?? "").sort().at(-1);
+    expect(index?.lastmod).toBe(newestCollection);
+  });
 });
 
 describe("announcement bar free-shipping token data (storefront audit)", () => {

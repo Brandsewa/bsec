@@ -395,7 +395,7 @@ export async function getCachedCollectionsArchive(tenantId: string) {
     { id: "default-archive", type: "CollectionGrid", version: 1, props: { title: "Collections", subtitle: "Browse everything we sell.", collectionSlugs: [], showAll: true, columns: "3" } },
   ];
   const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
-  return { blocks, renderData, usesTheme: Boolean(page) };
+  return { blocks, renderData, usesTheme: Boolean(page), seo: page?.seo ?? null };
 }
 
 /**
@@ -418,7 +418,7 @@ export async function getCachedCategoriesArchive(tenantId: string) {
     if (b.type === "CollectionGrid" || b.type === "CollectionShowcase") b.props = { ...b.props, source: "categories", showAll: true };
   });
   const renderData = await loadRenderData(tenantId, tenantCtx, { version: 1, blocks });
-  return { blocks, renderData, usesTheme: Boolean(page) };
+  return { blocks, renderData, usesTheme: Boolean(page), seo: page?.seo ?? null };
 }
 
 /** Copy and switches for the default pages (checkout, order success, payment failed, search, 404); built-in text when the store's theme sets none. */

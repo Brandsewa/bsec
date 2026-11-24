@@ -37,6 +37,7 @@ export { clearStorefrontAccessCache } from "./storefront/access-cache.ts";
 export * from "./storefront/product-status.ts";
 export * from "./storefront/catalog.ts";
 export * from "./redirects/paths.ts";
+export { decodeEntities } from "./html-entities.ts";
 export * from "./admin/link-health.ts";
 export { classifyLink, type KnownTargets, type LinkProblem, type LinkProblemKind } from "./admin/link-rules.ts";
 export * from "./domains/canonical.ts";
