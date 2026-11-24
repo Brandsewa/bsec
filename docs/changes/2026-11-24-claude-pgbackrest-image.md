@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-24
 - **Agent:** claude
-- **Branch:** `feat/pgbackrest-image`  (not merged yet)
+- **Branch:** `feat/pgbackrest-image` (merged in #324, c35f170d)
 - **Area:** infra, ci, docs
 - **Type:** infra
 - **Supersedes:** none
