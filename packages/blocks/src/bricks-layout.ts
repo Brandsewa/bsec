@@ -571,10 +571,17 @@ export function bricksElementStyle(props: BricksLayoutProps, options?: { default
   if (tt_t) style["--brx-t-tt"] = tt_t;
   if (tt_m) style["--brx-m-tt"] = tt_m;
 
-  // Display
+  // Display. Desktop is the inline value; tablet and phone overrides are variables that blocks.css applies inside the
+  // media queries (an inline value would otherwise beat them). Only emitted when a smaller device sets its own display.
   const display = props.display || options?.defaultDisplay;
-  if (display && display !== "none") {
+  if (display) {
     style.display = display;
+  }
+  if (t?.display || m?.display) {
+    const disp_t = t?.display ?? display;
+    const disp_m = m?.display ?? disp_t;
+    if (disp_t) style["--brx-t-disp"] = disp_t;
+    if (disp_m) style["--brx-m-disp"] = disp_m;
   }
 
   // Base styles for SSR / desktop

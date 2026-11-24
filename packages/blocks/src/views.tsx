@@ -25,6 +25,13 @@ import { BgVideo } from "./views-bg-video-client.tsx";
 import { ShowcaseTabsPreview } from "./views-showcase-tabs-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
+import { elementFontHref } from "./theme-vars.ts";
+
+/** Loads the Google font an element picked in its Typography panel (a no-op for the theme font or a system font). */
+function ElementFontLink({ family }: { family: string | undefined }): ReactNode {
+  const href = elementFontHref(family);
+  return href ? <link rel="stylesheet" href={href} precedence="default" /> : null;
+}
 
 /**
  * Presentational renderers for every block. Pure: no hooks, no data fetching, no browser
@@ -359,7 +366,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
           position: "relative",
           zIndex: 1,
           width: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -450,7 +457,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
           zIndex: 1,
           width: "100%",
           height: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -549,7 +556,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
           zIndex: 1,
           width: "100%",
           height: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -598,6 +605,9 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
       className={cx("bsb brxe-heading brx-resp", `bsb-align-${props.align}`)}
       style={customStyle}
     >
+      <ElementFontLink family={props.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.tablet?.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.mobile?.typography?.fontFamily} />
       {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );
@@ -630,6 +640,9 @@ export function TextView({ props }: A<R.TextProps>): ReactNode {
       className={cx("bsb brxe-text-basic brx-resp", `bsb-align-${props.align}`, props.muted && "bsb-muted")}
       style={customStyle}
     >
+      <ElementFontLink family={props.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.tablet?.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.mobile?.typography?.fontFamily} />
       {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );
