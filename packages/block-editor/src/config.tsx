@@ -752,7 +752,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
               icon: iconField("Icon (ignored when a picture is chosen)", true) as Field,
               iconMediaId: mediaField("Picture instead of an icon") as Field,
               heading: text("Heading"),
-              text: area("Text"),
+              text: markdownTextField("Text") as Field,
               linkLabel: text("Link text"),
               linkHref: link("Link"),
               imageMediaId: mediaField("Style 2: picture on top of this card") as Field,

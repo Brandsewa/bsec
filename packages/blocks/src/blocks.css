@@ -96,7 +96,7 @@
 .bsb { --f-h1: var(--bs-h1-m, 2.25rem); --f-h2: var(--bs-h2-m, 1.75rem); --f-h3: var(--bs-h3-m, 1.375rem); --f-h4: var(--bs-h4-m, 1.125rem); --f-body: var(--bs-body-m, 1rem); }
 @media (min-width: 768px) { .bsb { --f-h1: var(--bs-h1-t, 3rem); --f-h2: var(--bs-h2-t, 2rem); --f-h3: var(--bs-h3-t, 1.5rem); --f-h4: var(--bs-h4-t, 1.125rem); --f-body: var(--bs-body-t, 1rem); } }
 @media (min-width: 1024px) { .bsb { --f-h1: var(--bs-h1-d, 3.75rem); --f-h2: var(--bs-h2-d, 2.25rem); --f-h3: var(--bs-h3-d, 1.5rem); --f-h4: var(--bs-h4-d, 1.125rem); --f-body: var(--bs-body-d, 1rem); } }
-.bsb-heading { font-family: var(--fh); font-weight: var(--bs-heading-weight, 700); line-height: 1.15; margin: 0; }
+.bsb-heading { font-family: var(--b-ff, var(--fh)); font-weight: var(--b-fw, var(--bs-heading-weight, 700)); line-height: 1.15; margin: 0; }
 /*
  * Heading sizes come from the theme (theme-vars.ts: --bs-h1-m/-t/-d ... --bs-h6-*), mobile first:
  * below 768px the mobile size, from 768px the tablet size, from 1024px the desktop size.
@@ -1934,6 +1934,12 @@
 .bsb-mc-title { margin: 0; font-family: var(--fh); font-weight: var(--bs-heading-weight, 700); font-size: var(--bs-h4-m, 1.125rem); line-height: 1.25; }
 @media (min-width: 1024px) { .bsb-mc-title { font-size: var(--bs-h4-d, 1.125rem); } }
 .bsb-mc-text { margin: 0; line-height: 1.6; opacity: 0.85; }
+.bsb-mc-text p { margin: 0; }
+.bsb-mc-text p + p, .bsb-mc-text ul, .bsb-mc-text ol { margin-top: 0.5em; }
+.bsb-mc-text ul, .bsb-mc-text ol { padding-left: 1.25rem; }
+.bsb-mc-text ul { list-style: disc; }
+.bsb-mc-text ol { list-style: decimal; }
+.bsb-mc-text a { color: inherit; text-decoration: underline; }
 .bsb-mc-link { color: inherit; font-weight: 600; text-decoration: none; }
 .bsb-mc-link:hover { opacity: 0.7; }
 .bsb-mc-link.bsb-btn { text-decoration: none; }
@@ -2005,3 +2011,12 @@
 .bsb-ts-text { min-width: 0; }
 .bsb-ts-title { margin: 0; font-size: var(--ts-hs); font-weight: 600; line-height: 1.25; color: var(--ts-hc); }
 .bsb-ts-desc { margin: 0.2em 0 0; font-size: var(--ts-ts); line-height: 1.4; color: var(--ts-tc); }
+
+/* Per-device display (bricksElementStyle emits --brx-t-disp / --brx-m-disp only when a smaller device sets its own).
+   !important because the desktop value is inline. */
+@media (max-width: 1023px) {
+  .brx-resp[style*="--brx-t-disp"] { display: var(--brx-t-disp) !important; }
+}
+@media (max-width: 767px) {
+  .brx-resp[style*="--brx-m-disp"] { display: var(--brx-m-disp) !important; }
+}

@@ -298,6 +298,22 @@ export function googleFontsHref(tokens: ThemeTokensLike | null | undefined): str
 }
 
 /**
+ * Stylesheet URL for a font picked on a single element ("'DM Sans', sans-serif"): only the curated fonts qualify, so a
+ * saved value can never make the page request an arbitrary URL. Null for the theme font, system fonts and anything else.
+ */
+export function elementFontHref(fontFamily: string | undefined): string | null {
+  const first = fontFamily?.split(",")[0]?.trim().replace(/^['"]|['"]$/g, "");
+  if (!first || !(THEME_FONTS as readonly string[]).includes(first)) return null;
+  return `https://fonts.googleapis.com/css2?family=${first.replace(/ /g, "+")}:wght@300;400;500;600;700;800&display=swap`;
+}
+
+/** The CSS value stored when a font is picked on an element: name plus a generic fallback. */
+export function elementFontValue(name: string): string {
+  const serif = name === "Playfair Display" || name === "Lora" || name === "Merriweather";
+  return `${name.includes(" ") ? `'${name}'` : name}, ${serif ? "serif" : "sans-serif"}`;
+}
+
+/**
  * Metric-matched local fallbacks for the curated fonts (same values next/font computes: size-adjust and the ascent,
  * descent and line-gap overrides of Arial or Times New Roman). Text is first drawn in the fallback at the web font's
  * size and line height, so the swap when the font arrives does not move the page (layout shift).
