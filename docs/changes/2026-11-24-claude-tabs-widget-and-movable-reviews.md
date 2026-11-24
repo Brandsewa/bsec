@@ -23,7 +23,8 @@ Two requests from the owner. (1) A Tabs widget with full control of the titles a
 
 ## Verification
 - Ran: `pnpm --filter @bs/blocks exec vitest run` 303 pass (new `tabs-section.test.tsx`: schema, markup, accordion and default-tab state, sanitising, reviews placement; registry count 48 to 49); `pnpm --filter @bs/block-editor exec vitest run` 41 pass (picker rule for Reviews); typecheck and lint pass.
-- NOT verified: no browser run of the editor panels, of the tab and accordion behaviour, or of the product page with a reviews block (the preview server could not be started in this session). The CSS was read, not looked at. The mobile accordion, the sideways-scrolling tab row and the vertical layout need a look at 375 px before merging. `pnpm build` and the heavy tests were not run.
+- Looked at: the generated markup and `blocks.css` in the browser pane as a static page (no editor, no database; Docker was not running), at desktop and 375 px. Desktop: underline and cards titles, vertical titles with a tinted body. Phone: the accordion (one open at a time), the scrolling card tab row (no stacking, no page overflow). The click behaviour on that page was a copy of `TabsBehavior`, not the real component.
+- NOT verified: the editor panels, the real `TabsBehavior` (keyboard and click) in the storefront, and the product page with a Reviews block. `pnpm build` and the heavy tests were not run.
 
 ## Docs updated
 - [x] `docs/ARCHITECTURE.md` (block list, product page reviews)

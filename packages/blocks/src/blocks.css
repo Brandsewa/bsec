@@ -2064,7 +2064,7 @@
   .bsb-tb-pos-left, .bsb-tb-pos-right { flex-direction: column; align-items: stretch; }
   .bsb-tb-pos-left .bsb-tb-list, .bsb-tb-pos-right .bsb-tb-list { flex-direction: row; width: auto; max-width: none; }
   /* Keep the tabs on phones: one row that scrolls sideways, never stacked */
-  .bsb-tb-mobile-tabs .bsb-tb-list { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .bsb-tb-mobile-tabs .bsb-tb-list { padding-bottom: 6px; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
   .bsb-tb-mobile-tabs .bsb-tb-tab, .bsb-tb-mobile-tabs.bsb-tb-pos-top.bsb-tb-align-stretch .bsb-tb-tab { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: start; }
   .bsb-tb-mobile-tabs.bsb-tb-style-underline.bsb-tb-pos-left .bsb-tb-tab, .bsb-tb-mobile-tabs.bsb-tb-style-underline.bsb-tb-pos-right .bsb-tb-tab { border-inline-start: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .bsb-tb-mobile-tabs.bsb-tb-style-underline.bsb-tb-pos-left .bsb-tb-tab[aria-selected="true"], .bsb-tb-mobile-tabs.bsb-tb-style-underline.bsb-tb-pos-right .bsb-tb-tab[aria-selected="true"] { border-bottom-color: var(--tb-bc, var(--p)); }
