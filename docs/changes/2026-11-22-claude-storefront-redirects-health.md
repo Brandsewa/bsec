@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-22
 - **Agent:** claude
-- **Branch:** `feat/storefront-redirects-health` (stacked on `fix/storefront-audit-fixes`, PR 313; not merged yet)
+- **Branch:** `feat/storefront-redirects-health` (merged in #314, 00d1a964; was stacked on #313)
 - **Area:** db, domain, contracts, web, admin, docs
 - **Type:** feature
 - **Supersedes:** none (continues `docs/changes/2026-11-21-claude-storefront-audit-fixes.md`)

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-23
 - **Agent:** claude
-- **Branch:** `feat/rich-product-descriptions` (stacked on `feat/storefront-seo-gaps`, PR 316; not merged yet)
+- **Branch:** `feat/rich-product-descriptions` (merged in #317, 65709e35; was stacked on #316)
 - **Area:** contracts, domain, web, admin, docs
 - **Type:** feature
 - **Supersedes:** none

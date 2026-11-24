@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-21
 - **Agent:** claude
-- **Branch:** `docs/audit-fixes-plan` (not merged yet)
+- **Branch:** `docs/audit-fixes-plan` (never pushed; the plan went to `main` inside #313, 13634f36)
 - **Area:** docs
 - **Type:** docs
 - **Supersedes:** none

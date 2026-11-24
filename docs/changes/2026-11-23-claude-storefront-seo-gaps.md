@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-23
 - **Agent:** claude
-- **Branch:** `feat/storefront-seo-gaps` (not merged yet)
+- **Branch:** `feat/storefront-seo-gaps` (merged in #316, e72a0ee8)
 - **Area:** domain, contracts, web, admin, docs
 - **Type:** fix
 - **Supersedes:** none (continues `docs/changes/2026-11-22-claude-storefront-redirects-health.md`)
