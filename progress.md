@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `feat/tabs-widget-review-position` · Tabs widget (accordion on phones) and the product page's reviews movable through the Reviews block; change record `docs/changes/2026-11-24-claude-tabs-widget-and-movable-reviews.md` · 2026-11-24
 - claude · `fix/builder-ruttl-fixes-2026-11-24` · builder fixes from the Ruttl board (font and weight, display per device, bold and italic, card text, long media URL); change record `docs/changes/2026-11-24-claude-ruttl-builder-fixes.md` · 2026-11-24
 - claude · `feat/ai-content-tools` · AI access: categories, collections, blog, website pages (text, links, sections), menus and redirects editable through MCP; map `docs/MCP-CONTENT-MAP.md`, change record `docs/changes/2026-11-23-claude-ai-content-tools.md` · 2026-11-23
 - claude · `feat/ai-products-full` · AI access: every product field, variant, option, image, category and collection editable through MCP; map `docs/MCP-PRODUCTS-MAP.md`, change record `docs/changes/2026-11-22-claude-ai-products-full.md` · 2026-11-22
