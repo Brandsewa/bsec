@@ -1,6 +1,6 @@
 import { getMarketContext } from "@/server/market.ts";
 import { JsonLd } from "@/components/blog/JsonLd.tsx";
-import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
+import { ProductCustomField, customFieldBody } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
 import { ProductShowcaseSchema, filterVisibleBlocks, walkBlocks, type ProductCouponsOptions } from "@bs/blocks";
 import { CouponCards } from "@/components/product/CouponCards.tsx";
@@ -211,6 +211,11 @@ const templateContext = {
     locale: marketLocale,
     renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options),
     renderProductCustomField: customField,
+    // A custom field inside a Tabs block ({{field:key}}): just the value, no wrapper or padding; nothing when the product has none.
+    renderCustomFieldValue: (key: string) => {
+      const field = customFields.find((f) => f.key === key);
+      return field ? customFieldBody(field, marketLocale) : null;
+    },
     renderProductCoupons: couponCards,
     renderProductReviews: () => (
       <div className="bs-site-w mx-auto px-4 pb-10">

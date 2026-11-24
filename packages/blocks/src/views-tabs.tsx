@@ -16,6 +16,32 @@ import { TabsBehavior } from "./views-tabs-client.tsx";
 const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
 type A<P> = BlockRenderArgs<P>;
 
+/** `{{field:key}}` in a tab's content: pulls in that custom field of the product being viewed. */
+const FIELD_TOKEN = /\{\{\s*field:([a-z0-9_]{1,60})\s*\}\}/g;
+
+function renderContent(content: string, ctx: A<R.TabsSectionProps>["ctx"]): ReactNode {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let n = 0;
+  const text = (chunk: string) => {
+    if (chunk.trim()) parts.push(<div key={n++} dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(chunk) }} />);
+  };
+  for (const m of content.matchAll(FIELD_TOKEN)) {
+    text(content.slice(last, m.index));
+    const key = m[1] ?? "";
+    if (ctx?.renderCustomFieldValue) {
+      const value = ctx.renderCustomFieldValue(key);
+      if (value !== null && value !== undefined) parts.push(<div key={n++} className="bsb-tb-field" data-custom-field={key}>{value}</div>);
+    } else {
+      // The editor and previews have no product: show where the value will appear.
+      parts.push(<div key={n++} className="bsb-tb-field bsb-tb-field-sample">Custom field: {key} (shown on the product page)</div>);
+    }
+    last = (m.index ?? 0) + m[0].length;
+  }
+  text(content.slice(last));
+  return parts;
+}
+
 export function TabsSectionView({ props, ctx }: A<R.TabsSectionProps>): ReactNode {
   const uid = `tb-${(ctx?.blockId ?? "w").replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const current = Math.min(props.items.length, Math.max(1, props.defaultTab)) - 1;
@@ -25,13 +51,18 @@ export function TabsSectionView({ props, ctx }: A<R.TabsSectionProps>): ReactNod
     "--tb-gap": `${props.titleBodyGap}px`,
     "--tb-fs": `${props.titleFontSize}px`,
     "--tb-fw": props.titleWeight,
-    "--tb-px": `${props.titlePaddingX}px`,
-    "--tb-py": `${props.titlePaddingY}px`,
+    "--tb-pt": `${props.titlePadding?.top ?? props.titlePaddingY}px`,
+    "--tb-pr": `${props.titlePadding?.right ?? props.titlePaddingX}px`,
+    "--tb-pb": `${props.titlePadding?.bottom ?? props.titlePaddingY}px`,
+    "--tb-pl": `${props.titlePadding?.left ?? props.titlePaddingX}px`,
     "--tb-tgap": `${props.titleGap}px`,
     "--tb-radius": `${props.cardRadius}px`,
     "--tb-icon": `${props.iconSize}px`,
-    "--tb-body-py": `${props.bodyPaddingY}px`,
-    "--tb-body-px": `${props.bodyPaddingX}px`,
+    "--tb-body-pt": `${props.bodyPadding?.top ?? props.bodyPaddingY}px`,
+    "--tb-body-pr": `${props.bodyPadding?.right ?? props.bodyPaddingX}px`,
+    "--tb-body-pb": `${props.bodyPadding?.bottom ?? props.bodyPaddingY}px`,
+    "--tb-body-pl": `${props.bodyPadding?.left ?? props.bodyPaddingX}px`,
+    "--tb-acc-icon": `${props.accordionIconSize}px`,
     "--tb-body-bw": `${props.bodyBorderWidth}px`,
     "--tb-body-radius": `${props.bodyRadius}px`,
     "--tb-body-fs": `${props.bodyFontSize}px`,
@@ -46,8 +77,9 @@ export function TabsSectionView({ props, ctx }: A<R.TabsSectionProps>): ReactNod
   if (props.bodyBorderColor) vars["--tb-body-bc"] = props.bodyBorderColor;
 
   return (
-    <section className={cx("bsb bs-block-tabs bsb-py-lg", `bsb-tone-${props.tone}`)}>
-      <div className={cx("bsb-w", `bsb-w-${props.width}`)}>
+    // No padding or width of its own: put the widget in a Section or Container to space and size it.
+    <section className={cx("bsb bs-block-tabs", `bsb-tone-${props.tone}`)}>
+      <div className="bsb-tb-wrap">
         {hasHead ? (
           <div className={cx("bsb-tb-head", `bsb-align-${props.headingAlign}`)}>
             {props.title ? <h2 className="bsb-heading bsb-h-lg">{props.title}</h2> : null}
@@ -115,7 +147,7 @@ export function TabsSectionView({ props, ctx }: A<R.TabsSectionProps>): ReactNod
                     aria-labelledby={`${uid}-t${i}`}
                     tabIndex={0}
                   >
-                    <div className="bsb-tb-body" dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(it.content) }} />
+                    <div className="bsb-tb-body">{renderContent(it.content, ctx)}</div>
                   </div>
                 </div>
               ))}

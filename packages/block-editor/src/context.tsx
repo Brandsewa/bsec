@@ -14,6 +14,12 @@ export interface MediaAsset {
   thumbnailUrl?: string | null | undefined;
 }
 
+export interface EditorCustomField {
+  key: string;
+  name: string;
+  type: string;
+}
+
 export interface BlockEditorHost {
   /** Store data + media URLs for the blocks currently on the canvas (products, collections, images). */
   loadRenderData(blocks: unknown[]): Promise<{ data: Record<string, unknown>; media: Record<string, string> }>;
@@ -34,6 +40,8 @@ export interface BlockEditorHost {
   listCollections?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
   /** The store's active categories, for the category pickers. Hosts without a store leave it out. */
   listCategories?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
+  /** The store's active product custom fields, for the custom field picker. Hosts without a store leave it out. */
+  listCustomFields?: (() => Promise<EditorCustomField[]>) | undefined;
   /** The store's listed products, for the hand-pick product picker. Hosts without a store leave it out. */
   listProducts?: (() => Promise<Array<{ slug: string; title: string }>>) | undefined;
 }
