@@ -25,6 +25,7 @@ import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
 import * as VT from "./views-trust-strip.tsx";
 import * as VM from "./views-multi-card.tsx";
+import * as VTB from "./views-tabs.tsx";
 import { MARKETING_BLOCK_DEFINITIONS } from "./marketing-blocks.ts";
 
 /* ------------------------------------------------------------------ */
@@ -1218,6 +1219,88 @@ export const FaqSectionBlock: BlockDefinition<FaqSectionProps> = {
 };
 
 /**
+ * Tabs: a row of titles with a rich-text body per tab. Titles can be plain text, underlined or cards (with a corner
+ * radius), horizontal or down the side. On phones the tabs either turn into an accordion (default) or stay tabs with a
+ * title row that scrolls sideways instead of stacking. Bodies are markdown (bold, italic, links, lists), sanitised on render.
+ */
+export const TabsSectionSchema = z.object({
+  // Section
+  title: z.string().max(160).default(""),
+  description: z.string().max(500).default(""),
+  headingAlign: alignSchema.default("left"),
+  width: widthSchema.default("wide"),
+  tone: toneSchema.default("default"),
+  // Layout
+  /** top: titles in a row above the body. left / right: titles in a column beside it (phones always get the row or the accordion). */
+  tabsPosition: z.enum(["top", "left", "right"]).default("top"),
+  /** Titles row alignment (top position); "stretch" shares the width equally. */
+  tabsAlign: z.enum(["left", "center", "right", "stretch"]).default("left"),
+  /** Space between the titles and the body, px. */
+  titleBodyGap: z.number().int().min(0).max(80).default(16),
+  /** The tab open first (1 = first). */
+  defaultTab: z.number().int().min(1).max(12).default(1),
+  // Title look
+  titleStyle: z.enum(["simple", "underline", "cards"]).default("underline"),
+  /** Cards look: corner radius, px. */
+  cardRadius: z.number().int().min(0).max(40).default(10),
+  titleFontSize: z.number().int().min(11).max(28).default(16),
+  titleWeight: z.enum(["400", "500", "600", "700"]).default("600"),
+  titlePaddingX: z.number().int().min(0).max(48).default(16),
+  titlePaddingY: z.number().int().min(0).max(32).default(10),
+  /** Space between the titles, px. */
+  titleGap: z.number().int().min(0).max(40).default(8),
+  iconPosition: z.enum(["left", "top"]).default("left"),
+  iconSize: z.number().int().min(12).max(40).default(18),
+  titleColor: hexColorSchema.optional(),
+  titleActiveColor: hexColorSchema.optional(),
+  titleBg: hexColorSchema.optional(),
+  titleActiveBg: hexColorSchema.optional(),
+  /** Underline colour, and the border of the cards. */
+  titleBorderColor: hexColorSchema.optional(),
+  // Body
+  bodyPaddingY: z.number().int().min(0).max(96).default(20),
+  bodyPaddingX: z.number().int().min(0).max(96).default(0),
+  bodyBg: hexColorSchema.optional(),
+  bodyTextColor: hexColorSchema.optional(),
+  bodyBorderWidth: z.number().int().min(0).max(8).default(0),
+  bodyBorderColor: hexColorSchema.optional(),
+  bodyRadius: z.number().int().min(0).max(40).default(0),
+  bodyAlign: alignSchema.default("left"),
+  bodyFontSize: z.number().int().min(12).max(24).default(16),
+  // Phones
+  /** accordion: every tab becomes a collapsible row. tabs: keep the tabs, the title row scrolls sideways. */
+  mobileMode: z.enum(["accordion", "tabs"]).default("accordion"),
+  accordionSingleOpen: z.boolean().default(true),
+  accordionOpenFirst: z.boolean().default(true),
+  accordionIcon: z.enum(["plus", "chevron"]).default("chevron"),
+  items: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(80),
+        icon: iconNameSchema.optional(),
+        /** Markdown: **bold**, *italic*, [link](url), lists, line breaks. */
+        content: z.string().max(5000).default(""),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .default([
+      { title: "Description", content: "Tell customers what makes this special. Use **bold**, *italic*, links and lists." },
+      { title: "Shipping", content: "- Dispatched within 1-2 days\n- Free delivery over a set amount\n- Track every order" },
+      { title: "Returns", content: "A simple return if something is not right." },
+    ]),
+});
+export type TabsSectionProps = z.infer<typeof TabsSectionSchema>;
+
+export const TabsSectionBlock: BlockDefinition<TabsSectionProps> = {
+  type: "TabsSection",
+  version: 1,
+  schema: TabsSectionSchema,
+  defaultProps: TabsSectionSchema.parse({}),
+  render: VTB.TabsSectionView,
+};
+
+/**
  * Collection showcase: the Collection grid with the heading placed left, middle or right, an optional button link,
  * up to six cards per desktop row (more collections wrap into more rows), and a grid or carousel choice for
  * tablets and phones. Collections are picked from the store's own list; the data is resolved like the Collection grid.
@@ -1506,6 +1589,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   ReviewsMarquee: ReviewsMarqueeBlock,
   ImageBanner: ImageBannerBlock,
   FaqSection: FaqSectionBlock,
+  TabsSection: TabsSectionBlock,
   CollectionShowcase: CollectionShowcaseBlock,
   MultiCard: MultiCardBlock,
   CollectionProducts: CollectionProductsBlock,

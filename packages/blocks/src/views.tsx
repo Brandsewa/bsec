@@ -202,7 +202,9 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
   );
 }
 
-export function ReviewsView({ props }: A<R.ReviewsProps>): ReactNode {
+export function ReviewsView({ props, ctx }: A<R.ReviewsProps>): ReactNode {
+  // On a product page the block is the real reviews, drawn where the block sits (move the block to move the reviews).
+  if (ctx?.renderProductReviews) return <>{ctx.renderProductReviews()}</>;
   return (
     <section className="bsb bs-block-reviews bsb-py-lg">
       <div className="bsb-w bsb-w-default">
