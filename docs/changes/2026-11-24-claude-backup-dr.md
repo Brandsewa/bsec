@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-24
 - **Agent:** claude
-- **Branch:** `feat/backup-dr`  (not merged yet, not committed yet)
+- **Branch:** `feat/backup-dr` (merged in #323, bb0fc732)
 - **Area:** db, domain, contracts, platform, worker, superadmin, infra, docs
 - **Type:** feature
 - **Supersedes:** none

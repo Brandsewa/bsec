@@ -27,6 +27,7 @@ Daily Coolify `pg_dump` at 02:30 UTC, 14 local copies, plus R2 bucket `bsec-back
   - Own prefix `/pgbackrest` in a **separate bucket** `bsec-pgbackrest` (the draft shares `bsec-backups`; separate buckets let each have its own lock and token).
   - Schedule: full weekly, differential daily, retention 30 days. The daily `pg_dump` stays as a second, independent path (logical dumps survive a corrupt physical backup and are what the tenant-restore runbook uses).
   - Cutover = swap the image on `bsec-postgres`, same data volume. This is a restart of about a minute, so schedule it off-peak and announce it. **Rehearse on staging first** (`docker-compose.staging.yml`).
+  - **Built 2026-11-24 (branch `feat/pgbackrest-image`):** `infra/docker/postgres.Dockerfile`, `postgres-entrypoint.sh`, `infra/backups/pgbackrest.conf`, `pitr-rehearsal.mjs`, CI job; procedure in `infra/backups/PGBACKREST.md`. **Correction to the bucket line above:** no bucket lock and no lifecycle rule on `bsec-pgbackrest`: pgBackRest rewrites `backup.info` and `archive.info` after every backup and expires its own files, so a lock or an expiry rule would break backups or delete live WAL. That bucket is protected by a scoped token and, later, the second-account copy.
   - Risk: the box is shared with other projects. WAL archiving adds disk and CPU; check disk headroom before enabling and set an alert (G4).
 
 ### G2. Restore never proven

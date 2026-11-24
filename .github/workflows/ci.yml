@@ -197,7 +197,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        app: [web, platform, worker, admin, superadmin, migrate]
+        app: [web, platform, worker, admin, superadmin, migrate, postgres]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
@@ -230,6 +230,36 @@ jobs:
           # builds cold. GHCR has no such cap, so mode=max keeps every layer (install, build) reusable.
           cache-from: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/bsec-cache:${{ matrix.app }}
           cache-to: type=registry,ref=ghcr.io/${{ steps.owner.outputs.name }}/bsec-cache:${{ matrix.app }},mode=max,image-manifest=true,oci-mediatypes=true
+
+  # Restore rehearsal for the bsec-postgres image (BACKUP-DR-PLAN G1): builds the image, archives WAL to a local S3
+  # stand-in, restores to a chosen moment and checks the rows. Only when something that affects the image or backup
+  # config changed, so most PRs skip it; no real R2 or token is involved.
+  pitr-rehearsal:
+    name: pgBackRest restore rehearsal
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+      - id: relevant
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || git diff --name-only HEAD^1 HEAD | grep -qE '^(infra/docker/postgres|infra/backups/(pgbackrest\.conf|pitr-rehearsal\.mjs))'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "Nothing that affects the bsec-postgres image changed: skipping."
+          fi
+      - if: steps.relevant.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .nvmrc
+      - if: steps.relevant.outputs.run == 'true'
+        run: docker build -f infra/docker/postgres.Dockerfile -t bsec-postgres:18 .
+      - if: steps.relevant.outputs.run == 'true'
+        run: node infra/backups/pitr-rehearsal.mjs
 
   # Ephemeral staging: run the exact images just pushed, on the runner, smoke-test, tear down.
   # Replaces a persistent staging VPS (cost/simplicity call, 2026-09-29). Fresh random secrets
@@ -344,7 +374,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        app: [web, platform, worker, admin, superadmin, migrate]
+        app: [web, platform, worker, admin, superadmin, migrate, postgres]
     steps:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
