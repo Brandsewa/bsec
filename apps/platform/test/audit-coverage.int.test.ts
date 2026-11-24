@@ -52,7 +52,7 @@ async function snapshot(): Promise<string> {
     "export_files", "tenant_owner_invites", "users", "sessions", "organizations", "store_settings", "roles", "theme_templates",
     "platform_email_settings", "plan_change_requests", "platform_storage_connections",
     "quota_tiers", "quota_tier_limits", "quota_definitions",
-    "platform_channel_providers", "platform_message_log",
+    "platform_channel_providers", "platform_message_log", "platform_backup_settings", "platform_restore_drills",
   ];
   const parts = tables.map((t) => `SELECT '${t}' || ':' || x::text AS r FROM ${t} x`);
   parts.push(`SELECT 'job:' || j.id::text || j.state::text FROM pgboss.job j`);
@@ -138,6 +138,8 @@ const CASES: Record<string, Case> = {
       return { webhookId: w!.id };
     },
   },
+  "backups.updateSettings": { role: "platform_admin", action: "backup.settings_updated", input: async () => ({ dumpMaxAgeHours: 30, alertEmails: ["ops@example.test"] }) },
+  "backups.recordDrill": { role: "platform_admin", action: "backup.drill_recorded", input: async () => ({ kind: "dump", result: "pass", drilledAt: new Date().toISOString(), rtoSeconds: 120, rpoSeconds: 3600 }) },
   "tenants.create": {
     role: "platform_admin",
     action: "tenant.provisioned",

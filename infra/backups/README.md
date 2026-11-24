@@ -8,7 +8,7 @@ Targets (PLAN §14): **RPO ≤ 15 min**, **RTO ≤ 2 h**. A backup counts as val
 - Repository: Cloudflare R2 bucket `bsec-pgbackrest-<env>` (S3 API), encrypted with `repo1-cipher-type=aes-256-cbc`.
 - Schedule: full weekly (Sun 02:30 IST), differential daily (02:30 IST), WAL archived continuously with `archive_timeout=60`.
 - Retention: 30 days (`repo1-retention-full-type=time`, `repo1-retention-full=30`).
-- Media: R2 bucket versioning on. Coolify config, env templates, migration state and image tags exported with each release.
+- Media: R2 does not offer S3-style object versioning (verify in the dashboard); protect `bsec-media` with a bucket lock and the weekly second-copy job instead (docs/BACKUP-DR-PLAN.md G6). Coolify config, env templates, migration state and image tags exported with each release.
 
 ## pgBackRest config (`/etc/pgbackrest/pgbackrest.conf` inside a sidecar that shares the PG data volume)
 See `pgbackrest.conf` in this folder. Secrets come from env (`PGBACKREST_REPO1_S3_KEY`, `PGBACKREST_REPO1_S3_KEY_SECRET`, `PGBACKREST_REPO1_CIPHER_PASS`).

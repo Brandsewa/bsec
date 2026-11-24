@@ -794,6 +794,20 @@ export async function startJobs(opts: {
     }
   });
 
+  // Backup freshness check (docs/BACKUP-DR-PLAN.md G4). Pings the heartbeat only when everything is healthy, so a missing
+  // ping still alerts when this job, the database or email is down.
+  await boss.work(QUEUE_NAMES.BACKUP_CHECK, { localConcurrency: 1 }, async () => {
+    const [{ backupDumpLister, pingHeartbeat }, { runBackupChecks }] = await Promise.all([import("./platform/backup-storage.ts"), import("./platform/backups.ts")]);
+    const listDumps = backupDumpLister();
+    if (!listDumps) {
+      opts.log.warn("backup.check skipped: BACKUP_R2_* is not set on the worker, backup monitoring is off");
+      return;
+    }
+    const run = await runBackupChecks(db, { listDumps });
+    opts.log.info({ allOk: run.allOk, checks: run.results.map((r) => ({ kind: r.kind, ok: r.ok })), alertsSent: run.alertsSent }, "backup.check processed");
+    if (run.allOk) await pingHeartbeat(process.env.BACKUP_HEARTBEAT_URL);
+  });
+
   // Handle order.created domain event (send the order confirmation)
   await boss.work<{ tenantId: string; orderId: string; paymentAfterCancel?: boolean }>(
     QUEUE_NAMES.ORDER_CREATED,
@@ -1439,6 +1453,7 @@ export async function startJobs(opts: {
   try {
     await boss.schedule(QUEUE_NAMES.RESERVATION_EXPIRY, "* * * * *", {});
     await boss.schedule(QUEUE_NAMES.IDEMPOTENCY_CLEANUP, "*/15 * * * *", {});
+    await boss.schedule(QUEUE_NAMES.BACKUP_CHECK, "*/30 * * * *", {});
     await boss.schedule(QUEUE_NAMES.CART_RECOVERY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.SUBSCRIPTION_TRIAL_EXPIRY_SWEEP, "0 * * * *", {});
     await boss.schedule(QUEUE_NAMES.DOMAINS_SWEEP, "*/5 * * * *", {});

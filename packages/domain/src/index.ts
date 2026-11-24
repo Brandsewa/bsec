@@ -191,6 +191,8 @@ export * from "./saas/promotion-math.ts";
 export * from "./platform/email-settings.ts";
 export * from "./platform/settings.ts";
 export * from "./platform/login-panel.ts";
+export * from "./platform/backups.ts";
+export * from "./platform/backup-storage.ts";
 export * from "./platform/branding.ts";
 export * from "./platform/branding-tokens.ts";
 export * from "./system/platform-mailer.ts";

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   HardDrive,
   RefreshCw,
@@ -92,6 +93,9 @@ export function System() {
     }
   };
 
+  const { data: backupOverview } = useQuery({ queryKey: ["platform", "backups"], queryFn: () => client.backups.overview(), refetchInterval: 60_000 });
+  const backupHealth = !backupOverview ? undefined : backupOverview.monitoring === "never_ran" ? "none" : backupOverview.latest.some((l) => !l.ok) ? "bad" : "good";
+
   if (isLoading || !systemData) return <PageSkeleton />;
 
   return (
@@ -107,52 +111,29 @@ export function System() {
       />
 
       <div className="space-y-8">
-        {/* Disaster Recovery & Backup Indicators */}
+        {/* Backups: real status lives on its own page (docs/BACKUP-DR-PLAN.md G10) */}
         <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/60">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg bg-primary/10 text-primary">
                 <HardDrive className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-semibold text-sm text-foreground">Disaster Recovery & Backup SLA</h2>
-                <p className="text-xs text-muted-foreground">High-availability target tracking & restore drill test logs</p>
+                <h2 className="font-semibold text-sm text-foreground">Backups & recovery</h2>
+                <p className="text-xs text-muted-foreground">
+                  {backupHealth === undefined
+                    ? "Backup status could not be loaded."
+                    : backupHealth === "none"
+                      ? "Backup monitoring has not reported yet."
+                      : backupHealth === "bad"
+                        ? "A backup check needs attention."
+                        : "All backup checks are passing."}
+                </p>
               </div>
             </div>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
-              systemData.backups.status === "healthy"
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
-            }`}>
-              {systemData.backups.status}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <span className="text-muted-foreground block text-[11px] font-medium">Last Full Backup</span>
-              <p className="font-semibold text-foreground text-sm mt-1">
-                {systemData.backups.lastBackupAt ? new Date(systemData.backups.lastBackupAt).toLocaleString("en-IN") : "Continuous WAL active"}
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <span className="text-muted-foreground block text-[11px] font-medium">Last Restore Drill Test</span>
-              <p className="font-semibold text-foreground text-sm mt-1">
-                {systemData.backups.lastRestoreTestAt ? new Date(systemData.backups.lastRestoreTestAt).toLocaleDateString("en-IN") : "Drill logged on staging"}
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <span className="text-muted-foreground block text-[11px] font-medium">RPO Target</span>
-              <p className="font-semibold text-foreground text-sm mt-1">
-                ≤ {systemData.backups.rpoTargetMinutes} minutes (WAL to R2)
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-              <span className="text-muted-foreground block text-[11px] font-medium">RTO Target</span>
-              <p className="font-semibold text-foreground text-sm mt-1">
-                ≤ {systemData.backups.rtoTargetHours} hours (Restore runbook)
-              </p>
-            </div>
+            <Link to="/backups" className="text-xs font-medium text-primary hover:underline">
+              Open Backups
+            </Link>
           </div>
         </div>
 
