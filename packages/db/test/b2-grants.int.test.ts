@@ -189,6 +189,7 @@ const NON_RLS_TABLES_WRITABLE_BY_APP_RW: string[] = [
   "oauth_authorization_requests", // AI access (ADR-050): single-use authorization requests; SELECT, INSERT, DELETE and UPDATE of the approval columns only
   "oauth_clients", // AI access (ADR-050): registered AI apps (dynamic registration); SELECT, INSERT, DELETE and UPDATE(name, redirect_uris, last_used_at) only
   "platform_audit_logs", // INSERT + SELECT only (append-only), asserted in the test above
+  "platform_backup_checks", // backup monitoring (migration 0121): the worker inserts check results and prunes after 14 days; the policy and drill tables are SELECT-only for app_rw
   "platform_email_log", // INSERT (mail diagnostics) + DELETE and SELECT(id, created_at) for the 90-day prune
   "platform_notifications", // INSERT + DELETE and SELECT(id, created_at) (the worker adds Super Admin inbox cards and prunes old ones); staff read them through app_platform
   "platform_message_log", // INSERT (SMS/WhatsApp diagnostics, masked recipients) + DELETE and SELECT(id, created_at) for the 90-day prune

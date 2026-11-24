@@ -20,6 +20,7 @@ let storageId: string;
 const INPUTS: Record<string, () => unknown> = {
   "system.health": () => undefined,
   "system.data": () => undefined,
+  "backups.overview": () => undefined,
   "overview.get": () => undefined,
   "tenants.list": () => ({}),
   "tenants.get": () => ({ id: tenantId }),

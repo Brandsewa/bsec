@@ -1787,3 +1787,64 @@ export const platformAccountContract = {
     z.array(z.object({ id: z.string(), action: z.string(), targetType: z.string(), targetId: z.string(), tenantId: z.string().nullable(), at: z.string() })),
   ),
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Backups (docs/BACKUP-DR-PLAN.md G10). Status, alert policy and the restore drill log. It never changes how backups run.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const BackupSettingsSchema = z.object({
+  dumpMaxAgeHours: z.number().int(),
+  walMaxLagMinutes: z.number().int(),
+  drillEveryDays: z.number().int(),
+  walArchivingExpected: z.boolean(),
+  alertEmails: z.array(z.string()),
+  updatedAt: z.string(),
+});
+
+export const BackupOverviewSchema = z.object({
+  settings: BackupSettingsSchema,
+  latest: z.array(z.object({ kind: z.enum(["dump", "wal", "drill"]), ok: z.boolean(), detail: z.record(z.string(), z.unknown()), checkedAt: z.string() })),
+  history: z.array(z.object({ kind: z.enum(["dump", "wal", "drill"]), ok: z.boolean(), checkedAt: z.string() })),
+  drills: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(["dump", "pitr", "tenant", "rebuild"]),
+      result: z.enum(["pass", "fail"]),
+      drilledAt: z.string(),
+      rtoSeconds: z.number().nullable(),
+      rpoSeconds: z.number().nullable(),
+      notes: z.string().nullable(),
+    }),
+  ),
+  config: z.array(z.object({ key: z.string(), label: z.string(), current: z.string(), recommended: z.string(), status: z.enum(["ok", "warn", "todo"]), note: z.string() })),
+  monitoring: z.enum(["running", "never_ran"]),
+});
+
+export const platformBackupsContract = {
+  overview: oc.route({ method: "GET", path: "/platform/backups" }).output(BackupOverviewSchema),
+  updateSettings: oc
+    .route({ method: "PUT", path: "/platform/backups/settings" })
+    .input(
+      z.object({
+        dumpMaxAgeHours: z.number().int().min(1).max(168).optional(),
+        walMaxLagMinutes: z.number().int().min(1).max(1440).optional(),
+        drillEveryDays: z.number().int().min(7).max(120).optional(),
+        walArchivingExpected: z.boolean().optional(),
+        alertEmails: z.array(z.string().max(254)).max(5).optional(),
+      }),
+    )
+    .output(BackupSettingsSchema),
+  recordDrill: oc
+    .route({ method: "POST", path: "/platform/backups/drills" })
+    .input(
+      z.object({
+        kind: z.enum(["dump", "pitr", "tenant", "rebuild"]),
+        result: z.enum(["pass", "fail"]),
+        drilledAt: z.string().datetime(),
+        rtoSeconds: z.number().int().min(0).max(2_592_000).optional(),
+        rpoSeconds: z.number().int().min(0).max(2_592_000).optional(),
+        notes: z.string().max(2000).optional(),
+      }),
+    )
+    .output(z.object({ id: z.string() })),
+};

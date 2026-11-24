@@ -2,6 +2,7 @@ import React, { useState, type FormEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  DatabaseBackup,
   Bell,
   Boxes,
   Building2,
@@ -105,6 +106,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Support Sessions", href: "/support", icon: Headphones },
       { label: "System & Queues", href: "/system", icon: Activity },
+      { label: "Backups", href: "/backups", icon: DatabaseBackup },
       { label: "Notifications", href: "/notifications", icon: Bell },
       { label: "Integrations", href: "/integrations", icon: Boxes },
       { label: "Quotas & Tiers", href: "/quotas", icon: Sliders },
@@ -229,6 +231,7 @@ export function Layout({ user, onLogout }: LayoutProps) {
     { id: "templates", label: "Themes Library", icon: Layers, onSelect: () => navigate({ to: "/templates" }), group: "Commerce" },
     { id: "support", label: "Support Sessions", icon: Headphones, onSelect: () => navigate({ to: "/support" }), group: "Operations" },
     { id: "system", label: "System & Queues", icon: Activity, onSelect: () => navigate({ to: "/system" }), group: "Operations" },
+    { id: "backups", label: "Backups", icon: DatabaseBackup, onSelect: () => navigate({ to: "/backups" }), group: "Operations" },
     { id: "integrations", label: "Integrations Hub", icon: Boxes, onSelect: () => navigate({ to: "/integrations" }), group: "Operations" },
     { id: "notification-manager", label: "Notifications (events and branding)", icon: Bell, onSelect: () => navigate({ to: "/notifications" }), group: "Operations" },
     { id: "notifications", label: "Notification Channels", icon: Mail, onSelect: () => navigate({ to: "/integrations/notifications" }), group: "Operations" },

@@ -47,6 +47,7 @@ import { CustomerPrivacyScreen } from "@bs/content-admin/settings/CustomerPrivac
 import { MediaScreen, validateMediaSearch } from "@bs/content-admin/media/MediaScreen.tsx";
 import { Support } from "./pages/Support.tsx";
 import { System } from "./pages/System.tsx";
+import { Backups } from "./pages/Backups.tsx";
 import { Quotas } from "./pages/Quotas.tsx";
 import { Features } from "./pages/Features.tsx";
 import { Staff } from "./pages/Staff.tsx";
@@ -468,6 +469,18 @@ const systemRoute = createRoute({
   ),
 });
 
+const backupsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: "/backups",
+  component: Backups,
+  pendingComponent: () => (
+    <PageContainer>
+      <PageHeaderSkeleton />
+      <DataTableSkeleton columns={4} rows={5} />
+    </PageContainer>
+  ),
+});
+
 const quotasRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: "/quotas",
@@ -750,6 +763,7 @@ export const routeTree = rootRoute.addChildren([
     templatesRoute,
     supportRoute,
     systemRoute,
+    backupsRoute,
     quotasRoute,
     featuresRoute,
     staffRoute,
