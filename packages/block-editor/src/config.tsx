@@ -11,6 +11,8 @@ import { trustStylesField } from "./TrustStripField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
 import { accordionFields } from "./sections.tsx";
+import { customFieldKeyField } from "./CustomFieldPicker.tsx";
+import { pxQuadField } from "./PxQuadField.tsx";
 import { layoutField, slideRadiusField } from "./LayoutField.tsx";
 import {
   createBricksLayoutFields,
@@ -433,7 +435,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         fields: {
           showAccordion: toggle("Accordion (details rows) in this column") as Field,
           accordionFirstOpen: toggle("Accordion: first row open") as Field,
-          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
+          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: customFieldKeyField("Custom field (for \"A custom field of the product\")") as Field, text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
         },
       },
     ]),
@@ -640,7 +642,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
             arrayFields: {
               title: text("Title"),
               icon: iconField("Icon (optional)", true) as Field,
-              content: markdownTextField("Content") as Field,
+              content: markdownTextField("Content", { preview: false, customFields: true }) as Field,
             },
             defaultItemProps: { title: "New tab", content: "Write the content of this tab." },
           } as Field,
@@ -654,7 +656,6 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           description: area("Description under the heading"),
           headingAlign: select("Heading alignment", ALIGN),
           tone: select("Background", TONE),
-          width: select("Width", WIDTH),
         },
       },
       {
@@ -675,8 +676,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           cardRadius: rnum("Cards: corner radius (px)", 0, 40),
           titleFontSize: rnum("Text size (px)", 11, 28),
           titleWeight: rsel("Text weight", { "400": "Regular", "500": "Medium", "600": "Semi bold", "700": "Bold" }),
-          titlePaddingX: rnum("Padding left and right (px)", 0, 48),
-          titlePaddingY: rnum("Padding top and bottom (px)", 0, 32),
+          titlePadding: pxQuadField("Padding (px)", { max: 96, legacyX: "titlePaddingX", legacyY: "titlePaddingY" }) as Field,
           titleGap: rnum("Space between titles (px)", 0, 40),
           iconPosition: select("Icon", { left: "Beside the title", top: "Above the title" }),
           iconSize: rnum("Icon size (px)", 12, 40),
@@ -697,8 +697,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         id: "body",
         title: "Content area",
         fields: {
-          bodyPaddingY: rnum("Padding top and bottom (px)", 0, 96),
-          bodyPaddingX: rnum("Padding left and right (px)", 0, 96),
+          bodyPadding: pxQuadField("Padding (px)", { max: 96, legacyX: "bodyPaddingX", legacyY: "bodyPaddingY" }) as Field,
           bodyFontSize: rnum("Text size (px)", 12, 24),
           bodyAlign: select("Text alignment", ALIGN),
           bodyBg: colorField("Background") as Field,
@@ -716,6 +715,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
           accordionSingleOpen: toggle("Accordion: opening one closes the others") as Field,
           accordionOpenFirst: toggle("Accordion: first row open") as Field,
           accordionIcon: select("Accordion icon", { chevron: "Arrow", plus: "Plus / minus" }),
+          accordionIconSize: rnum("Accordion icon size (px)", 8, 32),
         },
       },
     ]),

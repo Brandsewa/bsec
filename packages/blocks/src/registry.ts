@@ -1245,8 +1245,18 @@ export const TabsSectionSchema = z.object({
   cardRadius: z.number().int().min(0).max(40).default(10),
   titleFontSize: z.number().int().min(11).max(28).default(16),
   titleWeight: z.enum(["400", "500", "600", "700"]).default("600"),
+  /** Legacy single left-right and top-bottom values; `titlePadding` wins when set. */
   titlePaddingX: z.number().int().min(0).max(48).default(16),
   titlePaddingY: z.number().int().min(0).max(32).default(10),
+  /** Padding of each title, px, per side. */
+  titlePadding: z
+    .object({
+      top: z.number().int().min(0).max(96).optional(),
+      right: z.number().int().min(0).max(96).optional(),
+      bottom: z.number().int().min(0).max(96).optional(),
+      left: z.number().int().min(0).max(96).optional(),
+    })
+    .optional(),
   /** Space between the titles, px. */
   titleGap: z.number().int().min(0).max(40).default(8),
   iconPosition: z.enum(["left", "top"]).default("left"),
@@ -1258,8 +1268,18 @@ export const TabsSectionSchema = z.object({
   /** Underline colour, and the border of the cards. */
   titleBorderColor: hexColorSchema.optional(),
   // Body
+  /** Legacy top-bottom and left-right values; `bodyPadding` wins when set. */
   bodyPaddingY: z.number().int().min(0).max(96).default(20),
   bodyPaddingX: z.number().int().min(0).max(96).default(0),
+  /** Padding of the content area, px, per side. */
+  bodyPadding: z
+    .object({
+      top: z.number().int().min(0).max(96).optional(),
+      right: z.number().int().min(0).max(96).optional(),
+      bottom: z.number().int().min(0).max(96).optional(),
+      left: z.number().int().min(0).max(96).optional(),
+    })
+    .optional(),
   bodyBg: hexColorSchema.optional(),
   bodyTextColor: hexColorSchema.optional(),
   bodyBorderWidth: z.number().int().min(0).max(8).default(0),
@@ -1273,12 +1293,14 @@ export const TabsSectionSchema = z.object({
   accordionSingleOpen: z.boolean().default(true),
   accordionOpenFirst: z.boolean().default(true),
   accordionIcon: z.enum(["plus", "chevron"]).default("chevron"),
+  /** Size of the accordion's arrow or plus, px. */
+  accordionIconSize: z.number().int().min(8).max(32).default(12),
   items: z
     .array(
       z.object({
         title: z.string().min(1).max(80),
         icon: iconNameSchema.optional(),
-        /** Markdown: **bold**, *italic*, [link](url), lists, line breaks. */
+        /** Markdown: **bold**, *italic*, [link](url), lists, line breaks. `{{field:key}}` pulls in that product custom field. */
         content: z.string().max(5000).default(""),
       }),
     )

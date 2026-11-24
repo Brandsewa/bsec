@@ -12,6 +12,7 @@ import {
 } from "./BricksTabs.tsx";
 import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
 import { THEME_FONTS, elementFontValue, parseMarkdownToHtml } from "@bs/blocks";
+import { CustomFieldButton } from "./CustomFieldPicker.tsx";
 
 // =============================================================================
 // BRICKS BUILDER ORIGINAL SVG ICONS
@@ -1188,10 +1189,16 @@ function MarkdownTextControl({
   value,
   onChange,
   label,
+  preview = true,
+  customFields = false,
 }: {
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   label: string;
+  /** A small rendered copy under the box (the canvas already shows the result, so tight panels turn it off). */
+  preview?: boolean | undefined;
+  /** A button that inserts a product custom field (`{{field:key}}`) at the cursor. */
+  customFields?: boolean | undefined;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const text = value || "";
@@ -1239,6 +1246,21 @@ function MarkdownTextControl({
     commit(text.slice(0, start) + marker + selected + marker + text.slice(end), start + m, end + m);
   };
 
+  /** Puts `{{field:key}}` on its own line at the cursor, so the stored value is pulled in when the page is drawn. */
+  const insertField = (key: string) => {
+    const el = ref.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const lead = before && !before.endsWith("\n") ? "\n\n" : before ? "\n" : "";
+    const trail = after && !after.startsWith("\n") ? "\n\n" : after ? "\n" : "";
+    const token = `{{field:${key}}}`;
+    const next = before + lead + token + trail + after;
+    const caret = (before + lead + token).length;
+    commit(next, caret, caret);
+  };
+
   const insertLink = () => {
     const { start, end } = sel();
     const selected = text.slice(start, end) || "link text";
@@ -1282,6 +1304,7 @@ function MarkdownTextControl({
           <button type="button" title="Link" onMouseDown={keepFocus} onClick={insertLink} style={tool()}>Link</button>
           <button type="button" title="Bullet list" onMouseDown={keepFocus} onClick={() => toggleList("ul")} style={tool()}>• List</button>
           <button type="button" title="Numbered list" onMouseDown={keepFocus} onClick={() => toggleList("ol")} style={tool()}>1. List</button>
+          {customFields ? <CustomFieldButton onPick={insertField} style={tool({ borderLeft: "1px solid #d4d4d8", marginLeft: 2, paddingLeft: 8 })} /> : null}
         </div>
       </div>
       <textarea
@@ -1289,10 +1312,10 @@ function MarkdownTextControl({
         rows={5}
         value={text}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Write text. Enter makes a new line, a blank line a new paragraph. Select text, then use B, I, Link or the list buttons."
+        placeholder="Write text. Enter makes a new line, a blank line a new paragraph."
         style={{ width: "100%", padding: "8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.4 }}
       />
-      {text.trim() ? (
+      {preview && text.trim() ? (
         <div style={{ border: "1px dashed #d4d4d8", borderRadius: 6, padding: "6px 8px", background: "#fafafa", minWidth: 0 }}>
           <div style={{ fontSize: 10, color: "#71717a", marginBottom: 2 }}>Preview</div>
           <div className="brxe-text-basic" style={{ fontSize: 13, overflowWrap: "anywhere" }} dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(text) }} />
@@ -1303,10 +1326,10 @@ function MarkdownTextControl({
 }
 
 // Textarea Field with Markdown Formatting Toolbar (Bold, Italic, Link, Bullet List, Numbered List)
-export const markdownTextField = (label: string): CustomField<string | undefined> => ({
+export const markdownTextField = (label: string, opts: { preview?: boolean; customFields?: boolean } = {}): CustomField<string | undefined> => ({
   type: "custom",
   label,
-  render: ({ value, onChange }) => <MarkdownTextControl value={value} onChange={onChange} label={label} />,
+  render: ({ value, onChange }) => <MarkdownTextControl value={value} onChange={onChange} label={label} preview={opts.preview ?? true} customFields={opts.customFields ?? false} />,
 });
 
 // Color swatch field for custom colors

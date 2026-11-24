@@ -25,6 +25,15 @@ export const storeHost: BlockEditorHost = {
     }
   },
 
+  async listCustomFields() {
+    try {
+      const res = await client.admin.customFields.listDefinitions({ resourceType: "product" });
+      return res.definitions.filter((d) => !d.archived && d.showOnStorefront).map((d) => ({ key: d.key, name: d.name, type: d.type }));
+    } catch {
+      return [];
+    }
+  },
+
   async listProducts() {
     try {
       const res = await client.admin.products.list({ sort: "title_asc", limit: 100, offset: 0 });
