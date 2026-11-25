@@ -24,6 +24,8 @@ export interface GridColumn<T> {
   /** CSS width, e.g. "9rem". */
   width: string;
   align?: "left" | "right";
+  /** Pins the column while the grid scrolls sideways. Pinned columns must be the first ones; with none set, only the first is pinned. */
+  sticky?: boolean;
   /** Read-only content. Receives the node; for a group row `isGroup` is true. */
   render?: (node: GridNode<T>, ctx: { isGroup: boolean; childCount: number }) => ReactNode;
   /** Set for an editable column. */
@@ -50,6 +52,8 @@ export interface EditableGridProps<T> {
   onToggleExpanded: (id: string) => void;
   /** Shown instead of rows when there are none. */
   empty: ReactNode;
+  /** Column whose content labels a group row (the product name). Defaults to the first column. */
+  groupLabelColumn?: string;
   className?: string;
 }
 
@@ -64,11 +68,25 @@ function visibleLeaves<T>(nodes: GridNode<T>[], expanded: ReadonlySet<string>): 
   return out;
 }
 
-export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRevert, trailingHeader, trailingCell, expanded, onToggleExpanded, empty, className }: EditableGridProps<T>) {
+export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRevert, trailingHeader, trailingCell, expanded, onToggleExpanded, empty, groupLabelColumn, className }: EditableGridProps<T>) {
   const root = useRef<HTMLDivElement>(null);
   const leaves = useMemo(() => visibleLeaves(nodes, expanded), [nodes, expanded]);
   const leafIndexById = useMemo(() => new Map(leaves.map((l, i) => [l.id, i])), [leaves]);
   const editableIds = useMemo(() => columns.filter((c) => c.edit).map((c) => c.id), [columns]);
+  // Pinned columns and the left offset of each (the sum of the widths pinned before it).
+  const pinned = useMemo(() => {
+    const anySticky = columns.some((c) => c.sticky);
+    const left = new Map<string, string>();
+    const widths: string[] = [];
+    columns.forEach((c, i) => {
+      if (anySticky ? c.sticky : i === 0) {
+        left.set(c.id, widths.length ? `calc(${widths.join(" + ")})` : "0px");
+        widths.push(c.width);
+      }
+    });
+    return left;
+  }, [columns]);
+  const labelColumn = columns.find((c) => c.id === groupLabelColumn) ?? columns[0];
   const [focusKey, setFocusKey] = useState<string | null>(null);
 
   function focusCell(rowIndex: number, colId: string) {
@@ -156,12 +174,12 @@ export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRever
       <table className="w-full border-collapse text-sm" style={{ minWidth: "max-content" }}>
         <thead className="sticky top-0 z-10 bg-muted/60 text-xs font-medium text-muted-foreground backdrop-blur">
           <tr>
-            {columns.map((col, i) => (
+            {columns.map((col) => (
               <th
                 key={col.id}
                 scope="col"
-                style={{ width: col.width, minWidth: col.width }}
-                className={cn("border-b border-border px-2 py-2 text-left font-medium", col.align === "right" && "text-right", i === 0 && "sticky left-0 z-20 bg-muted")}
+                style={{ width: col.width, minWidth: col.width, ...(pinned.has(col.id) ? { left: pinned.get(col.id) } : {}) }}
+                className={cn("border-b border-border px-2 py-2 text-left font-medium", col.align === "right" && "text-right", pinned.has(col.id) && "sticky z-20 bg-muted")}
               >
                 {col.header}
               </th>
@@ -179,24 +197,17 @@ export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRever
               <FragmentRows key={node.id}>
                 {isGroup ? (
                   <tr className="border-b border-border bg-muted/20">
-                    {columns.map((col, i) => (
-                      <td key={col.id} className={cn("px-2 py-1", col.align === "right" && "text-right", i === 0 && "sticky left-0 z-[1] bg-muted/30")}>
-                        {i === 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => onToggleExpanded(node.id)}
-                            aria-expanded={open}
-                            className="flex w-full items-center gap-1.5 text-left font-medium text-foreground"
-                          >
-                            {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
-                            <span className="truncate">{col.render?.(node, { isGroup: true, childCount: kids.length })}</span>
-                          </button>
-                        ) : (
-                          (col.edit ? null : col.render?.(node, { isGroup: true, childCount: kids.length }))
-                        )}
-                      </td>
-                    ))}
-                    {trailingHeader ? <td /> : null}
+                    <td colSpan={columns.length + (trailingHeader ? 1 : 0)} className="px-2 py-1">
+                      <button
+                        type="button"
+                        onClick={() => onToggleExpanded(node.id)}
+                        aria-expanded={open}
+                        className="sticky left-2 flex w-fit max-w-[calc(100vw-6rem)] items-center gap-1.5 text-left font-medium text-foreground"
+                      >
+                        {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
+                        <span className="truncate">{labelColumn?.render?.(node, { isGroup: true, childCount: kids.length })}</span>
+                      </button>
+                    </td>
                   </tr>
                 ) : null}
                 {leafRows.map((leaf) => {
@@ -204,7 +215,11 @@ export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRever
                   return (
                     <tr key={leaf.id} className="border-b border-border last:border-b-0 hover:bg-muted/20">
                       {columns.map((col, i) => (
-                        <td key={col.id} className={cn("px-1 py-0.5", col.align === "right" && "text-right", i === 0 && "sticky left-0 z-[1] bg-background", i === 0 && isGroup && "pl-8")}>
+                        <td
+                          key={col.id}
+                          style={pinned.has(col.id) ? { left: pinned.get(col.id) } : undefined}
+                          className={cn("px-1 py-0.5", col.align === "right" && "text-right", pinned.has(col.id) && "sticky z-[1] bg-background", i === 0 && isGroup && "pl-4")}
+                        >
                           {col.edit ? cellView(leaf, col, idx) : (col.render?.(leaf, { isGroup: false, childCount: 0 }) ?? null)}
                         </td>
                       ))}
