@@ -53,6 +53,8 @@ Two independent signals:
 Backups are the answer to "server is gone". Add `infra/runbooks/REBUILD.md`: new VPS, Coolify install, restore Coolify config, create `bsec-postgres`, restore dump or PITR, run `bsec-migrate`, point Cloudflare. Test it once on a throwaway VPS and record the time; that is the true RTO. Hot standby stays in `FAILOVER-PLAN.md` phase B.
 Also export the Coolify config (env templates, resource list, image tags) after each release; Coolify's own database backup should be enabled too.
 
+**Written 2026-11-25:** `infra/runbooks/REBUILD.md` (two paths: Hostinger snapshot, build from scratch; secrets inventory; rebuild test; verification). It has not been rehearsed on a throwaway VPS yet; the measured time replaces the estimates.
+
 ### G6. Media bucket (`bsec-media`)
 R2 does not offer S3-style object versioning as far as I know, so the "versioning on" statement in `infra/backups/README.md` is probably wrong. Verify in the dashboard; if confirmed, fix the doc and replace it with a Bucket Lock plus, once the deferred second copy exists (G3), that job covering `bsec-media` too. Image uploads are the only customer files, so loss is recoverable but visible.
 
