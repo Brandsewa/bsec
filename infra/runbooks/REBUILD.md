@@ -84,7 +84,15 @@ Use this when there is no usable snapshot. Expected time: not measured (aim 2 to
 ## 6. Rebuild test (do this once, then repeat after big changes)
 Goal: prove this runbook and measure the real recovery time, without touching production.
 - Use a short-lived throwaway VPS and **never point production DNS at it** (test with a hosts-file entry or a scratch subdomain).
-- Create a **read-only** token for `bsec-pgbackrest` (Object Read only) and use it for the restore. A drill must **not** have write access and must **not** start archiving: leave the five `PGBACKREST_REPO1_*` archiving variables off on the scratch database (restore needs only the read-only credentials and passphrase).
+- Create a **read-only** token for `bsec-pgbackrest` (Object Read only) and use it for the restore. A drill must **not** have write access and must **not** archive. The restored scratch database still needs the five `PGBACKREST_REPO1_*` variables (with the read-only key), because replaying WAL reads it from R2 (`restore_command`). So start it through the **stock Postgres entrypoint with archiving switched off**, not through the image's own entrypoint (which turns archiving on whenever all five variables are set):
+  ```bash
+  docker run -d --name scratch -v <scratch volume>:/var/lib/postgresql -e POSTGRES_PASSWORD=scratch \
+    -e PGBACKREST_REPO1_S3_ENDPOINT=... -e PGBACKREST_REPO1_S3_BUCKET=bsec-pgbackrest \
+    -e PGBACKREST_REPO1_S3_KEY=<read-only key> -e PGBACKREST_REPO1_S3_KEY_SECRET=<its secret> \
+    -e PGBACKREST_REPO1_CIPHER_PASS=<passphrase> \
+    --entrypoint docker-entrypoint.sh "$IMAGE" postgres -c archive_mode=off
+  ```
+  (Not yet run against the real repository: confirm it in the first rebuild test.)
 - Follow section 5 through step 8, then check: a store page renders on its subdomain, an admin sign-in works, and **one stored store credential decrypts** with `TENANT_SECRETS_KEY` (the proof that the key matches the data).
 - Write the measured times and every deviation into a `docs/changes/` record (type: test) and fix this file.
 - Delete the throwaway VPS and its volumes afterwards.
