@@ -24,7 +24,7 @@ One Hostinger VPS runs everything through Coolify and Traefik: `bsec-postgres`, 
 | Platform API access | Public HTTPS with app-layer auth; RUNBOOK says to consider Cloudflare Access. INCIDENT.md says "Cloudflare Access protected in prod": **the two docs disagree, confirm which is true** | RUNBOOK section 5 vs INCIDENT section 2 |
 | Super Admin access | Public SPA at `superadmin.bcom.si`; not confirmed behind Cloudflare Access | uptime README |
 | Origin firewall | Only 22, 80, 443 open. Cloudflare-only allowlist for 80/443 and SSH hardening **still open** | RUNBOOK section 9 |
-| Sentry, log drain | Not configured | RUNBOOK section 9 |
+| Sentry, log drain | Sentry live since 2026-11-25; log drain not configured |
 | Resource limits per container | Not set | RUNBOOK section 5 |
 
 Conclusion: single-tenant noisy-neighbour protection is good. The real gaps are backup freshness, an unproven restore, no timeouts at the database, and no second place to run.

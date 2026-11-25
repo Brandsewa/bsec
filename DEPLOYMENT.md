@@ -84,6 +84,22 @@ Until step 3 the site works normally; only the self-service endpoints answer 503
 - Worker image: `sharp` (image resizing for `media.derive`) is installed beside the bundle by `infra/docker/worker.Dockerfile` (`npm install sharp@<version of packages/domain>`); keep both versions equal. A worker without it crashes only when it processes an image, because `sharp` is loaded lazily.
 - Storage connections can also be configured dynamically in Super Admin under **Storage** (`/storage` or `/integrations/storage`). Active connections in `platform_storage_connections` supersede environment variables. When using S3 or Cloudflare R2 with direct browser uploads, ensure bucket CORS permits `PUT` from admin origins (e.g. `https://admin.bcom.si`). The Super Admin "Test connection" button performs live CORS diagnostics. If bucket CORS is unconfigured, uploads automatically fall back through server-proxied streaming (`/api/admin/media/upload`).
 
+### Error tracking (Sentry)
+Live since 2026-11-25. Sentry organisation `brand-sewa`, **US data region** (matches `docs/legal/subprocessors.md`). Four projects; nothing is initialised unless the DSN exists, so local dev and CI stay quiet.
+
+| Sentry project | Reports | DSN comes from | Release tag |
+|---|---|---|---|
+| `bsec-web` (Next.js) | `bsec-web` server side (not the storefront browser) | `SENTRY_DSN` on `bsec-web` in Coolify | commit (`APP_VERSION`) |
+| `bsec-platform` (Node) | `bsec-platform` | `SENTRY_DSN` on `bsec-platform` in Coolify | commit |
+| `bsec-worker` (Node) | `bsec-worker` | `SENTRY_DSN` on `bsec-worker` in Coolify | commit |
+| `bsec-admin` (React) | **both** SPAs, store admin and Super Admin, in one project | GitHub repository secret `VITE_SENTRY_DSN`, baked in at build time for `bsec-admin` and `bsec-superadmin` | none |
+
+- The DSN is a public identifier, not a password, but keep the values out of the repo, docs and chat anyway; read them in Sentry > Settings > Projects > (project) > Client Keys (DSN).
+- Changing a server DSN needs a restart of that app; changing `VITE_SENTRY_DSN` needs a new build (the next merge to `main`).
+- **Alerts:** each project has Sentry's default rule "notify on high priority issues" by email to the organisation. Each key is rate-limited to **300 errors per hour** so one runaway bug cannot use up the monthly quota.
+- **Test:** send one event with `curl -X POST "https://<ingest host>/api/<project id>/store/" -H "X-Sentry-Auth: Sentry sentry_version=7, sentry_key=<public key>" -H "Content-Type: application/json" -d '{"message":"setup test","level":"info","environment":"setup-test"}'` (host, project id and key are inside the DSN), or throw an error from the browser console on the admin site. Resolve the test issue afterwards.
+- Known gaps: the storefront **browser** is not instrumented (server errors only); the SPAs have no release tag and no uploaded source maps, so their stack traces are minified; the web app samples 5% of traces, the others none.
+
 ### Database roles
 | Role | Used by | Notes |
 |---|---|---|
