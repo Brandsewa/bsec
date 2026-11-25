@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Search, Upload, X } from "lucide-react";
-import { Alert, Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Field, Input, PageSkeleton, SimpleSelect, Tabs, TabsContent, TabsList, TabsTrigger, toast } from "@bs/ui";
+import { Alert, Button, Dialog, Popover, PopoverContent, PopoverTrigger, DialogContent, DialogDescription, DialogHeader, DialogTitle, Field, Input, PageSkeleton, SimpleSelect, Tabs, TabsContent, TabsList, TabsTrigger, toast } from "@bs/ui";
 import type { ProductStatePricing } from "@bs/contracts";
 import { formatMoney } from "@bs/contracts/money";
 import { EditableGrid, type GridColumn, type GridNode } from "../../../components/data-grid/editable-grid.tsx";
@@ -61,7 +61,7 @@ function StatePricingPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader title="State Pricing" description="Give products a different price in any state. Every other state pays the default price." />
       <Tabs defaultValue="prices">
         <TabsList>
@@ -76,6 +76,26 @@ function StatePricingPage() {
         </TabsContent>
       </Tabs>
     </PageContainer>
+  );
+}
+
+/** One line of text that never wraps, so every row keeps the same height. The full text is in the tooltip. */
+function Clip({ text, muted }: { text: string; muted?: boolean }) {
+  return <span title={text} className={`block truncate px-1 ${muted ? "text-muted-foreground" : ""}`}>{text}</span>;
+}
+
+/** A SKU cut to one line; clicking it opens the full SKU so rows stay one height. */
+function SkuCell({ sku }: { sku: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        title="Click to see the full SKU"
+        className="block w-full truncate rounded-sm px-1 text-left font-mono text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        {sku}
+      </PopoverTrigger>
+      <PopoverContent className="w-auto max-w-sm select-all break-all p-2 font-mono text-xs">{sku}</PopoverContent>
+    </Popover>
   );
 }
 
@@ -160,17 +180,24 @@ function PricesGrid() {
 
   const columns: GridColumn<Row>[] = [
     {
+      id: "sku",
+      header: "SKU",
+      width: "10rem",
+      sticky: true,
+      render: (node) => (node.data.kind === "variant" && node.data.variant.sku ? <SkuCell sku={node.data.variant.sku} /> : null),
+    },
+    {
       id: "name",
       header: "Product",
-      width: "17rem",
+      width: "20rem",
+      sticky: true,
       render: (node, ctx) => {
         const d = node.data;
-        if (d.kind === "product") return ctx.isGroup ? <span>{d.product.productTitle} <span className="font-normal text-muted-foreground">· {ctx.childCount} variants</span></span> : <span className="px-1">{d.product.productTitle}</span>;
+        if (d.kind === "product") return ctx.isGroup ? <span>{d.product.productTitle} <span className="font-normal text-muted-foreground">· {ctx.childCount} variants</span></span> : <Clip text={d.product.productTitle} />;
         const single = d.product.variants.length === 1;
-        return single ? <span className="px-1">{d.product.productTitle}{d.variant.title !== "Default" ? <span className="text-muted-foreground"> · {d.variant.title}</span> : null}</span> : <span className="px-1 text-muted-foreground">{d.variant.title}</span>;
+        return single ? <Clip text={d.variant.title !== "Default" ? `${d.product.productTitle} · ${d.variant.title}` : d.product.productTitle} /> : <Clip text={d.variant.title} muted />;
       },
     },
-    { id: "sku", header: "SKU", width: "9rem", render: (node) => <span className="px-1 text-muted-foreground">{node.data.kind === "variant" ? (node.data.variant.sku ?? "") : ""}</span> },
     {
       id: "default",
       header: "Default price",
@@ -341,7 +368,8 @@ function PricesGrid() {
         <PageSkeleton />
       ) : (
         <EditableGrid
-          className="max-h-[65vh]"
+          className="max-h-[calc(100dvh-16rem)] min-h-80"
+          groupLabelColumn="name"
           columns={columns}
           nodes={nodes}
           expanded={expanded}
