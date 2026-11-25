@@ -52,7 +52,7 @@ export interface EditableGridProps<T> {
   onToggleExpanded: (id: string) => void;
   /** Shown instead of rows when there are none. */
   empty: ReactNode;
-  /** Column whose content labels a group row (the product name). Defaults to the first column. */
+  /** Column whose content labels a group row (the product name). The first column then holds only the expander. */
   groupLabelColumn?: string;
   className?: string;
 }
@@ -197,17 +197,32 @@ export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRever
               <FragmentRows key={node.id}>
                 {isGroup ? (
                   <tr className="border-b border-border bg-muted/20">
-                    <td colSpan={columns.length + (trailingHeader ? 1 : 0)} className="px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => onToggleExpanded(node.id)}
-                        aria-expanded={open}
-                        className="sticky left-2 flex w-fit max-w-[calc(100vw-6rem)] items-center gap-1.5 text-left font-medium text-foreground"
+                    {columns.map((col, i) => (
+                      <td
+                        key={col.id}
+                        style={pinned.has(col.id) ? { left: pinned.get(col.id) } : undefined}
+                        className={cn("px-2 py-1", col.align === "right" && "text-right", pinned.has(col.id) && "sticky z-[1] bg-muted")}
                       >
-                        {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
-                        <span className="truncate">{labelColumn?.render?.(node, { isGroup: true, childCount: kids.length })}</span>
-                      </button>
-                    </td>
+                        {i === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => onToggleExpanded(node.id)}
+                            aria-expanded={open}
+                            aria-label={`${open ? "Collapse" : "Expand"} ${kids.length} variants`}
+                            className="flex items-center rounded-sm p-0.5 text-foreground hover:bg-background"
+                          >
+                            {open ? <ChevronDown className="size-4 shrink-0" aria-hidden /> : <ChevronRight className="size-4 shrink-0" aria-hidden />}
+                          </button>
+                        ) : col.id === labelColumn?.id ? (
+                          <button type="button" onClick={() => onToggleExpanded(node.id)} className="block w-full truncate text-left font-medium text-foreground">
+                            {col.render?.(node, { isGroup: true, childCount: kids.length })}
+                          </button>
+                        ) : col.edit ? null : (
+                          col.render?.(node, { isGroup: true, childCount: kids.length })
+                        )}
+                      </td>
+                    ))}
+                    {trailingHeader ? <td /> : null}
                   </tr>
                 ) : null}
                 {leafRows.map((leaf) => {
@@ -218,7 +233,7 @@ export function EditableGrid<T>({ columns, nodes, onCellChange, onPaste, onRever
                         <td
                           key={col.id}
                           style={pinned.has(col.id) ? { left: pinned.get(col.id) } : undefined}
-                          className={cn("px-1 py-0.5", col.align === "right" && "text-right", pinned.has(col.id) && "sticky z-[1] bg-background", i === 0 && isGroup && "pl-4")}
+                          className={cn("px-1 py-0.5", col.align === "right" && "text-right", pinned.has(col.id) && "sticky z-[1] bg-background", i === 0 && isGroup && "pl-6")}
                         >
                           {col.edit ? cellView(leaf, col, idx) : (col.render?.(leaf, { isGroup: false, childCount: 0 }) ?? null)}
                         </td>

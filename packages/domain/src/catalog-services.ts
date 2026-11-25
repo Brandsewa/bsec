@@ -170,8 +170,21 @@ export async function listProducts(
     const ids = rows.map((r) => r.id);
     const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number; preorderStatus: "active" | "passed" | null }>();
     const primaryCatMap = new Map<string, { id: string; name: string }>();
+    const imageMap = new Map<string, string>();
 
     if (ids.length > 0) {
+      // Featured image = the first image in the product's media order (position 0 is the primary one).
+      const images = await tx
+        .select({ productId: schema.productMedia.productId, storageKey: schema.media.storageKey })
+        .from(schema.productMedia)
+        .innerJoin(schema.media, and(eq(schema.media.tenantId, schema.productMedia.tenantId), eq(schema.media.id, schema.productMedia.mediaId)))
+        .where(and(eq(schema.productMedia.tenantId, ctx.tenantId), inArray(schema.productMedia.productId, ids), eq(schema.media.kind, "image")))
+        .orderBy(schema.productMedia.position, schema.productMedia.createdAt);
+      for (const im of images) {
+        const url = publicMediaUrl(im.storageKey);
+        if (url && !imageMap.has(im.productId)) imageMap.set(im.productId, url);
+      }
+
       const agg = await tx
         .select({
           productId: schema.variants.productId,
@@ -255,6 +268,7 @@ export async function listProducts(
           preorderStatus: sm?.preorderStatus ?? null,
           primaryCategoryId: pCat?.id ?? null,
           primaryCategoryName: pCat?.name ?? null,
+          imageUrl: imageMap.get(r.id) ?? null,
         };
       }),
       total,

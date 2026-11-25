@@ -30,6 +30,39 @@ export function cellProblem(text: string): string | null {
 
 export const editKey = (variantId: string, state: string) => `${variantId}:${state}`;
 
+/** The edit key's "state" for the default (base) price column, which is a variant price and not a state price. */
+export const BASE_KEY = "__base";
+
+/** null when the default-price text is fine, otherwise the problem (a default price cannot be empty). */
+export function basePriceProblem(text: string): string | null {
+  return toMinor(text) === null ? "Enter an amount above zero, with at most 2 decimals" : null;
+}
+
+export interface BasePriceChange {
+  productId: string;
+  variantId: string;
+  /** Minor units. */
+  price: number;
+}
+
+/** Default-price edits that differ from what is saved. `known` maps a variant to its product and saved default price. */
+export function buildBaseChanges(
+  edits: Readonly<Record<string, string>>,
+  known: ReadonlyMap<string, { productId: string; basePrice: number }>,
+): { changes: BasePriceChange[]; invalid: string | null } {
+  const changes: BasePriceChange[] = [];
+  for (const [key, text] of Object.entries(edits)) {
+    const [variantId, state] = key.split(":") as [string, string];
+    if (state !== BASE_KEY) continue;
+    const saved = known.get(variantId);
+    if (!saved) continue;
+    const minor = toMinor(text);
+    if (minor === null) return { changes: [], invalid: key };
+    if (minor !== saved.basePrice) changes.push({ productId: saved.productId, variantId, price: minor });
+  }
+  return { changes, invalid: null };
+}
+
 /** The saved text for a cell (empty when the state follows the default price). */
 export function savedText(prices: Record<string, { price: number }>, state: string): string {
   const p = prices[state];
@@ -54,6 +87,7 @@ export function buildChanges(
   const changes: PendingChange[] = [];
   for (const [key, text] of Object.entries(edits)) {
     const [variantId, state] = key.split(":") as [string, string];
+    if (state === BASE_KEY) continue; // the default price is saved through buildBaseChanges
     const saved = known.get(variantId);
     if (saved && savedText(saved, state) === text.trim()) continue;
     if (text.trim() === "") {

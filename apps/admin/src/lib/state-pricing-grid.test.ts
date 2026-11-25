@@ -74,3 +74,17 @@ describe("export and import", () => {
     expect(() => planImport([["Name"], ["x"]], states, new Map())).toThrow(/SKU column/);
   });
 });
+
+describe("default price edits", () => {
+  const known = new Map([["v1", { productId: "p1", basePrice: 90000 }]]);
+  it("sends only default prices that differ, with their product", async () => {
+    const { buildBaseChanges, BASE_KEY } = await import("./state-pricing-grid.ts");
+    expect(buildBaseChanges({ [`v1:${BASE_KEY}`]: "950.50" }, known).changes).toEqual([{ productId: "p1", variantId: "v1", price: 95050 }]);
+    expect(buildBaseChanges({ [`v1:${BASE_KEY}`]: "900" }, known).changes).toEqual([]);
+  });
+  it("rejects an empty default price and keeps it out of the state changes", async () => {
+    const { buildBaseChanges, buildChanges, BASE_KEY } = await import("./state-pricing-grid.ts");
+    expect(buildBaseChanges({ [`v1:${BASE_KEY}`]: "" }, known).invalid).toBe(`v1:${BASE_KEY}`);
+    expect(buildChanges({ [`v1:${BASE_KEY}`]: "950" }, new Map()).changes).toEqual([]);
+  });
+});
