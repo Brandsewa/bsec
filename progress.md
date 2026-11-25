@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `docs/rebuild-runbook` · `infra/runbooks/REBUILD.md` (server lost: snapshot path and from-scratch path, secrets inventory, rebuild test); plan `docs/BACKUP-DR-PLAN.md` G5, change record `docs/changes/2026-11-25-claude-rebuild-runbook.md` · 2026-11-25
 - claude · `feat/tabs-revisions-custom-fields` · Tabs revisions: custom field picker popup (tabs and product accordion), four-box paddings, accordion icon size, no default widget padding; change record `docs/changes/2026-11-24-claude-tabs-revisions-custom-fields.md` · 2026-11-24
 - claude · `feat/tabs-widget-review-position` · Tabs widget (accordion on phones) and the product page's reviews movable through the Reviews block; change record `docs/changes/2026-11-24-claude-tabs-widget-and-movable-reviews.md` · 2026-11-24
 - claude · `fix/builder-ruttl-fixes-2026-11-24` · builder fixes from the Ruttl board (font and weight, display per device, bold and italic, card text, long media URL); change record `docs/changes/2026-11-24-claude-ruttl-builder-fixes.md` · 2026-11-24
@@ -416,7 +417,7 @@ Cached "not found" never cleared after a draft product was published; Add to Car
 
 ### Open infra items
 - Sentry projects and DSNs, uptime monitors (deferred to the end, with provider keys).
-- Point-in-time recovery (pgBackRest/WAL) is **live since 2026-11-25** (RPO about a minute, see `infra/backups/PGBACKREST.md`). Still open: tick "WAL archiving is live" in Super Admin > Backups, a restore drill from the real R2 repository, the weekly copy to a second Cloudflare account, `infra/runbooks/REBUILD.md`, a VPS disk-space alert, and measuring real WAL growth after a week.
+- Point-in-time recovery (pgBackRest/WAL) is **live since 2026-11-25** (RPO about a minute, see `infra/backups/PGBACKREST.md`). Still open: tick "WAL archiving is live" in Super Admin > Backups, a restore drill from the real R2 repository, the weekly copy to a second Cloudflare account, a rehearsal of `infra/runbooks/REBUILD.md` on a throwaway VPS (written 2026-11-25), a read-only pgBackRest token for drills, a VPS disk-space alert, and measuring real WAL growth after a week.
 - GitHub `production` environment has no required-reviewer gate (needs a paid plan).
 - Coolify's own healthcheck fails on this host; apps are verified through their `/health` endpoints instead.
 - `bsec-superadmin` GHCR package is private (Coolify uses a server-side `docker login`); other packages are public.

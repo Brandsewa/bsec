@@ -45,9 +45,7 @@ Run host commands in Coolify > Terminal, choosing the **`localhost`** entry (a `
 - Repository size and growth: `info` (compare week to week).
 
 ## If a Hostinger server snapshot is ever restored
-The weekly snapshot restores the whole server, including this database's data directory as of that day. **Do not let `bsec-postgres` start with archiving on** until you have decided how to recover the database: the old data directory would try to archive WAL that conflicts with the newer history already in R2, which can damage the archive. Remove the five `PGBACKREST_REPO1_*` variables (or set the image to `postgres:18`) before the first start, then recover the database with `pgbackrest restore` from R2 (the Restore section below), and only then re-enable archiving with a fresh `stanza-create` check. Also recreate the cron lines above if they are missing. `infra/runbooks/REBUILD.md` (still to write) will carry the full procedure.
-
-Rollback: remove the five variables (or set the image back to `postgres:18`) and restart. The data directory is untouched; archiving simply stops. WAL already in R2 stays.
+Follow `infra/runbooks/REBUILD.md` section 4. The short version: the restored server starts its containers on boot, including `bsec-postgres` with the snapshot's data directory. **Stop the apps and the database as soon as Coolify answers.** If the snapshot is from after 2026-11-25 the old data directory would try to archive WAL into the live R2 repository: pgBackRest should refuse to overwrite a segment with different content (archiving stalls with duplicate-segment errors), but the two histories must not be mixed. Replace the data directory from R2 with a one-off `pgbackrest restore --delta` (the Restore section below), then start the database and take a fresh full backup. Also recreate the cron lines above if the snapshot predates them.
 
 ## Restore (point in time)
 Not yet exercised against the real repository (only the rehearsal and a scratch copy). Plan a restore drill from R2 into a scratch container before relying on it, and record it in Super Admin > Backups.

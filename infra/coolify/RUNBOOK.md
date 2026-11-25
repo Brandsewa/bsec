@@ -121,6 +121,8 @@ Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"ro
 - Data: restore from a `bsec-postgres` backup (section 8).
 
 ## 8. Backups
+**Update 2026-11-25:** pgBackRest (continuous WAL, point-in-time restore) is now live next to the daily dump described below: `infra/backups/PGBACKREST.md`. If the whole server is lost, follow `infra/runbooks/REBUILD.md`; this file's sections 3 to 6 are the build recipe it points back to, so keep them current when resources, variables or images change.
+
 **Using Coolify's native scheduled `pg_dump` backups**, not pgBackRest (`infra/backups/` is now superseded by this for the current stage - simpler, and needs no VPS shell access). Configured on `bsec-postgres` -> Backups:
 - Schedule: daily, cron `30 2 * * *` (02:30 UTC), database `bsec`, timeout 3600s.
 - Local retention: 14 backups / 14 days / 5 GB cap.
