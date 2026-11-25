@@ -66,7 +66,7 @@ One Coolify "Docker Image" resource per image (see the table above for images/po
 | web | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=10`, `LOG_LEVEL=info`, `PORT=3000`, `HOSTNAME=0.0.0.0`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>`, `TRUST_CLOUDFLARE=true` (set in Coolify 2026-11-20, see DEPLOYMENT.md) |
 | platform | `DATABASE_URL_PLATFORM=postgres://app_platform:...@<postgres-internal-hostname>:5432/bsec`, `APP_ENV=production`, `DB_POOL_MAX=3`, `LOG_LEVEL=info`, `PORT=4000`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>`, `TRUST_CLOUDFLARE=true` (set in Coolify 2026-11-20, see DEPLOYMENT.md) |
 | worker | `DATABASE_URL_RW=postgres://app_rw:...@<postgres-internal-hostname>:5432/bsec`, `WORKER_CONCURRENCY=4`, `APP_ENV=production`, `LOG_LEVEL=info`, `PORT=4100`, `TENANT_SECRETS_KEY=<32-byte-hex-or-string>` |
-| admin | none (static nginx SPA; build-arg VITE_SENTRY_DSN optional) |
+| admin | none at runtime (static nginx SPA; `VITE_SENTRY_DSN` is baked in at build time from the GitHub secret) |
 
 `<postgres-internal-hostname>` is `bsec-postgres`'s Coolify-assigned container hostname (visible on its General page, "Postgres URL (internal)") - same Docker network (`coolify`), reachable by name.
 
@@ -131,7 +131,7 @@ Each app's `/health` returns `{"status":"ok","service":"...","db":{"ok":true,"ro
 - Not yet done: a restore drill (pull an object back from R2, restore into a scratch Postgres, log RPO/RTO) and an S3-side lifecycle/retention policy in R2 (local retention is 14 backups/14 days/5 GB; R2 currently has no separate expiry, so it will grow unbounded until one is added).
 
 ## 9. Observability
-- Sentry: one project per service (`web`, `platform`, `worker`), `SENTRY_DSN` per resource. Code no-ops when unset - **not configured yet**, no DSNs set.
+- Sentry: **live since 2026-11-25** (organisation `brand-sewa`, US region). Projects `bsec-web`, `bsec-platform`, `bsec-worker` take `SENTRY_DSN` from each Coolify resource's environment (restart to apply); `bsec-admin` serves both SPAs through the GitHub secret `VITE_SENTRY_DSN` (build time). Default email alert on high priority issues, 300 errors per hour per key. Details and test recipe: `DEPLOYMENT.md` "Error tracking (Sentry)".
 - Logs: pino JSON on stdout with `request_id` (`tenant_id` populated from M1). Not yet shipped anywhere durable - only visible via Coolify's Runtime Logs, which don't persist long. Better Stack log drain still to do.
 - Uptime: not set up yet. Once it is: `https://bcom.si/api/health`, `https://admin.bcom.si/health`, `https://platform.bcom.si/health`.
 
