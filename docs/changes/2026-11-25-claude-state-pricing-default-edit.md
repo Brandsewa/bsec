@@ -1,4 +1,4 @@
-# State Pricing grid: editable default price, expander in the SKU column
+# State Pricing grid: editable default price, expander in the SKU column; product thumbnails in the Products list
 
 - **Date:** 2026-11-25
 - **Agent:** claude
@@ -16,6 +16,8 @@ Follow-up to the layout change (`2026-11-25-claude-state-pricing-grid-layout.md`
 - `apps/admin/src/components/data-grid/editable-grid.tsx`: group row cells per column again, expander in the first column, label in `groupLabelColumn`.
 - `apps/admin/src/lib/state-pricing-grid.test.ts`: tests for the default-price helpers.
 
+- Products list (`apps/admin/src/routes/_store/products/index.tsx`): the slug line is gone, the Product cell shows a small rounded square thumbnail of the featured image (placeholder icon when none) before the name. `Product` contract gains optional `imageUrl`, filled by `listProducts` (first image by media position, one extra query for the page's products). Slug is still available in the row menu ("Copy slug").
+
 ## Decisions and trade-offs
 - No new API: default prices reuse `products.bulkUpdate`. A staff member with `apps.manage` but not `products.write` can edit state prices but gets an error toast when saving a default price.
 - Default price cannot be emptied or zero (an empty cell is invalid).
@@ -23,7 +25,7 @@ Follow-up to the layout change (`2026-11-25-claude-state-pricing-grid-layout.md`
 - The CSV import still ignores the "Default Price" column.
 
 ## Verification
-- Ran: `pnpm --filter @bs/admin typecheck`, `lint`, and the unit tests of `state-pricing-grid` (10 pass).
+- Ran: `pnpm typecheck`, `pnpm lint`, the unit tests of `state-pricing-grid` (10 pass), and `product-images.int.test.ts` against a real Postgres (12 pass, including the new list `imageUrl` test).
 - Not verified: the screen in a browser, an actual save against a database, the permission-denied toast.
 
 ## Docs updated

@@ -546,6 +546,8 @@ export const Product = z.object({
   preorderStatus: z.enum(["active", "passed"]).nullable().optional(),
   primaryCategoryId: z.string().uuid().nullable().optional(),
   primaryCategoryName: z.string().nullable().optional(),
+  /** Featured (first) image, on list results only. */
+  imageUrl: z.string().nullable().optional(),
 });
 export type Product = z.infer<typeof Product>;
 
