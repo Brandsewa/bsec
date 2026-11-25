@@ -6,11 +6,15 @@
 ARG POSTGRES_IMAGE=postgres:18
 FROM ${POSTGRES_IMAGE}
 
+# ca-certificates is NOT in the postgres base image: without it pgBackRest cannot verify R2's TLS certificate
+# ("unable to get local issuer certificate", found at the first production cutover 2026-11-25). The build fails if the
+# bundle is missing.
 # Exact version from the PGDG repo that the base image already has configured. If PGDG drops this build the image fails
 # to build (loud), rather than silently picking a different version: bump it deliberately and rerun the PITR rehearsal.
 ARG PGBACKREST_VERSION=2.60.1-1.pgdg13+1
 RUN apt-get update \
- && apt-get install -y --no-install-recommends pgbackrest=${PGBACKREST_VERSION} \
+ && apt-get install -y --no-install-recommends ca-certificates pgbackrest=${PGBACKREST_VERSION} \
+ && test -s /etc/ssl/certs/ca-certificates.crt \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /etc/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest \
  && chown postgres:postgres /var/log/pgbackrest /var/spool/pgbackrest
