@@ -14,7 +14,7 @@ Production cutover of `bsec-postgres` to the pgBackRest image, done on 2026-11-2
 - Bucket `bsec-pgbackrest` and an Object Read & Write token scoped to it were created in Cloudflare (no lock, no lifecycle rule: pgBackRest rewrites its index files and expires its own files). Five `PGBACKREST_REPO1_*` variables were set on `bsec-postgres` in Coolify by the owner; the key, secret and cipher passphrase are in the owner's password manager.
 - Image on `bsec-postgres` changed twice, each followed by a Coolify restart (about a minute of downtime): first to `sha-b16cac3d...` (cutover), then to `" + IMG + "` after the CA-certificate fix. Both were pre-pulled on the host.
 - On the host: `stanza-create`, `check` and a full backup (`20261125-040117F`, database 227 MB, 31.1 MB in R2, about 6.6 minutes, 04:01 to 04:08 UTC).
-- Root's crontab on the VPS: Sunday 03:30 UTC full, Monday to Saturday 03:30 UTC differential, log `/var/log/bsec-pgbackrest-cron.log`.
+- Root's crontab on the VPS: Saturday 22:00 UTC (= Sunday 03:30 IST) full, Sunday to Friday 22:00 UTC (= Monday to Saturday 03:30 IST) differential (first installed as 03:30 UTC, changed the same day to 03:30 IST at the owner's request), log `/var/log/bsec-pgbackrest-cron.log`.
 
 ## Findings
 - **The postgres base image has no CA certificates**, so the first `stanza-create` failed (`unable to get local issuer certificate`). The first rehearsal had verification off and missed it. Fixed in #326 (package installed, build fails without the bundle, rehearsal verifies a real CA chain).
@@ -24,7 +24,7 @@ Production cutover of `bsec-postgres` to the pgBackRest image, done on 2026-11-2
 
 ## Verification
 - Ran in production: `docker ps` shows the pinned image healthy; log line `WAL archiving ON (stanza bsec)`; `stanza-create` and `check` completed successfully; `pgbackrest info` shows `status: ok`, the full backup, and a growing WAL archive range; `crontab -l` shows the two lines; `docker exec` resolves under a minimal cron PATH.
-- Not verified: the first scheduled cron run (Thursday 2026-11-26 03:30 UTC), a restore from the real repository into a scratch container, the Super Admin "WAL archiving is live" alert path, repository growth over a week, Hostinger snapshot restore interaction (documented as a rule, not tested).
+- Not verified: the first scheduled cron run (Thursday 2026-11-26 03:30 IST = Wednesday 22:00 UTC), a restore from the real repository into a scratch container, the Super Admin "WAL archiving is live" alert path, repository growth over a week, Hostinger snapshot restore interaction (documented as a rule, not tested).
 
 ## Docs updated
 - [x] `infra/backups/PGBACKREST.md` (live setup, day-to-day checks, snapshot-restore rule), `docs/BACKUP-DR-PLAN.md`, `progress.md`, `DEPLOYMENT.md`, `docs/ARCHITECTURE.md`

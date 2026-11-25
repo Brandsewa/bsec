@@ -36,7 +36,7 @@ Run host commands in Coolify > Terminal, choosing the **`localhost`** entry (a `
    docker exec -u postgres $C pgbackrest --stanza=bsec backup --type=full   # about 7 minutes for 227 MB
    docker exec -u postgres $C pgbackrest --stanza=bsec info
    ```
-5. **Schedule (host cron, not Coolify):** Coolify databases have no Scheduled Tasks tab. Root's crontab on the VPS (server time is UTC) holds: Sunday `30 3 * * 0` full, Monday to Saturday `30 3 * * 1-6` differential, each `docker exec -u postgres jpukpasrsnmzzt6w2gshxktd pgbackrest --stanza=bsec backup --type=<full|diff>` appending to `/var/log/bsec-pgbackrest-cron.log` (03:30 UTC = 09:00 IST). A rebuilt server must recreate these two lines.
+5. **Schedule (host cron, not Coolify):** Coolify databases have no Scheduled Tasks tab. Root's crontab on the VPS (server time is UTC) holds: Saturday `0 22 * * 6` full (that is Sunday 03:30 IST), Sunday to Friday `0 22 * * 0-5` differential (Monday to Saturday 03:30 IST), each `docker exec -u postgres jpukpasrsnmzzt6w2gshxktd pgbackrest --stanza=bsec backup --type=<full|diff>` appending to `/var/log/bsec-pgbackrest-cron.log` (22:00 UTC = 03:30 IST the next day; the owner works in IST, so the schedule is written in IST and converted). A rebuilt server must recreate these two lines.
 6. Super Admin > Backups: the WAL card shows segments archived; turn on "WAL archiving is live, so alert when it goes quiet".
 
 ## Day-to-day checks
