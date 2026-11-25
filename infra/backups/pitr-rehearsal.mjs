@@ -48,8 +48,12 @@ const env = {
   PGBACKREST_REPO1_S3_KEY: KEY,
   PGBACKREST_REPO1_S3_KEY_SECRET: SECRET,
   PGBACKREST_REPO1_CIPHER_PASS: randomBytes(16).toString("hex"),
-  PGBACKREST_REPO1_STORAGE_VERIFY_TLS: "n", // the stand-in S3 uses a self-signed certificate; R2 does not need this
+  // No verify-tls override on purpose: the stand-in's certificate is signed by a throwaway CA that is installed into the
+  // container's system trust store, so this exercises the same path as R2 (system CA bundle). A first version of this
+  // script turned verification off and missed that the image had no CA bundle at all (production cutover, 2026-11-25).
 };
+// Installs the throwaway CA into the system trust store (needs the ca-certificates package), then runs the rest.
+const TRUST = "cp /certs/ca.crt /usr/local/share/ca-certificates/pitr-ca.crt && update-ca-certificates >/dev/null 2>&1 && ";
 const envArgs = (e) => Object.entries(e).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 const psql = (container, sql) => must(docker(["exec", container, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c", sql]), `psql ${sql.slice(0, 40)}`);
 const pgb = (container, ...a) => must(docker(["exec", "-u", "postgres", container, "pgbackrest", "--stanza=bsec", ...a]), `pgbackrest ${a[0]}`);
@@ -82,7 +86,10 @@ async function main() {
     must(
       docker([
         "run", "--rm", "-v", `${vols.certs}:/certs`, "--entrypoint", "sh", IMAGE, "-c",
-        `openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=${names.s3} -addext subjectAltName=DNS:${names.s3} -keyout /certs/private.key -out /certs/public.crt 2>/dev/null` +
+        `set -e; cd /certs; openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=pitr-ca -keyout ca.key -out ca.crt 2>/dev/null` +
+          ` && openssl req -newkey rsa:2048 -nodes -subj /CN=${names.s3} -keyout private.key -out s.csr 2>/dev/null` +
+          ` && printf 'subjectAltName=DNS:${names.s3}\\nbasicConstraints=CA:FALSE\\n' > ext.cnf` +
+          ` && openssl x509 -req -in s.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 -extfile ext.cnf -out public.crt 2>/dev/null` +
           ` && printf '{"identities":[{"name":"t","credentials":[{"accessKey":"${KEY}","secretKey":"${SECRET}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > /certs/s3.json && chmod 644 /certs/*`,
       ]),
       "cert and s3 config",
@@ -99,8 +106,10 @@ async function main() {
     must(docker(["exec", "-i", names.s3, "weed", "shell"], { input: "s3.bucket.create -name bsec-pgbackrest\nexit\n" }), "create bucket");
 
     // 3. bsec-postgres with credentials: archiving on.
-    must(docker(["run", "-d", "--name", names.pg, "--network", net, "-v", `${vols.pg}:/var/lib/postgresql`, "-e", `POSTGRES_PASSWORD=${PGPASS}`, ...envArgs(env), IMAGE]), "start pg");
+    must(docker(["run", "-d", "--name", names.pg, "--network", net, "-v", `${vols.certs}:/certs:ro`, "-v", `${vols.pg}:/var/lib/postgresql`, "-e", `POSTGRES_PASSWORD=${PGPASS}`, ...envArgs(env), "--entrypoint", "sh", IMAGE, "-c", TRUST + "exec bsec-postgres-entrypoint.sh postgres"]), "start pg");
     await waitReady(names.pg);
+    check("Image ships a CA bundle", docker(["exec", names.pg, "test", "-s", "/etc/ssl/certs/ca-certificates.crt"]).status === 0);
+    check("TLS certificate verification is on (no override)", !("PGBACKREST_REPO1_STORAGE_VERIFY_TLS" in env));
     check("With credentials: archive_mode is on, archive_command uses pgbackrest", psql(names.pg, "SHOW archive_mode") === "on" && psql(names.pg, "SHOW archive_command").includes("pgbackrest --stanza=bsec archive-push"));
 
     pgb(names.pg, "stanza-create");
@@ -147,10 +156,10 @@ async function main() {
     );
     const r0 = Date.now();
     must(
-      docker(["run", "--rm", "--network", net, "-u", "postgres", "-v", `${vols.restored}:/var/lib/postgresql`, ...envArgs(env), "--entrypoint", "pgbackrest", IMAGE, "--stanza=bsec", "restore", "--type=time", `--target=${target}`, "--target-action=promote"]),
+      docker(["run", "--rm", "--network", net, "-v", `${vols.certs}:/certs:ro`, "-v", `${vols.restored}:/var/lib/postgresql`, ...envArgs(env), "--entrypoint", "sh", IMAGE, "-c", TRUST + `exec gosu postgres pgbackrest --stanza=bsec restore --type=time --target='${target}' --target-action=promote`]),
       "restore",
     );
-    must(docker(["run", "-d", "--name", names.restored, "--network", net, "-v", `${vols.restored}:/var/lib/postgresql`, "-e", `POSTGRES_PASSWORD=${PGPASS}`, ...envArgs(env), IMAGE]), "start restored");
+    must(docker(["run", "-d", "--name", names.restored, "--network", net, "-v", `${vols.certs}:/certs:ro`, "-v", `${vols.restored}:/var/lib/postgresql`, "-e", `POSTGRES_PASSWORD=${PGPASS}`, ...envArgs(env), "--entrypoint", "sh", IMAGE, "-c", TRUST + "exec bsec-postgres-entrypoint.sh postgres"]), "start restored");
     await waitReady(names.restored);
     for (let i = 0; i < 60 && psql(names.restored, "SELECT pg_is_in_recovery()") === "t"; i++) await sleep(1000);
     const rtoSeconds = Math.round((Date.now() - r0) / 1000);
