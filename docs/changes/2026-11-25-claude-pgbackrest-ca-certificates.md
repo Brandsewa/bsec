@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-25
 - **Agent:** claude
-- **Branch:** `fix/pgbackrest-ca-certificates`  (not merged yet)
+- **Branch:** `fix/pgbackrest-ca-certificates` (merged in #326, 877bdeb4)
 - **Area:** infra, docs
 - **Type:** fix
 - **Supersedes:** none

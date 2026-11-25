@@ -1,6 +1,6 @@
 # pgBackRest: continuous WAL archiving, backups and point-in-time restore
 
-Status: image and rehearsal built and passing locally and in CI; **not yet in production**. Cutover planned for Wednesday 2026-11-25, 09:00 IST, done by hand by the owner following the steps below (moved from the original 03:00 plan). Plan: `docs/BACKUP-DR-PLAN.md` G1. The daily Coolify `pg_dump` to `bsec-backups` stays: it is the independent logical copy.
+Status: **live in production since 2026-11-25** (cutover by hand, 09:00 IST). `bsec-postgres` runs `ghcr.io/brandsewa/bsec-postgres:sha-877bdeb418db0589df16130e289e0d6a27f121e3`, WAL archives continuously to R2 bucket `bsec-pgbackrest`, first full backup `20261125-040117F` (database 227 MB, 31 MB stored), differential and full backups scheduled by host cron (below). Plan: `docs/BACKUP-DR-PLAN.md` G1. The daily Coolify `pg_dump` to `bsec-backups` stays: it is the independent logical copy, and Hostinger's weekly server snapshot is a third, whole-server layer.
 
 ## What was built
 - `infra/docker/postgres.Dockerfile`: `postgres:18` + pgBackRest (pinned package version, PGDG repo already in the base image). Built by CI as `ghcr.io/<owner>/bsec-postgres` (`sha-<commit>`, then `:main` after the checks pass), same as the app images.
@@ -23,24 +23,34 @@ Status: image and rehearsal built and passing locally and in CI; **not yet in pr
 | `PGBACKREST_REPO1_S3_KEY` and `PGBACKREST_REPO1_S3_KEY_SECRET` | the token above |
 | `PGBACKREST_REPO1_CIPHER_PASS` | the passphrase |
 
-## Cutover (09:00 IST, by hand; about a minute of database restart)
-1. Check disk headroom on the VPS (WAL archiving adds some local disk use) and note the current `bsec-postgres` image tag for rollback.
-2. The five variables are set on `bsec-postgres` already (check they are still there). Change its image to the **pinned** tag `ghcr.io/brandsewa/bsec-postgres:sha-<commit>` (the exact tag is in the change record for the first publish), **not** `:main`: `:main` moves with every merge, so a later restart could quietly pull a newer image under the live database. Restart.
-3. In the container log find `bsec-postgres: pgBackRest configured, WAL archiving ON (stanza bsec)`. In a shell, `SHOW archive_mode;` must say `on`. **Unverified until this step:** whether Coolify's Postgres resource keeps the image's entrypoint. If the log line is missing, roll back (below) and tell Claude.
-4. In the `bsec-postgres` container (Coolify terminal):
+## Live setup (what was done on 2026-11-25, and how to repeat it)
+Run host commands in Coolify > Terminal, choosing the **`localhost`** entry (a `root@server` prompt), not a container.
+1. Disk headroom checked first (96 GB disk, 16% used). Note the current image tag for rollback.
+2. Five `PGBACKREST_REPO1_*` variables on `bsec-postgres` (Environment Variables tab), then **General > Image** set to the **pinned** tag `ghcr.io/brandsewa/bsec-postgres:sha-<commit>`, not `:main` (`:main` moves with every merge; a later restart could quietly pull a newer image under the live database). Pre-pull on the host with `docker pull <image>`; Save, then Restart (about a minute of downtime; the apps reconnect on their own).
+3. Container log shows `bsec-postgres: pgBackRest configured, WAL archiving ON (stanza bsec)`. Coolify keeps the image's own entrypoint when no custom start command is set (confirmed).
+4. On the host, run these one at a time (`C` is the container name, `jpukpasrsnmzzt6w2gshxktd`):
    ```bash
-   gosu postgres pgbackrest --stanza=bsec stanza-create
-   gosu postgres pgbackrest --stanza=bsec check
-   gosu postgres pgbackrest --stanza=bsec backup --type=full
-   gosu postgres pgbackrest --stanza=bsec info
+   C=jpukpasrsnmzzt6w2gshxktd
+   docker exec -u postgres $C pgbackrest --stanza=bsec stanza-create
+   docker exec -u postgres $C pgbackrest --stanza=bsec check
+   docker exec -u postgres $C pgbackrest --stanza=bsec backup --type=full   # about 7 minutes for 227 MB
+   docker exec -u postgres $C pgbackrest --stanza=bsec info
    ```
-5. Coolify scheduled tasks on the resource: Sunday 03:30 `gosu postgres pgbackrest --stanza=bsec backup --type=full`; Monday to Saturday 03:30 `gosu postgres pgbackrest --stanza=bsec backup --type=diff`.
-6. Super Admin > Backups: the WAL card should show segments archived within a minute or two. Then turn on "WAL archiving is live, so alert when it goes quiet".
-7. The app services reconnect on their own after the restart. `bsec-migrate` is not needed.
+5. **Schedule (host cron, not Coolify):** Coolify databases have no Scheduled Tasks tab. Root's crontab on the VPS (server time is UTC) holds: Sunday `30 3 * * 0` full, Monday to Saturday `30 3 * * 1-6` differential, each `docker exec -u postgres jpukpasrsnmzzt6w2gshxktd pgbackrest --stanza=bsec backup --type=<full|diff>` appending to `/var/log/bsec-pgbackrest-cron.log` (03:30 UTC = 09:00 IST). A rebuilt server must recreate these two lines.
+6. Super Admin > Backups: the WAL card shows segments archived; turn on "WAL archiving is live, so alert when it goes quiet".
+
+## Day-to-day checks
+- `docker exec -u postgres $C pgbackrest --stanza=bsec info`: `status: ok`, the newest backup is under a day (diff) or a week (full) old, WAL archive max keeps growing.
+- `tail /var/log/bsec-pgbackrest-cron.log` on the host: no `ERROR` lines. A failed cron run is not alerted by itself; the Backups page and `backup.check` watch WAL freshness, and a stalled differential shows up as an old backup in `info`.
+- Repository size and growth: `info` (compare week to week).
+
+## If a Hostinger server snapshot is ever restored
+The weekly snapshot restores the whole server, including this database's data directory as of that day. **Do not let `bsec-postgres` start with archiving on** until you have decided how to recover the database: the old data directory would try to archive WAL that conflicts with the newer history already in R2, which can damage the archive. Remove the five `PGBACKREST_REPO1_*` variables (or set the image to `postgres:18`) before the first start, then recover the database with `pgbackrest restore` from R2 (the Restore section below), and only then re-enable archiving with a fresh `stanza-create` check. Also recreate the cron lines above if they are missing. `infra/runbooks/REBUILD.md` (still to write) will carry the full procedure.
 
 Rollback: remove the five variables (or set the image back to `postgres:18`) and restart. The data directory is untouched; archiving simply stops. WAL already in R2 stays.
 
 ## Restore (point in time)
+Not yet exercised against the real repository (only the rehearsal and a scratch copy). Plan a restore drill from R2 into a scratch container before relying on it, and record it in Super Admin > Backups.
 The target time format matters: `YYYY-MM-DD HH:MM:SS.mmm+00`, **no space before the zone** (pgBackRest 2.60 rejects `... +00`). `pitr-rehearsal.mjs` is the tested version of these steps.
 1. Stop the apps, then `bsec-postgres`. Keep the old data volume until the restore is verified (rename or snapshot it, never delete first).
 2. Restore into an empty data directory with the same image and env: `gosu postgres pgbackrest --stanza=bsec restore --type=time "--target=<UTC time>" --target-action=promote` (leave out `--type` and `--target` to restore to the latest point).
