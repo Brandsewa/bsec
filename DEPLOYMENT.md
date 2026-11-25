@@ -98,6 +98,7 @@ Live since 2026-11-25. Sentry organisation `brand-sewa`, **US data region** (mat
 - Changing a server DSN needs a restart of that app; changing `VITE_SENTRY_DSN` needs a new build (the next merge to `main`).
 - **Alerts:** each project has Sentry's default rule "notify on high priority issues" by email to the organisation. Each key is rate-limited to **300 errors per hour** so one runaway bug cannot use up the monthly quota.
 - **Test:** send one event with `curl -X POST "https://<ingest host>/api/<project id>/store/" -H "X-Sentry-Auth: Sentry sentry_version=7, sentry_key=<public key>" -H "Content-Type: application/json" -d '{"message":"setup test","level":"info","environment":"setup-test"}'` (host, project id and key are inside the DSN), or throw an error from the browser console on the admin site. Resolve the test issue afterwards.
+- **Claude access (MCP):** the hosted Sentry MCP server is added for the owner only (user level, not the repo) and limited to the organisation: `claude mcp add --transport http --scope user sentry https://mcp.sentry.dev/mcp/brand-sewa`, then the owner approves the Sentry sign-in (OAuth) in the browser. Remove with `claude mcp remove sentry -s user`. The official Sentry plugin ships a second, unscoped copy; keep it unconnected. Rules for using it: `AGENTS.md` section 10.
 - Known gaps: the storefront **browser** is not instrumented (server errors only); the SPAs have no release tag and no uploaded source maps, so their stack traces are minified; the web app samples 5% of traces, the others none.
 
 ### Database roles
