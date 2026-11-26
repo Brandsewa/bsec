@@ -1,0 +1,617 @@
+{
+ "source": "https://claude.ai/artifact/PTbu9tSNxj4wdN2UizABbJ",
+ "exported": "2026-11-25",
+ "meta": {
+  "order": [
+   "e8",
+   "e51",
+   "e52",
+   "e53",
+   "e54",
+   "e55",
+   "e1",
+   "e2",
+   "e3",
+   "e4",
+   "e5",
+   "e6",
+   "e7",
+   "e9",
+   "e10",
+   "e11",
+   "e12",
+   "e13",
+   "e14",
+   "e15",
+   "e16",
+   "e17",
+   "e18",
+   "e19",
+   "e20",
+   "e21",
+   "e22",
+   "e24",
+   "e25",
+   "e26",
+   "e27",
+   "e32",
+   "e33",
+   "e34",
+   "e35",
+   "e36",
+   "e37",
+   "e38",
+   "e39",
+   "e40",
+   "e41",
+   "e43",
+   "e44",
+   "e45",
+   "e46",
+   "e47",
+   "e48",
+   "e49",
+   "e50",
+   "e56",
+   "e57",
+   "e58"
+  ],
+  "title": "bsec System Architecture",
+  "v": 1
+ },
+ "elements": {
+  "e1": {
+   "size": "title",
+   "text": "Bsec system architecture",
+   "type": "text",
+   "x": 1165.6900598995114,
+   "y": -327.3313395581995
+  },
+  "e10": {
+   "color": "blue",
+   "h": 150,
+   "kind": "rounded",
+   "size": "small",
+   "stroke": null,
+   "text": "**bsec-admin**\nVite, React 19 SPA\nStore admin UI\nnginx, port 8080\nNo DB access",
+   "type": "shape",
+   "w": 210,
+   "x": 1206,
+   "y": 401
+  },
+  "e11": {
+   "color": "blue",
+   "h": 150,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**bsec-web**\nNext.js 16, React 19\nStorefront + Store API\nPort 3000\nDB role app_rw",
+   "type": "shape",
+   "w": 210,
+   "x": 1560,
+   "y": 401
+  },
+  "e12": {
+   "color": "blue",
+   "h": 150,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**bsec-worker**\nNode, pg-boss\nEmail, expiry, sweeps\nHealth port 4100\nDB role app_rw",
+   "type": "shape",
+   "w": 210,
+   "x": 1850,
+   "y": 401
+  },
+  "e13": {
+   "color": "blue",
+   "h": 150,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**bsec-platform**\nHono, oRPC, Better Auth\nStaff API + MFA\nPort 4000\nDB role app_platform",
+   "type": "shape",
+   "w": 210,
+   "x": 2140,
+   "y": 401
+  },
+  "e14": {
+   "color": "blue",
+   "h": 150,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**bsec-superadmin**\nVite, React 19 SPA\nPlatform staff UI\nnginx, port 8081\nNo DB access",
+   "type": "shape",
+   "w": 210,
+   "x": 2494,
+   "y": 401
+  },
+  "e15": {
+   "color": "green",
+   "h": 130,
+   "kind": "database",
+   "size": "small",
+   "text": "**PostgreSQL 18**\nOne database for all stores, row-level security on every tenant table\npg-boss job queue · roles: app_owner, app_rw, app_saas, app_platform",
+   "type": "shape",
+   "w": 800,
+   "x": 1560,
+   "y": 778.0242635509226
+  },
+  "e16": {
+   "color": "green",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**Cloudflare R2**\nProduct images\nmedia.bcom.si",
+   "type": "shape",
+   "w": 210,
+   "x": 1206,
+   "y": 793.0242635509226
+  },
+  "e17": {
+   "color": "blue",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**bsec-migrate**\nOne-shot, role app_owner\nRuns before each deploy",
+   "type": "shape",
+   "w": 200,
+   "x": 2504,
+   "y": 793.0242635509226
+  },
+  "e18": {
+   "size": "body",
+   "text": "Every push to main that passes CI deploys to production",
+   "type": "text",
+   "x": 1190,
+   "y": 1489.1772502873878
+  },
+  "e19": {
+   "color": "purple",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**GitHub**\nPublic repo, pnpm + Turborepo\nBranches, pull requests",
+   "type": "shape",
+   "w": 260,
+   "x": 1206,
+   "y": 1535.1772502873878
+  },
+  "e2": {
+   "size": "large",
+   "text": "One codebase serves many stores from one VPS and one database.",
+   "type": "text",
+   "wrap": 900,
+   "x": 1165.6900598995114,
+   "y": -257.3313395581995
+  },
+  "e20": {
+   "color": "purple",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**GitHub Actions**\nTypecheck, lint, tests\nGitleaks, e2e smoke test",
+   "type": "shape",
+   "w": 260,
+   "x": 1610,
+   "y": 1535.1772502873878
+  },
+  "e21": {
+   "color": "purple",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**ghcr.io registry**\nOne Docker image per app\n:sha tag, then :main",
+   "type": "shape",
+   "w": 260,
+   "x": 2014,
+   "y": 1535.1772502873878
+  },
+  "e22": {
+   "color": "purple",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**Coolify**\nRuns migrate, then restarts\nthe five apps",
+   "type": "shape",
+   "w": 260,
+   "x": 2418,
+   "y": 1535.1772502873878
+  },
+  "e24": {
+   "cols": {
+    "c1": {
+     "at": 1,
+     "w": 139
+    },
+    "c2": {
+     "at": 2,
+     "w": 800
+    }
+   },
+   "rows": {
+    "r1": {
+     "at": 1,
+     "c1": "Layer",
+     "c2": "What we use"
+    },
+    "r2": {
+     "at": 2,
+     "c1": "Language",
+     "c2": "TypeScript 6 (strict) end to end, SQL migrations"
+    },
+    "r3": {
+     "at": 3,
+     "c1": "Frontend",
+     "c2": "React 19, Next.js 16 (Cache Components), Vite, TanStack Router, Tailwind, shadcn on Base UI, Puck page editor"
+    },
+    "r4": {
+     "at": 4,
+     "c1": "Backend",
+     "c2": "Hono, oRPC with Zod contracts, Better Auth, Drizzle ORM, pg-boss queues; all business logic in packages/domain"
+    },
+    "r5": {
+     "at": 5,
+     "c1": "Data",
+     "c2": "PostgreSQL 18 with row-level security, Cloudflare R2 for media"
+    },
+    "r6": {
+     "at": 6,
+     "c1": "Tooling",
+     "c2": "Node 24, pnpm 10, Turborepo, Vitest, Playwright, ESLint 10, Docker, k6 load tests"
+    },
+    "r7": {
+     "at": 7,
+     "c1": "Payments",
+     "c2": "COD live; Razorpay per store; Stripe and PayPal for other markets. Shiprocket and email delivery not live yet"
+    }
+   },
+   "type": "table",
+   "x": 1190,
+   "y": 1747.3782715476812
+  },
+  "e25": {
+   "from": "e4",
+   "fromSide": "bottom",
+   "label": "HTTPS",
+   "to": [
+    1311,
+    117
+   ],
+   "type": "arrow"
+  },
+  "e26": {
+   "from": "e5",
+   "fromSide": "bottom",
+   "label": "HTTPS",
+   "to": [
+    1665,
+    117
+   ],
+   "type": "arrow"
+  },
+  "e27": {
+   "from": "e6",
+   "fromSide": "bottom",
+   "label": "HTTPS",
+   "to": [
+    2599,
+    117
+   ],
+   "type": "arrow"
+  },
+  "e3": {
+   "size": "small",
+   "text": "**Key:** yellow = edge and outside watchers, blue = services, green = data and backups, purple = build and ship. Outline only = planned, not live yet",
+   "type": "text",
+   "wrap": 460,
+   "x": 2165.6900598995117,
+   "y": -317.3313395581995
+  },
+  "e32": {
+   "from": "e10",
+   "fromSide": "right",
+   "label": "oRPC /api",
+   "to": "e11",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e33": {
+   "from": "e14",
+   "fromSide": "left",
+   "label": "oRPC",
+   "to": "e13",
+   "toSide": "right",
+   "type": "arrow"
+  },
+  "e34": {
+   "from": "e11",
+   "fromSide": "bottom",
+   "label": "SQL, RLS enforced",
+   "to": [
+    1665,
+    778.0242635509226
+   ],
+   "type": "arrow"
+  },
+  "e35": {
+   "from": "e12",
+   "fromSide": "bottom",
+   "label": "SQL, job queue",
+   "to": [
+    1955,
+    778.0242635509226
+   ],
+   "type": "arrow"
+  },
+  "e36": {
+   "from": "e13",
+   "fromSide": "bottom",
+   "label": "SQL, bypasses RLS",
+   "to": [
+    2245,
+    778.0242635509226
+   ],
+   "type": "arrow"
+  },
+  "e37": {
+   "bends": [
+    "v",
+    112
+   ],
+   "dash": true,
+   "from": "e11",
+   "fromSide": "bottom",
+   "label": "image uploads",
+   "to": "e16",
+   "toSide": "top",
+   "type": "arrow"
+  },
+  "e38": {
+   "from": "e17",
+   "fromSide": "left",
+   "label": "applies migrations",
+   "to": "e15",
+   "toSide": "right",
+   "type": "arrow"
+  },
+  "e39": {
+   "from": "e19",
+   "fromSide": "right",
+   "label": "on push",
+   "to": "e20",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e4": {
+   "color": "white",
+   "h": 80,
+   "kind": "pill",
+   "size": "small",
+   "text": "**Merchants**\nadmin.bcom.si",
+   "type": "shape",
+   "w": 210,
+   "x": 1206,
+   "y": -107
+  },
+  "e40": {
+   "from": "e20",
+   "fromSide": "right",
+   "label": "build images",
+   "to": "e21",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e41": {
+   "from": "e21",
+   "fromSide": "right",
+   "label": "pull :main",
+   "to": "e22",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e43": {
+   "color": "green",
+   "h": 130,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**Hostinger snapshots**\nWeekly, whole VPS\nLast-resort restore",
+   "type": "shape",
+   "w": 210,
+   "x": 1211.0000000000002,
+   "y": 1121.7903338914452
+  },
+  "e44": {
+   "color": "green",
+   "h": 130,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**pgBackRest**\nOn bsec-postgres, WAL archived\nFull Sat, diff Sun-Fri, 03:30 IST\n30-day retention",
+   "type": "shape",
+   "w": 320,
+   "x": 1565.0000000000002,
+   "y": 1121.7903338914452
+  },
+  "e45": {
+   "color": "green",
+   "h": 130,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**R2 bucket**\nbsec-pgbackrest\nOff-server copy",
+   "type": "shape",
+   "w": 210,
+   "x": 2029.0000000000002,
+   "y": 1121.7903338914452
+  },
+  "e46": {
+   "color": "green",
+   "h": 130,
+   "hollow": true,
+   "kind": "rounded",
+   "size": "small",
+   "stroke": "green",
+   "text": "**Second copy**\nWeekly, second\nCloudflare account\nPlanned, not live",
+   "type": "shape",
+   "w": 210,
+   "x": 2383.0000000000005,
+   "y": 1121.7903338914452
+  },
+  "e47": {
+   "color": "yellow",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**Better Stack** (watches from outside)\nUptime monitors on web, admin and platform every 3 min\nPublic status page",
+   "type": "shape",
+   "w": 700,
+   "x": 1211.0000000000002,
+   "y": 1281.7903338914452
+  },
+  "e48": {
+   "from": [
+    1720,
+    908.0242635509226
+   ],
+   "label": "WAL + backups",
+   "to": "e44",
+   "toSide": "top",
+   "type": "arrow"
+  },
+  "e49": {
+   "from": "e44",
+   "fromSide": "right",
+   "label": "archive over TLS",
+   "to": "e45",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e5": {
+   "color": "white",
+   "h": 80,
+   "kind": "pill",
+   "size": "small",
+   "text": "**Shoppers**\n<store>.bcom.si",
+   "type": "shape",
+   "w": 210,
+   "x": 1560,
+   "y": -107
+  },
+  "e50": {
+   "dash": true,
+   "from": "e45",
+   "fromSide": "right",
+   "label": "weekly copy",
+   "to": "e46",
+   "toSide": "left",
+   "type": "arrow"
+  },
+  "e51": {
+   "h": 388,
+   "text": "Users and edge",
+   "type": "container",
+   "w": 1578,
+   "x": 1166,
+   "y": -147
+  },
+  "e52": {
+   "h": 182,
+   "text": "Data",
+   "type": "container",
+   "w": 1578,
+   "x": 1166,
+   "y": 750.0242635509226
+  },
+  "e53": {
+   "h": 352,
+   "text": "Backups and monitoring",
+   "type": "container",
+   "w": 1578,
+   "x": 1171.0000000000002,
+   "y": 1053.7903338914452
+  },
+  "e54": {
+   "h": 186,
+   "text": "Build and ship",
+   "type": "container",
+   "w": 1578,
+   "x": 1166,
+   "y": 1473.1772502873878
+  },
+  "e55": {
+   "h": 492.5844144798266,
+   "text": "Languages and tools",
+   "type": "container",
+   "w": 1578,
+   "x": 1166,
+   "y": 1711.1772502873878
+  },
+  "e56": {
+   "color": "yellow",
+   "h": 100,
+   "hollow": true,
+   "kind": "rounded",
+   "size": "small",
+   "stroke": "#c9a400",
+   "text": "**Sentry**\nError tracking\nPlanned, not live",
+   "type": "shape",
+   "w": 250,
+   "x": 1935.0000000000002,
+   "y": 1281.7903338914452
+  },
+  "e57": {
+   "color": "yellow",
+   "h": 100,
+   "hollow": true,
+   "kind": "rounded",
+   "size": "small",
+   "stroke": "#c9a400",
+   "text": "**Cloudflare Access**\nOn Super Admin hosts\nPlanned, not live",
+   "type": "shape",
+   "w": 250,
+   "x": 2209.0000000000005,
+   "y": 1281.7903338914452
+  },
+  "e58": {
+   "from": "e7",
+   "fromSide": "bottom",
+   "label": "routes by hostname",
+   "to": "e8",
+   "toSide": "top",
+   "type": "arrow"
+  },
+  "e6": {
+   "color": "white",
+   "h": 80,
+   "kind": "pill",
+   "size": "small",
+   "text": "**Platform staff**\nsuperadmin.bcom.si",
+   "type": "shape",
+   "w": 210,
+   "x": 2494,
+   "y": -107
+  },
+  "e7": {
+   "color": "yellow",
+   "h": 100,
+   "kind": "rounded",
+   "size": "small",
+   "text": "**Cloudflare**\nDNS, TLS, Turnstile bot check\nWildcard *.bcom.si and custom domains all reach one origin",
+   "type": "shape",
+   "w": 1498,
+   "x": 1206,
+   "y": 117
+  },
+  "e8": {
+   "h": 258,
+   "text": "Single VPS (Hostinger) · Coolify + Traefik · Docker",
+   "type": "container",
+   "w": 1578,
+   "x": 1166,
+   "y": 361
+  },
+  "e9": {
+   "size": "small",
+   "text": "Firewall: only ports 22, 80, 443 open",
+   "type": "text",
+   "x": 2286,
+   "y": 585
+  }
+ }
+}
