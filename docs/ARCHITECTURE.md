@@ -27,6 +27,7 @@
 | Added an env var or deploy step | 14 (config) and `DEPLOYMENT.md` |
 | Added a test layer or changed a gate | 15 (testing) |
 | Made an architectural decision | write an ADR, then section 16 |
+| Changed a deployed service, data store, backup, monitoring tool or the CI/CD stages | [`SYSTEM-DIAGRAM.md`](SYSTEM-DIAGRAM.md) (Mermaid, whiteboard snapshot in `docs/diagrams/`) |
 
 Then bump the "Last verified against" commit above. `pnpm docs:check` (also run in CI) fails if an app/package, ADR or migration exists on disk but is missing from the docs.
 
@@ -57,6 +58,8 @@ Production root domain is `bcom.si` (web, `admin.`, `platform.`, `superadmin.`, 
 ---
 
 ## 2. System at a glance
+
+> A fuller picture (edge, backups, monitoring, CI/CD, languages) is in [`SYSTEM-DIAGRAM.md`](SYSTEM-DIAGRAM.md). Keep it in step with this section.
 
 ```
                        Cloudflare (DNS, TLS, R2 media.bcom.si, Turnstile)
