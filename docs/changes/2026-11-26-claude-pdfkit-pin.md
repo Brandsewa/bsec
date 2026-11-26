@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-26
 - **Agent:** claude
-- **Branch:** `fix/pdfkit-bundle-pin` (follows #342)
+- **Branch:** `fix/pdfkit-bundle-pin` (merged in #343, a74cf05c; follows #342, 6059b6dd). `main` run for #343 passed the staging smoke test and deployed to production.
 - **Area:** domain (dependency), web (404 page, Next config), CI config (Dependabot)
 - **Type:** fix
 
