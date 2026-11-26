@@ -14,6 +14,7 @@ import {
   getStorefrontProduct,
   isMediaStorageConfigured,
   listMedia,
+  listProducts,
   provisionTenant,
   publicMediaUrl,
   requestMediaUpload,
@@ -163,6 +164,12 @@ describe("a product's images", () => {
     expect(first).toMatchObject({ position: 0, isPrimary: true, url: `https://media.example.test/${ctx.tenantId}/products/a.png` });
     const second = await attachProductMedia(rtWeb, ctx, { productId, mediaId: mediaB });
     expect(second).toMatchObject({ position: 1, isPrimary: false });
+  });
+
+  it("the products list carries the featured (first) image url", async () => {
+    const list = await listProducts(rtWeb, ctx, {});
+    const row = list.items.find((p) => p.id === productId);
+    expect(row?.imageUrl).toBe(`https://media.example.test/${ctx.tenantId}/products/a.png`);
   });
 
   it("attaching the same image twice does not duplicate it", async () => {

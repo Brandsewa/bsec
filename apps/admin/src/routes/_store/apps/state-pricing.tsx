@@ -2,17 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Search, Upload, X } from "lucide-react";
-import { Alert, Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Field, Input, PageSkeleton, SimpleSelect, Tabs, TabsContent, TabsList, TabsTrigger, toast } from "@bs/ui";
+import { Alert, Button, Dialog, Popover, PopoverContent, PopoverTrigger, DialogContent, DialogDescription, DialogHeader, DialogTitle, Field, Input, PageSkeleton, SimpleSelect, Tabs, TabsContent, TabsList, TabsTrigger, toast } from "@bs/ui";
 import type { ProductStatePricing } from "@bs/contracts";
-import { formatMoney } from "@bs/contracts/money";
 import { EditableGrid, type GridColumn, type GridNode } from "../../../components/data-grid/editable-grid.tsx";
 import { Pagination } from "../../../components/data-table/pagination.tsx";
 import { client, orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
 import { downloadCsv, parseCsv } from "../../../lib/csv.ts";
-import { useStoreCurrency } from "../../../lib/use-store-currency.ts";
 import { PageContainer, PageHeader } from "@bs/ui";
 import {
+  BASE_KEY,
+  basePriceProblem,
+  buildBaseChanges,
   buildChanges,
   buildExportCsv,
   cellProblem,
@@ -20,6 +21,7 @@ import {
   MAX_INLINE_STATES,
   planImport,
   savedText,
+  toMajor,
   type StateOption,
 } from "../../../lib/state-pricing-grid.ts";
 
@@ -61,7 +63,7 @@ function StatePricingPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer size="full">
       <PageHeader title="State Pricing" description="Give products a different price in any state. Every other state pays the default price." />
       <Tabs defaultValue="prices">
         <TabsList>
@@ -76,6 +78,26 @@ function StatePricingPage() {
         </TabsContent>
       </Tabs>
     </PageContainer>
+  );
+}
+
+/** One line of text that never wraps, so every row keeps the same height. The full text is in the tooltip. */
+function Clip({ text, muted }: { text: string; muted?: boolean }) {
+  return <span title={text} className={`block truncate px-1 ${muted ? "text-muted-foreground" : ""}`}>{text}</span>;
+}
+
+/** A SKU cut to one line; clicking it opens the full SKU so rows stay one height. */
+function SkuCell({ sku }: { sku: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        title="Click to see the full SKU"
+        className="block w-full truncate rounded-sm px-1 text-left font-mono text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        {sku}
+      </PopoverTrigger>
+      <PopoverContent className="w-auto max-w-sm select-all break-all p-2 font-mono text-xs">{sku}</PopoverContent>
+    </Popover>
   );
 }
 
@@ -102,7 +124,6 @@ function SettingsTab({ mode, onSaved }: { mode: string; onSaved: () => void }) {
 }
 
 function PricesGrid() {
-  const currency = useStoreCurrency();
   const [search, setSearch] = useState("");
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -115,6 +136,8 @@ function PricesGrid() {
   const [importNote, setImportNote] = useState<string | null>(null);
   // Saved prices of every variant loaded so far (across pages and searches), to tell unsaved edits from saved values.
   const [seen, setSeen] = useState<ReadonlyMap<string, Record<string, { price: number }>>>(new Map());
+  // Saved default price and product of every variant loaded so far.
+  const [bases, setBases] = useState<ReadonlyMap<string, { productId: string; basePrice: number }>>(new Map());
   const [lastData, setLastData] = useState<unknown>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -143,6 +166,11 @@ function PricesGrid() {
       for (const row of grid.data?.rows ?? []) for (const v of row.variants) next.set(v.variantId, v.prices);
       return next;
     });
+    setBases((prev) => {
+      const next = new Map(prev);
+      for (const row of grid.data?.rows ?? []) for (const v of row.variants) next.set(v.variantId, { productId: row.productId, basePrice: v.basePrice });
+      return next;
+    });
     if (shown === null) setShown(grid.data.usedStates);
   }
 
@@ -151,7 +179,12 @@ function PricesGrid() {
   const overflow = shownStates.slice(MAX_INLINE_STATES);
   const nodes = useMemo(() => nodesFor(grid.data?.rows ?? []), [grid.data]);
 
-  const { changes, invalid } = useMemo(() => buildChanges(edits, seen), [edits, seen]);
+  const stateEdits = useMemo(() => buildChanges(edits, seen), [edits, seen]);
+  const baseEdits = useMemo(() => buildBaseChanges(edits, bases), [edits, bases]);
+  const invalid = stateEdits.invalid ?? baseEdits.invalid;
+  const changeCount = stateEdits.changes.length + baseEdits.changes.length;
+  /** The edit key's state part for a column: the default price column is not a state. */
+  const keyOf = (columnId: string) => (columnId === "default" ? BASE_KEY : columnId);
 
   function textOf(variantId: string, state: string, prices: Record<string, { price: number }>): string {
     const k = editKey(variantId, state);
@@ -160,23 +193,39 @@ function PricesGrid() {
 
   const columns: GridColumn<Row>[] = [
     {
+      id: "sku",
+      header: "SKU",
+      width: "10rem",
+      sticky: true,
+      render: (node) => (node.data.kind === "variant" && node.data.variant.sku ? <SkuCell sku={node.data.variant.sku} /> : null),
+    },
+    {
       id: "name",
       header: "Product",
-      width: "17rem",
+      width: "20rem",
+      sticky: true,
       render: (node, ctx) => {
         const d = node.data;
-        if (d.kind === "product") return ctx.isGroup ? <span>{d.product.productTitle} <span className="font-normal text-muted-foreground">· {ctx.childCount} variants</span></span> : <span className="px-1">{d.product.productTitle}</span>;
+        if (d.kind === "product") return ctx.isGroup ? <span>{d.product.productTitle} <span className="font-normal text-muted-foreground">· {ctx.childCount} variants</span></span> : <Clip text={d.product.productTitle} />;
         const single = d.product.variants.length === 1;
-        return single ? <span className="px-1">{d.product.productTitle}{d.variant.title !== "Default" ? <span className="text-muted-foreground"> · {d.variant.title}</span> : null}</span> : <span className="px-1 text-muted-foreground">{d.variant.title}</span>;
+        return single ? <Clip text={d.variant.title !== "Default" ? `${d.product.productTitle} · ${d.variant.title}` : d.product.productTitle} /> : <Clip text={d.variant.title} muted />;
       },
     },
-    { id: "sku", header: "SKU", width: "9rem", render: (node) => <span className="px-1 text-muted-foreground">{node.data.kind === "variant" ? (node.data.variant.sku ?? "") : ""}</span> },
     {
       id: "default",
       header: "Default price",
-      width: "8rem",
+      width: "8.5rem",
       align: "right",
-      render: (node) => <span className="px-2 tabular-nums">{node.data.kind === "variant" ? formatMoney(node.data.variant.basePrice, currency) : ""}</span>,
+      edit: {
+        cell: (node) => {
+          if (node.data.kind !== "variant") return { value: "", dirty: false, readOnly: true };
+          const v = node.data.variant;
+          const k = editKey(v.variantId, BASE_KEY);
+          const saved = toMajor(v.basePrice);
+          const value = k in edits ? (edits[k] as string) : saved;
+          return { value, dirty: k in edits && value.trim() !== saved, error: basePriceProblem(value) ?? undefined };
+        },
+      },
     },
     ...inline.map(
       (code): GridColumn<Row> => ({
@@ -214,7 +263,8 @@ function PricesGrid() {
   }
 
   function onPaste(start: { node: GridNode<Row>; columnId: string }, matrix: string[][], rows: GridNode<Row>[]) {
-    const first = inline.indexOf(start.columnId);
+    const order = ["default", ...inline];
+    const first = order.indexOf(start.columnId);
     if (first < 0) return;
     setEdits((e) => {
       const next = { ...e };
@@ -222,8 +272,8 @@ function PricesGrid() {
         const row = rows[r]?.data;
         if (!row || row.kind !== "variant") return;
         cells.forEach((text, c) => {
-          const code = inline[first + c];
-          if (code) next[editKey(row.variant.variantId, code)] = text.trim().replace(/^₹\s*/, "");
+          const code = order[first + c];
+          if (code) next[editKey(row.variant.variantId, keyOf(code))] = text.trim().replace(/^₹\s*/, "");
         });
       });
       return next;
@@ -239,15 +289,31 @@ function PricesGrid() {
     try {
       let saved = 0;
       let removed = 0;
+      // Default prices go through the product editor's service (market prices, cache and audit stay in one place).
+      const byProduct = new Map<string, { id: string; variants: { id: string; price: number }[] }>();
+      for (const c of baseEdits.changes) {
+        const item = byProduct.get(c.productId) ?? { id: c.productId, variants: [] };
+        item.variants.push({ id: c.variantId, price: c.price });
+        byProduct.set(c.productId, item);
+      }
+      const baseItems = [...byProduct.values()];
+      for (let i = 0; i < baseItems.length; i += 100) {
+        const res = await client.admin.products.bulkUpdate({ items: baseItems.slice(i, i + 100) });
+        const failed = res.results.find((r) => !r.ok);
+        if (failed) throw new Error(failed.error ?? "A default price could not be saved");
+      }
+      const changes = stateEdits.changes;
       for (let i = 0; i < changes.length; i += 1000) {
         const res = await client.admin.apps.setPricesBulk({ items: changes.slice(i, i + 1000) });
         saved += res.saved;
         removed += res.removed;
       }
-      toast.success(`Saved ${saved} price${saved === 1 ? "" : "s"}${removed ? `, removed ${removed}` : ""}`);
+      const total = saved + baseEdits.changes.length;
+      toast.success(`Saved ${total} price${total === 1 ? "" : "s"}${removed ? `, removed ${removed}` : ""}`);
       setEdits({});
       setImportNote(null);
       setSeen(new Map());
+      setBases(new Map());
       setLastData(null);
       await grid.refetch();
     } catch (err) {
@@ -293,7 +359,7 @@ function PricesGrid() {
 
   const available = stateList.filter((s) => !shownStates.includes(s.code));
   // While a cell is invalid there are no sendable changes, but the bar must stay so the problem and Discard stay visible.
-  const dirtyCount = invalid ? Object.keys(edits).length : changes.length;
+  const dirtyCount = invalid ? Object.keys(edits).length : changeCount;
 
   return (
     <div className="space-y-3">
@@ -341,13 +407,14 @@ function PricesGrid() {
         <PageSkeleton />
       ) : (
         <EditableGrid
-          className="max-h-[65vh]"
+          className="max-h-[calc(100dvh-16rem)] min-h-80"
+          groupLabelColumn="name"
           columns={columns}
           nodes={nodes}
           expanded={expanded}
           onToggleExpanded={(id) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; })}
-          onCellChange={(node, col, value) => node.data.kind === "variant" && setCell(node.data.variant.variantId, col, value)}
-          onRevert={(node, col) => node.data.kind === "variant" && setEdits((e) => { const { [editKey(node.data.kind === "variant" ? node.data.variant.variantId : "", col)]: _gone, ...rest } = e; return rest; })}
+          onCellChange={(node, col, value) => node.data.kind === "variant" && setCell(node.data.variant.variantId, keyOf(col), value)}
+          onRevert={(node, col) => node.data.kind === "variant" && setEdits((e) => { const { [editKey(node.data.kind === "variant" ? node.data.variant.variantId : "", keyOf(col))]: _gone, ...rest } = e; return rest; })}
           onPaste={onPaste}
           empty={<p className="rounded-md border border-border p-6 text-center text-sm text-muted-foreground">{term ? "No products match your search." : "No products yet."}</p>}
           trailingHeader={

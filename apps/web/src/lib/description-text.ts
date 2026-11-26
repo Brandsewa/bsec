@@ -1,6 +1,14 @@
 /** The product's long description as plain text. The admin stores it as `{ type: "text", text }` (older rows may hold a plain string). */
 export function descriptionText(json: unknown): string {
   if (typeof json === "string") return json.trim();
+  // Formatted content (headings, paragraphs, lists): one block per paragraph, so the "Read more" popup keeps its shape.
+  if (json && typeof json === "object" && Array.isArray((json as { blocks?: unknown }).blocks)) {
+    return ((json as { blocks: Array<{ type: string; text?: string; items?: string[] }> }).blocks)
+      .map((b) => (typeof b.text === "string" ? b.text : Array.isArray(b.items) ? b.items.join("\n") : ""))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
   if (json && typeof json === "object" && "text" in json && typeof (json as { text: unknown }).text === "string") return (json as { text: string }).text.trim();
   return "";
 }

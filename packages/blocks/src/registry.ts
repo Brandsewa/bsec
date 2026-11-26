@@ -4,7 +4,7 @@ import {
   alignSchema,
   bgVideoUrlSchema,
   hexColorSchema,
-  hrefSchema,
+  storeHrefSchema as hrefSchema,
   httpsImageUrlSchema,
   logoSizeSchema,
   iconNameSchema,
@@ -25,6 +25,7 @@ import { PRODUCT_ELEMENTS } from "./product-elements.ts";
 import * as VC from "./views-collection-showcase.tsx";
 import * as VT from "./views-trust-strip.tsx";
 import * as VM from "./views-multi-card.tsx";
+import * as VTB from "./views-tabs.tsx";
 import { MARKETING_BLOCK_DEFINITIONS } from "./marketing-blocks.ts";
 
 /* ------------------------------------------------------------------ */
@@ -61,7 +62,7 @@ export const BannerBlock: BlockDefinition<BannerProps> = {
   version: 1,
   schema: BannerSchema,
   defaultProps: {
-    text: "Special introductory offer: free shipping on orders over ₹999!",
+    text: "Special introductory offer: free shipping on orders over {{free_shipping_threshold}}!",
     dismissible: false,
     variant: "promo",
     messages: [],
@@ -334,8 +335,8 @@ export const ButtonBlock: BlockDefinition<ButtonProps> = {
   defaultProps: {
     label: "Click here",
     text: "Click here",
-    href: "/collections/all",
-    link: "/collections/all",
+    href: "/products/all",
+    link: "/products/all",
     newTab: false,
     styleType: "theme",
     variant: "primary",
@@ -390,7 +391,7 @@ export const SiteHeaderBlock: BlockDefinition<SiteHeaderProps> = {
     menuHandle: "header",
     links: [
       { label: "Home", href: "/" },
-      { label: "Shop", href: "/collections/all" },
+      { label: "Shop", href: "/products/all" },
       { label: "About", href: "/pages/about" },
     ],
     layout: "left",
@@ -432,7 +433,7 @@ export const SiteFooterSchema = z.object({
     .default([]),
   /** Social icons under the brand: one per network, each linking out. Empty shows none. */
   socials: z
-    .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: hrefSchema.min(1) }))
+    .array(z.object({ network: z.enum(SOCIAL_NETWORKS), url: hrefSchema.refine((v) => v.length > 0, { message: "Enter a link" }) }))
     .max(8)
     .default([]),
   socialStyle: z.enum(["plain", "filled", "outline"]).default("plain"),
@@ -459,7 +460,7 @@ export const SiteFooterBlock: BlockDefinition<SiteFooterProps> = {
     logoSize: { desktop: {}, tablet: {}, mobile: {} },
     mobileAccordion: true,
     columns: [
-      { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
+      { title: "Shop", links: [{ label: "All products", href: "/products/all" }, { label: "Search", href: "/search" }] },
       {
         title: "Policies",
         links: [
@@ -832,7 +833,7 @@ const DEFAULT_SLIDES: HeroSlide[] = [
     title: "Pure quality, delivered with care",
     subtitle: "Small-batch products from makers you can trust.",
     primaryLabel: "Shop now",
-    primaryHref: "/collections/all",
+    primaryHref: "/products/all",
     secondaryLabel: "Our story",
     secondaryHref: "/pages/about",
   },
@@ -1218,6 +1219,110 @@ export const FaqSectionBlock: BlockDefinition<FaqSectionProps> = {
 };
 
 /**
+ * Tabs: a row of titles with a rich-text body per tab. Titles can be plain text, underlined or cards (with a corner
+ * radius), horizontal or down the side. On phones the tabs either turn into an accordion (default) or stay tabs with a
+ * title row that scrolls sideways instead of stacking. Bodies are markdown (bold, italic, links, lists), sanitised on render.
+ */
+export const TabsSectionSchema = z.object({
+  // Section
+  title: z.string().max(160).default(""),
+  description: z.string().max(500).default(""),
+  headingAlign: alignSchema.default("left"),
+  width: widthSchema.default("wide"),
+  tone: toneSchema.default("default"),
+  // Layout
+  /** top: titles in a row above the body. left / right: titles in a column beside it (phones always get the row or the accordion). */
+  tabsPosition: z.enum(["top", "left", "right"]).default("top"),
+  /** Titles row alignment (top position); "stretch" shares the width equally. */
+  tabsAlign: z.enum(["left", "center", "right", "stretch"]).default("left"),
+  /** Space between the titles and the body, px. */
+  titleBodyGap: z.number().int().min(0).max(80).default(16),
+  /** The tab open first (1 = first). */
+  defaultTab: z.number().int().min(1).max(12).default(1),
+  // Title look
+  titleStyle: z.enum(["simple", "underline", "cards"]).default("underline"),
+  /** Cards look: corner radius, px. */
+  cardRadius: z.number().int().min(0).max(40).default(10),
+  titleFontSize: z.number().int().min(11).max(28).default(16),
+  titleWeight: z.enum(["400", "500", "600", "700"]).default("600"),
+  /** Legacy single left-right and top-bottom values; `titlePadding` wins when set. */
+  titlePaddingX: z.number().int().min(0).max(48).default(16),
+  titlePaddingY: z.number().int().min(0).max(32).default(10),
+  /** Padding of each title, px, per side. */
+  titlePadding: z
+    .object({
+      top: z.number().int().min(0).max(96).optional(),
+      right: z.number().int().min(0).max(96).optional(),
+      bottom: z.number().int().min(0).max(96).optional(),
+      left: z.number().int().min(0).max(96).optional(),
+    })
+    .optional(),
+  /** Space between the titles, px. */
+  titleGap: z.number().int().min(0).max(40).default(8),
+  iconPosition: z.enum(["left", "top"]).default("left"),
+  iconSize: z.number().int().min(12).max(40).default(18),
+  titleColor: hexColorSchema.optional(),
+  titleActiveColor: hexColorSchema.optional(),
+  titleBg: hexColorSchema.optional(),
+  titleActiveBg: hexColorSchema.optional(),
+  /** Underline colour, and the border of the cards. */
+  titleBorderColor: hexColorSchema.optional(),
+  // Body
+  /** Legacy top-bottom and left-right values; `bodyPadding` wins when set. */
+  bodyPaddingY: z.number().int().min(0).max(96).default(20),
+  bodyPaddingX: z.number().int().min(0).max(96).default(0),
+  /** Padding of the content area, px, per side. */
+  bodyPadding: z
+    .object({
+      top: z.number().int().min(0).max(96).optional(),
+      right: z.number().int().min(0).max(96).optional(),
+      bottom: z.number().int().min(0).max(96).optional(),
+      left: z.number().int().min(0).max(96).optional(),
+    })
+    .optional(),
+  bodyBg: hexColorSchema.optional(),
+  bodyTextColor: hexColorSchema.optional(),
+  bodyBorderWidth: z.number().int().min(0).max(8).default(0),
+  bodyBorderColor: hexColorSchema.optional(),
+  bodyRadius: z.number().int().min(0).max(40).default(0),
+  bodyAlign: alignSchema.default("left"),
+  bodyFontSize: z.number().int().min(12).max(24).default(16),
+  // Phones
+  /** accordion: every tab becomes a collapsible row. tabs: keep the tabs, the title row scrolls sideways. */
+  mobileMode: z.enum(["accordion", "tabs"]).default("accordion"),
+  accordionSingleOpen: z.boolean().default(true),
+  accordionOpenFirst: z.boolean().default(true),
+  accordionIcon: z.enum(["plus", "chevron"]).default("chevron"),
+  /** Size of the accordion's arrow or plus, px. */
+  accordionIconSize: z.number().int().min(8).max(32).default(12),
+  items: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(80),
+        icon: iconNameSchema.optional(),
+        /** Markdown: **bold**, *italic*, [link](url), lists, line breaks. `{{field:key}}` pulls in that product custom field. */
+        content: z.string().max(5000).default(""),
+      }),
+    )
+    .min(1)
+    .max(12)
+    .default([
+      { title: "Description", content: "Tell customers what makes this special. Use **bold**, *italic*, links and lists." },
+      { title: "Shipping", content: "- Dispatched within 1-2 days\n- Free delivery over a set amount\n- Track every order" },
+      { title: "Returns", content: "A simple return if something is not right." },
+    ]),
+});
+export type TabsSectionProps = z.infer<typeof TabsSectionSchema>;
+
+export const TabsSectionBlock: BlockDefinition<TabsSectionProps> = {
+  type: "TabsSection",
+  version: 1,
+  schema: TabsSectionSchema,
+  defaultProps: TabsSectionSchema.parse({}),
+  render: VTB.TabsSectionView,
+};
+
+/**
  * Collection showcase: the Collection grid with the heading placed left, middle or right, an optional button link,
  * up to six cards per desktop row (more collections wrap into more rows), and a grid or carousel choice for
  * tablets and phones. Collections are picked from the store's own list; the data is resolved like the Collection grid.
@@ -1414,7 +1519,7 @@ export const TrustStripSchema = z.object({
     .min(1)
     .max(12)
     .default([
-      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "truck", title: "Free shipping", description: "On qualifying orders" },
       { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
       { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
       { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },
@@ -1506,6 +1611,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, AnyBlockDefinition> = {
   ReviewsMarquee: ReviewsMarqueeBlock,
   ImageBanner: ImageBannerBlock,
   FaqSection: FaqSectionBlock,
+  TabsSection: TabsSectionBlock,
   CollectionShowcase: CollectionShowcaseBlock,
   MultiCard: MultiCardBlock,
   CollectionProducts: CollectionProductsBlock,

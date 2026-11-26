@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import {
   evaluateStorefrontAccess,
   formatTitle,
+  deriveMetaDescription,
+  firstTextOfBlocks,
   generateBreadcrumbJsonLd,
   getPublishedPolicy,
   getStorefrontSeoSettings,
@@ -104,6 +106,15 @@ interface PolicyPageProps {
   params: Promise<{ type: string }>;
 }
 
+/** What each policy covers, in a phrase: the default search description when the policy's own text has no usable first sentence. */
+const POLICY_SUMMARY: Record<PolicyType, string> = {
+  privacy: "how we collect, use and protect your personal data",
+  terms: "the terms for using the store and buying from it",
+  refund: "how returns, cancellations and refunds work",
+  shipping: "delivery areas, charges and timelines",
+  legal_notice: "the legal and business details of the store",
+};
+
 export async function generateMetadata({ params }: PolicyPageProps): Promise<Metadata> {
   const { type } = await params;
   if (!isValidPolicyType(type)) {
@@ -139,7 +150,7 @@ export async function generateMetadata({ params }: PolicyPageProps): Promise<Met
     const name = published?.title ?? fallback?.title ?? "Policy";
     const url = `https://${host}/policies/${type}`;
     const title = formatTitle(seoSettings?.titleTemplate, name, storeName);
-    const description = `${name} of ${storeName}.`;
+    const description = deriveMetaDescription([firstTextOfBlocks(published?.content)], `${name} for ${storeName}: ${POLICY_SUMMARY[type]}.`);
     const assets = await getCachedBrandAssets(access.tenantId).catch(() => null);
     return withShareImage(
       {

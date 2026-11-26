@@ -201,7 +201,7 @@ export async function seedDemoStore(rt: Runtime, input: SeedDemoInput): Promise<
   await createMenu(rt, ctx, {
     name: "Header",
     handle: "demo-header",
-    items: [{ label: "Shop all", url: "/products" }, { label: "About us", url: "/demo-about-us" }],
+    items: [{ label: "Shop all", url: "/products/all" }, { label: "About us", url: "/demo-about-us" }],
   });
 
   // Customers

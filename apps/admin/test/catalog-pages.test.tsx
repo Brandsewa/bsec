@@ -45,7 +45,8 @@ describe("Catalog pages render real query data", () => {
     qc.setQueryData(orpc.admin.products.list.queryOptions({ input: productsListInput(parseProductsSearch({})) }).queryKey, { items: [product], total: 1 });
     const html = await renderRouted(qc, ProductsPage);
     expect(html).toContain("Handloom Linen Kurta");
-    expect(html).toContain("handloom-linen-kurta");
+    // The list shows the product name only (no slug line) and a thumbnail slot.
+    expect(html).not.toContain(">handloom-linen-kurta<");
     for (const s of SAMPLE_TEXT) expect(html).not.toContain(s);
   });
 

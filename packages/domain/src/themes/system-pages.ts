@@ -29,7 +29,7 @@ export async function getStorefrontThemePage(
   rt: Runtime,
   ctx: TenantContext,
   key: ThemeSystemPageKey,
-): Promise<{ id: string; blocks: BlockInstance[] } | null> {
+): Promise<{ id: string; blocks: BlockInstance[]; seo: unknown } | null> {
   const def = THEME_SYSTEM_PAGES[key];
   return withTenant(rt._db.db, ctx.tenantId, async (tx) => {
     const [page] = await tx
@@ -46,7 +46,7 @@ export async function getStorefrontThemePage(
     const parsed = validateBlockDocument(ver?.document);
     // A stored document that no longer validates is treated as "no custom layout": never break the storefront.
     if (!parsed.success || parsed.data.blocks.length === 0) return null;
-    return { id: page.id, blocks: parsed.data.blocks };
+    return { id: page.id, blocks: parsed.data.blocks, seo: page.seo };
   });
 }
 

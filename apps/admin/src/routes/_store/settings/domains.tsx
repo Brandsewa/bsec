@@ -12,7 +12,7 @@ import { Field } from "@bs/ui";
 import { HeaderActions, SettingsCard, SettingsPageFrame } from "../../../components/settings/settings-page.tsx";
 import { orpc } from "../../../lib/orpc.ts";
 import { errorMessage } from "../../../lib/errors.ts";
-import { describeRouting, isApexDomain } from "../../../lib/domain-hosts.ts";
+import { describeRouting, isApexDomain, missingWwwTwins } from "../../../lib/domain-hosts.ts";
 
 export const Route = createFileRoute("/_store/settings/domains")({
   pendingComponent: () => <PageSkeleton />,
@@ -290,6 +290,17 @@ export function DomainsSettingsPage() {
           </form>
         </SettingsCard>
       )}
+
+      {domains.length > 0 && missingWwwTwins(domains.filter((d) => d.status !== "failed").map((d) => d.hostname)).length > 0 ? (
+        <div className="rounded-md border border-border bg-muted/30 p-3.5 text-sm" role="note">
+          <p className="font-medium text-foreground">Connect both versions of your address</p>
+          <p className="mt-1 text-muted-foreground">
+            {missingWwwTwins(domains.filter((d) => d.status !== "failed").map((d) => d.hostname)).map((m) => `${m.have} is connected but ${m.add} is not`).join("; ")}. Shoppers
+            type either one, and one that is not connected shows a browser error. Add the other as well, then make one of them your primary address: the other
+            one sends visitors to it automatically, so search engines see a single address.
+          </p>
+        </div>
+      ) : null}
 
       {domains.length === 0 && !isAdding ? (
         <SettingsCard>

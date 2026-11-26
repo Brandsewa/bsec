@@ -57,6 +57,8 @@ export const QUEUES = [
   { name: "domains.sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 10 } },
   // SEO: tells search engines about changed pages (IndexNow), docs/SEO-GEO-AEO-PLAN.md Phase 2
   { name: "seo.indexnow_sweep", options: { retryLimit: 3, retryBackoff: true, retryDelay: 30 } },
+  // Backup freshness check and Better Stack heartbeat (docs/BACKUP-DR-PLAN.md G4)
+  { name: "backup.check", options: { retryLimit: 1, retryBackoff: true, retryDelay: 30 } },
 ] as const;
 
 export type QueueName = (typeof QUEUES)[number]["name"];
@@ -70,6 +72,7 @@ export const QUEUE_NAMES = {
   RESERVATION_EXPIRY: "reservation.expiry",
   WEBHOOK_PROCESS: "webhook.process",
   IDEMPOTENCY_CLEANUP: "idempotency.cleanup",
+  BACKUP_CHECK: "backup.check",
   FULFILLMENT_CREATED: "fulfillment.created",
   FULFILLMENT_DELIVERED: "fulfillment.delivered",
   FULFILLMENT_RTO: "fulfillment.rto",

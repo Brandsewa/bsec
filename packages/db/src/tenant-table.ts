@@ -48,6 +48,9 @@ export interface TenantForeignKeyOptions {
  * Composite foreign key helper for references between tenant tables:
  * creates FOREIGN KEY (tenant_id, column) REFERENCES target (tenant_id, id).
  * Prevents referencing another tenant's row even if IDs match.
+ *
+ * "set null" here would clear tenant_id too, which is NOT NULL, so the parent delete fails. Write the migration by hand
+ * as ON DELETE SET NULL ("<column>") so only the reference column is cleared (see migration 0122).
  */
 export function tenantForeignKey(opts: TenantForeignKeyOptions): ForeignKeyBuilder {
   const fkConfig: {

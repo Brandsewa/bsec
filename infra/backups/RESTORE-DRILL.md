@@ -1,5 +1,7 @@
 # Backup & Restore Drill Runbook (M0 / M6 Hardening)
 
+> **Run it with the script:** `node infra/backups/drill.mjs` (newest dump from the backup bucket, needs a read-only `BACKUP_R2_*` token) or `node infra/backups/drill.mjs --file <dump>`. It does steps 4.1 to 4.7 below, prints PASS/FAIL, the measured restore time and the data-loss window, and removes the scratch container. Record the result in Super Admin > Backups and in `docs/changes/`. The steps below remain the manual path and the checks the script does not cover (secret decryption and store isolation). See `docs/BACKUP-DR-PLAN.md`.
+
 ## 1. Objectives & SLO Targets (PLAN §14, §15)
 
 - **Recovery Point Objective (RPO)**: $\le 15\text{ minutes}$ (Continuous WAL archiving) / $\le 24\text{ hours}$ (Coolify native daily pg_dump).

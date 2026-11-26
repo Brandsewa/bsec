@@ -4,11 +4,12 @@ import type { CollectionRule } from "@bs/contracts";
 import type { Runtime } from "./runtime.ts";
 import { assertPermission, type TenantContext } from "./context.ts";
 import { invalidateCache } from "./cache-invalidation.ts";
-import { cleanRichDescription, type RichDescriptionValue } from "./rich-description.ts";
+import { cleanRichDescription, normalizeProductDescription, type RichDescriptionValue } from "./rich-description.ts";
 import { publicMediaUrl } from "./media/storage.ts";
 import { assertProductQuota } from "./system/quotas.ts";
 import { clearMediaUsagesForOwner, syncMediaUsages } from "./media-services.ts";
 import { syncVariantMarketPrices } from "./markets/service.ts";
+import { recordAutoRedirect } from "./redirects/service.ts";
 
 export interface ListProductsQuery {
   search?: string | undefined;
@@ -169,8 +170,21 @@ export async function listProducts(
     const ids = rows.map((r) => r.id);
     const summary = new Map<string, { variantCount: number; priceMin: number | null; priceMax: number | null; stock: number; preorderStatus: "active" | "passed" | null }>();
     const primaryCatMap = new Map<string, { id: string; name: string }>();
+    const imageMap = new Map<string, string>();
 
     if (ids.length > 0) {
+      // Featured image = the first image in the product's media order (position 0 is the primary one).
+      const images = await tx
+        .select({ productId: schema.productMedia.productId, storageKey: schema.media.storageKey })
+        .from(schema.productMedia)
+        .innerJoin(schema.media, and(eq(schema.media.tenantId, schema.productMedia.tenantId), eq(schema.media.id, schema.productMedia.mediaId)))
+        .where(and(eq(schema.productMedia.tenantId, ctx.tenantId), inArray(schema.productMedia.productId, ids), eq(schema.media.kind, "image")))
+        .orderBy(schema.productMedia.position, schema.productMedia.createdAt);
+      for (const im of images) {
+        const url = publicMediaUrl(im.storageKey);
+        if (url && !imageMap.has(im.productId)) imageMap.set(im.productId, url);
+      }
+
       const agg = await tx
         .select({
           productId: schema.variants.productId,
@@ -254,6 +268,7 @@ export async function listProducts(
           preorderStatus: sm?.preorderStatus ?? null,
           primaryCategoryId: pCat?.id ?? null,
           primaryCategoryName: pCat?.name ?? null,
+          imageUrl: imageMap.get(r.id) ?? null,
         };
       }),
       total,
@@ -465,7 +480,7 @@ export async function createProduct(
         title: input.title,
         slug,
         status: input.status ?? "draft",
-        descriptionJson: input.descriptionJson,
+        descriptionJson: normalizeProductDescription(input.descriptionJson),
         shortDescription: input.shortDescription,
         brandId: input.brandId,
         productType: input.productType,
@@ -656,7 +671,7 @@ export async function updateProduct(
     if (input.title !== undefined) updateValues.title = input.title;
     if (input.slug !== undefined) updateValues.slug = input.slug;
     if (input.status !== undefined) updateValues.status = input.status;
-    if (input.descriptionJson !== undefined) updateValues.descriptionJson = input.descriptionJson;
+    if (input.descriptionJson !== undefined) updateValues.descriptionJson = normalizeProductDescription(input.descriptionJson);
     if (input.shortDescription !== undefined) updateValues.shortDescription = input.shortDescription;
     if (input.brandId !== undefined) updateValues.brandId = input.brandId;
     if (input.productType !== undefined) updateValues.productType = input.productType;
@@ -678,6 +693,9 @@ export async function updateProduct(
     if (!row) {
       throw new Error(`Product not found: "${input.id}"`);
     }
+
+    // A renamed address keeps working: the old one redirects to the new one (ADR-051).
+    if (existing.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/products/${existing.slug}`, `/products/${row.slug}`);
 
     // Update product_categories if primary or extra categories are passed
     if (input.primaryCategoryId !== undefined || input.extraCategoryIds !== undefined) {
@@ -1622,6 +1640,8 @@ export async function updateCategory(
 
     if (!row) throw new Error(`Category not found: "${input.id}"`);
 
+    if (existing.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/categories/${existing.slug}`, `/categories/${row.slug}`);
+
     if (input.productIds !== undefined && row.type === "manual") {
       await syncCategoryProducts(tx, ctx.tenantId, row.id, input.productIds);
     }
@@ -2069,6 +2089,7 @@ export async function updateCollection(
   const db = rt._db.db;
 
   const savedId = await withTenant(db, ctx.tenantId, async (tx) => {
+    const [before] = await tx.select({ slug: schema.collections.slug }).from(schema.collections).where(eq(schema.collections.id, input.id)).limit(1);
     const updateValues: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) updateValues.title = input.title.trim();
     if (input.slug !== undefined) updateValues.slug = input.slug.trim();
@@ -2090,6 +2111,8 @@ export async function updateCollection(
       .returning();
 
     if (!row) throw new Error(`Collection not found: "${input.id}"`);
+
+    if (before && before.slug !== row.slug) await recordAutoRedirect(tx, ctx, `/collections/${before.slug}`, `/collections/${row.slug}`);
 
     if (input.imageMediaId !== undefined) {
       await syncMediaUsages(tx, ctx, {

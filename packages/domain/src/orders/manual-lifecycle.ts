@@ -282,7 +282,8 @@ export async function getReturnableItems(
       returnableFlag: schema.products.returnable,
     })
     .from(schema.orderItems)
-    .innerJoin(schema.variants, and(eq(schema.variants.tenantId, schema.orderItems.tenantId), eq(schema.variants.id, schema.orderItems.variantId)))
+    // Left join: a line whose variant was deleted after delivery stays returnable (refund, nothing to restock).
+    .leftJoin(schema.variants, and(eq(schema.variants.tenantId, schema.orderItems.tenantId), eq(schema.variants.id, schema.orderItems.variantId)))
     .leftJoin(schema.products, and(eq(schema.products.tenantId, schema.variants.tenantId), eq(schema.products.id, schema.variants.productId)))
     .where(and(eq(schema.orderItems.tenantId, tenantId), eq(schema.orderItems.orderId, orderId)));
 
@@ -591,16 +592,18 @@ export async function actOnReturn(
         for (const { ri, oi } of lines) {
           await tx.update(schema.orderItems).set({ returnedQty: sql`${schema.orderItems.returnedQty} + ${ri.quantity}` }).where(eq(schema.orderItems.id, oi.id));
           const loc = shelf;
-          const back = input.restock !== false && ri.restock && loc !== undefined;
+          // A variant deleted after the sale (order_items.variant_id null) has no stock to go back to.
+          const variantId = oi.variantId;
+          const back = input.restock !== false && ri.restock && loc !== undefined && variantId !== null;
           await tx.update(schema.returnItems).set({ restock: back }).where(eq(schema.returnItems.id, ri.id));
-          if (back) {
+          if (back && variantId !== null) {
             await tx
               .update(schema.inventoryLevels)
               .set({ onHand: sql`${schema.inventoryLevels.onHand} + ${ri.quantity}`, updatedAt: new Date() })
-              .where(and(eq(schema.inventoryLevels.variantId, oi.variantId), eq(schema.inventoryLevels.locationId, loc.id)));
+              .where(and(eq(schema.inventoryLevels.variantId, variantId), eq(schema.inventoryLevels.locationId, loc.id)));
             await tx.insert(schema.inventoryMovements).values({
               tenantId: ctx.tenantId,
-              variantId: oi.variantId,
+              variantId,
               locationId: loc.id,
               delta: ri.quantity,
               reason: "return",
@@ -995,6 +998,7 @@ export async function abandonUnpaidOnlineOrder(
     const items = itemsBeforeDelete;
     await tx.delete(schema.cartItems).where(eq(schema.cartItems.cartId, cart.id));
     for (const i of items) {
+      if (i.variantId === null) continue; // its variant was deleted; nothing to put back in the cart
       await tx.insert(schema.cartItems).values({ tenantId, cartId: cart.id, variantId: i.variantId, quantity: i.quantity, unitPriceSnapshot: i.unitPrice });
     }
     // 'abandoned' is what the Abandoned checkouts list reads; placing the order later marks the cart recovered.

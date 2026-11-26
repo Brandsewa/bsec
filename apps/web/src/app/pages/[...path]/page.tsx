@@ -11,10 +11,13 @@ import {
   tenantTag,
   parsePageSeo,
   resolveMediaUrlById,
+  deriveMetaDescription,
+  firstTextOfBlocks,
+  decodeEntities,
 } from "@bs/domain";
 import { renderBlockDocument } from "@bs/blocks";
 import { server } from "@/server/runtime.ts";
-import { getCachedBrandAssets, getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
+import { getCachedBrandAssets, getCachedStoreName, getCachedStorefrontPageByPath } from "@/server/cached-storefront.ts";
 import { withShareImage } from "@/lib/share-image.ts";
 import { GoogleOneTapPrompt } from "@/components/account/GoogleOneTapPrompt.tsx";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer.tsx";
@@ -56,8 +59,9 @@ export async function generateMetadata({ params }: CustomPageProps): Promise<Met
       const result = await getStorefrontPageByPath(rt, tenantCtx, path);
       if (result) {
         const seo = parsePageSeo(result.page.seo);
-        const title = seo?.title || result.page.title;
-        const description = seo?.description || `Read more about ${result.page.title}.`;
+        const title = decodeEntities(seo?.title || result.page.title);
+        const storeLabel = await getCachedStoreName(access.tenantId).catch(() => "our store");
+        const description = seo?.description || deriveMetaDescription([firstTextOfBlocks(result.page.document?.blocks)], `${result.page.title}: ${storeLabel}.`);
         const canonicalUrl = `https://${host}${result.canonicalPath}`;
 
         let imageUrl: string | undefined;

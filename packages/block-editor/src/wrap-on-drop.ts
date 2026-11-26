@@ -15,6 +15,7 @@ export const WRAP_ON_DROP: ReadonlySet<BlockType> = new Set<BlockType>([
   "Reviews",
   "ReviewsMarquee",
   "FaqSection",
+  "TabsSection",
   "Gallery",
   "TrustStrip",
 ]);

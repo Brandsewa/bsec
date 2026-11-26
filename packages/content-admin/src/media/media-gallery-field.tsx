@@ -392,9 +392,11 @@ export function MediaGalleryField({
       }
     }
 
-    // Attach items
+    // Attach items. Without onAttach (nothing saved yet) the picked items are collected and handed over in one onChange:
+    // calling onChange per item with the same `value` kept only the last one.
+    const added: MediaRef[] = [];
     for (const item of selected) {
-      if (value.some((v) => v.mediaId === item.id)) {
+      if (value.some((v) => v.mediaId === item.id) || added.some((v) => v.mediaId === item.id)) {
         continue; // already attached
       }
 
@@ -413,9 +415,10 @@ export function MediaGalleryField({
           alt: item.alt,
           filename: item.filename,
         };
-        onChange?.([...value, newRef]);
+        added.push(newRef);
       }
     }
+    if (added.length > 0) onChange?.([...value, ...added]);
   };
 
   const handleRemoveItem = async (item: MediaRef) => {

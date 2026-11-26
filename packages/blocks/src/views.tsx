@@ -25,6 +25,13 @@ import { BgVideo } from "./views-bg-video-client.tsx";
 import { ShowcaseTabsPreview } from "./views-showcase-tabs-client.tsx";
 import type { LogoSize } from "./common.ts";
 import { NewsletterForm } from "./newsletter-form.tsx";
+import { elementFontHref } from "./theme-vars.ts";
+
+/** Loads the Google font an element picked in its Typography panel (a no-op for the theme font or a system font). */
+function ElementFontLink({ family }: { family: string | undefined }): ReactNode {
+  const href = elementFontHref(family);
+  return href ? <link rel="stylesheet" href={href} precedence="default" /> : null;
+}
 
 /**
  * Presentational renderers for every block. Pure: no hooks, no data fetching, no browser
@@ -108,8 +115,19 @@ function SectionHead({
   );
 }
 
+/** The store's real free-shipping amount, so an announcement bar can quote it instead of a number typed by hand. */
+const FREE_SHIPPING_TOKEN = "{{free_shipping_threshold}}";
+
 export function BannerView({ props, ctx }: A<R.BannerProps>): ReactNode {
-  const all = [{ text: props.text, link: props.link }, ...props.messages];
+  const d = ctx?.blockId ? ctx.data?.[ctx.blockId] : undefined;
+  const threshold = d && d.kind === "banner" ? d.freeShippingThresholdPaise : undefined;
+  // With data: the amount fills the token, and a message about free shipping is dropped when the store has no threshold.
+  // Without data (the editors): the token stays visible so the owner can see what will be replaced.
+  const all = [{ text: props.text, link: props.link }, ...props.messages].flatMap((m) => {
+    if (!m.text.includes(FREE_SHIPPING_TOKEN) || threshold === undefined) return [m];
+    return threshold ? [{ ...m, text: m.text.split(FREE_SHIPPING_TOKEN).join(money(threshold, ctx)) }] : [];
+  });
+  if (all.length === 0) return null;
   const rotating = props.rotate && all.length > 1;
   const style = {
     padding: "0.6rem 1rem",
@@ -191,7 +209,9 @@ export function CollectionGridView({ props, ctx }: A<R.CollectionGridProps>): Re
   );
 }
 
-export function ReviewsView({ props }: A<R.ReviewsProps>): ReactNode {
+export function ReviewsView({ props, ctx }: A<R.ReviewsProps>): ReactNode {
+  // On a product page the block is the real reviews, drawn where the block sits (move the block to move the reviews).
+  if (ctx?.renderProductReviews) return <>{ctx.renderProductReviews()}</>;
   return (
     <section className="bsb bs-block-reviews bsb-py-lg">
       <div className="bsb-w bsb-w-default">
@@ -348,7 +368,7 @@ export function SectionView({ props, children, ctx }: A<R.SectionProps>): ReactN
           position: "relative",
           zIndex: 1,
           width: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -439,7 +459,7 @@ export function ContainerView({ props, children, ctx }: A<R.ContainerProps>): Re
           zIndex: 1,
           width: "100%",
           height: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -538,7 +558,7 @@ export function BlockView({ props, children, ctx }: A<R.BlockProps>): ReactNode 
           zIndex: 1,
           width: "100%",
           height: "100%",
-          display: "flex",
+          display: "inherit",
           flexDirection: (props.direction ? `var(--b-dir, ${props.direction})` : "var(--b-dir, column)") as CSSProperties["flexDirection"],
           ...slotBasisVars(props),
           alignItems: (props.alignCrossAxis ? `var(--b-ai, ${props.alignCrossAxis})` : "var(--b-ai, stretch)") as CSSProperties["alignItems"],
@@ -587,6 +607,9 @@ export function HeadingView({ props }: A<R.HeadingProps>): ReactNode {
       className={cx("bsb brxe-heading brx-resp", `bsb-align-${props.align}`)}
       style={customStyle}
     >
+      <ElementFontLink family={props.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.tablet?.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.mobile?.typography?.fontFamily} />
       {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );
@@ -619,6 +642,9 @@ export function TextView({ props }: A<R.TextProps>): ReactNode {
       className={cx("bsb brxe-text-basic brx-resp", `bsb-align-${props.align}`, props.muted && "bsb-muted")}
       style={customStyle}
     >
+      <ElementFontLink family={props.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.tablet?.typography?.fontFamily} />
+      <ElementFontLink family={props.responsive?.mobile?.typography?.fontFamily} />
       {props.link ? <a href={props.link} style={{ color: "inherit", textDecoration: "none" }}>{content}</a> : content}
     </div>
   );

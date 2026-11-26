@@ -116,7 +116,7 @@ export function GalleryViewer({ images, children, initialOpen = null }: { images
                   className={`h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 sm:h-16 sm:w-16 ${i === open ? "border-white" : "border-transparent opacity-60 hover:opacity-100"}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={im.thumb} alt="" className="h-full w-full object-cover" />
+                  <img src={im.thumb} alt={im.alt || `Image ${i + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>

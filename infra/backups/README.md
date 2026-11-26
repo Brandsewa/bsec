@@ -1,5 +1,7 @@
 # Backups and restore drill (pgBackRest → R2)
 
+**Update 2026-11-24:** the pgBackRest image, config and a restore rehearsal are built; the procedure and cutover steps are in [`PGBACKREST.md`](PGBACKREST.md). The text below is the original draft: where it disagrees with `PGBACKREST.md` (bucket name, no bucket lock on the pgBackRest bucket, config baked into the image), `PGBACKREST.md` wins.
+
 **Superseded for now.** What's actually running in production is Coolify's native scheduled `pg_dump`, with Cloudflare R2 as an offsite S3 destination attached directly in the Coolify UI — see `infra/coolify/RUNBOOK.md` §8 for the real, verified setup (bucket `bsec-backups`, daily dump, both local and R2 copies confirmed). It gives RPO ≤ 24h, not the ≤15min this doc targets. This pgBackRest + continuous WAL archiving design below is the eventual upgrade path once point-in-time recovery actually matters (real order data) — revisit then.
 
 Targets (PLAN §14): **RPO ≤ 15 min**, **RTO ≤ 2 h**. A backup counts as valid only after a restore test. Status: **draft, not yet executed** (needs the production VPS and an R2 bucket).
@@ -8,7 +10,7 @@ Targets (PLAN §14): **RPO ≤ 15 min**, **RTO ≤ 2 h**. A backup counts as val
 - Repository: Cloudflare R2 bucket `bsec-pgbackrest-<env>` (S3 API), encrypted with `repo1-cipher-type=aes-256-cbc`.
 - Schedule: full weekly (Sun 02:30 IST), differential daily (02:30 IST), WAL archived continuously with `archive_timeout=60`.
 - Retention: 30 days (`repo1-retention-full-type=time`, `repo1-retention-full=30`).
-- Media: R2 bucket versioning on. Coolify config, env templates, migration state and image tags exported with each release.
+- Media: R2 does not offer S3-style object versioning (verify in the dashboard); protect `bsec-media` with a bucket lock and the weekly second-copy job instead (docs/BACKUP-DR-PLAN.md G6). Coolify config, env templates, migration state and image tags exported with each release.
 
 ## pgBackRest config (`/etc/pgbackrest/pgbackrest.conf` inside a sidecar that shares the PG data volume)
 See `pgbackrest.conf` in this folder. Secrets come from env (`PGBACKREST_REPO1_S3_KEY`, `PGBACKREST_REPO1_S3_KEY_SECRET`, `PGBACKREST_REPO1_CIPHER_PASS`).

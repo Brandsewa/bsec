@@ -224,3 +224,54 @@ export const platformBrandingVersions = pgTable("platform_branding_versions", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+/**
+ * Backup monitoring policy (single row, id = 'default'). Alert thresholds and drill cadence only: it never changes how
+ * backups are taken (that lives in Coolify and Postgres, docs/BACKUP-DR-PLAN.md G10). Platform-level, no RLS.
+ */
+export const platformBackupSettings = pgTable("platform_backup_settings", {
+  id: text("id").primaryKey().default("default"),
+  /** Newest daily dump older than this raises an alert. Daily schedule plus margin. */
+  dumpMaxAgeHours: integer("dump_max_age_hours").notNull().default(26),
+  /** Newest archived WAL older than this raises an alert, only once walArchivingExpected is on. */
+  walMaxLagMinutes: integer("wal_max_lag_minutes").notNull().default(10),
+  /** A passing restore drill must be newer than this. */
+  drillEveryDays: integer("drill_every_days").notNull().default(35),
+  /** Turn on once pgBackRest WAL archiving is live, so a quiet archiver becomes an alert. */
+  walArchivingExpected: boolean("wal_archiving_expected").notNull().default(false),
+  /** Where alerts are sent (the admin address). */
+  alertEmails: text("alert_emails").array().notNull().default(sql`'{}'::text[]`),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/** One row per check run by the worker (dump freshness, WAL archiver, drill age). Pruned after 14 days. Platform-level. */
+export const platformBackupChecks = pgTable(
+  "platform_backup_checks",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    kind: text("kind").notNull(),
+    ok: boolean("ok").notNull(),
+    detail: jsonb("detail").notNull().default(sql`'{}'::jsonb`),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [index("platform_backup_checks_kind_checked_idx").on(t.kind, t.checkedAt)],
+);
+
+/** Restore drill log: the proof that a backup can be restored. Platform-level. */
+export const platformRestoreDrills = pgTable(
+  "platform_restore_drills",
+  {
+    id: uuid("id").primaryKey().default(sql`uuidv7()`),
+    /** dump | pitr | tenant | rebuild */
+    kind: text("kind").notNull(),
+    result: text("result").notNull(),
+    drilledAt: timestamp("drilled_at", { withTimezone: true }).notNull(),
+    rtoSeconds: integer("rto_seconds"),
+    rpoSeconds: integer("rpo_seconds"),
+    notes: text("notes"),
+    recordedBy: uuid("recorded_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => [index("platform_restore_drills_drilled_idx").on(t.drilledAt)],
+);

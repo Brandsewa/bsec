@@ -40,6 +40,8 @@ export type BlockType =
   | "ImageBanner"
   // FAQ accordion with heading and description, split or stacked layout, card or plain look, icon on either side
   | "FaqSection"
+  // Tabs with rich-text bodies; a row of titles, or an accordion on phones
+  | "TabsSection"
   // Collection grid with a movable heading, a button link, wrapping rows and a carousel option for tablets and phones
   | "CollectionShowcase"
   // Cards with icon or picture, heading, text and link: a grid, or a slider on tablets and phones
@@ -158,6 +160,7 @@ export type BlockData =
   | { kind: "menu"; items: ResolvedMenuItem[] }
   | { kind: "plans"; plans: Array<{ code: string; name: string; priceMonthlyPaise: number; priceYearlyPaise: number; tagline: string | null; badge: string | null; bullets: string[] }> }
   | { kind: "footer-menus"; columns: Array<ResolvedMenuItem[] | null> }
+  | { kind: "banner"; freeShippingThresholdPaise: number | null }
   | { kind: "file"; filename: string; mime: string; bytes: number; url?: string | undefined };
 
 export interface RenderMediaDetail {
@@ -212,6 +215,10 @@ export interface RenderContext {
   /** The live contact form (posts to the store); the editor draws a static sample. */
   renderContactForm?: ((opts: ContactFormOptions) => ReactNode) | undefined;
   renderProductCoupons?: ((opts: ProductCouponsOptions) => ReactNode) | undefined;
+  /** The live reviews of the product being viewed. The product page supplies it so the theme's "Reviews" block can sit anywhere. */
+  renderProductReviews?: (() => ReactNode) | undefined;
+  /** One custom field value of the product being viewed, without any wrapper or padding (null: the product has none). The Tabs block uses it for `{{field:key}}`. */
+  renderCustomFieldValue?: ((fieldKey: string) => ReactNode) | undefined;
   renderCollectionListing?: ((opts: CollectionListingOptions) => ReactNode) | undefined;
   /** The real blog archive / single post (drawn by the storefront from the request's data); the editor draws labelled samples instead. */
   renderBlogListing?: ((opts: BlogListingOptions) => ReactNode) | undefined;

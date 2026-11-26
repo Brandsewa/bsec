@@ -6,6 +6,7 @@ import { layoutStyle } from "./layout.ts";
 import { responsiveImgAttrs } from "./media-image.ts";
 import { SvgIcon } from "./svg-icon.tsx";
 import type * as R from "./registry.ts";
+import { parseMarkdownToHtml } from "./markdown.ts";
 
 /**
  * Multi card: a section of cards (icon or picture, heading, text, link). Desktop is always a grid; tablets and phones
@@ -123,7 +124,7 @@ export function MultiCardView({ props, ctx }: A<R.MultiCardProps>): ReactNode {
           ) : null}
           <div className="bsb-mc-main">
             {props.showHeading && it.heading ? <h3 className="bsb-mc-title">{it.heading}</h3> : null}
-            {props.showText && it.text ? <p className="bsb-mc-text">{it.text}</p> : null}
+            {props.showText && it.text ? <div className="bsb-mc-text" dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(it.text) }} /> : null}
             {props.showLink && it.linkLabel && it.linkHref ? (
               <a className={cx("bsb-mc-link", props.linkStyle === "button" && "bsb-btn bsb-btn-primary bsb-btn-sm")} href={it.linkHref}>
                 {it.linkLabel}

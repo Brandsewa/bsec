@@ -16,6 +16,13 @@ export interface RolePasswords {
   saas?: string | undefined;
 }
 
+/** Start permissive and tighten from logs. The platform role runs reports, so it gets more room. */
+export const ROLE_TIMEOUTS: Record<string, { statement: string; idleInTransaction: string; lock: string }> = {
+  app_rw: { statement: "30s", idleInTransaction: "30s", lock: "5s" },
+  app_saas: { statement: "30s", idleInTransaction: "30s", lock: "5s" },
+  app_platform: { statement: "1min", idleInTransaction: "1min", lock: "5s" },
+};
+
 const lit = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
 function upsertRole(name: string, password: string, attrs: string): string {
@@ -43,6 +50,16 @@ export function rolesSql(database: string, pw: RolePasswords): string {
     ...(pw.saas
       ? [`GRANT CONNECT ON DATABASE ${db} TO app_saas;`, `GRANT app_rw TO app_saas;`, `GRANT USAGE ON SCHEMA public TO app_saas;`]
       : []),
+    // Per-role timeouts (docs/BACKUP-DR-PLAN.md G8): one runaway query or an idle open transaction must not stall every
+    // store (outage 2026-11-02). Roles do not inherit these from each other, so app_saas repeats app_rw's. app_owner is
+    // left alone: migrations manage their own lock_timeout. Long jobs opt out with SET LOCAL statement_timeout.
+    ...Object.entries(ROLE_TIMEOUTS)
+      .filter(([role]) => role !== "app_saas" || pw.saas)
+      .flatMap(([role, t]) => [
+        `ALTER ROLE ${role} SET statement_timeout = '${t.statement}';`,
+        `ALTER ROLE ${role} SET idle_in_transaction_session_timeout = '${t.idleInTransaction}';`,
+        `ALTER ROLE ${role} SET lock_timeout = '${t.lock}';`,
+      ]),
     `ALTER SCHEMA public OWNER TO app_owner;`,
     `REVOKE CREATE ON SCHEMA public FROM PUBLIC;`,
     `GRANT USAGE ON SCHEMA public TO app_rw, app_platform;`,

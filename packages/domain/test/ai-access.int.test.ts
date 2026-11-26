@@ -4,7 +4,7 @@
  * the platform-scoped token tables.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
@@ -21,9 +21,11 @@ import {
   exchangeAuthorizationCode,
   getAiSettings,
   listAiConnections,
+  mcpResourceUrl,
   provisionTenant,
   registerOAuthClient,
   revokeAiConnection,
+  resolveAiQuota,
   rotateRefreshToken,
   updateAiSettings,
   type Runtime,
@@ -197,6 +199,30 @@ describe("OAuth connect flow", () => {
     expect(list.find((x) => x.id && x.clientName === "Claude" && x.status === "active")).toBeDefined(); // other connections are untouched
   });
 
+  it("connects Google Antigravity through its client metadata document (CIMD), PKCE and the resource parameter", async () => {
+    const db = rtWeb._db.db;
+    const clientId = "https://antigravity.google/oauth/client-metadata.json";
+    const callback = "https://antigravity.google/oauth-callback";
+    // The document Antigravity publishes (fetched 2026-11-26); stubbed so the test needs no network.
+    const doc = { client_id: clientId, client_name: "Google Antigravity", client_uri: "https://antigravity.google", redirect_uris: [callback], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url === clientId ? new Response(JSON.stringify(doc), { status: 200 }) : new Response("no", { status: 404 }))));
+    try {
+      const { verifier, challenge } = pkce();
+      const resource = mcpResourceUrl(BASE);
+      const { requestId } = await createAuthorizationRequest(db, BASE, { responseType: "code", clientId, redirectUri: callback, codeChallenge: challenge, codeChallengeMethod: "S256", state: "s1", scope: undefined, resource });
+      const { redirectTo } = await approveAuthorizationRequest(rtWeb, ctxA, requestId);
+      expect(redirectTo.startsWith(`${callback}?`)).toBe(true);
+      const tokens = await exchangeAuthorizationCode(db, BASE, { code: new URL(redirectTo).searchParams.get("code")!, clientId, redirectUri: callback, codeVerifier: verifier, resource });
+      const session = await authenticateAgent(rtWeb, tokens.access_token, "r-ag");
+      expect(session.ctx.tenantId).toBe(a.tenantId);
+      expect(session.connection.clientName).toBe("Google Antigravity");
+      // Another redirect address under the same client is refused.
+      await expect(createAuthorizationRequest(db, BASE, { responseType: "code", clientId, redirectUri: "https://antigravity.google/elsewhere", codeChallenge: challenge, codeChallengeMethod: "S256", state: undefined, scope: undefined, resource })).rejects.toThrow(/redirect_uri/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("a refresh token cannot be used by a different app", async () => {
     const { tokens } = await connect(ctxA);
     await expect(rotateRefreshToken(rtWeb._db.db, tokens.refresh_token, "bsc_someone_else")).rejects.toThrow(/different app/);
@@ -281,11 +307,36 @@ describe("usage limits", () => {
     await rtPlatform._db.db.execute(sql`DELETE FROM tenant_quota_overrides WHERE tenant_id = ${a.tenantId} AND quota_key = 'ai_calls_min_conn'`);
   });
 
+  it("an entitled store is never limited to zero because its size tier is missing or still XS or S", async () => {
+    const { tokens } = await connect(ctxA);
+    const s = await authenticateAgent(rtWeb, tokens.access_token, "r");
+    const db = rtWeb._db.db;
+    for (const tier of ["XS", "S", null] as const) {
+      if (tier) await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${a.tenantId}, ${tier}) ON CONFLICT (tenant_id) DO UPDATE SET tier = ${tier}`);
+      else await rtPlatform._db.db.execute(sql`DELETE FROM tenant_size_tiers WHERE tenant_id = ${a.tenantId}`);
+      expect(await resolveAiQuota(db, a.tenantId, "ai_calls_min_conn"), String(tier)).toBe(60); // the Growth plan maps to tier M
+      expect(await resolveAiQuota(db, a.tenantId, "ai_calls_day_store"), String(tier)).toBe(3000);
+      await rtPlatform._db.db.execute(sql`DELETE FROM rate_limit_counters WHERE key LIKE ${`ai:%${a.tenantId}%`} OR key LIKE ${`ai:c:${s.connection.id}%`}`);
+      await enforceAgentLimits(db, s, "read"); // does not throw
+    }
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${a.tenantId}, 'M') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'M'`);
+  });
+
+  it("a Pro store resolves to the larger limits even when its tier row is stale", async () => {
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${b.tenantId}, 'S') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'S'`);
+    await rtPlatform._db.db.execute(sql`UPDATE subscriptions SET plan_id = (SELECT id FROM plans WHERE code = 'pro') WHERE tenant_id = ${b.tenantId}`);
+    expect(await resolveAiQuota(rtWeb._db.db, b.tenantId, "ai_calls_day_store")).toBe(15000);
+    await rtPlatform._db.db.execute(sql`UPDATE subscriptions SET plan_id = (SELECT id FROM plans WHERE code = 'growth') WHERE tenant_id = ${b.tenantId}`);
+    await rtPlatform._db.db.execute(sql`INSERT INTO tenant_size_tiers (tenant_id, tier) VALUES (${b.tenantId}, 'M') ON CONFLICT (tenant_id) DO UPDATE SET tier = 'M'`);
+  });
+
   it("a quota of zero blocks the call outright (not entitled)", async () => {
     const { tokens } = await connect(ctxA);
     const s = await authenticateAgent(rtWeb, tokens.access_token, "r");
     await rtPlatform._db.db.execute(sql`INSERT INTO tenant_quota_overrides (tenant_id, quota_key, value) VALUES (${a.tenantId}, 'ai_calls_day_store', 0) ON CONFLICT (tenant_id, quota_key) DO UPDATE SET value = 0`);
-    await expect(enforceAgentLimits(rtWeb._db.db, s, "read")).rejects.toBeInstanceOf(AgentRateLimitError);
+    const err = await enforceAgentLimits(rtWeb._db.db, s, "read").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentRateLimitError);
+    expect((err as AgentRateLimitError).message).toMatch(/paused for this store/); // plain words, not "sending requests too fast"
     await rtPlatform._db.db.execute(sql`DELETE FROM tenant_quota_overrides WHERE tenant_id = ${a.tenantId} AND quota_key = 'ai_calls_day_store'`);
   });
 });

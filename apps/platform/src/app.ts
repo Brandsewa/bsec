@@ -168,6 +168,9 @@ import {
   writePlatformAudit,
   verifyExportSignature,
   getPlatformSystemData,
+  getBackupOverview,
+  updateBackupSettings,
+  recordRestoreDrill,
   updatePlatformSettings,
   getLoginPanelForStaff,
   updateLoginPanel,
@@ -559,6 +562,11 @@ export const platformRouter = os.router({
       const staffUserId = actor(context);
       return retryFailedWebhook(context.rt, staffUserId, input.webhookId, context.meta);
     }),
+  },
+  backups: {
+    overview: os.backups.overview.use(requirePlatformStaff).handler(({ context }) => getBackupOverview(context.rt, actor(context))),
+    updateSettings: os.backups.updateSettings.use(requireStaff("platform_admin")).handler(({ context, input }) => updateBackupSettings(context.rt, actor(context), input, context.meta)),
+    recordDrill: os.backups.recordDrill.use(requireStaff("platform_admin")).handler(({ context, input }) => recordRestoreDrill(context.rt, actor(context), { ...input, drilledAt: new Date(input.drilledAt) }, context.meta)),
   },
   overview: {
     get: os.overview.get.use(requirePlatformStaff).handler(async ({ context }) => {

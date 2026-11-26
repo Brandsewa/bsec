@@ -3,20 +3,21 @@ import { AlertTriangle, Archive, ArrowLeft, Eye, Save, Trash2 } from "lucide-rea
 import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ProductDetail } from "@bs/contracts";
+import type { ProductDetail, RichDescription } from "@bs/contracts";
+import { initialProductDescription } from "../../../lib/product-description.ts";
+import { richBlocksToText } from "@bs/contracts/rich-text";
 import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel } from "@bs/ui";
 import { Input } from "@bs/ui";
 import { Switch } from "@bs/ui";
-import { Textarea } from "@bs/ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@bs/ui";
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { VariantBuilderCard } from "../../../components/product/variant-builder.tsx";
 import { CustomFieldsCard } from "../../../components/product/custom-fields-card.tsx";
 import { CopyableId, SimpleSelect } from "@bs/ui";
 import { formatProductId } from "@bs/contracts";
-import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
+import { DescriptionCard, OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
 import { storefrontLink, useStorefrontUrl } from "../../../lib/storefront-url.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
 import { MediaGalleryField } from "@bs/content-admin/media/media-gallery-field.tsx";
@@ -37,14 +38,6 @@ function ProductDetailRoute() {
   return <ProductDetailPage id={id} navigate={(to) => void navigate({ to })} />;
 }
 
-
-function descriptionText(json: unknown): string {
-  if (typeof json === "string") return json;
-  if (json && typeof json === "object" && "text" in json && typeof (json as { text: unknown }).text === "string") {
-    return (json as { text: string }).text;
-  }
-  return "";
-}
 
 export function ProductDetailPage({ id, navigate }: { id: string; navigate?: (to: string) => void }) {
   const go = navigate ?? (() => undefined);
@@ -102,7 +95,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
   const [slug, setSlug] = useState(product.slug);
   const [status, setStatus] = useState<"draft" | "active" | "unlisted" | "archived">(product.status);
   const [shortDescription, setShortDescription] = useState(product.shortDescription ?? "");
-  const [description, setDescription] = useState(descriptionText(product.descriptionJson));
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(() => initialProductDescription(product.descriptionJson));
   const [tags, setTags] = useState(product.tags.join(", "));
   const [requiresShipping, setRequiresShipping] = useState(product.requiresShipping);
   const [priceOnRequest, setPriceOnRequest] = useState(Boolean(product.priceOnRequest));
@@ -212,7 +205,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
       slug: slug.trim(),
       status: finalStatus,
       shortDescription: shortDescription.trim(),
-      descriptionJson: { type: "text", text: description.trim() },
+      descriptionJson,
       tags: tags
         .split(",")
         .map((s) => s.trim())
@@ -324,7 +317,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">General Information</CardTitle>
-              <CardDescription>Title, handle, and product descriptions.</CardDescription>
+              <CardDescription>Title, handle, short description and tags.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-1.5">
@@ -356,17 +349,6 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                   value={shortDescription}
                   onChange={(e) => setShortDescription(e.target.value)}
                   placeholder="Brief summary used in cards and search engine snippets..."
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <FieldLabel htmlFor="edit-desc">Description</FieldLabel>
-                <Textarea
-                  id="edit-desc"
-                  rows={6}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detailed product story, specifications, and care instructions..."
                 />
               </div>
 
@@ -404,10 +386,12 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           {/* Custom fields (ADR-034) */}
           <CustomFieldsCard resourceType="product" resourceId={product.id} />
 
+          <DescriptionCard id="edit-desc" value={descriptionJson} onChange={setDescriptionJson} />
+
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
             defaultTitle={title || product.title}
-            defaultDescription={shortDescription || description.slice(0, 160)}
+            defaultDescription={shortDescription || richBlocksToText(descriptionJson?.blocks ?? []).replace(/\s+/g, " ").slice(0, 160)}
             pathPrefix="/products"
             slug={slug}
             title={seoTitle}

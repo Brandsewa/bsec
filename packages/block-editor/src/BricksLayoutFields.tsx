@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type CSSProperties, type MouseEvent } from "react";
 import type { CustomField, Field } from "@puckeditor/core";
 import { AutoField, FieldLabel, usePuck } from "@puckeditor/core";
 import { useHost, useRenderData } from "./context.tsx";
@@ -11,6 +11,8 @@ import {
   useBricksActiveDevice,
 } from "./BricksTabs.tsx";
 import { ColorPickerSwatch } from "./ColorPickerSwatch.tsx";
+import { THEME_FONTS, elementFontValue, parseMarkdownToHtml } from "@bs/blocks";
+import { CustomFieldButton } from "./CustomFieldPicker.tsx";
 
 // =============================================================================
 // BRICKS BUILDER ORIGINAL SVG ICONS
@@ -418,7 +420,7 @@ function BackgroundControl({
   const activeImageSrc = (v.imageUrl as string) || (v.mediaId ? media[v.mediaId as string] : null);
 
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10 }}>
       {/* Background Color */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Color</span>
@@ -442,7 +444,7 @@ function BackgroundControl({
       </div>
 
       {/* Background Image with Media Library Button */}
-      <div style={{ display: "grid", gap: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 4 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 12, color: "#27272a", fontWeight: 500 }}>Image</span>
           {host?.pickMedia ? (
@@ -468,7 +470,7 @@ function BackgroundControl({
         {activeImageSrc ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 4, border: "1px solid #e4e4e7", borderRadius: 6, background: "#fafafa" }}>
             <img src={activeImageSrc} alt="" style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 4 }} />
-            <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#71717a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#71717a", overflowWrap: "anywhere", wordBreak: "break-all" }}>
               {v.mediaId ? `ID: ${v.mediaId}` : activeImageSrc}
             </div>
             <button
@@ -477,7 +479,7 @@ function BackgroundControl({
                 set("mediaId", undefined);
                 set("imageUrl", undefined);
               }}
-              style={{ border: 0, background: "none", color: "#dc2626", fontSize: 11, cursor: "pointer" }}
+              style={{ border: 0, background: "none", color: "#dc2626", fontSize: 11, cursor: "pointer", flexShrink: 0 }}
             >
               Remove
             </button>
@@ -1081,15 +1083,15 @@ function TypographyControl({
           style={{ width: "100%", padding: "5px 8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, background: "#fff" }}
         >
           <option value="">Default (Theme font)</option>
-          <option value="Inter, sans-serif">Inter</option>
-          <option value="Roboto, sans-serif">Roboto</option>
-          <option value="Poppins, sans-serif">Poppins</option>
-          <option value="Montserrat, sans-serif">Montserrat</option>
-          <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
-          <option value="'Playfair Display', serif">Playfair Display (Serif)</option>
-          <option value="Merriweather, serif">Merriweather (Serif)</option>
+          {THEME_FONTS.map((name) => (
+            <option key={name} value={elementFontValue(name)}>{name}</option>
+          ))}
           <option value="system-ui, -apple-system, sans-serif">System Sans</option>
           <option value="monospace">Monospace</option>
+          {/* A value saved before the list was curated stays selectable instead of silently showing as the default. */}
+          {v.fontFamily && !THEME_FONTS.some((n) => elementFontValue(n) === v.fontFamily) && v.fontFamily !== "system-ui, -apple-system, sans-serif" && v.fontFamily !== "monospace" ? (
+            <option value={v.fontFamily as string}>{(v.fontFamily as string).split(",")[0]?.replace(/['"]/g, "")} (not loaded)</option>
+          ) : null}
         </select>
       </div>
 
@@ -1187,114 +1189,147 @@ function MarkdownTextControl({
   value,
   onChange,
   label,
+  preview = true,
+  customFields = false,
 }: {
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   label: string;
+  /** A small rendered copy under the box (the canvas already shows the result, so tight panels turn it off). */
+  preview?: boolean | undefined;
+  /** A button that inserts a product custom field (`{{field:key}}`) at the cursor. */
+  customFields?: boolean | undefined;
 }) {
-  const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const text = value || "";
 
-  const insertFormat = (type: "bold" | "italic" | "link" | "ul" | "ol") => {
-    const current = value || "";
-    const start = selection.start;
-    const end = selection.end;
-    const selected = current.slice(start, end);
-
-    let replacement = "";
-    if (type === "bold") {
-      replacement = selected ? `**${selected}**` : `**bold text**`;
-    } else if (type === "italic") {
-      replacement = selected ? `*${selected}*` : `*italic text*`;
-    } else if (type === "link") {
-      replacement = selected ? `[${selected}](https://...)` : `[link text](https://...)`;
-    } else if (type === "ul") {
-      replacement = selected
-        ? selected
-            .split("\n")
-            .map((l) => (l.startsWith("- ") ? l : `- ${l}`))
-            .join("\n")
-        : `\n- Item 1\n- Item 2\n`;
-    } else if (type === "ol") {
-      replacement = selected
-        ? selected
-            .split("\n")
-            .map((l, i) => (/^\d+\.\s+/.test(l) ? l : `${i + 1}. ${l}`))
-            .join("\n")
-        : `\n1. Item 1\n2. Item 2\n`;
-    }
-
-    const next = current.slice(0, start) + replacement + current.slice(end);
+  /** Apply an edit and put the selection back after React re-renders the controlled textarea. */
+  const commit = (next: string, selStart: number, selEnd: number) => {
     onChange(next);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(selStart, selEnd);
+    });
+  };
+  const sel = () => {
+    const el = ref.current;
+    return { start: el?.selectionStart ?? text.length, end: el?.selectionEnd ?? text.length };
   };
 
+  /** Bold (`**`) and italic (`*`) toggle: a second click removes the marks instead of stacking more asterisks. */
+  const toggleInline = (marker: "**" | "*") => {
+    const { start, end } = sel();
+    const m = marker.length;
+    const selected = text.slice(start, end);
+    // The marks may be just outside the selection, or inside it (the whole `**word**` selected).
+    let before = 0;
+    while (text[start - 1 - before] === "*") before++;
+    let after = 0;
+    while (text[end + after] === "*") after++;
+    const outside = marker === "**" ? Math.min(before, after) >= 2 : Math.min(before, after) % 2 === 1;
+    if (outside) {
+      commit(text.slice(0, start - m) + selected + text.slice(end + m), start - m, end - m);
+      return;
+    }
+    if (selected.length > m * 2 && selected.startsWith(marker) && selected.endsWith(marker) && (marker === "**" || !selected.startsWith("**"))) {
+      const inner = selected.slice(m, selected.length - m);
+      commit(text.slice(0, start) + inner + text.slice(end), start, start + inner.length);
+      return;
+    }
+    if (!selected) {
+      const placeholder = marker === "**" ? "bold text" : "italic text";
+      commit(text.slice(0, start) + marker + placeholder + marker + text.slice(end), start + m, start + m + placeholder.length);
+      return;
+    }
+    commit(text.slice(0, start) + marker + selected + marker + text.slice(end), start + m, end + m);
+  };
+
+  /** Puts `{{field:key}}` on its own line at the cursor, so the stored value is pulled in when the page is drawn. */
+  const insertField = (key: string) => {
+    const el = ref.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const lead = before && !before.endsWith("\n") ? "\n\n" : before ? "\n" : "";
+    const trail = after && !after.startsWith("\n") ? "\n\n" : after ? "\n" : "";
+    const token = `{{field:${key}}}`;
+    const next = before + lead + token + trail + after;
+    const caret = (before + lead + token).length;
+    commit(next, caret, caret);
+  };
+
+  const insertLink = () => {
+    const { start, end } = sel();
+    const selected = text.slice(start, end) || "link text";
+    const out = `[${selected}](https://...)`;
+    commit(text.slice(0, start) + out + text.slice(end), start + selected.length + 3, start + out.length - 1);
+  };
+
+  /** Lists work on whole lines: every selected line gets the prefix, or loses it when they all have it already. */
+  const toggleList = (kind: "ul" | "ol") => {
+    const { start, end } = sel();
+    const from = text.lastIndexOf("\n", start - 1) + 1;
+    const nl = text.indexOf("\n", end);
+    const to = nl === -1 ? text.length : nl;
+    const lines = text.slice(from, to).split("\n");
+    const re = kind === "ul" ? /^\s*[-*]\s+/ : /^\s*\d+\.\s+/;
+    const allHave = lines.every((l) => l.trim() === "" || re.test(l));
+    const next = lines.map((l, i) => (allHave ? l.replace(re, "") : re.test(l) ? l : kind === "ul" ? `- ${l}` : `${i + 1}. ${l}`)).join("\n");
+    commit(text.slice(0, from) + next + text.slice(to), from, from + next.length);
+  };
+
+  const tool = (extra: CSSProperties = {}): CSSProperties => ({
+    padding: "1px 6px",
+    fontSize: 11,
+    border: 0,
+    background: "transparent",
+    cursor: "pointer",
+    borderRadius: 3,
+    color: "#18181b",
+    ...extra,
+  });
+  // mousedown would move focus off the textarea and lose the selection before the click handler reads it.
+  const keepFocus = (e: MouseEvent) => e.preventDefault();
+
   return (
-    <div style={{ display: "grid", gap: 4 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 4 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#18181b" }}>{label}</span>
-        {/* Formatting Toolbar */}
         <div style={{ display: "inline-flex", gap: 2, background: "#f4f4f5", padding: "2px 4px", borderRadius: 4, border: "1px solid #e4e4e7" }}>
-          <button
-            type="button"
-            title="Bold (**text**)"
-            onClick={() => insertFormat("bold")}
-            style={{ padding: "1px 6px", fontSize: 11, fontWeight: 700, border: 0, background: "transparent", cursor: "pointer", borderRadius: 3, color: "#18181b" }}
-          >
-            B
-          </button>
-          <button
-            type="button"
-            title="Italic (*text*)"
-            onClick={() => insertFormat("italic")}
-            style={{ padding: "1px 6px", fontSize: 11, fontStyle: "italic", fontWeight: 600, border: 0, background: "transparent", cursor: "pointer", borderRadius: 3, color: "#18181b" }}
-          >
-            I
-          </button>
-          <button
-            type="button"
-            title="Link ([text](url))"
-            onClick={() => insertFormat("link")}
-            style={{ padding: "1px 5px", fontSize: 11, border: 0, background: "transparent", cursor: "pointer", borderRadius: 3, color: "#18181b" }}
-          >
-            🔗
-          </button>
-          <button
-            type="button"
-            title="Bullet list (- item)"
-            onClick={() => insertFormat("ul")}
-            style={{ padding: "1px 5px", fontSize: 11, border: 0, background: "transparent", cursor: "pointer", borderRadius: 3, color: "#18181b" }}
-          >
-            • List
-          </button>
-          <button
-            type="button"
-            title="Numbered list (1. item)"
-            onClick={() => insertFormat("ol")}
-            style={{ padding: "1px 5px", fontSize: 11, border: 0, background: "transparent", cursor: "pointer", borderRadius: 3, color: "#18181b" }}
-          >
-            1. List
-          </button>
+          <button type="button" title="Bold" onMouseDown={keepFocus} onClick={() => toggleInline("**")} style={tool({ fontWeight: 700 })}>B</button>
+          <button type="button" title="Italic" onMouseDown={keepFocus} onClick={() => toggleInline("*")} style={tool({ fontStyle: "italic", fontWeight: 600 })}>I</button>
+          <button type="button" title="Link" onMouseDown={keepFocus} onClick={insertLink} style={tool()}>Link</button>
+          <button type="button" title="Bullet list" onMouseDown={keepFocus} onClick={() => toggleList("ul")} style={tool()}>• List</button>
+          <button type="button" title="Numbered list" onMouseDown={keepFocus} onClick={() => toggleList("ol")} style={tool()}>1. List</button>
+          {customFields ? <CustomFieldButton onPick={insertField} style={tool({ borderLeft: "1px solid #d4d4d8", marginLeft: 2, paddingLeft: 8 })} /> : null}
         </div>
       </div>
       <textarea
+        ref={ref}
         rows={5}
-        value={value || ""}
+        value={text}
         onChange={(e) => onChange(e.target.value)}
-        onSelect={(e) => {
-          const target = e.target as HTMLTextAreaElement;
-          setSelection({ start: target.selectionStart, end: target.selectionEnd });
-        }}
-        placeholder="Write text with formatting (supports **bold**, *italic*, [link](url), and lists)"
+        placeholder="Write text. Enter makes a new line, a blank line a new paragraph."
         style={{ width: "100%", padding: "8px", fontSize: 12, border: "1px solid #e4e4e7", borderRadius: 6, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.4 }}
       />
+      {preview && text.trim() ? (
+        <div style={{ border: "1px dashed #d4d4d8", borderRadius: 6, padding: "6px 8px", background: "#fafafa", minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: "#71717a", marginBottom: 2 }}>Preview</div>
+          <div className="brxe-text-basic" style={{ fontSize: 13, overflowWrap: "anywhere" }} dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(text) }} />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // Textarea Field with Markdown Formatting Toolbar (Bold, Italic, Link, Bullet List, Numbered List)
-export const markdownTextField = (label: string): CustomField<string | undefined> => ({
+export const markdownTextField = (label: string, opts: { preview?: boolean; customFields?: boolean } = {}): CustomField<string | undefined> => ({
   type: "custom",
   label,
-  render: ({ value, onChange }) => <MarkdownTextControl value={value} onChange={onChange} label={label} />,
+  render: ({ value, onChange }) => <MarkdownTextControl value={value} onChange={onChange} label={label} preview={opts.preview ?? true} customFields={opts.customFields ?? false} />,
 });
 
 // Color swatch field for custom colors

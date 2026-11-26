@@ -11,6 +11,8 @@ import { trustStylesField } from "./TrustStripField.tsx";
 import { logoSizeField } from "./HeaderFooterPanels.tsx";
 import { elementOrderField } from "./ElementOrderField.tsx";
 import { accordionFields } from "./sections.tsx";
+import { customFieldKeyField } from "./CustomFieldPicker.tsx";
+import { pxQuadField } from "./PxQuadField.tsx";
 import { layoutField, slideRadiusField } from "./LayoutField.tsx";
 import {
   createBricksLayoutFields,
@@ -287,7 +289,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       "Button",
       {
         text: bricksRowInputField("Text", "Click here") as Field,
-        link: bricksRowInputField("Link", "/collections/all") as Field,
+        link: bricksRowInputField("Link", "/products/all") as Field,
         newTab: radio("Open in new tab"),
         styleType: bricksRowSelectField("Button Style", [
           { value: "theme", label: "Theme Preset" },
@@ -342,7 +344,8 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
   CollectionGrid: { label: "Collection grid", category: "store", fields: { title: text("Heading"), subtitle: text("Description under the heading"), headerAlign: select("Heading and description position", ALIGN), showAll: radio("List every published collection"), collectionSlugs: listField("Collection slugs (ignored when listing every collection)") as Field, columns: select("Cards per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Cards per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Cards per row: mobile", { "1": "1", "2": "2" }) } },
   BlogListing: { label: "Blog archive posts", category: "store", fields: { style: select("Blog index style", { magazine: "Magazine: headline, subscribe form, latest posts, a row per category", classic: "Classic: heading and a grid of posts" }), headlineBold: text("Headline (empty = Heading below)"), subtitle: area("Description below the headline"), showSubscribe: radio("Subscribe form (right of the headline on desktop)"), subscribeText: area("Text below the subscribe form"), subscribeLabel: text("Subscribe button text"), subscribePlaceholder: text("Email field placeholder"), latestSideCount: num("Small posts beside the latest post (0 hides them)", 0, 8), showCategorySections: radio("A row of posts for each category"), postsPerCategory: num("Posts in each category row", 1, 8), title: text("Heading (category pages and classic style)"), showCategories: radio("Category links"), layout: select("Layout", { grid: "Grid", list: "List" }), columns: select("Posts per row: desktop", { "4": "4", "3": "3", "2": "2" }), columnsTablet: select("Posts per row: tablet", { "2": "2", "1": "1" }), columnsMobile: select("Posts per row: phone", { "1": "1", "2": "2" }), featuredFirst: radio("Show the first post larger"), imageRatio: select("Image shape", { landscape: "Landscape", square: "Square", portrait: "Portrait (4:5)" }), showImage: radio("Image"), showExcerpt: radio("Summary"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), showCategoryLabel: radio("Category label"), postsPerPage: num("Posts per page (0 = use the blog setting)", 0, 48), emptyText: text("Text when there are no posts") } },
   BlogPostContent: { label: "Blog post", category: "store", fields: { layout: select("Layout", { magazine: "Magazine: picture on top, contents and sidebar beside the text", classic: "Classic: one narrow column" }), tocPosition: select("Table of contents side (desktop)", { left: "Left", right: "Right" }), showSidebar: radio("Sidebar (related posts, subscribe box, categories)"), showAboutCard: radio("About card in the sidebar"), aboutTitle: text("About card title (empty = blog title)"), aboutText: area("About card text (empty = blog description)"), showFeatured: radio("Featured posts in the sidebar (hidden when none are starred)"), featuredCount: num("How many featured posts", 1, 8), showSubscribe: radio("Subscribe box in the sidebar"), subscribeTitle: text("Subscribe box title"), subscribeText: area("Subscribe box text"), subscribePlaceholder: text("Email field placeholder"), subscribeLabel: text("Subscribe button text"), showCategoriesCloud: radio("Category list in the sidebar"), showBreadcrumb: radio("Breadcrumb"), showCategory: radio("Category label"), showDate: radio("Date"), showAuthor: radio("Author"), showReadingTime: radio("Reading time"), featuredImage: select("Featured image", { above: "Above the text", wide: "Wide, above the title", hidden: "Hidden" }), contentWidth: select("Text width", { narrow: "Narrow (easy to read)", normal: "Normal" }), showToc: radio("Table of contents (3 or more headings)"), showShare: radio("Share links"), showRelated: radio("Related posts"), relatedCount: num("How many related posts", 0, 6), showPrevNext: radio("Previous and next post links") } },
-  Reviews: { label: "Reviews", category: "store", fields: { title: text("Heading"), showAggregate: radio("Show average"), limit: num("How many", 1, 20) } },
+  // On the product page this block is the real reviews: it has no settings, only a place. Drag it where the reviews should sit.
+  Reviews: { label: "Product reviews", category: "store", fields: {} },
   Gallery: { label: "Gallery", category: "bcom", fields: { title: text("Heading"), description: area("Description under the heading"), headerAlign: rsel("Heading and description alignment", { left: "Left", center: "Middle", right: "Right" }), titleGap: rnum("Space between heading and description (px)", 0, 80), headerGap: rnum("Space between the heading area and the pictures (px)", 0, 120), images: galleryImagesField("Pictures (pick many, drag to reorder)") as Field, layout: rsel("Style", { masonry: "Masonry (each picture keeps its shape)", grid: "Even grid" }), columnsDesktop: rsel("Pictures per row: desktop", { "2": "2", "3": "3", "4": "4", "5": "5", "6": "6" }), columnsTablet: rsel("Pictures per row: tablet", { "1": "1", "2": "2", "3": "3", "4": "4" }), columnsMobile: rsel("Pictures per row: phone", { "1": "1", "2": "2", "3": "3" }), gap: rnum("Space between pictures (px)", 0, 48), radius: rnum("Corner radius (px)", 0, 48), heightMode: rsel("Picture height", { auto: "Automatic", manual: "Fixed height" }), manualHeight: rnum("Fixed height (px)", 80, 800), lightbox: radio("Open in a viewer with arrows and thumbnails when clicked") } },
   SiteHeader: { label: "Header", category: "store", fields: { menuHandle: menuField("Navigation menu") as Field, logoText: text("Logo text (empty = store logo / name)"), logoMediaId: mediaField("Custom logo image (overrides brand logo)") as Field, logoSize: logoSizeField("Logo size") as Field, layout: select("Layout", { left: "Logo left, menu next to it", navCenter: "Logo left, menu in the middle", logoCenter: "Menu left, logo in the middle", logoRight: "Logo right, menu left", center: "Stacked: logo in the middle, menu below" }), links: { type: "array", label: "Fallback menu links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field, showSearch: radio("Search icon"), showAccount: radio("Account icon"), showCart: radio("Cart icon"), sticky: radio("Stay at top while scrolling"), tone: select("Background", TONE) } },
   SiteFooter: { label: "Footer", category: "store", fields: { layout: select("Layout", { columns: "Columns: brand, link columns, newsletter", centered: "Centred: brand on top, link columns in a row", compact: "Compact: brand and links side by side" }), logoMediaId: mediaField("Logo image (empty = brand name)") as Field, logoSize: logoSizeField("Logo size") as Field, logoText: text("Brand name (empty = store name)"), about: area("About text"), mobileAccordion: radio("Fold link columns into an accordion on phones"), columns: { type: "array", label: "Link columns", getItemSummary: (i: { title?: string }) => i.title ?? "Column", arrayFields: { title: text("Column title"), menuHandle: menuField("Navigation menu") as Field, links: { type: "array", label: "Fallback links", getItemSummary: (i: { label?: string }) => i.label ?? "Link", arrayFields: { label: text("Label"), href: link("Link") }, defaultItemProps: { label: "Link", href: "/" } } as Field }, defaultItemProps: { title: "Column", links: [] } } as Field, socials: { type: "array", label: "Social links", getItemSummary: (i: { network?: string }) => i.network ?? "Social link", arrayFields: { network: select("Network", { instagram: "Instagram", facebook: "Facebook", x: "X (Twitter)", youtube: "YouTube", linkedin: "LinkedIn", whatsapp: "WhatsApp", email: "Email", website: "Website" }), url: link("Link") }, defaultItemProps: { network: "instagram", url: "https://" } } as Field, socialStyle: select("Social icon style", { plain: "Plain icon", filled: "Filled circle", outline: "Outlined circle" }), socialColor: select("Social icon colour", { text: "Text colour", brand: "Brand colour" }), socialSize: num("Social icon size (px)", 14, 40), showNewsletter: radio("Newsletter signup"), newsletterTitle: text("Newsletter heading"), newsletterText: text("Newsletter text"), copyright: text("Copyright line (empty = automatic)"), bgColor: colorField("Footer background colour (empty keeps the theme's soft background)") as Field, textColor: colorField("Footer text colour (empty is chosen for contrast)") as Field } },
@@ -432,7 +435,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
         fields: {
           showAccordion: toggle("Accordion (details rows) in this column") as Field,
           accordionFirstOpen: toggle("Accordion: first row open") as Field,
-          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: text("Custom field key (Settings > Custom fields)"), text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
+          accordionItems: { type: "array", label: "Accordion rows (max 8)", max: 8, getItemSummary: (i: { title?: string }) => i.title ?? "Row", arrayFields: { icon: iconField("Icon") as Field, title: text("Title"), source: select("Content", { static: "Text written here", custom_field: "A custom field of the product" }), fieldKey: customFieldKeyField("Custom field (for \"A custom field of the product\")") as Field, text: area("Text (for \"Text written here\")") }, defaultItemProps: { icon: "info", title: "Details", source: "static", text: "" } } as Field,
         },
       },
     ]),
@@ -487,7 +490,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
               secondaryLabel: text("Second button label"),
               secondaryHref: link("Second button link"),
             },
-            defaultItemProps: { title: "New slide", subtitle: "", primaryLabel: "Shop now", primaryHref: "/collections/all", secondaryLabel: "", secondaryHref: "" },
+            defaultItemProps: { title: "New slide", subtitle: "", primaryLabel: "Shop now", primaryHref: "/products/all", secondaryLabel: "", secondaryHref: "" },
           } as Field,
           titleSize: select("Heading size (theme H2 / H1)", { lg: "Large (H2 size)", xl: "Extra large (H1 size)" }),
           titleTag: select("First slide heading tag (SEO)", { h2: "H2", h1: "H1 (use once per page)" }),
@@ -623,6 +626,100 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
       },
     ]),
   },
+  TabsSection: {
+    label: "Tabs",
+    category: "bcom",
+    fields: accordionFields("TabsSection", [
+      {
+        id: "items",
+        title: "Tabs",
+        fields: {
+          items: {
+            type: "array",
+            label: "Tabs (max 12)",
+            max: 12,
+            getItemSummary: (i: { title?: string }) => i.title || "Tab",
+            arrayFields: {
+              title: text("Title"),
+              icon: iconField("Icon (optional)", true) as Field,
+              content: markdownTextField("Content", { preview: false, customFields: true }) as Field,
+            },
+            defaultItemProps: { title: "New tab", content: "Write the content of this tab." },
+          } as Field,
+        },
+      },
+      {
+        id: "heading",
+        title: "Heading and section",
+        fields: {
+          title: text("Heading (empty hides it)"),
+          description: area("Description under the heading"),
+          headingAlign: select("Heading alignment", ALIGN),
+          tone: select("Background", TONE),
+        },
+      },
+      {
+        id: "layout",
+        title: "Layout",
+        fields: {
+          tabsPosition: select("Tab titles", { top: "Above the content", left: "Left of the content", right: "Right of the content" }),
+          tabsAlign: select("Titles row (above the content)", { left: "Left", center: "Center", right: "Right", stretch: "Stretch to share the width" }),
+          titleBodyGap: rnum("Space between titles and content (px)", 0, 80),
+          defaultTab: rnum("Tab open first (1 = first)", 1, 12),
+        },
+      },
+      {
+        id: "titleLook",
+        title: "Tab titles look",
+        fields: {
+          titleStyle: select("Style", { simple: "Simple (text only)", underline: "Underline", cards: "Cards (boxes with rounded corners)" }),
+          cardRadius: rnum("Cards: corner radius (px)", 0, 40),
+          titleFontSize: rnum("Text size (px)", 11, 28),
+          titleWeight: rsel("Text weight", { "400": "Regular", "500": "Medium", "600": "Semi bold", "700": "Bold" }),
+          titlePadding: pxQuadField("Padding (px)", { max: 96, legacyX: "titlePaddingX", legacyY: "titlePaddingY" }) as Field,
+          titleGap: rnum("Space between titles (px)", 0, 40),
+          iconPosition: select("Icon", { left: "Beside the title", top: "Above the title" }),
+          iconSize: rnum("Icon size (px)", 12, 40),
+        },
+      },
+      {
+        id: "titleColours",
+        title: "Tab titles colours",
+        fields: {
+          titleColor: colorField("Title colour") as Field,
+          titleActiveColor: colorField("Open title colour") as Field,
+          titleBg: colorField("Title background") as Field,
+          titleActiveBg: colorField("Open title background (cards)") as Field,
+          titleBorderColor: colorField("Underline and card border colour") as Field,
+        },
+      },
+      {
+        id: "body",
+        title: "Content area",
+        fields: {
+          bodyPadding: pxQuadField("Padding (px)", { max: 96, legacyX: "bodyPaddingX", legacyY: "bodyPaddingY" }) as Field,
+          bodyFontSize: rnum("Text size (px)", 12, 24),
+          bodyAlign: select("Text alignment", ALIGN),
+          bodyBg: colorField("Background") as Field,
+          bodyTextColor: colorField("Text colour") as Field,
+          bodyBorderWidth: rnum("Border width (px, 0 = none)", 0, 8),
+          bodyBorderColor: colorField("Border colour") as Field,
+          bodyRadius: rnum("Corner radius (px)", 0, 40),
+        },
+      },
+      {
+        id: "mobile",
+        title: "On phones",
+        fields: {
+          mobileMode: select("Tabs on a phone", { accordion: "Turn into an accordion", tabs: "Keep tabs (title row scrolls sideways)" }),
+          accordionSingleOpen: toggle("Accordion: opening one closes the others") as Field,
+          accordionOpenFirst: toggle("Accordion: first row open") as Field,
+          accordionIcon: select("Accordion icon", { chevron: "Arrow", plus: "Plus / minus" }),
+          accordionIconSize: rnum("Accordion icon size (px)", 8, 32),
+        },
+      },
+    ]),
+  },
   FaqSection: {
     label: "FAQ accordion",
     category: "bcom",
@@ -752,7 +849,7 @@ export const BLOCK_SPECS: Record<BlockType, Spec> = {
               icon: iconField("Icon (ignored when a picture is chosen)", true) as Field,
               iconMediaId: mediaField("Picture instead of an icon") as Field,
               heading: text("Heading"),
-              text: area("Text"),
+              text: markdownTextField("Text") as Field,
               linkLabel: text("Link text"),
               linkHref: link("Link"),
               imageMediaId: mediaField("Style 2: picture on top of this card") as Field,
@@ -1251,12 +1348,16 @@ export const RETIRED_FROM_PICKER: BlockType[] = [
   "CollectionListing",
   "CollectionGrid",
   "Banner",
-  "Reviews",
   // Settings of the website, edited in the Theme tab, never a block to place.
   "MkTheme",
   // The website uses the store FAQ accordion now.
   "MkFaq",
 ];
+
+/** Not offered in the block picker (but still editable where a page already has it). Product reviews are offered on the product page only. */
+export function hiddenFromPicker(type: BlockType, kind: EditorPageKind): boolean {
+  return RETIRED_FROM_PICKER.includes(type) || (type === "Reviews" && kind !== "product");
+}
 
 export function blockAllowed(type: BlockType, kind: EditorPageKind): boolean {
   // The website and the stores never share the website sections (ADR-042). A website page also takes the generic
@@ -1287,7 +1388,7 @@ export function buildPuckConfig(options: { themeVars: Record<string, string>; pa
   for (const [type, spec] of Object.entries(BLOCK_SPECS) as Array<[BlockType, Spec]>) {
     if (!blockAllowed(type, kind)) continue;
     const def = getBlockDefinition(type);
-    if (!RETIRED_FROM_PICKER.includes(type)) byCategory[spec.category]?.push(type);
+    if (!hiddenFromPicker(type, kind)) byCategory[spec.category]?.push(type);
     components[type] = {
       label: spec.label,
       fields: spec.fields,

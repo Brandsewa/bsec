@@ -29,14 +29,14 @@ const b = (id: string, type: BlockInstance["type"], props: Record<string, unknow
 });
 
 export const LAUNCH_TEMPLATE_HOME: BlockInstance[] = [
-  b("ec-banner", "Banner", { text: "Free shipping on orders over ₹999", link: "/collections/all", variant: "promo", dismissible: false }),
+  b("ec-banner", "Banner", { text: "Free shipping on orders over {{free_shipping_threshold}}", link: "/products/all", variant: "promo", dismissible: false }),
   b("ec-hero", "HeroSlider", {
     slides: [
       {
         title: "Made with care. Delivered to your door.",
         subtitle: "Small-batch products from makers you can trust, with easy returns and fast shipping across India.",
         primaryLabel: "Shop the collection",
-        primaryHref: "/collections/all",
+        primaryHref: "/products/all",
         secondaryLabel: "Our story",
         secondaryHref: "/pages/about",
       },
@@ -44,7 +44,7 @@ export const LAUNCH_TEMPLATE_HOME: BlockInstance[] = [
   }),
   b("ec-usp", "TrustStrip", {
     items: [
-      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "truck", title: "Free shipping", description: "On qualifying orders" },
       { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
       { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
       { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },
@@ -92,7 +92,7 @@ export const LAUNCH_TEMPLATE_HEADER: BlockInstance[] = [
   b("ec-header", "SiteHeader", {
     links: [
       { label: "Home", href: "/" },
-      { label: "Shop", href: "/collections/all" },
+      { label: "Shop", href: "/products/all" },
       { label: "Our story", href: "/pages/about" },
     ],
     layout: "left",
@@ -107,7 +107,7 @@ export const LAUNCH_TEMPLATE_FOOTER: BlockInstance[] = [
   b("ec-footer", "SiteFooter", {
     about: "Small-batch products from makers you can trust, delivered across India.",
     columns: [
-      { title: "Shop", links: [{ label: "All products", href: "/collections/all" }, { label: "Search", href: "/search" }] },
+      { title: "Shop", links: [{ label: "All products", href: "/products/all" }, { label: "Search", href: "/search" }] },
       {
         title: "Policies",
         links: [
@@ -129,7 +129,7 @@ export const LAUNCH_TEMPLATE_PRODUCT: BlockInstance[] = [
   b("ec-product", "ProductDetail", { galleryPosition: "left", showBreadcrumb: true, showRating: true, showDescription: true, showTags: true }),
   b("ec-product-usp", "TrustStrip", {
     items: [
-      { icon: "truck", title: "Free shipping", description: "On orders above ₹999" },
+      { icon: "truck", title: "Free shipping", description: "On qualifying orders" },
       { icon: "shield", title: "Secure checkout", description: "UPI, cards and cash on delivery" },
       { icon: "returns", title: "Easy returns", description: "7-day return guarantee" },
       { icon: "headphones", title: "Friendly support", description: "Phone and WhatsApp" },

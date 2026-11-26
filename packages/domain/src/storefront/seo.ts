@@ -1,6 +1,9 @@
 import { and, desc, eq, isNull, inArray, notInArray, or, sql } from "drizzle-orm";
 import { listBlogForSitemap } from "../blog/queries.ts";
 import { LISTED_PRODUCT_STATUSES } from "./product-status.ts";
+import { ALL_PRODUCTS_PATH } from "./catalog.ts";
+import { decodeEntities } from "../html-entities.ts";
+import { plainTextOfDescription } from "../rich-description.ts";
 import { schema, withTenant, type Db } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import type { TenantContext } from "../context.ts";
@@ -102,10 +105,69 @@ export function formatTitle(
   storeName: string,
 ): string {
   const tpl = template && template.trim().length > 0 ? template : "%s | {{store_name}}";
-  return tpl.replace(/%s/g, title).replace(/\{\{store_name\}\}/g, storeName);
+  // Plain text: a name or title saved with entities ("&amp;") would otherwise show the entity in the browser tab.
+  return decodeEntities(tpl.replace(/%s/g, () => decodeEntities(title)).replace(/\{\{store_name\}\}/g, () => decodeEntities(storeName)));
 }
 
 export const generateTitle = formatTitle;
+
+/** Longest description search engines show before cutting it off (about 155 characters on desktop). */
+export const META_DESCRIPTION_MAX = 155;
+
+/** Plain text from a stored description: a string, HTML, or the admin's `{ type: "text", text }` value. Empty when there is none. */
+export function cleanMetaText(input: unknown): string {
+  const raw = typeof input === "string" ? input : input && typeof input === "object" ? plainTextOfDescription(input) : "";
+  return decodeEntities(raw.replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Cuts text to `max` characters at a word boundary, with an ellipsis when it was cut. */
+export function clampMetaDescription(text: string, max = META_DESCRIPTION_MAX): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const atWord = cut.replace(/\s+\S*$/, "");
+  return `${(atWord.length >= max * 0.6 ? atWord : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
+}
+
+const TEXT_KEY = /^(subtitle|text|body|description|content|intro|heading|html)$/i;
+
+/**
+ * The first real sentence of copy in a page's blocks (document order), for a page whose merchant wrote no description. Text shorter
+ * than `minLength` is skipped (a button label or a heading is not a description). Returns "" when there is none.
+ */
+export function firstTextOfBlocks(node: unknown, minLength = 40, depth = 0): string {
+  if (depth > 12) return "";
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const t = firstTextOfBlocks(item, minLength, depth + 1);
+      if (t) return t;
+    }
+  } else if (node && typeof node === "object") {
+    for (const [k, v] of Object.entries(node)) {
+      if (typeof v === "string" && TEXT_KEY.test(k)) {
+        const t = cleanMetaText(v);
+        if (t.length >= minLength) return t;
+      } else if (v && typeof v === "object") {
+        const t = firstTextOfBlocks(v, minLength, depth + 1);
+        if (t) return t;
+      }
+    }
+  }
+  return "";
+}
+
+/**
+ * The description to put in the page head when the merchant wrote none: the first candidate that has text (an empty string is
+ * not text), with HTML removed and the length capped, else the fallback. Never returns an empty string.
+ */
+export function deriveMetaDescription(candidates: unknown[], fallback: string): string {
+  for (const c of candidates) {
+    const text = cleanMetaText(c);
+    if (text) return clampMetaDescription(text);
+  }
+  return fallback;
+}
 
 export interface OrganizationJsonLd {
   "@context": "https://schema.org";
@@ -380,17 +442,19 @@ export function generateProductJsonLd(
     "@id": `${productUrl}#product`,
     url: productUrl,
     name: product.title,
-    description: product.shortDescription ?? undefined,
+    description: cleanMetaText(product.shortDescription) || cleanMetaText(product.descriptionJson) || undefined,
     image: images.length > 0 ? images : undefined,
     sku: firstSku,
     category: product.productType ?? undefined,
     offers: offers.length > 0 ? offers : undefined,
   };
 
-  if (product.brand?.name) {
+  // Google Merchant Center asks for a brand on every product; a store that sets none is its own brand.
+  const brandName = product.brand?.name?.trim() || opts.storeName?.trim();
+  if (brandName) {
     result.brand = {
       "@type": "Brand",
-      name: product.brand.name,
+      name: brandName,
     };
   }
 
@@ -918,11 +982,11 @@ export function buildCategorySeoMetadata(opts: {
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.category.seo === "object" && opts.category.seo !== null) ? (opts.category.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.category.name, storeName);
-  const description = storedDescription ?? opts.category.description ?? `Browse ${opts.category.name} at ${storeName}. High-quality products and great deals.`;
+  const description = storedDescription ?? deriveMetaDescription([opts.category.description], `Browse ${opts.category.name} at ${storeName}. High-quality products and great deals.`);
 
   const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
 
@@ -982,16 +1046,18 @@ export function buildCollectionSeoMetadata(opts: {
   page?: number | undefined;
   host: string;
   prefix?: string | null | undefined;
+  /** The page's own path when it is not `/collections/<slug>` (the all-products listing). */
+  path?: string | undefined;
 }): SeoMetadataResult {
   const cleanHost = opts.host.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.collection.seo === "object" && opts.collection.seo !== null) ? (opts.collection.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.collection.title, storeName);
-  const description = storedDescription ?? opts.collection.description ?? `Shop ${opts.collection.title} at ${storeName}. High-quality products and great deals.`;
+  const description = storedDescription ?? deriveMetaDescription([opts.collection.description], `Shop ${opts.collection.title} at ${storeName}. High-quality products and great deals.`);
 
   const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
 
@@ -1003,9 +1069,10 @@ export function buildCollectionSeoMetadata(opts: {
   const shouldIndex = !isStoreBlocked && isEligible && !isFiltered;
   const shouldFollow = !isStoreBlocked;
 
-  let canonicalUrl = `https://${cleanHost}${pfx}/collections/${opts.collection.slug}`;
+  const ownPath = opts.path ?? `/collections/${opts.collection.slug}`;
+  let canonicalUrl = `https://${cleanHost}${pfx}${ownPath}`;
   if (!isFiltered && pageNum > 1 && isEligible) {
-    canonicalUrl = `https://${cleanHost}${pfx}/collections/${opts.collection.slug}?page=${pageNum}`;
+    canonicalUrl = `https://${cleanHost}${pfx}${ownPath}?page=${pageNum}`;
   }
 
   return {
@@ -1039,6 +1106,8 @@ export function buildProductSeoMetadata(opts: {
     slug: string;
     status: string;
     shortDescription?: string | null | undefined;
+    /** The long description; used for the page description when there is no short one. */
+    descriptionJson?: unknown;
     seo?: unknown;
     media?: Array<{ url?: string | undefined }> | undefined;
   };
@@ -1053,11 +1122,11 @@ export function buildProductSeoMetadata(opts: {
   const pfx = opts.prefix ? (opts.prefix.startsWith("/") ? opts.prefix : `/${opts.prefix}`) : "";
   const storeName = opts.storeSettings?.storeName ?? "Store";
   const seoObj = (typeof opts.product.seo === "object" && opts.product.seo !== null) ? (opts.product.seo as Record<string, unknown>) : {};
-  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? seoObj.title.trim() : null;
-  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? seoObj.description.trim() : null;
+  const storedTitle = typeof seoObj.title === "string" && seoObj.title.trim().length > 0 ? decodeEntities(seoObj.title.trim()) : null;
+  const storedDescription = typeof seoObj.description === "string" && seoObj.description.trim().length > 0 ? decodeEntities(seoObj.description.trim()) : null;
 
   const title = storedTitle ?? formatTitle(opts.seoSettings?.titleTemplate, opts.product.title, storeName);
-  const description = storedDescription ?? opts.product.shortDescription ?? `Buy ${opts.product.title} at ${storeName}.`;
+  const description = storedDescription ?? deriveMetaDescription([opts.product.shortDescription, opts.product.descriptionJson], `Buy ${opts.product.title} at ${storeName}.`);
 
   const isStoreBlocked = opts.noindex === true || opts.storeStatusMode === "coming_soon" || opts.storeStatusMode === "password" || opts.storeStatusMode === "maintenance" || opts.storeStatusMode === "suspended" || opts.seoSettings?.indexingEnabled === false;
 
@@ -1126,7 +1195,7 @@ export function buildHomeSeoMetadata(opts: {
   };
 }
 
-async function getScopedCatalogForSitemap(
+export async function getScopedCatalogForSitemap(
   tx: Db,
   tenantId: string,
 ) {
@@ -1320,6 +1389,20 @@ export async function getStorefrontSitemapUrls(
         priority: 0.8,
         ...imagesFor(p.id),
       });
+    }
+
+    // The built-in all-products listing.
+    if (productRows.length > 0) {
+      sitemapItems.push({ loc: `${baseUrl}${ALL_PRODUCTS_PATH}`, lastmod: productRows[0]?.updatedAt.toISOString() ?? homeLastMod, changefreq: "daily", priority: 0.7 });
+    }
+
+    // The two index pages (`/collections`, `/categories`), once the store has something to list; their lastmod is the newest entry's.
+    const newest = (rows: Array<{ updatedAt: Date }>): string => rows.reduce((a, r) => (r.updatedAt > a ? r.updatedAt : a), rows[0]?.updatedAt ?? new Date(0)).toISOString();
+    if (eligibleCollections.length > 0) {
+      sitemapItems.push({ loc: `${baseUrl}/collections`, lastmod: newest(eligibleCollections), changefreq: "weekly", priority: 0.6 });
+    }
+    if (categoryRows.length > 0) {
+      sitemapItems.push({ loc: `${baseUrl}/categories`, lastmod: newest(categoryRows), changefreq: "weekly", priority: 0.6 });
     }
 
     // Base Collections

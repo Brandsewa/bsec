@@ -7,12 +7,14 @@ import { Button } from "@bs/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@bs/ui";
 import { Field, FieldLabel, Switch } from "@bs/ui";
 import { Input } from "@bs/ui";
-import { Textarea } from "@bs/ui";
+import type { RichDescription } from "@bs/contracts";
+import { richBlocksToText } from "@bs/contracts/rich-text";
 import { SeoCard } from "../../../components/seo-card.tsx";
 import { DraftVariantBuilderCard, defaultDraftVariant, usableOptions, type DraftVariant } from "../../../components/product/draft-variant-builder.tsx";
-import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
+import { DescriptionCard, OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
 import { previewGrid, type DraftOption } from "../../../lib/variant-grid.ts";
-import { orpc } from "../../../lib/orpc.ts";
+import { client, orpc } from "../../../lib/orpc.ts";
+import { MediaGalleryField, type MediaRef } from "@bs/content-admin/media/media-gallery-field.tsx";
 
 export const Route = createFileRoute("/_store/products/new")({
   pendingComponent: () => (
@@ -55,7 +57,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [slugTouched, setSlugTouched] = useState(false);
   const [status, setStatus] = useState<"draft" | "active" | "unlisted" | "archived">("draft");
   const [shortDescription, setShortDescription] = useState("");
-  const [description, setDescription] = useState("");
+  const [descriptionJson, setDescriptionJson] = useState<RichDescription | null>(null);
   const [tags, setTags] = useState("");
   const [requiresShipping, setRequiresShipping] = useState(true);
   const [priceOnRequest, setPriceOnRequest] = useState(false);
@@ -76,11 +78,22 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
   const [variants, setVariants] = useState<DraftVariant[]>([defaultDraftVariant()]);
   const [preorder, setPreorder] = useState<PreorderValue>({ enabled: false, shipsOn: "", message: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Picked before the product exists: shown at once, attached in this order right after the product is created.
+  const [media, setMedia] = useState<MediaRef[]>([]);
 
   const createMutation = useMutation(
     orpc.admin.products.create.mutationOptions({
-      onSuccess: (product) => {
-        toast.success(`Product "${product.title}" created`);
+      onSuccess: async (product) => {
+        let failed = 0;
+        for (const m of media) {
+          try {
+            await client.admin.products.attachMedia({ id: product.id, mediaId: m.mediaId, ...(m.alt ? { alt: m.alt } : { alt: product.title }) });
+          } catch {
+            failed += 1;
+          }
+        }
+        if (failed > 0) toast.error(`Product created, but ${failed} image${failed === 1 ? "" : "s"} could not be attached. Add ${failed === 1 ? "it" : "them"} again on the product page.`);
+        else toast.success(`Product "${product.title}" created`);
         void queryClient.invalidateQueries({ queryKey: orpc.admin.products.list.key() });
         go(`/products/${product.id}`);
       },
@@ -139,7 +152,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
       ...(slug ? { slug } : {}),
       status,
       ...(shortDescription.trim() ? { shortDescription: shortDescription.trim() } : {}),
-      ...(description.trim() ? { descriptionJson: { type: "text", text: description.trim() } } : {}),
+      ...(descriptionJson ? { descriptionJson } : {}),
       tags: tags
         .split(",")
         .map((s) => s.trim())
@@ -212,7 +225,7 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">General Information</CardTitle>
-              <CardDescription>Basic product title, URL handle, and descriptions.</CardDescription>
+              <CardDescription>Basic product title, URL handle, short description and tags.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-1.5">
@@ -253,17 +266,6 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
               </div>
 
               <div className="grid gap-1.5">
-                <FieldLabel htmlFor="product-desc">Description</FieldLabel>
-                <Textarea
-                  id="product-desc"
-                  rows={6}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detailed product story, specifications, and care instructions..."
-                />
-              </div>
-
-              <div className="grid gap-1.5">
                 <FieldLabel htmlFor="product-tags">Tags</FieldLabel>
                 <Input
                   id="product-tags"
@@ -272,6 +274,18 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
                   placeholder="Comma separated, e.g. summer, cotton, organic"
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">Media</CardTitle>
+              <CardDescription>
+                Images and videos shown on your storefront. The first image is the main card image. Drag to reorder.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MediaGalleryField value={media} onChange={setMedia} accept={["image", "video"]} max={10} />
             </CardContent>
           </Card>
 
@@ -292,10 +306,12 @@ export function NewProductPage({ navigate }: { navigate?: (to: string) => void }
             errors={errors}
           />
 
+          <DescriptionCard id="product-desc" value={descriptionJson} onChange={setDescriptionJson} />
+
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard
             defaultTitle={title}
-            defaultDescription={shortDescription || description.slice(0, 160)}
+            defaultDescription={shortDescription || richBlocksToText(descriptionJson?.blocks ?? []).replace(/\s+/g, " ").slice(0, 160)}
             pathPrefix="/products"
             slug={slug}
             title={seoTitle}

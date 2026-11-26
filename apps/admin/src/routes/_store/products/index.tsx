@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Archive, Copy, Download, ExternalLink, FileCheck, FilePen, MoreHorizontal, Package, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Archive, Copy, Download, ExternalLink, FileCheck, FilePen, Image as ImageIcon, MoreHorizontal, Package, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MetricCard, MetricCardSkeleton, PageContainer, PageHeader, PageSection, PageSkeleton, TableSkeleton, toast } from "@bs/ui";
 import { formatMoney } from "@bs/contracts/money";
@@ -214,9 +214,12 @@ export function ProductsPage() {
       header: "Product",
       sort: { asc: "title_asc", desc: "title_desc" },
       cell: (p) => (
-        <div className="flex max-w-72 flex-col">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate font-medium text-foreground">{p.title}</span>
+        <div className="flex max-w-80 items-center gap-2.5">
+          <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30">
+            {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" className="size-full object-cover" /> : <ImageIcon className="size-4 text-muted-foreground" aria-hidden />}
+          </span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-medium text-foreground" title={p.title}>{p.title}</span>
             {p.preorderStatus === "passed" ? (
               <span className="inline-flex shrink-0 items-center rounded bg-rose-500/10 px-1.5 py-0.25 text-[10px] font-medium text-rose-700 dark:text-rose-400">
                 Pre-order date passed
@@ -227,7 +230,6 @@ export function ProductsPage() {
               </span>
             ) : null}
           </div>
-          <span className="truncate text-muted-foreground">{p.slug}</span>
         </div>
       ),
     },

@@ -77,6 +77,7 @@ let mockMediaUrlToReturn: string | undefined = undefined;
 vi.mock("@/server/cached-storefront.ts", () => ({
   getCachedStorefrontPageByPath: vi.fn(async () => pageDataToReturn),
   getCachedBrandAssets: vi.fn(async () => null),
+  getCachedStoreName: vi.fn(async () => "Demo Store"),
 }));
 
 vi.mock("@/server/runtime.ts", () => ({

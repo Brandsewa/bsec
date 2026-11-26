@@ -1,8 +1,8 @@
 import { getMarketContext } from "@/server/market.ts";
 import { JsonLd } from "@/components/blog/JsonLd.tsx";
-import { ProductCustomField } from "@/components/product/ProductCustomField.tsx";
+import { ProductCustomField, customFieldBody } from "@/components/product/ProductCustomField.tsx";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection.tsx";
-import { ProductShowcaseSchema, type ProductCouponsOptions } from "@bs/blocks";
+import { ProductShowcaseSchema, filterVisibleBlocks, walkBlocks, type ProductCouponsOptions } from "@bs/blocks";
 import { CouponCards } from "@/components/product/CouponCards.tsx";
 import React from "react";
 import type { Metadata } from "next";
@@ -176,8 +176,13 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   // carousel's card, arrows and dots settings are copied onto it. The product page keeps its own heading, subtitle and count. The theme's "Reviews"
   // block is only a heading placeholder (the real reviews are drawn below the product's own blocks), so it is left out.
   const homeDesign = template ? await getCachedStorefrontHomePage(tenantId, marketId).then((h) => findShowcaseProps(h.document.blocks)).catch(() => null) : null;
+  // The theme's "Reviews" block is where the real reviews are drawn, so the merchant can move them anywhere in the page
+  // (inside a section, below other blocks). A theme without one keeps the old place: right after the product's own blocks.
+  let hasReviewsBlock = false;
+  walkBlocks(filterVisibleBlocks(template?.blocks ?? []), (b) => {
+    if (b.type === "Reviews") hasReviewsBlock = true;
+  });
   const adaptedBlocks = (template?.blocks ?? [])
-    .filter((b) => b.type !== "Reviews")
     .map((b) => {
       const tabs = Array.isArray(b.props["tabs"]) ? (b.props["tabs"] as Array<{ source?: string }>) : [];
       if (b.type !== "ProductShowcase" || !homeDesign || !tabs.some((t) => t.source === "related")) return b;
@@ -206,18 +211,31 @@ const templateContext = {
     locale: marketLocale,
     renderProductDetail: (options: Parameters<typeof detail>[0]) => detail(options),
     renderProductCustomField: customField,
+    // A custom field inside a Tabs block ({{field:key}}): just the value, no wrapper or padding; nothing when the product has none.
+    renderCustomFieldValue: (key: string) => {
+      const field = customFields.find((f) => f.key === key);
+      return field ? customFieldBody(field, marketLocale) : null;
+    },
     renderProductCoupons: couponCards,
+    renderProductReviews: () => (
+      <div className="bs-site-w mx-auto px-4 pb-10">
+        <ProductReviewsSection productId={product.id} productTitle={product.title} />
+      </div>
+    ),
   };
-  // The theme's "Reviews" block is only a heading placeholder (the real reviews are drawn below the product's own blocks),
-  // so it is left out here; the reviews section has its own heading.
   const templateBlocks = adaptedBlocks;
   const coreTypes = new Set(["ProductDetail", "ProductCustomField", "ProductCoupons"]);
   let lastCore = -1;
+  // The product's own blocks are often wrapped in a Section or Container, so look inside each top-level block. Looking
+  // only at the top level found nothing and drew the reviews above the product.
   templateBlocks.forEach((b, i) => {
-    if (coreTypes.has(b.type)) lastCore = i;
+    walkBlocks([b], (inner) => {
+      if (coreTypes.has(inner.type)) lastCore = i;
+    });
   });
-  const beforeReviews = templateBlocks.slice(0, lastCore + 1);
-  const afterReviews = templateBlocks.slice(lastCore + 1);
+  // With a Reviews block in the theme, the blocks render as one list; the old split only applies without one.
+  const beforeReviews = hasReviewsBlock ? templateBlocks : templateBlocks.slice(0, lastCore + 1);
+  const afterReviews = hasReviewsBlock ? [] : templateBlocks.slice(lastCore + 1);
 
   return (
     <div data-cache-tag={productCacheTag} className="bs-skin">
@@ -228,11 +246,15 @@ const templateContext = {
       {template ? (
         <>
           <BlockRenderer blocks={beforeReviews} renderData={renderData} context={templateContext} />
-          {/* Reviews follow the product's own blocks; recommendations and anything else the theme adds come after them. */}
-          <div className="bs-site-w mx-auto px-4 pb-10">
-            <ProductReviewsSection productId={product.id} productTitle={product.title} />
-          </div>
-          <BlockRenderer blocks={afterReviews} renderData={renderData} context={templateContext} />
+          {hasReviewsBlock ? null : (
+            <>
+              {/* No Reviews block in the theme: reviews follow the product's own blocks; recommendations and anything else come after them. */}
+              <div className="bs-site-w mx-auto px-4 pb-10">
+                <ProductReviewsSection productId={product.id} productTitle={product.title} />
+              </div>
+              <BlockRenderer blocks={afterReviews} renderData={renderData} context={templateContext} />
+            </>
+          )}
         </>
       ) : (
         <>

@@ -17,6 +17,87 @@ const STATUS = {
   fail: { icon: XCircle, label: "Needs attention", className: "text-destructive" },
 } as const;
 
+const LINK_KIND_LABEL = {
+  broken: "Page not found",
+  platform_host: "Preview address",
+  shopify_checkout: "Old checkout link",
+  www_host: "www not connected",
+} as const;
+
+/** Links in menus and published pages that lead nowhere, with what to do about each. Read-only. */
+function BrokenLinksCard() {
+  const links = useQuery(orpc.admin.seo.links.queryOptions());
+  const problems = links.data?.problems ?? [];
+  return (
+    <SettingsCard
+      title="Links that lead nowhere"
+      description={
+        links.data
+          ? problems.length === 0
+            ? `We read ${links.data.scanned} links in your menus and pages and found no problems.`
+            : `${problems.length}${links.data.truncated ? "+" : ""} of ${links.data.scanned} links need fixing. Edit the link where it is used, or add a redirect.`
+          : "Checks the links in your menus and published pages against what your store really has."
+      }
+    >
+      {links.isLoading ? (
+        <TableSkeleton rows={3} columns={2} />
+      ) : links.isError ? (
+        <EmptyState icon={AlertTriangle} title="Could not check your links" description={errorMessage(links.error)} action={<Button onClick={() => void links.refetch()}>Try again</Button>} />
+      ) : problems.length === 0 ? null : (
+        <ul className="divide-y divide-border/60">
+          {problems.map((p) => (
+            <li key={`${p.where.type}|${p.where.label}|${p.link}`} className="py-3 first:pt-0 last:pb-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{LINK_KIND_LABEL[p.kind]}</Badge>
+                <code className="break-all text-xs">{p.link}</code>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                In {p.where.type === "menu" ? "the menu" : p.where.type === "blog" ? "the blog post" : "the page"} <span className="font-medium text-foreground">{p.where.label}</span>. {p.hint}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {problems.some((p) => p.kind === "broken") ? (
+        <div className="mt-4">
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link to="/settings/redirects" />}>
+            Add a redirect
+          </Button>
+        </div>
+      ) : null}
+    </SettingsCard>
+  );
+}
+
+const NOINDEX_TYPE = { category: "Category", collection: "Collection", product: "Product", blog: "Blog post" } as const;
+
+/** Pages the storefront asks search engines to skip, and why, so a missing page in search results can be explained. */
+function KeptOutCard({ data }: { data: { total: number; items: Array<{ type: keyof typeof NOINDEX_TYPE; name: string; path: string; reason: string }> } }) {
+  return (
+    <SettingsCard
+      title="Pages kept out of search"
+      description={
+        data.total === 0
+          ? "Nothing on your store is hidden from search engines."
+          : `${data.total} ${data.total === 1 ? "page is" : "pages are"} marked to stay out of search results. Empty categories and collections are skipped automatically; add products to bring them back.`
+      }
+    >
+      {data.total === 0 ? null : (
+        <ul className="divide-y divide-border/60">
+          {data.items.map((i) => (
+            <li key={`${i.type}|${i.path}`} className="flex flex-wrap items-center gap-2 py-2.5 first:pt-0 last:pb-0">
+              <Badge variant="secondary">{NOINDEX_TYPE[i.type]}</Badge>
+              <span className="text-sm font-medium">{i.name}</span>
+              <code className="break-all text-xs text-muted-foreground">{i.path}</code>
+              <span className="basis-full text-xs text-muted-foreground">{i.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsCard>
+  );
+}
+
 export function SeoHealthPage() {
   const health = useQuery(orpc.admin.seo.health.queryOptions());
   const checks = health.data?.checks ?? [];
@@ -67,6 +148,8 @@ export function SeoHealthPage() {
               })}
             </ul>
           </SettingsCard>
+          {health.data?.noindexed ? <KeptOutCard data={health.data.noindexed} /> : null}
+          <BrokenLinksCard />
         </>
       )}
     </SettingsPageFrame>

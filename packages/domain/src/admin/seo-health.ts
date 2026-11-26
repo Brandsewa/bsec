@@ -4,7 +4,8 @@ import type { SeoHealthView } from "@bs/contracts";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { LISTED_PRODUCT_STATUSES } from "../storefront/product-status.ts";
-import { DEFAULT_AI_CRAWLERS, getStorefrontBrandAssets, getStorefrontSitemapUrls } from "../storefront/seo.ts";
+import { DEFAULT_AI_CRAWLERS, getScopedCatalogForSitemap, getStorefrontBrandAssets, getStorefrontSitemapUrls } from "../storefront/seo.ts";
+import { countBlocksWithoutAlt, countImagesWithoutAlt } from "./content-scan.ts";
 
 type Check = SeoHealthView["checks"][number];
 
@@ -23,6 +24,8 @@ export function buildSeoHealthChecks(f: {
   productsWithoutDescription: number;
   productsWithoutImage: number;
   imagesWithoutAlt: number;
+  /** Pictures in blog posts and page picture blocks with no alt text. */
+  contentImagesWithoutAlt?: number;
   categoriesWithoutDescription: number;
   collectionsWithoutDescription: number;
   publishedPolicies: number;
@@ -54,6 +57,7 @@ export function buildSeoHealthChecks(f: {
   count("product-description", "Products have a description", f.productsWithoutDescription, f.listedProducts, f.listedProducts === 0 ? "No products yet." : "Every product has a description.", `${plural(f.productsWithoutDescription, "product")} with no description: search engines and AI have little to quote.`, "/products");
   count("product-image", "Products have a picture", f.productsWithoutImage, f.listedProducts, "Every product has a picture.", `${plural(f.productsWithoutImage, "product")} with no picture.`, "/products");
   count("image-alt", "Product pictures have alt text", f.imagesWithoutAlt, f.listedProducts, "Every product picture is described.", `${plural(f.imagesWithoutAlt, "picture")} with no description (alt text): used by image search and screen readers.`, "/products");
+  count("content-image-alt", "Blog and page pictures have alt text", f.contentImagesWithoutAlt ?? 0, 0, "Every picture in your blog posts and pages is described.", `${plural(f.contentImagesWithoutAlt ?? 0, "picture")} in blog posts and pages with no description (alt text). Add it where the picture is placed.`, "/blog");
   count("category-description", "Categories have a description", f.categoriesWithoutDescription, 0, "Every category has a description.", `${plural(f.categoriesWithoutDescription, "category", "categories")} with no description.`, "/categories");
   count("collection-description", "Collections have a description", f.collectionsWithoutDescription, 0, "Every collection has a description.", `${plural(f.collectionsWithoutDescription, "collection")} with no description.`, "/collections");
   checks.push({
@@ -107,7 +111,33 @@ export async function getSeoHealth(rt: Runtime, ctx: TenantContext): Promise<Seo
       .where(and(eq(schema.collections.tenantId, t), eq(schema.collections.published, true)));
     const policies = await tx.select({ handle: schema.storePolicies.handle, published: schema.storePolicies.publishedVersionId }).from(schema.storePolicies).where(eq(schema.storePolicies.tenantId, t));
     const [rates] = await tx.select({ n: sql<number>`count(*)::int` }).from(schema.shippingRates).where(eq(schema.shippingRates.tenantId, t));
-    return { status, seo, store, counts, alt, cats, cols, policies, rates };
+    // Pictures in published blog posts and page blocks with no alt text, and the pages kept out of search (the same rules the
+    // storefront applies: empty categories and collections, collections marked noindex, unlisted products, noindex posts).
+    const posts = await tx
+      .select({ slug: schema.blogPosts.slug, title: schema.blogPosts.title, html: schema.blogPosts.contentHtml, seo: schema.blogPosts.seo })
+      .from(schema.blogPosts)
+      .where(eq(schema.blogPosts.tenantId, t))
+      .limit(2000);
+    const pageVersions = await tx
+      .select({ document: schema.pageVersions.document })
+      .from(schema.pages)
+      .innerJoin(schema.pageVersions, and(eq(schema.pageVersions.tenantId, schema.pages.tenantId), eq(schema.pageVersions.id, schema.pages.publishedVersionId)))
+      .where(and(eq(schema.pages.tenantId, t), eq(schema.pages.status, "published")))
+      .limit(2000);
+    const contentImagesWithoutAlt = posts.reduce((n, p) => n + countImagesWithoutAlt(p.html ?? ""), 0) + pageVersions.reduce((n, v) => n + countBlocksWithoutAlt(v.document), 0);
+
+    const { eligibleCollections, categoryRows } = await getScopedCatalogForSitemap(tx, t);
+    const allCategories = await tx.select({ name: schema.categories.name, slug: schema.categories.slug }).from(schema.categories).where(eq(schema.categories.tenantId, t));
+    const allCollections = await tx.select({ title: schema.collections.title, slug: schema.collections.slug, indexable: schema.collections.indexable }).from(schema.collections).where(and(eq(schema.collections.tenantId, t), eq(schema.collections.published, true)));
+    const unlisted = await tx.select({ title: schema.products.title, slug: schema.products.slug }).from(schema.products).where(and(eq(schema.products.tenantId, t), eq(schema.products.status, "unlisted"), isNull(schema.products.deletedAt))).limit(500);
+    const keptOut: NonNullable<SeoHealthView["noindexed"]>["items"] = [];
+    const okCat = new Set(categoryRows.map((c) => c.slug));
+    for (const c of allCategories) if (!okCat.has(c.slug)) keptOut.push({ type: "category", name: c.name, path: `/categories/${c.slug}`, reason: "Empty: no listed products, so search engines are asked to skip it." });
+    const okCol = new Set(eligibleCollections.map((c) => c.slug));
+    for (const c of allCollections) if (!okCol.has(c.slug)) keptOut.push({ type: "collection", name: c.title, path: `/collections/${c.slug}`, reason: c.indexable ? "Empty: no listed products, so search engines are asked to skip it." : "Marked \"hide from search engines\" in its settings." });
+    for (const p of unlisted) keptOut.push({ type: "product", name: p.title, path: `/products/${p.slug}`, reason: "Status is Unlisted." });
+    for (const p of posts) if ((p.seo as { noindex?: unknown } | null)?.noindex === true) keptOut.push({ type: "blog", name: p.title, path: `/blog/${p.slug}`, reason: "Marked \"hide from search engines\" in the post's settings." });
+    return { status, seo, store, counts, alt, cats, cols, policies, rates, contentImagesWithoutAlt, keptOut };
   });
 
   const crawlers = { ...DEFAULT_AI_CRAWLERS, ...((base.seo?.aiCrawlers as Record<string, "allow" | "block"> | null | undefined) ?? {}) };
@@ -116,6 +146,7 @@ export async function getSeoHealth(rt: Runtime, ctx: TenantContext): Promise<Seo
   const publishedPolicies = base.policies.filter((p) => p.published && (CORE_POLICIES as readonly string[]).includes(p.handle)).length;
 
   return {
+    noindexed: { total: base.keptOut.length, items: base.keptOut.slice(0, 100) },
     indexablePageCount: sitemap.length,
     checks: buildSeoHealthChecks({
       storeLive: (base.status?.mode ?? "coming_soon") === "live",
@@ -125,6 +156,7 @@ export async function getSeoHealth(rt: Runtime, ctx: TenantContext): Promise<Seo
       productsWithoutDescription: base.counts?.noDescription ?? 0,
       productsWithoutImage: base.counts?.noImage ?? 0,
       imagesWithoutAlt: base.alt?.n ?? 0,
+      contentImagesWithoutAlt: base.contentImagesWithoutAlt,
       categoriesWithoutDescription: base.cats?.n ?? 0,
       collectionsWithoutDescription: base.cols?.n ?? 0,
       publishedPolicies,

@@ -15,6 +15,25 @@ export function isApexDomain(hostname: string): boolean {
   return labels.length === 3 && TWO_PART_SUFFIXES.has(labels.slice(1).join("."));
 }
 
+/**
+ * For each connected bare domain ("mybrand.com") its "www" twin, and for each "www.mybrand.com" the bare domain, when that twin is
+ * not connected. Visitors type either, so a store should connect both and make one primary: the other then redirects to it.
+ * Only the www and bare pair is suggested (not other subdomains such as "shop.mybrand.com").
+ */
+export function missingWwwTwins(hostnames: readonly string[]): Array<{ have: string; add: string }> {
+  const set = new Set(hostnames.map((h) => h.trim().toLowerCase()));
+  const out: Array<{ have: string; add: string }> = [];
+  for (const h of set) {
+    if (h.startsWith("www.")) {
+      const bare = h.slice(4);
+      if (bare.includes(".") && !set.has(bare)) out.push({ have: h, add: bare });
+    } else if (isApexDomain(h) && !set.has(`www.${h}`)) {
+      out.push({ have: h, add: `www.${h}` });
+    }
+  }
+  return out;
+}
+
 export type RoutingView = {
   status: "unknown" | "dns_missing" | "dns_wrong" | "dns_ok" | "reachable";
   seen: { a: string[]; aaaa: string[]; cname: string | null };

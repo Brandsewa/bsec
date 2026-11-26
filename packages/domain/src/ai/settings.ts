@@ -8,7 +8,7 @@ import type { Runtime } from "../runtime.ts";
 import { assertPermission, hasPermission, type StorePermission, type TenantContext } from "../context.ts";
 import { aiAccessEntitled, aiFlagEnabled } from "./access.ts";
 import { AI_CONSENT_TEXT, AI_CONSENT_VERSION } from "./consent.ts";
-import { AI_ACTIONS, AI_CELLS, AI_RESOURCES, isCellAllowed, normalizeMatrix, readOnlyMatrix, storePermissionFor, type AiMatrix } from "./matrix.ts";
+import { AI_ACTIONS, AI_CELLS, AI_RESOURCES, isCellAllowed, normalizeMatrix, readOnlyMatrix, storePermissionFor, type AiMatrix, type AiResource } from "./matrix.ts";
 import { listAgentCalls, type AgentCallEntry } from "./call-log.ts";
 import { getAuthorizationRequestView, type AuthorizationRequestView } from "./oauth.ts";
 import { readAiUsage, type AiUsage } from "./limits.ts";
@@ -194,8 +194,21 @@ const ABILITY_TEXT: Record<string, string> = {
   "products.read": "View products, prices and stock",
   "products.write": "Create and edit products (new products are saved as drafts)",
   "products.delete": "Archive products (they can be restored)",
+  "categories.read": "View categories",
+  "categories.write": "Create and edit categories",
+  "categories.delete": "Delete categories that have no products and no sub-categories",
   "collections.read": "View collections",
-  "collections.write": "Create and edit collections",
+  "collections.write": "Create and edit collections and choose their products",
+  "collections.delete": "Delete collections that are not published",
+  "blog.read": "View blog posts and blog categories",
+  "blog.write": "Write and edit blog posts and blog categories (new posts are saved as drafts)",
+  "blog.delete": "Delete blog posts that are not published, and blog categories",
+  "pages.read": "View website pages, their text and links, and the menus",
+  "pages.write": "Edit website page text, links and sections (changes are saved as drafts) and edit menus",
+  "pages.delete": "Delete website pages that are not published, and menus",
+  "redirects.read": "View the redirect manager",
+  "redirects.write": "Add and edit redirects",
+  "redirects.delete": "Delete redirects",
   "customers.read": "View customers, including names, email addresses, phone numbers and addresses",
   "orders.read": "View orders",
   "analytics.read": "View sales reports",
@@ -213,10 +226,13 @@ function describeAbilities(matrix: AiMatrix, allowPublishing: boolean, permissio
       if (line) abilities.push(line);
     }
   }
-  const canWriteCatalog = (isCellAllowed(matrix, "products", "write") || isCellAllowed(matrix, "collections", "write")) && allowPublishing;
-  if (canWriteCatalog) abilities.push("Publish products and collections (make them visible to shoppers)");
-  const refusals = ["Change store settings, payments or staff", "Move money or edit the books", "Delete anything permanently", "Send emails or messages to customers"];
-  if (!canWriteCatalog) refusals.unshift("Publish products or collections");
+  const can = (r: AiResource) => isCellAllowed(matrix, r, "write") && hasPermission(permissions, storePermissionFor(r, "write") as StorePermission);
+  const canWriteCatalog = (can("products") || can("collections") || can("blog") || can("pages")) && allowPublishing;
+  if (canWriteCatalog) abilities.push("Publish products, collections, blog posts and pages (make them visible to shoppers)");
+  // Content deletes are permanent (only for items already hidden, with confirmation); product "delete" only archives.
+  const canDeleteContent = AI_RESOURCES.some((r) => r !== "products" && isCellAllowed(matrix, r, "delete") && hasPermission(permissions, storePermissionFor(r, "delete") as StorePermission));
+  const refusals = ["Change store settings, payments or staff", "Move money or edit the books", canDeleteContent ? "Delete anything that is visible to shoppers" : "Delete anything permanently", "Send emails or messages to customers"];
+  if (!canWriteCatalog) refusals.unshift("Publish products, collections, blog posts or pages");
   return { abilities, refusals };
 }
 
