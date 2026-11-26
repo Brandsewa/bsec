@@ -180,7 +180,7 @@ export interface CreateDeliveredCodOrderOptions extends CreateGuestCheckoutOptio
 
 export interface DeliveredCodOrderResult extends GuestCheckoutResult {
   orderItemId: string;
-  items: Array<{ id: string; orderId: string; variantId: string; quantity: number }>;
+  items: Array<{ id: string; orderId: string; variantId: string | null; quantity: number }>;
 }
 
 /**

@@ -529,7 +529,7 @@ function VariantWorkspace({ onOpenChange, productId, productMedia, priceOnReques
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete this variant?"
-        description="This removes the variant and its stock records. A variant that has been sold cannot be deleted."
+        description="This removes the variant and its stock records. Past orders keep their details. A variant on an order that is still in progress cannot be deleted until that order is delivered or cancelled."
         confirmLabel="Delete variant"
         destructive
         pending={deleteMutation.isPending}

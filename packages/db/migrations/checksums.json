@@ -114,5 +114,6 @@
   "0118_staff_two_factors.sql": "a6817e3bd738653f344341ce8a738d0f99aa8ce26aafd57fba96a62503996bda",
   "0119_ai_access.sql": "a631391dba608926f9597a9ab49df392650ceb2966bedaada122b7918c22207a",
   "0120_store_redirects.sql": "79f44d696712d9d72a8db625b277ddf2b1b9ad529170bae7abe0040dfef6252d",
-  "0121_platform_backups.sql": "5669de9e22bdd4ff0652d105df95cca2bf0af9f1d14c08499130c28b89374b29"
+  "0121_platform_backups.sql": "5669de9e22bdd4ff0652d105df95cca2bf0af9f1d14c08499130c28b89374b29",
+  "0122_variant_delete_keeps_order_history.sql": "2d3585ff5f30816b67db3e6bd5560d22840f89f3d81862cdd0b9259a61b63840"
 }
