@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-26
 - **Agent:** claude
-- **Branch:** `docs/system-diagram-and-plans` (audit plus saving the unsaved docs; cleanup done by hand after merge)
+- **Branch:** `docs/system-diagram-and-plans` (merged in #341, 2ed2e797); cleanup done by hand after merge
 - **Area:** repo housekeeping (branches, worktrees, PRs, sessions), docs
 - **Type:** audit
 - **State checked against:** `origin/main` at `feat(ai-access): connect Google Antigravity (#340)`; last three `main` runs green.
@@ -100,5 +100,13 @@ Read-only checks: `git worktree list`, `git for-each-ref`, `gh pr list --state a
 ## Owner decisions (2026-11-26)
 A1 save in this PR; A2 drop the home animation work; A3 close #164; A4 review and merge #307; A5 close #242; A6 old In flight items are done, list cleared in this PR.
 
+## Outcome (2026-11-26, after the audit)
+- A1, A6: merged in #341 and deployed.
+- A2: `C:/dev/bsec-home-modern` and `feat/marketing-home-modern` deleted; the home animation work was dropped.
+- A3: #164 closed, branch deleted. A5: #242 closed, branch deleted.
+- A4: Dependabot replaced #307 with #342 (50 updates). It needed two fixes before merging (pdfkit kept out of the Next bundle; the 404 page no longer loads the client Button, product page 50.37 to 34.93 KB) and one after (#343, pdfkit held at 0.20.2 because 0.21 crashed the bundled worker in the staging smoke test). See `2026-11-26-claude-pdfkit-pin.md`. #343 deployed to production.
+- Main checkout: leftovers stashed (`cleanup 2026-11-26`), switched to `main`. All worktrees and merged local branches removed, plus four orphan folders and old logs under `C:/dev`.
+- 30 bsec Claude Code sessions archived.
+
 ## Not done
-Nothing was changed, deleted, closed or archived. The audit read git, `gh` and the session list only.
+- The 404 page was not opened in a browser after the Button swap.
