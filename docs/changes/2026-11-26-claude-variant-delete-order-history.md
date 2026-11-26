@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-26
 - **Agent:** claude
-- **Branch:** `fix/variant-delete-order-history` (not merged yet)
+- **Branch:** `fix/variant-delete-order-history` (merged in #338, aa340f80; deployed 2026-11-26)
 - **Area:** db, domain, admin
 - **Type:** fix
 - **Supersedes:** none
@@ -26,7 +26,7 @@ The owner could not delete a variant after a test order for it had been cancelle
 ## Verification
 - Ran: `pnpm turbo run typecheck` (all 19 tasks) pass; `pnpm docs:check` pass (117 migrations recorded).
 - Ran: `packages/domain/test/variant-delete-order-history.int.test.ts` (new) and `variant-builder.int.test.ts` on real Postgres as `app_rw`: 9 pass. Covers refusal naming the in-progress order, delete after a real `cancelAdminOrder`, line kept with `variant_id` null and its SKU, title and price intact, `tenant_id` intact, a review on the variant no longer blocking, and a delivered order: delete allowed and the line still returnable.
-- Full domain integration suite (`pnpm test:heavy:local`): see the PR.
+- Full domain integration suite (`pnpm test:heavy:local`): 174/174 files pass (two crashed the Windows test worker on the first run and passed on re-run). CI on #338: all checks green.
 - NOT verified: the admin dialog in a browser for this change (wording only); production data (no order there is touched by the migration, it only changes constraints).
 
 ## Docs updated
@@ -44,4 +44,4 @@ The owner could not delete a variant after a test order for it had been cancelle
 - [x] Real-DB tests added for the rule and the migration.
 - [x] `docs/ARCHITECTURE.md` updated for the new migration.
 - [x] No secrets, no generated files, no unrelated edits in the diff.
-- [ ] After merge: record updated, in-flight line removed, branch and worktree removed.
+- [x] After merge: record updated, in-flight line removed, branch and worktree removed.
