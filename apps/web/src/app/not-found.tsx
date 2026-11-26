@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DEFAULT_PAGES } from "@bs/blocks";
 import { evaluateStorefrontAccess } from "@bs/domain";
-import { Button } from "@bs/ui";
+// buttonVariants, not the client <Button>: the root not-found boundary ships with every route, so a client Button here put
+// Base UI, tailwind-merge and the spinner icon into the product page bundle (50 KB budget, apps/web/test/perf-budget-bundle).
+import { buttonVariants } from "@bs/ui/server";
 import { server } from "@/server/runtime.ts";
 import { getCachedDefaultPages } from "@/server/cached-storefront.ts";
 
@@ -52,17 +54,17 @@ function NotFoundView({ copy }: { copy: { heading: string; message: string } }) 
           placeholder="Search products"
           className="h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm"
         />
-        <Button type="submit" size="lg">
+        <button type="submit" className={buttonVariants({ size: "lg" })}>
           Search
-        </Button>
+        </button>
       </form>
       <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Button asChild variant="outline" size="lg">
-          <Link href="/">Home</Link>
-        </Button>
-        <Button asChild variant="outline" size="lg">
-          <Link href="/collections">Browse collections</Link>
-        </Button>
+        <Link href="/" className={buttonVariants({ variant: "outline", size: "lg" })}>
+          Home
+        </Link>
+        <Link href="/collections" className={buttonVariants({ variant: "outline", size: "lg" })}>
+          Browse collections
+        </Link>
       </div>
     </div>
   );
