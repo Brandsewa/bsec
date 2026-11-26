@@ -4,7 +4,7 @@
  * the platform-scoped token tables.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
@@ -21,6 +21,7 @@ import {
   exchangeAuthorizationCode,
   getAiSettings,
   listAiConnections,
+  mcpResourceUrl,
   provisionTenant,
   registerOAuthClient,
   revokeAiConnection,
@@ -196,6 +197,30 @@ describe("OAuth connect flow", () => {
     await expect(authenticateAgent(rtWeb, next.accessToken, "r")).rejects.toBeInstanceOf(AgentAccessError); // the whole chain is dead
     const list = await listAiConnections(rtWeb, ctxA);
     expect(list.find((x) => x.id && x.clientName === "Claude" && x.status === "active")).toBeDefined(); // other connections are untouched
+  });
+
+  it("connects Google Antigravity through its client metadata document (CIMD), PKCE and the resource parameter", async () => {
+    const db = rtWeb._db.db;
+    const clientId = "https://antigravity.google/oauth/client-metadata.json";
+    const callback = "https://antigravity.google/oauth-callback";
+    // The document Antigravity publishes (fetched 2026-11-26); stubbed so the test needs no network.
+    const doc = { client_id: clientId, client_name: "Google Antigravity", client_uri: "https://antigravity.google", redirect_uris: [callback], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url === clientId ? new Response(JSON.stringify(doc), { status: 200 }) : new Response("no", { status: 404 }))));
+    try {
+      const { verifier, challenge } = pkce();
+      const resource = mcpResourceUrl(BASE);
+      const { requestId } = await createAuthorizationRequest(db, BASE, { responseType: "code", clientId, redirectUri: callback, codeChallenge: challenge, codeChallengeMethod: "S256", state: "s1", scope: undefined, resource });
+      const { redirectTo } = await approveAuthorizationRequest(rtWeb, ctxA, requestId);
+      expect(redirectTo.startsWith(`${callback}?`)).toBe(true);
+      const tokens = await exchangeAuthorizationCode(db, BASE, { code: new URL(redirectTo).searchParams.get("code")!, clientId, redirectUri: callback, codeVerifier: verifier, resource });
+      const session = await authenticateAgent(rtWeb, tokens.access_token, "r-ag");
+      expect(session.ctx.tenantId).toBe(a.tenantId);
+      expect(session.connection.clientName).toBe("Google Antigravity");
+      // Another redirect address under the same client is refused.
+      await expect(createAuthorizationRequest(db, BASE, { responseType: "code", clientId, redirectUri: "https://antigravity.google/elsewhere", codeChallenge: challenge, codeChallengeMethod: "S256", state: undefined, scope: undefined, resource })).rejects.toThrow(/redirect_uri/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("a refresh token cannot be used by a different app", async () => {

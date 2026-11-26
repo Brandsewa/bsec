@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_store/settings/ai-access")({
 });
 
 const TITLE = "AI access";
-const DESCRIPTION = "Let an AI assistant such as Claude help run your store. You choose what it can see and change.";
+const DESCRIPTION = "Let an AI assistant such as Claude or Google Antigravity help run your store. You choose what it can see and change.";
 const KEY = ["admin", "ai", "settings"] as const;
 
 const RESOURCES: Array<{ id: string; label: string; hint: string }> = [
@@ -33,6 +33,11 @@ const RESOURCES: Array<{ id: string; label: string; hint: string }> = [
   { id: "finance", label: "Finance", hint: "Profit and loss and expenses. The AI can never change the books." },
 ];
 const ACTIONS = ["read", "write", "delete"] as const;
+
+/** The Antigravity mcp_config.json entry: a remote server needs only its address; sign-in uses Antigravity's published identity (CIMD). */
+function antigravityConfig(url: string): string {
+  return JSON.stringify({ mcpServers: { "my-store": { serverUrl: url } } }, null, 2);
+}
 const CHANGE_LABELS: Record<string, string> = {
   "product.created": "Created a product (draft)",
   "product.updated": "Edited a product",
@@ -283,14 +288,16 @@ function ConnectionTab({ settings }: { settings: AiSettings }) {
     );
   }
 
-  async function copy() {
+  async function copyText(text: string, done: string) {
     try {
-      await navigator.clipboard.writeText(settings.mcpUrl);
-      toast.success("Address copied");
+      await navigator.clipboard.writeText(text);
+      toast.success(done);
     } catch {
-      toast.error("Could not copy. Select the address and copy it.");
+      toast.error("Could not copy. Select the text and copy it.");
     }
   }
+
+  const copy = () => copyText(settings.mcpUrl, "Address copied");
 
   async function runCheck() {
     setChecking(true);
@@ -323,11 +330,11 @@ function ConnectionTab({ settings }: { settings: AiSettings }) {
 
   return (
     <>
-      <SettingsCard title="Connect Claude" description="Add your store to Claude as a custom connector. It takes about a minute.">
+      <SettingsCard title="Connect an AI app" description="Add your store to Claude or Google Antigravity. It takes about a minute.">
         <div className="grid gap-4">
           <div>
             <label htmlFor="ai-url" className="mb-1 block text-xs font-medium text-foreground">
-              Connector address
+              Store connector address
             </label>
             <div className="flex items-center gap-2">
               <input id="ai-url" readOnly value={settings.mcpUrl} onFocus={(e) => e.currentTarget.select()} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 font-mono text-xs text-foreground" />
@@ -336,25 +343,57 @@ function ConnectionTab({ settings }: { settings: AiSettings }) {
               </Button>
             </div>
           </div>
-          <ol className="list-decimal space-y-1.5 pl-5 text-sm text-foreground">
-            <li>In Claude, open Customize, then Connectors, then Add custom connector.</li>
-            <li>Paste the address above and press Add.</li>
-            <li>Press Connect, sign in to your store here and approve.</li>
-          </ol>
-          <details className="group rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-foreground">
-              On a Team plan, or using Claude Code?
-              <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
-            </summary>
-            <div className="mt-2 space-y-1.5">
-              <p>On Claude Team and Enterprise plans, a workspace Owner adds the connector under Organization settings, then each person presses Connect.</p>
-              <p>In the OAuth step keep &ldquo;Use Claude&rsquo;s published identity&rdquo;. A Free Claude account allows one custom connector.</p>
-              <p>
-                Claude Code: <code className="rounded bg-muted px-1 py-0.5 font-mono">claude mcp add --transport http store {settings.mcpUrl}</code>
-              </p>
-              <p>If sign-in fails, note the reference starting with &ldquo;ofid_&rdquo; that Claude shows and send it to support.</p>
-            </div>
-          </details>
+          <Tabs defaultValue="claude">
+            <TabsList>
+              <TabsTrigger value="claude">Claude</TabsTrigger>
+              <TabsTrigger value="antigravity">Google Antigravity</TabsTrigger>
+            </TabsList>
+            <TabsContent value="claude" className="mt-3 grid gap-4">
+              <ol className="list-decimal space-y-1.5 pl-5 text-sm text-foreground">
+                <li>In Claude, open Customize, then Connectors, then Add custom connector.</li>
+                <li>Paste the address above and press Add.</li>
+                <li>Press Connect, sign in to your store here and approve.</li>
+              </ol>
+              <details className="group rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-foreground">
+                  On a Team plan, or using Claude Code?
+                  <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+                </summary>
+                <div className="mt-2 space-y-1.5">
+                  <p>On Claude Team and Enterprise plans, a workspace Owner adds the connector under Organization settings, then each person presses Connect.</p>
+                  <p>In the OAuth step keep &ldquo;Use Claude&rsquo;s published identity&rdquo;. A Free Claude account allows one custom connector.</p>
+                  <p>
+                    Claude Code: <code className="rounded bg-muted px-1 py-0.5 font-mono">claude mcp add --transport http store {settings.mcpUrl}</code>
+                  </p>
+                  <p>If sign-in fails, note the reference starting with &ldquo;ofid_&rdquo; that Claude shows and send it to support.</p>
+                </div>
+              </details>
+            </TabsContent>
+            <TabsContent value="antigravity" className="mt-3 grid gap-4">
+              <ol className="list-decimal space-y-1.5 pl-5 text-sm text-foreground">
+                <li>In Antigravity open the MCP servers settings: in the app, Customizations, then Installed, then MCP Servers; in the editor, MCP Servers, then Manage MCP Servers, then View raw config.</li>
+                <li>Add the lines below to the configuration and save.</li>
+                <li>Press Authenticate on the new server, sign in to your store here and approve. Antigravity then shows a code: paste it where Antigravity asks for the authorization code.</li>
+              </ol>
+              <div className="relative">
+                <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">{antigravityConfig(settings.mcpUrl)}</pre>
+                <Button variant="outline" size="sm" className="absolute right-2 top-2" onClick={() => void copyText(antigravityConfig(settings.mcpUrl), "Configuration copied")}>
+                  <Copy /> Copy
+                </Button>
+              </div>
+              <details className="group rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <summary className="flex cursor-pointer list-none items-center justify-between font-medium text-foreground">
+                  Using the Antigravity CLI, or sign-in does not start?
+                  <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+                </summary>
+                <div className="mt-2 space-y-1.5">
+                  <p>The CLI and the editor read the same file: <code className="rounded bg-muted px-1 py-0.5 font-mono">~/.gemini/config/mcp_config.json</code>, or <code className="rounded bg-muted px-1 py-0.5 font-mono">.agents/mcp_config.json</code> inside one project.</p>
+                  <p>No client ID, secret or API key is needed: Antigravity signs in with its own published identity. Do not paste a token into the file.</p>
+                  <p>Use a recent Antigravity version (the editor needs 2.6 or later for this kind of sign-in).</p>
+                </div>
+              </details>
+            </TabsContent>
+          </Tabs>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="outline" onClick={() => void runCheck()} loading={checking} disabled={checking}>
               <ShieldCheck /> Check my setup
@@ -381,7 +420,7 @@ function ConnectionTab({ settings }: { settings: AiSettings }) {
         {connections.isLoading ? (
           <FormSkeleton />
         ) : (connections.data ?? []).length === 0 ? (
-          <EmptyState icon={Unplug} title="No AI apps connected yet" description="Follow the steps above to connect Claude." />
+          <EmptyState icon={Unplug} title="No AI apps connected yet" description="Follow the steps above to connect Claude or Google Antigravity." />
         ) : (
           <ul className="divide-y divide-border/60">
             {(connections.data ?? []).map((c) => (

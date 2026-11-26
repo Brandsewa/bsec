@@ -229,7 +229,9 @@ function describeAbilities(matrix: AiMatrix, allowPublishing: boolean, permissio
   const can = (r: AiResource) => isCellAllowed(matrix, r, "write") && hasPermission(permissions, storePermissionFor(r, "write") as StorePermission);
   const canWriteCatalog = (can("products") || can("collections") || can("blog") || can("pages")) && allowPublishing;
   if (canWriteCatalog) abilities.push("Publish products, collections, blog posts and pages (make them visible to shoppers)");
-  const refusals = ["Change store settings, payments or staff", "Move money or edit the books", "Delete anything permanently", "Send emails or messages to customers"];
+  // Content deletes are permanent (only for items already hidden, with confirmation); product "delete" only archives.
+  const canDeleteContent = AI_RESOURCES.some((r) => r !== "products" && isCellAllowed(matrix, r, "delete") && hasPermission(permissions, storePermissionFor(r, "delete") as StorePermission));
+  const refusals = ["Change store settings, payments or staff", "Move money or edit the books", canDeleteContent ? "Delete anything that is visible to shoppers" : "Delete anything permanently", "Send emails or messages to customers"];
   if (!canWriteCatalog) refusals.unshift("Publish products, collections, blog posts or pages");
   return { abilities, refusals };
 }
