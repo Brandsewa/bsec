@@ -10,7 +10,9 @@ const config: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@bs/ui"],
   // pg + pino use Node internals; keep them as runtime requires instead of bundling.
-  serverExternalPackages: ["pg", "pino", "pg-boss"],
+  // pdfkit (reached through the @bs/domain barrel, invoice PDFs) finds its data files from its own file URL since 0.21;
+  // bundled, that URL comes from the wrong realm and the build fails ("Received an instance of URL"), so it stays external.
+  serverExternalPackages: ["pg", "pino", "pg-boss", "pdfkit"],
   // IndexNow proves site ownership by fetching /<key>.txt from the root of the host (docs/SEO-GEO-AEO-PLAN.md Phase 2).
   // The key is 32 hex characters; the route answers only for the requesting store's own key.
   // Browser hardening that is safe without per-page tuning (audit A7-01; docs/audit/2026-11-A7-attack-surface.md). A Content-Security-Policy
