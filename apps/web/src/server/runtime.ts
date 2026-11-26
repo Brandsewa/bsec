@@ -25,8 +25,11 @@ export function server(): { rt: Runtime; log: Logger } {
         revalidateTags: (tags) => {
           for (const t of tags) {
             try {
+              // Merchant edits are read-your-writes (ADR-004): `{ expire: 0 }` drops the entry so the next storefront request
+              // renders fresh. The "max" profile served the old page (old price) to the next visit while it refreshed in the
+              // background. updateTag() would do the same but only works in Server Actions; these calls come from Route Handlers.
               // eslint-disable-next-line bs/tenant-cache-tag -- tag strings are pre-verified tenant-prefixed via computeInvalidationTags
-              revalidateTag(t, "max");
+              revalidateTag(t, { expire: 0 });
             } catch (err) {
               // revalidateTag() only works inside a Server Action/Route Handler request scope.
               // Domain mutations can legitimately run outside one (e.g. a worker job) - log so a

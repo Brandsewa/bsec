@@ -1,4 +1,4 @@
-import { ImageIcon, Plus, X } from "lucide-react";
+import { AlertTriangle, ImageIcon, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -130,6 +131,26 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
   const savedCombos = useMemo(() => optionCombinations(cleanOptions(initial)), [initial]);
   const outsideGrid = (v: ProductVariant) =>
     savedCombos.length > 0 && !savedCombos.some((c) => sameCombo(v.optionValues as Record<string, string> | null, c));
+  const strays = product.variants.filter(outsideGrid);
+  // Variants to delete after the merchant confirms (from the selection or the "not in the option grid" warning).
+  const [pendingDelete, setPendingDelete] = useState<ProductVariant[] | null>(null);
+
+  async function deleteVariants(rows: ProductVariant[]) {
+    setPendingDelete(null);
+    await bulk.run({
+      rows,
+      getId: (v) => v.id,
+      getLabel: (v) => v.sku,
+      verb: "Deleting",
+      done: "deleted",
+      noun: "variant",
+      action: (v) => client.admin.variants.delete({ id: v.id }),
+      onFinished: () => {
+        setSelected(new Set());
+        onChanged();
+      },
+    });
+  }
 
   const mediaUrl = (mediaId: string | null | undefined) => product.media.find((m) => m.mediaId === mediaId)?.url;
 
@@ -295,6 +316,19 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
                   Set price for {selected.size}
                 </Button>
               ) : null}
+              {selected.size > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={bulk.busy || selected.size >= product.variants.length}
+                  title={selected.size >= product.variants.length ? "A product needs at least one variant" : undefined}
+                  onClick={() => setPendingDelete(product.variants.filter((v) => selected.has(v.id)))}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" aria-hidden /> Delete {selected.size}
+                </Button>
+              ) : null}
               <Button type="button" variant="outline" size="sm" disabled={product.variants.length >= MAX_VARIANTS} onClick={() => openDrawer(null)}>
                 <Plus className="mr-1.5 size-3.5" aria-hidden /> Add variant
               </Button>
@@ -305,6 +339,26 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
             <p role="status" className="text-xs text-muted-foreground">
               {bulk.progress.label}… {bulk.progress.done}/{bulk.progress.total}
             </p>
+          ) : null}
+
+          {strays.length > 0 && strays.length < product.variants.length ? (
+            <div role="alert" className="flex flex-wrap items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+              <p className="min-w-0 flex-1 text-foreground">
+                {strays.length === 1 ? "1 variant does" : `${strays.length} variants do`} not match the options above ({strays.map((v) => v.title).join(", ")}).
+                While {strays.length === 1 ? "it exists" : "they exist"}, the storefront cannot show one picker per option and lists every variant in a single combined choice instead.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={bulk.busy}
+                onClick={() => setPendingDelete(strays)}
+              >
+                <Trash2 className="mr-1.5 size-3.5" aria-hidden /> Delete {strays.length === 1 ? "it" : `these ${strays.length}`}
+              </Button>
+            </div>
           ) : null}
 
           {product.variants.length === 0 ? (
@@ -384,6 +438,17 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
         optionNames={optionNames}
         canDelete={product.variants.length > 1}
         onChanged={onChanged}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={pendingDelete?.length === 1 ? "Delete this variant?" : `Delete ${pendingDelete?.length ?? 0} variants?`}
+        description={`${(pendingDelete ?? []).map((v) => v.title).join(", ")}. This removes ${pendingDelete?.length === 1 ? "the variant" : "them"} and the stock records. A variant that has been sold cannot be deleted.`}
+        confirmLabel="Delete"
+        destructive
+        pending={bulk.busy}
+        onConfirm={() => void deleteVariants(pendingDelete ?? [])}
       />
 
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>

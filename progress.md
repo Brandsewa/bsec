@@ -3,6 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
+- claude · `fix/product-editor-variants` · product editor: storefront price refresh after edits, one picker per option (variant builder extends variants when an option is added), variant delete with cart lines, images before first save, Description card; change record `docs/changes/2026-11-26-claude-product-editor-variant-fixes.md` · 2026-11-26
 - claude · `docs/rebuild-runbook` · `infra/runbooks/REBUILD.md` (server lost: snapshot path and from-scratch path, secrets inventory, rebuild test); plan `docs/BACKUP-DR-PLAN.md` G5, change record `docs/changes/2026-11-25-claude-rebuild-runbook.md` · 2026-11-25
 - claude · `feat/tabs-revisions-custom-fields` · Tabs revisions: custom field picker popup (tabs and product accordion), four-box paddings, accordion icon size, no default widget padding; change record `docs/changes/2026-11-24-claude-tabs-revisions-custom-fields.md` · 2026-11-24
 - claude · `feat/tabs-widget-review-position` · Tabs widget (accordion on phones) and the product page's reviews movable through the Reviews block; change record `docs/changes/2026-11-24-claude-tabs-widget-and-movable-reviews.md` · 2026-11-24

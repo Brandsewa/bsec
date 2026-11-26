@@ -6,13 +6,12 @@ import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { loadProductDetailInternal } from "../catalog-services.ts";
 import { syncVariantMarketPrices } from "../markets/service.ts";
+import { planVariantGrid } from "@bs/contracts/variant-grid";
 import {
   MAX_VARIANTS_PER_PRODUCT,
   comboTitle,
   nextSku,
   normalizeOptions,
-  optionCombinations,
-  sameCombo,
   type OptionInput,
 } from "./variant-options.ts";
 
@@ -72,6 +71,8 @@ export interface SetProductOptionsInput {
  * Replaces a product's options and brings its variants in line (the variant builder):
  *  - variants whose option values match a combination are kept as they are (price, SKU, stock untouched);
  *  - a product that had no options and one variant keeps that variant as the first combination;
+ *  - a variant that only lacks a value for a newly added option is extended with that option's first free value
+ *    ("Red" becomes "Red / S" when Size is added), so the storefront can show one picker per option;
  *  - missing combinations get new variants with generated SKUs;
  *  - variants that match no combination are left alone (never deleted here) so no order history or stock is lost;
  *    they show in the admin as "not in the option grid" and can be deleted by hand.
@@ -103,31 +104,18 @@ export async function setProductOptions(rt: Runtime, ctx: TenantContext, input: 
       await tx.insert(schema.productOptions).values({ tenantId: ctx.tenantId, productId: input.productId, name: opt.name, position: i, values: opt.values });
     }
 
-    const combos = optionCombinations(options);
-    const matched = new Set<string>();
-    const unmatchedCombos: Array<Record<string, string>> = [];
-    for (const combo of combos) {
-      const hit = existing.find((v) => !matched.has(v.id) && sameCombo(v.optionValues as Record<string, string> | null, combo));
-      if (hit) matched.add(hit.id);
-      else unmatchedCombos.push(combo);
+    // Shared with the admin preview (@bs/contracts/variant-grid): existing variants keep or extend their combination
+    // (adding Size turns "Red" into "Red / S"), the rest of the grid becomes new variants.
+    const plan = planVariantGrid(options, existing.map((v) => ({ optionValues: v.optionValues as Record<string, string> | null })));
+    for (const a of plan.assigned) {
+      const v = existing[a.index];
+      if (!v || !a.changed) continue;
+      await tx
+        .update(schema.variants)
+        .set({ optionValues: a.combo, title: comboTitle(a.combo, options), updatedAt: new Date() })
+        .where(and(eq(schema.variants.id, v.id), eq(schema.variants.tenantId, ctx.tenantId)));
     }
-
-    // First time options are added to a one-variant product: that variant becomes the first combination.
-    const unmatchedExisting = existing.filter((v) => !matched.has(v.id));
-    const hadNoOptions = existing.every((v) => !v.optionValues || Object.keys(v.optionValues as object).length === 0);
-    if (combos.length > 0 && hadNoOptions && existing.length === 1 && unmatchedCombos.length > 0) {
-      const [first, ...rest] = unmatchedCombos;
-      const only = unmatchedExisting[0];
-      if (first && only) {
-        await tx
-          .update(schema.variants)
-          .set({ optionValues: first, title: comboTitle(first, options), updatedAt: new Date() })
-          .where(eq(schema.variants.id, only.id));
-        matched.add(only.id);
-        unmatchedCombos.length = 0;
-        unmatchedCombos.push(...rest);
-      }
-    }
+    const unmatchedCombos = plan.toCreate;
 
     if (existing.length + unmatchedCombos.length > MAX_VARIANTS_PER_PRODUCT) {
       throw new Error(`Bad Request: this would give the product more than ${MAX_VARIANTS_PER_PRODUCT} variants`);
@@ -247,7 +235,7 @@ export async function createVariant(rt: Runtime, ctx: TenantContext, input: Crea
 
 /**
  * Deletes a variant that was never sold. A variant that appears on any order is refused (its history must stay), and a
- * product always keeps at least one variant.
+ * product always keeps at least one variant. Lines in open shopper carts are removed with it.
  */
 export async function deleteVariant(rt: Runtime, ctx: TenantContext, input: { id: string }) {
   assertPermission(ctx, "products.write");
@@ -275,6 +263,17 @@ export async function deleteVariant(rt: Runtime, ctx: TenantContext, input: { id
       throw new Error("Conflict: this variant is on past orders and cannot be deleted. Turn off stock tracking or archive the product instead");
     }
 
+    const [quoted] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.quoteRequests)
+      .where(and(eq(schema.quoteRequests.variantId, input.id), eq(schema.quoteRequests.tenantId, ctx.tenantId)));
+    if (Number(quoted?.n ?? 0) > 0) {
+      throw new Error("Conflict: this variant has quote requests and cannot be deleted. Archive the product instead");
+    }
+
+    // Shoppers' carts point at variants with ON DELETE RESTRICT, so a variant sitting in any open cart could never be
+    // deleted (the merchant saw a raw foreign key error). The line simply leaves those carts; nothing was bought.
+    await tx.delete(schema.cartItems).where(and(eq(schema.cartItems.variantId, input.id), eq(schema.cartItems.tenantId, ctx.tenantId)));
     await tx.delete(schema.variants).where(and(eq(schema.variants.id, input.id), eq(schema.variants.tenantId, ctx.tenantId)));
     await audit(tx, ctx, "variant.deleted", variant.productId, { variantId: variant.id, sku: variant.sku });
     return variant.productId;
