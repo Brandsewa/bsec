@@ -13,6 +13,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # pdfkit 0.21 reads data files (data.trie) next to its own module; the esbuild single-file bundles of
+    # platform and worker cannot ship them, so the worker crashed at start (docs/changes/2026-11-26-claude-pdfkit-pin.md).
+    # Lift this once those images install pdfkit next to the bundle, as they do for sharp.
+    ignore:
+      - dependency-name: pdfkit
+        versions: [">=0.21.0"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
