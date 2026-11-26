@@ -45,7 +45,7 @@ Daily Coolify `pg_dump` at 02:30 UTC, 14 local copies, plus R2 bucket `bsec-back
 
 ### G4. A failed backup goes unnoticed
 Two independent signals:
-1. Coolify notifications by **email to the admin address** (owner decision 2026-11-24; Telegram or Slack can be added later) for scheduled-backup failure. Configuration only, no code. Better Stack heartbeat alerts go to the same address.
+1. Coolify notifications by **email to the admin address** (owner decision 2026-11-24; Telegram or Slack can be added later) for scheduled-backup failure. Configuration only, no code. Better Stack heartbeat alerts go to the same address. **Done 2026-11-26:** team Notifications > Email and the instance transactional email both send through Zoho ZeptoMail SMTP (`smtp.zeptomail.in:587`, StartTLS, from `no-reply@bcom.si`); events: backup failure, deploy failure, restart limit, scheduled task failure, server alerts including disk usage (which also covers the VPS disk-space alert in item 3). Alerts go to the Coolify account email; tests arrived.
 2. **Freshness check in `apps/worker`:** a pg-boss job every 30 min lists the newest object under `data/` with the read-only token; if older than 26 h (daily dump), or once pgBackRest is live if the newest archived WAL is older than 10 min (from `pgbackrest info`/`pg_stat_archiver`), it logs an error, sends Sentry, and **stops pinging a Better Stack heartbeat**. A missing ping pages you. Same job also pings only when object size is at least 50% of the median of the last 7 (catches empty dumps). Domain code, unit-tested; env: `BACKUP_R2_*` (read-only), documented in `DEPLOYMENT.md`.
 3. Plus Better Stack uptime monitors for `/api/health` (RUNBOOK section 9, not set up yet) and a disk-space alert on the VPS (needed for G1 phase 3).
 
