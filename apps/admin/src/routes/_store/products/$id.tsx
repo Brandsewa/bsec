@@ -4,7 +4,6 @@ import { useState } from "react";
 import { DetailSkeleton, EmptyState, PageContainer, PageHeader, PageSkeleton, toast } from "@bs/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProductDetail, RichDescription } from "@bs/contracts";
-import { RichDescriptionField } from "../../../components/rich-description-field.tsx";
 import { initialProductDescription } from "../../../lib/product-description.ts";
 import { richBlocksToText } from "@bs/contracts/rich-text";
 import { Button } from "@bs/ui";
@@ -18,7 +17,7 @@ import { VariantBuilderCard } from "../../../components/product/variant-builder.
 import { CustomFieldsCard } from "../../../components/product/custom-fields-card.tsx";
 import { CopyableId, SimpleSelect } from "@bs/ui";
 import { formatProductId } from "@bs/contracts";
-import { OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
+import { DescriptionCard, OrganizationCard, PricingQuotesCard, StatusVisibilityCard, type PreorderValue } from "../../../components/product/product-cards.tsx";
 import { storefrontLink, useStorefrontUrl } from "../../../lib/storefront-url.ts";
 import { client, orpc } from "../../../lib/orpc.ts";
 import { MediaGalleryField } from "@bs/content-admin/media/media-gallery-field.tsx";
@@ -318,7 +317,7 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-semibold">General Information</CardTitle>
-              <CardDescription>Title, handle, and product descriptions.</CardDescription>
+              <CardDescription>Title, handle, short description and tags.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-1.5">
@@ -353,13 +352,6 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
                 />
               </div>
 
-              <RichDescriptionField
-                id="edit-desc"
-                value={descriptionJson}
-                onChange={setDescriptionJson}
-                tip="Shown in full under the product, where shoppers and search engines read it. Use headings for sections such as tasting notes, brewing and FAQ, plus lists, bold, italic and links."
-              />
-
               <div className="grid gap-1.5">
                 <FieldLabel htmlFor="edit-tags">Tags</FieldLabel>
                 <Input
@@ -393,6 +385,8 @@ function ProductEditor({ product, go }: { product: ProductDetailData; go: (to: s
 
           {/* Custom fields (ADR-034) */}
           <CustomFieldsCard resourceType="product" resourceId={product.id} />
+
+          <DescriptionCard id="edit-desc" value={descriptionJson} onChange={setDescriptionJson} />
 
           {/* Search Engine Listing (SEO Card) */}
           <SeoCard

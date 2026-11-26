@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { startTestDb, type TestDb } from "@bs/db/test-env";
+import { schema, withTenant } from "@bs/db";
 import {
   createProduct,
   createRuntime,
@@ -96,6 +98,35 @@ describe("variant builder", () => {
     expect(shrunk.variants).toHaveLength(3);
   });
 
+  it("adding a second option extends the existing variants instead of leaving them behind", async () => {
+    // Owner report 2026-11-26: Colour then Size left "Red" and "Blue" outside the grid next to new "Red / S"... variants,
+    // and the storefront then showed one combined list instead of a Colour picker and a Size picker.
+    const p = await makeProduct("Two Axis Tee");
+    const colour = await setProductOptions(rt, ctx, { productId: p.id, options: [{ name: "Colour", values: ["Red", "Blue"] }] });
+    const red = colour.variants.find((v) => v.optionValues?.["Colour"] === "Red")!;
+    const blue = colour.variants.find((v) => v.optionValues?.["Colour"] === "Blue")!;
+    await updateVariant(rt, ctx, { id: blue.id, price: 61_000 });
+
+    const both = await setProductOptions(rt, ctx, {
+      productId: p.id,
+      options: [
+        { name: "Colour", values: ["Red", "Blue"] },
+        { name: "Size", values: ["S", "M"] },
+      ],
+    });
+    expect(both.variants).toHaveLength(4);
+    for (const v of both.variants) {
+      expect(Object.keys(v.optionValues ?? {}).sort()).toEqual(["Colour", "Size"]);
+    }
+    const redAfter = both.variants.find((v) => v.id === red.id)!;
+    expect(redAfter.optionValues).toEqual({ Colour: "Red", Size: "S" });
+    expect(redAfter.title).toBe("Red / S");
+    expect(redAfter.sku).toBe(red.sku);
+    const blueAfter = both.variants.find((v) => v.id === blue.id)!;
+    expect(blueAfter.optionValues).toEqual({ Colour: "Blue", Size: "S" });
+    expect(blueAfter.price).toBe(61_000);
+  });
+
   it("refuses invalid option sets", async () => {
     const p = await makeProduct("Limit Tea");
     await expect(
@@ -120,6 +151,18 @@ describe("variant builder", () => {
     await expect(createVariant(rt, ctx, { productId: p.id, sku: "SINGLE-EXTRA", title: "Dup", price: 1 })).rejects.toThrow(/already used/);
 
     await expect(deleteVariant(rt, ctx, { id: extra.id })).resolves.toEqual({ success: true });
+
+    // A variant sitting in a shopper's open cart can still be deleted; the cart line goes with it.
+    const carted = await createVariant(rt, ctx, { productId: p.id, sku: "SINGLE-CARTED", title: "Carted", price: 5_000 });
+    const cartId = await withTenant(rt._db.db, ctx.tenantId, async (tx) => {
+      const [cart] = await tx.insert(schema.carts).values({ tenantId: ctx.tenantId, token: `vb-cart-${carted.id}` }).returning();
+      await tx.insert(schema.cartItems).values({ tenantId: ctx.tenantId, cartId: cart!.id, variantId: carted.id, quantity: 1, unitPriceSnapshot: 5_000 });
+      return cart!.id;
+    });
+    await expect(deleteVariant(rtRls, ctx, { id: carted.id })).resolves.toEqual({ success: true });
+    const lines = await withTenant(rt._db.db, ctx.tenantId, (tx) => tx.select().from(schema.cartItems).where(eq(schema.cartItems.cartId, cartId)));
+    expect(lines).toHaveLength(0);
+
     const [only] = (await makeProduct("Only Tea")).variants;
     await expect(deleteVariant(rt, ctx, { id: only!.id })).rejects.toThrow(/at least one variant/);
   });

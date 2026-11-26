@@ -2,6 +2,8 @@
  * Client-side preview of what the variant builder will do (the server decides, see
  * packages/domain/src/catalog/variant-options.ts). Used to show "this will add N variants" before applying.
  */
+import { planVariantGrid } from "@bs/contracts/variant-grid";
+
 export const MAX_OPTIONS = 3;
 export const MAX_VALUES = 30;
 export const MAX_VARIANTS = 250;
@@ -68,15 +70,8 @@ export function previewGrid(options: DraftOption[], existing: Array<{ optionValu
   const combos = optionCombinations(cleaned);
   if (combos.length > MAX_VARIANTS) return { error: `That makes ${combos.length} variants; the limit is ${MAX_VARIANTS}`, total: combos.length, toCreate: 0 };
 
-  const matched = new Set<number>();
-  let unmatchedCombos = 0;
-  for (const combo of combos) {
-    const idx = existing.findIndex((v, i) => !matched.has(i) && sameCombo(v.optionValues ?? null, combo));
-    if (idx >= 0) matched.add(idx);
-    else unmatchedCombos += 1;
-  }
-  const hadNoOptions = existing.every((v) => !v.optionValues || Object.keys(v.optionValues).length === 0);
-  if (combos.length > 0 && hadNoOptions && existing.length === 1 && unmatchedCombos > 0) unmatchedCombos -= 1; // the one variant is reused
+  // Same rules as the server's setProductOptions, so "N new will be added" is what Apply does.
+  const unmatchedCombos = planVariantGrid(cleaned, existing).toCreate.length;
   if (existing.length + unmatchedCombos > MAX_VARIANTS) return { error: `That would give the product more than ${MAX_VARIANTS} variants`, total: combos.length, toCreate: unmatchedCombos };
   return { error: null, total: combos.length, toCreate: unmatchedCombos };
 }

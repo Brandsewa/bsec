@@ -20,9 +20,31 @@ import {
   SimpleSelect,
   Switch,
 } from "@bs/ui";
+import type { RichDescription } from "@bs/contracts";
 import { categoryLabel } from "../../lib/category-label.ts";
+import { RichDescriptionField } from "../rich-description-field.tsx";
 
 export type ProductStatus = "draft" | "active" | "unlisted" | "archived";
+
+/** The long description in a card of its own, below Variants and Custom fields (owner request 2026-11-26). Same on the add and the edit page. */
+export function DescriptionCard({ id, value, onChange }: { id: string; value: RichDescription | null; onChange: (value: RichDescription | null) => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Description</CardTitle>
+        <CardDescription>The full product description shown on the product page.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <RichDescriptionField
+          id={id}
+          value={value}
+          onChange={onChange}
+          tip="Shown in full under the product, where shoppers and search engines read it. Use headings for sections such as tasting notes, brewing and FAQ, plus lists, bold, italic and links."
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
 /** Status dropdown and the featured switch. Same card on the add and the edit page. */
 export function StatusVisibilityCard({

@@ -10,7 +10,8 @@
     "./discount-rules": "./src/discount-rules.ts",
     "./countries": "./src/countries.ts",
     "./units": "./src/units.ts",
-    "./product-bulk-io": "./src/product-bulk-io/index.ts"
+    "./product-bulk-io": "./src/product-bulk-io/index.ts",
+    "./variant-grid": "./src/variant-grid.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
