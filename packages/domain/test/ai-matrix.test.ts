@@ -51,6 +51,9 @@ describe("AI permission matrix", () => {
 describe("OAuth redirect allowlist", () => {
   it("accepts Claude's hosted callback and loopback addresses of any port", () => {
     expect(isAllowedRedirectUri("https://claude.ai/api/mcp/auth_callback")).toBe(true);
+    expect(isAllowedRedirectUri("https://antigravity.google/oauth-callback")).toBe(true);
+    expect(isAllowedRedirectUri("https://antigravity.google/oauth-callback/other")).toBe(false);
+    expect(isAllowedRedirectUri("https://evil.example/antigravity.google/oauth-callback")).toBe(false);
     expect(isAllowedRedirectUri("http://localhost:3118/callback")).toBe(true);
     expect(isAllowedRedirectUri("http://127.0.0.1:54321/callback")).toBe(true);
   });

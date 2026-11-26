@@ -16,8 +16,13 @@ import { AI_CONSENT_VERSION } from "./consent.ts";
 import { OAuthError, issueTokenPair, newToken, revokeConnectionAsCompromised, hashAiToken, type TokenPair } from "./tokens.ts";
 import { aiAccessEntitled, aiFlagEnabled } from "./access.ts";
 
-const DEFAULT_REDIRECT_URIS = ["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"];
-const DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com"];
+/**
+ * Hosted callbacks and client metadata hosts of the AI apps we support (ADR-050). Claude (claude.ai, claude.com) and
+ * Google Antigravity (antigravity.google: CIMD client https://antigravity.google/oauth/client-metadata.json, hosted callback
+ * where the App shows the code to paste). Loopback addresses are always allowed for local apps.
+ */
+const DEFAULT_REDIRECT_URIS = ["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback", "https://antigravity.google/oauth-callback"];
+const DEFAULT_CIMD_HOSTS = ["claude.ai", "claude.com", "antigravity.google"];
 const REQUEST_TTL_MS = 10 * 60 * 1000;
 const CODE_TTL_MS = 60 * 1000;
 
