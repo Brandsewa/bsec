@@ -6,7 +6,8 @@ import { type Db, orders, orderItems, orderEvents, fulfillments, fulfillmentItem
 
 export interface OrderItemSummary {
   id: string;
-  variantId: string;
+  /** null when the variant was deleted after the order. */
+  variantId: string | null;
   productTitle: string;
   variantTitle: string | null;
   sku: string | null;

@@ -444,7 +444,7 @@ export function VariantBuilderCard({ product, priceOnRequest, onChanged }: Varia
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
         title={pendingDelete?.length === 1 ? "Delete this variant?" : `Delete ${pendingDelete?.length ?? 0} variants?`}
-        description={`${(pendingDelete ?? []).map((v) => v.title).join(", ")}. This removes ${pendingDelete?.length === 1 ? "the variant" : "them"} and the stock records. A variant that has been sold cannot be deleted.`}
+        description={`${(pendingDelete ?? []).map((v) => v.title).join(", ")}. This removes ${pendingDelete?.length === 1 ? "the variant" : "them"} and the stock records. Past orders keep their details. A variant on an order that is still in progress cannot be deleted until that order is delivered or cancelled.`}
         confirmLabel="Delete"
         destructive
         pending={bulk.busy}

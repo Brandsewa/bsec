@@ -30,7 +30,8 @@ export function getIndianFinancialYear(date: Date = new Date()): string {
 
 export interface TaxLineCalculation {
   orderItemId: string;
-  variantId: string;
+  /** null when the variant was deleted after the order (the line keeps its own SKU and title). */
+  variantId: string | null;
   sku?: string | null | undefined;
   productTitle: string;
   hsn?: string | null | undefined;
@@ -103,7 +104,7 @@ export { normalizeState } from "./tax-engine.ts";
  */
 export function calculateGstLineItem(opts: {
   orderItemId: string;
-  variantId: string;
+  variantId: string | null;
   sku?: string | null | undefined;
   productTitle: string;
   hsn?: string | null | undefined;

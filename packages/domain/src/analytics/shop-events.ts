@@ -71,7 +71,7 @@ interface OrderLike {
   currency: string;
   grandTotal: number;
   shippingTotal: number;
-  items: Array<{ variantId: string; sku: string | null; productTitle: string; variantTitle: string | null; quantity: number; unitPrice: number }>;
+  items: Array<{ variantId: string | null; sku: string | null; productTitle: string; variantTitle: string | null; quantity: number; unitPrice: number }>;
 }
 
 /** The thank-you page. Cancelled orders are not purchases. `orderId` is the order number, which is unique within the store. */
@@ -84,7 +84,7 @@ export function buildPurchaseEvent(order: OrderLike): ShopEvent | null {
     orderId: order.number,
     shipping: money(order.shippingTotal, order.currency),
     items: order.items.map((i) => ({
-      id: itemId({ id: i.variantId, sku: i.sku }),
+      id: itemId({ id: i.variantId ?? i.productTitle, sku: i.sku }), // variantId is null once the variant was deleted
       name: i.productTitle.slice(0, 150),
       variant: variantName(i.variantTitle),
       price: money(i.unitPrice, order.currency),

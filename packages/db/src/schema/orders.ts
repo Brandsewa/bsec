@@ -93,7 +93,11 @@ export const orderItems = tenantTable(
   {
     id: uuid("id").default(sql`uuidv7()`).primaryKey(),
     orderId: uuid("order_id").notNull(),
-    variantId: uuid("variant_id").notNull(),
+    /**
+     * The variant sold. null once that variant has been deleted: the line keeps its own copy of title, SKU, price, tax
+     * and cost, so the order still reads and invoices the same (migration 0122, decision 2026-11-26).
+     */
+    variantId: uuid("variant_id"),
     productTitle: text("product_title").notNull(),
     variantTitle: text("variant_title"),
     sku: text("sku"),
@@ -132,7 +136,8 @@ export const orderItems = tenantTable(
       column: t.variantId,
       target: variants,
       name: "order_items_variant_fk",
-      onDelete: "restrict",
+      // The SQL is ON DELETE SET NULL ("variant_id"): only the variant column is cleared, tenant_id stays (migration 0122).
+      onDelete: "set null",
     }),
   ],
 );

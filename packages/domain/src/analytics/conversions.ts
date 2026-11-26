@@ -102,7 +102,7 @@ export interface ConversionOrder {
   grandTotal: number;
   shippingTotal: number;
   placedAt: Date;
-  items: Array<{ variantId: string; sku: string | null; productTitle: string; variantTitle: string | null; quantity: number; unitPrice: number }>;
+  items: Array<{ variantId: string | null; sku: string | null; productTitle: string; variantTitle: string | null; quantity: number; unitPrice: number }>;
 }
 
 export interface ConversionTracking {

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-26
 - **Agent:** claude
-- **Branch:** `fix/product-editor-variants` (not merged yet)
+- **Branch:** `fix/product-editor-variants` (merged in #337, eed77c9f)
 - **Area:** web, domain, contracts, admin
 - **Type:** fix
 - **Supersedes:** none
@@ -42,4 +42,4 @@ Five owner-reported problems with editing products. A new price saved in the adm
 - [x] Tests added (real-DB test for the variant builder and delete).
 - [x] No secrets, no generated files, no unrelated edits in the diff.
 - [x] Walked in the browser (see Verification).
-- [ ] After merge: record updated, in-flight line removed, branch and worktree removed.
+- [x] After merge: record updated, in-flight line removed, branch and worktree removed.

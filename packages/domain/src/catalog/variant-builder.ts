@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { schema, withTenant } from "@bs/db";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
@@ -6,6 +6,7 @@ import { invalidateCache } from "../cache-invalidation.ts";
 import { syncMediaUsages } from "../media-services.ts";
 import { loadProductDetailInternal } from "../catalog-services.ts";
 import { syncVariantMarketPrices } from "../markets/service.ts";
+import type { OrderStatus } from "../orders/state-machine.ts";
 import { planVariantGrid } from "@bs/contracts/variant-grid";
 import {
   MAX_VARIANTS_PER_PRODUCT,
@@ -233,9 +234,14 @@ export async function createVariant(rt: Runtime, ctx: TenantContext, input: Crea
   return toVariant(row);
 }
 
+/** Order statuses after which an order no longer needs its variants (see deleteVariant). */
+export const VARIANT_DELETE_CLOSED_ORDER_STATUSES: OrderStatus[] = ["cancelled", "returned", "delivered"];
+
 /**
- * Deletes a variant that was never sold. A variant that appears on any order is refused (its history must stay), and a
- * product always keeps at least one variant. Lines in open shopper carts are removed with it.
+ * Deletes a variant. Refused while any order with it is still in progress (pending to shipped), because that order
+ * still needs it for stock and fulfilment; once all its orders are cancelled, returned or delivered (decision
+ * 2026-11-26), the variant goes and those order lines keep their own copy of what was sold. A product always keeps at
+ * least one variant. Lines in open shopper carts are removed with it.
  */
 export async function deleteVariant(rt: Runtime, ctx: TenantContext, input: { id: string }) {
   assertPermission(ctx, "products.write");
@@ -255,12 +261,27 @@ export async function deleteVariant(rt: Runtime, ctx: TenantContext, input: { id
       .where(and(eq(schema.variants.productId, variant.productId), eq(schema.variants.tenantId, ctx.tenantId)));
     if (Number(siblings?.n ?? 0) <= 1) throw new Error("Conflict: a product needs at least one variant");
 
-    const [sold] = await tx
-      .select({ n: sql<number>`count(*)::int` })
+    // Orders that still need the live variant: stock to reserve or release, items to pack and ship, a return to restock
+    // on its way. Once every order is cancelled, returned or delivered, its lines carry their own copy of title, SKU,
+    // price, tax and cost, and lose only the link (order_items.variant_id is set to null, migration 0122).
+    const openOrders = await tx
+      .selectDistinct({ number: schema.orders.number })
       .from(schema.orderItems)
-      .where(and(eq(schema.orderItems.variantId, input.id), eq(schema.orderItems.tenantId, ctx.tenantId)));
-    if (Number(sold?.n ?? 0) > 0) {
-      throw new Error("Conflict: this variant is on past orders and cannot be deleted. Turn off stock tracking or archive the product instead");
+      .innerJoin(schema.orders, and(eq(schema.orders.tenantId, schema.orderItems.tenantId), eq(schema.orders.id, schema.orderItems.orderId)))
+      .where(
+        and(
+          eq(schema.orderItems.variantId, input.id),
+          eq(schema.orderItems.tenantId, ctx.tenantId),
+          notInArray(schema.orders.status, VARIANT_DELETE_CLOSED_ORDER_STATUSES),
+        ),
+      )
+      .limit(6);
+    if (openOrders.length > 0) {
+      const shown = openOrders.slice(0, 5).map((o) => o.number).join(", ");
+      const more = openOrders.length > 5 ? " and more" : "";
+      throw new Error(
+        `Conflict: this variant is on orders that are still in progress (${shown}${more}). Finish or cancel ${openOrders.length === 1 ? "that order" : "those orders"} first; once every order with it is cancelled, returned or delivered it can be deleted and those orders keep their details`,
+      );
     }
 
     const [quoted] = await tx
