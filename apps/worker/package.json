@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@bs/domain": "workspace:*",
-    "@sentry/node": "11.16.0"
+    "@sentry/node": "11.17.0"
   },
   "devDependencies": {
     "@bs/config": "workspace:*",
