@@ -131,3 +131,4 @@ export type StoreClient = ContractRouterClient<StoreContract>;
 export * from "./money.ts";
 export * from "./countries.ts";
 export * from "./units.ts";
+export * from "./policy-links.ts";

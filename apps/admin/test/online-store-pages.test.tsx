@@ -81,6 +81,33 @@ describe("Online store admin pages use real oRPC data", { timeout: 30000 }, () =
     expectNoSample(html);
   });
 
+  it("menu editor renders policy items without crashing", async () => {
+    await import("../src/lib/content-host.ts");
+    const { MenuEditorScreen } = await import("@bs/content-admin/menus/MenuEditorScreen.tsx");
+    const { orpc } = await import("../src/lib/orpc.ts");
+    const client = newClient();
+    client.setQueryData(orpc.admin.menus.get.queryOptions({ input: { handle: "footer" } }).queryKey, {
+      id: MENU_ID,
+      name: "Footer menu",
+      handle: "footer",
+      kind: "navigation",
+      itemCount: 2,
+      usedIn: ["Footer"],
+      isProtected: true,
+      items: [
+        { id: "p1", title: "Privacy Policy", url: "/policies/privacy", type: "policy", targetId: "privacy" },
+        { id: "p2", title: "Terms & Conditions", url: "/policies", type: "policy" },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const html = await renderRouted(client, () => React.createElement(MenuEditorScreen, { handle: "footer" }));
+    expect(html).toContain("Footer menu");
+    expect(html).toContain("Privacy Policy");
+    expect(html).toContain("Terms &amp; Conditions");
+    expectNoSample(html);
+  });
+
   it("menus page shows an empty state when there are no menus", async () => {
     await import("../src/lib/content-host.ts");
     const { MenusScreen } = await import("@bs/content-admin/menus/MenusScreen.tsx");

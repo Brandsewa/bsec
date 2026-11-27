@@ -96,6 +96,14 @@ describe("Storefront Pages & Block Rendering", () => {
         expect(policy.lastUpdated).toBeDefined();
       }
     });
+
+    it("has /policies index and /policies/[type] pages with loading siblings", () => {
+      const root = join(process.cwd(), "src/app/policies");
+      expect(existsSync(join(root, "page.tsx"))).toBe(true);
+      expect(existsSync(join(root, "loading.tsx"))).toBe(true);
+      expect(existsSync(join(root, "[type]/page.tsx"))).toBe(true);
+      expect(existsSync(join(root, "[type]/loading.tsx"))).toBe(true);
+    });
   });
 
   describe("Home Page Block Document Integration", () => {

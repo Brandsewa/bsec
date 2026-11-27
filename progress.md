@@ -3,7 +3,7 @@
 Source of truth: `docs/PLAN.html` v2.0 (build order in `docs/BUILD-PLAN-M2-M9.md`). Items are ticked only after verification; the evidence is noted next to each. "From code" means it was read in the repo but not exercised live.
 
 ## In flight
-_Nothing in flight._
+- Antigravity · `fix_merchant_footer_legal_links` · Footer menu policy link picker, storefront policy link resolution, and `/policies` index · 2026-11-27
 
 ## M15 · Multi-market stores (ADR-040): live on production (2026-10-30)
 

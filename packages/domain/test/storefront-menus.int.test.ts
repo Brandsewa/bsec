@@ -223,6 +223,75 @@ describe("storefront menu resolution in resolvePageRenderData (Slice A)", () => 
       expect(footerData.columns[1]).toBeNull();
     }
   });
+
+  it("resolves footer policy menu items via targetId handle, store_policies row id, and legacy /policies labels", async () => {
+    const policyMenuId = crypto.randomUUID();
+    const policyRowId = crypto.randomUUID();
+
+    await withTenant(rt._db.db, ctxA.tenantId, async (tx) => {
+      await tx
+        .insert(schema.storePolicies)
+        .values({
+          id: policyRowId,
+          tenantId: ctxA.tenantId,
+          handle: "legal_notice",
+          title: "Legal Notice",
+          draftContent: { v: 1, blocks: [{ type: "paragraph", text: "Legal details." }] },
+        })
+        .onConflictDoNothing();
+
+      const [existingLegal] = await tx
+        .select({ id: schema.storePolicies.id })
+        .from(schema.storePolicies)
+        .where(and(eq(schema.storePolicies.tenantId, ctxA.tenantId), eq(schema.storePolicies.handle, "legal_notice")))
+        .limit(1);
+
+      const resolvedRowId = existingLegal?.id ?? policyRowId;
+
+      await tx.insert(schema.menus).values({
+        id: policyMenuId,
+        tenantId: ctxA.tenantId,
+        handle: "footer-policies-test",
+        title: "Policies",
+        kind: "navigation",
+        items: [
+          // Legacy broken items saved with bare /policies and no targetId
+          { id: "p1", title: "Terms & Conditions", type: "policy", url: "/policies" },
+          { id: "p2", title: "Privacy Policy", type: "policy", url: "/policies" },
+          { id: "p3", title: "Refund & Cancellation Policy", type: "policy", url: "" },
+          { id: "p4", title: "Shipping Policy", type: "url", url: "/policies" },
+          // Explicit handle targetId
+          { id: "p5", title: "Returns", type: "policy", targetId: "refund", url: "/policies" },
+          // Explicit store_policies UUID targetId
+          { id: "p6", title: "Imprint", type: "policy", targetId: resolvedRowId, url: "/policies" },
+        ],
+      });
+    });
+
+    const footerBlock: BlockInstance = {
+      id: "ftr-pol",
+      type: "SiteFooter",
+      version: 1,
+      props: {
+        columns: [{ title: "Policies", menuHandle: "footer-policies-test" }],
+      },
+    };
+
+    const renderData = await resolvePageRenderData(rt, ctxA, [footerBlock]);
+    const footerData = renderData.data["ftr-pol"];
+    expect(footerData?.kind).toBe("footer-menus");
+    if (footerData?.kind === "footer-menus") {
+      const col = footerData.columns[0] ?? [];
+      expect(col.map((item) => item.url)).toEqual([
+        "/policies/terms",
+        "/policies/privacy",
+        "/policies/refund",
+        "/policies/shipping",
+        "/policies/refund",
+        "/policies/legal_notice",
+      ]);
+    }
+  });
 });
 
 describe("menu management and protection (Slice B)", () => {

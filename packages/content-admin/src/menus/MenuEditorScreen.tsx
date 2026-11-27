@@ -58,7 +58,18 @@ import {
   Switch,
   toast,
 } from "@bs/ui";
-import type { FilterDisplay, FilterItemConfig, FilterKind, MenuDetail, MenuItem, MenuItemType } from "@bs/contracts";
+import {
+  STORE_POLICY_LINK_OPTIONS,
+  extractPolicyHandleFromUrl,
+  inferPolicyHandleFromLabel,
+  isStorePolicyHandle,
+  type FilterDisplay,
+  type FilterItemConfig,
+  type FilterKind,
+  type MenuDetail,
+  type MenuItem,
+  type MenuItemType,
+} from "@bs/contracts";
 import { errorMessage } from "../errors.ts";
 import { hiddenMenuLinkTypes, orpc, paths } from "../host.ts";
 
@@ -783,8 +794,18 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
     setEditingItemPath(flat.path);
     setItemFormTitle(flat.item.title);
     setItemFormType(flat.item.type);
-    setItemFormTargetId(flat.item.targetId ?? "");
-    setItemFormUrl(flat.item.url);
+    const resolvedPolicyHandle =
+      flat.item.type === "policy"
+        ? (isStorePolicyHandle(flat.item.targetId)
+            ? flat.item.targetId
+            : extractPolicyHandleFromUrl(flat.item.url) ?? inferPolicyHandleFromLabel(flat.item.title))
+        : undefined;
+    setItemFormTargetId(resolvedPolicyHandle ?? flat.item.targetId ?? "");
+    setItemFormUrl(
+      resolvedPolicyHandle && (!flat.item.url || /^\/policies\/?$/i.test(flat.item.url.trim()))
+        ? `/policies/${resolvedPolicyHandle}`
+        : flat.item.url,
+    );
     setItemFormOpenInNewTab(Boolean(flat.item.openInNewTab));
     setItemFormTitleTouched(true);
     setItemDrawerOpen(true);
@@ -804,8 +825,7 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
         setItemFormUrl("/blog");
         break;
       case "policy":
-        if (!itemFormTitleTouched || !itemFormTitle) setItemFormTitle("Policies");
-        setItemFormUrl("/policies");
+        setItemFormUrl("");
         break;
       case "search":
         if (!itemFormTitleTouched || !itemFormTitle) setItemFormTitle("Search");
@@ -836,6 +856,10 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
     const title = itemFormTitle.trim();
     if (!title) {
       toast.error("Please enter a title for the menu item");
+      return;
+    }
+    if (itemFormType === "policy" && !itemFormTargetId && (!itemFormUrl.trim() || /^\/policies\/?$/i.test(itemFormUrl.trim()))) {
+      toast.error("Please select a policy");
       return;
     }
     if (itemFormType === "url") {
@@ -1324,6 +1348,31 @@ function MenuEditorForm({ menu }: { menu: MenuDetail }) {
                     ...(productsQuery.data?.items ?? []).map((p) => ({
                       value: p.id,
                       label: p.title,
+                    })),
+                  ]}
+                />
+              </div>
+            ) : null}
+
+            {itemFormType === "policy" ? (
+              <div className="space-y-1.5">
+                <Label>Select Policy</Label>
+                <SimpleSelect
+                  value={itemFormTargetId}
+                  onChange={(handle: string) => {
+                    const pol = STORE_POLICY_LINK_OPTIONS.find((p) => p.handle === handle);
+                    if (pol) {
+                      handleResourceSelect(pol.handle, pol.label, pol.path);
+                    } else {
+                      setItemFormTargetId("");
+                      setItemFormUrl("");
+                    }
+                  }}
+                  options={[
+                    { value: "", label: "-- Choose a policy --" },
+                    ...STORE_POLICY_LINK_OPTIONS.map((p) => ({
+                      value: p.handle,
+                      label: p.label,
                     })),
                   ]}
                 />

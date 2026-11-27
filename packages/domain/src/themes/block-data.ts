@@ -14,6 +14,11 @@ import {
   type BlockProduct,
   type ResolvedMenuItem,
 } from "@bs/blocks";
+import {
+  inferPolicyHandleFromLabel,
+  isStorePolicyHandle,
+  resolvePolicyMenuHref,
+} from "@bs/contracts";
 import type { Runtime } from "../runtime.ts";
 import { assertPermission, type TenantContext } from "../context.ts";
 import { isFeatureEnabled } from "../features.ts";
@@ -320,6 +325,7 @@ export async function loadMenusData(
   const brandSlugs = new Set<string>();
   const blogCategoryTargetIds = new Set<string>();
   const blogPostTargetIds = new Set<string>();
+  const policyTargetIds = new Set<string>();
 
   function collectFromItems(items: unknown) {
     if (!Array.isArray(items)) return;
@@ -350,6 +356,8 @@ export async function loadMenusData(
         if (targetId) blogCategoryTargetIds.add(targetId);
       } else if (type === "blog_post") {
         if (targetId) blogPostTargetIds.add(targetId);
+      } else if (type === "policy") {
+        if (targetId && !isStorePolicyHandle(targetId)) policyTargetIds.add(targetId);
       } else if (type === "brand") {
         if (targetId) brandTargetIds.add(targetId);
         const s = extractBrandSlug(url);
@@ -439,6 +447,15 @@ export async function loadMenusData(
     blogCategoryTargetIds.size > 0 || blogPostTargetIds.size > 0
       ? await blogMenuTargetsTx(tx, tenantId, { categoryIds: blogCategoryTargetIds, postIds: blogPostTargetIds })
       : { categories: new Map<string, string>(), posts: new Map<string, string>() };
+
+  const policyRows =
+    policyTargetIds.size > 0
+      ? await tx
+          .select({ id: schema.storePolicies.id, handle: schema.storePolicies.handle })
+          .from(schema.storePolicies)
+          .where(and(eq(schema.storePolicies.tenantId, tenantId), inArray(schema.storePolicies.id, [...policyTargetIds])))
+      : [];
+  const policyHandleById = new Map(policyRows.map((p) => [p.id, p.handle]));
 
   const SAFE_SCHEME = /^(\/(?!\/)|#|https:\/\/|mailto:|tel:)/i;
 
@@ -544,7 +561,12 @@ export async function loadMenusData(
         break;
       }
       case "policy": {
-        resolvedUrl = rawUrl || "/policies";
+        const handleFromId = targetId
+          ? isStorePolicyHandle(targetId)
+            ? targetId
+            : policyHandleById.get(targetId)
+          : undefined;
+        resolvedUrl = resolvePolicyMenuHref({ targetId: handleFromId, url: rawUrl, label });
         break;
       }
       case "url":
@@ -552,7 +574,12 @@ export async function loadMenusData(
         if (!rawUrl || !SAFE_SCHEME.test(rawUrl)) {
           return null; // unsafe or empty: skip
         }
-        resolvedUrl = rawUrl;
+        if (/^\/policies\/?$/i.test(rawUrl)) {
+          const inferred = inferPolicyHandleFromLabel(label);
+          resolvedUrl = inferred ? `/policies/${inferred}` : "/policies";
+        } else {
+          resolvedUrl = rawUrl;
+        }
         break;
       }
     }

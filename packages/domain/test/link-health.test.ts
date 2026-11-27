@@ -15,7 +15,7 @@ const kind = (link: string) => classifyLink(link, known)?.kind ?? null;
 
 describe("classifyLink", () => {
   it("accepts pages the store really has, with a query, fragment, trailing slash or capital letters", () => {
-    for (const l of ["/", "/products/green-tea", "/Products/Green-Tea/?x=1#top", "/collections/teas", "/categories/herbal", "/pages/about", "/pages/services/wholesale", "/blog/how-to-brew", "/products/all", "/collections/all", "/categories/all", "/policies/refund", "/cart", "/search?q=tea", "/old-tea"]) {
+    for (const l of ["/", "/products/green-tea", "/Products/Green-Tea/?x=1#top", "/collections/teas", "/categories/herbal", "/pages/about", "/pages/services/wholesale", "/blog/how-to-brew", "/products/all", "/collections/all", "/categories/all", "/policies", "/policies/refund", "/cart", "/search?q=tea", "/old-tea"]) {
       expect(kind(l), l).toBeNull();
     }
   });

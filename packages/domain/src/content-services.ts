@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, lt, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
+import { resolvePolicyMenuHref } from "@bs/contracts";
 import { normalizeMenuItems } from "./menu-defaults.ts";
 import { schema, withTenant } from "@bs/db";
 import { getBlockDefinition, hasMarketingBlocks, normalizeStoreHref, validateBlockDocument } from "@bs/blocks";
@@ -1409,7 +1410,14 @@ function tidyMenuLinks(items: unknown[]): unknown[] {
   return items.map((item) => {
     if (!item || typeof item !== "object") return item;
     const it = { ...(item as Record<string, unknown>) };
-    if ((it.type === undefined || it.type === "url") && typeof it.url === "string") it.url = normalizeStoreHref(it.url.trim());
+    if ((it.type === undefined || it.type === "url") && typeof it.url === "string") {
+      it.url = normalizeStoreHref(it.url.trim());
+    } else if (it.type === "policy") {
+      const targetId = typeof it.targetId === "string" ? it.targetId : undefined;
+      const url = typeof it.url === "string" ? it.url : undefined;
+      const label = typeof it.title === "string" ? it.title : undefined;
+      it.url = resolvePolicyMenuHref({ targetId, url, label });
+    }
     if (Array.isArray(it.children)) it.children = tidyMenuLinks(it.children);
     return it;
   });
