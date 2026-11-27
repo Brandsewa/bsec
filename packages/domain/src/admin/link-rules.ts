@@ -30,6 +30,7 @@ export interface LinkProblem {
 const STATIC_PATHS = new Set([
   "/", "/search", "/cart", "/checkout", "/track", "/contact", "/about", "/blog", "/products/all", "/collections", "/categories",
   "/account", "/account/login", "/account/register", "/account/orders", "/account/profile", "/account/addresses", "/privacy", "/terms",
+  "/policies",
 ]);
 const PREFIX_OK = ["/account/", "/policies/", "/orders/", "/o/", "/api/", "/_next/", "/blog/category/", "/blog/page/", "/cod/", "/address/"];
 

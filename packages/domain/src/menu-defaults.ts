@@ -6,6 +6,7 @@ export interface StoredMenuItem {
   title: string;
   url: string;
   type: string;
+  targetId?: string;
   children?: StoredMenuItem[];
   [key: string]: unknown;
 }
@@ -23,8 +24,8 @@ export function defaultHeaderMenuItems(): StoredMenuItem[] {
 export function defaultFooterMenuItems(): StoredMenuItem[] {
   return [
     { id: randomUUID(), title: "About Us", url: "/pages/about", type: "page" },
-    { id: randomUUID(), title: "Privacy Policy", url: "/policies/privacy", type: "policy" },
-    { id: randomUUID(), title: "Terms of Service", url: "/policies/terms", type: "policy" },
+    { id: randomUUID(), title: "Privacy Policy", url: "/policies/privacy", type: "policy", targetId: "privacy" },
+    { id: randomUUID(), title: "Terms of Service", url: "/policies/terms", type: "policy", targetId: "terms" },
   ];
 }
 
